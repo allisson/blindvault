@@ -136,6 +136,14 @@ _Avoid_: key slot, unlock method
 An optional password that opens one specific backup.
 _Avoid_: backup password, file password
 
+**Fresh restore**:
+Restoring a backup onto a device that does not hold the vault, which installs the same vault there as an unregistered device.
+_Avoid_: restore as a new vault, new vault from backup
+
+**Backup merge**:
+Restoring a backup into the vault a device already holds, merging its records by the same rules as sync.
+_Avoid_: merge restore, import
+
 ## Devices and sync
 
 **Device identity**:
