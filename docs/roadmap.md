@@ -225,7 +225,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Vault key material transferred over the Noise channel only after confirmation
 - [ ] New device initialization: display name sent with the acknowledgement, local password, KEK, wrapped master key, identity, Device record written by A (D30)
 - [ ] Startup cleanup of an incomplete pairing (records without Local Config) (D30)
-- [ ] Retire and un-retire a Device record, with UI stating it is not revocation (D30)
+- [ ] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
 - [ ] Re-admission of a device restored from backup: SAS, mutual Master Key confirmation bound to the handshake hash, Device records, merge sync, no Master Key transfer (D22, D29)
 - [ ] Camera QR scanning and copy/paste fallback
@@ -259,6 +259,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Keep payload delivery behind an interface so a mailbox transport (Nostr, ntfy) can be added after v1 without protocol changes
 - [ ] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions
 - [ ] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008)
+- [ ] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31)
 - [ ] Messages bound to the session (CRYPTO-INV-009)
 - [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, future-clock bound (D19)
 - [ ] Summary exchange and transfer of divergent records only
@@ -284,6 +285,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
+- [ ] A retired peer cannot sync, and a forged newer non-retired Device record, even one claiming another device's HLC, never un-retires it (D31, CRYPTO-INV-015)
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected
 - [ ] During a sync session, an edit on one device reaches the other without a new exchange
 - [ ] Locking the vault on either side ends the sync session

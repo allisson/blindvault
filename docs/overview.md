@@ -1,7 +1,7 @@
 # BlindVault — Overview
 
 > Normative design document for implementation. It prevails over every other document in this repository.
-> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D30 (section 21).
+> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D31 (section 21).
 > Status: Proposed · Author: Allisson Azevedo · License: MIT.
 > The words MUST, MUST NOT, SHOULD and MAY follow RFC 2119. Terms follow `GLOSSARY.md`.
 
@@ -63,6 +63,7 @@ Cryptographic confidentiality and application integrity are separate properties.
 | Malicious PWA host | Partially protected | Reproducible builds + hashes + self-hosting |
 | Browser compromise | Out of scope | Trusted browser required |
 | Stale device resurrecting data | Protected | Persistent tombstones |
+| Retired device reconnecting | Limited | Sync refused by every peer that has received the retirement; retirement cannot be undone; data already replicated stays exposed (D31) |
 | Sync conflict | Protected (items); limited (folders) | HLC + item history; folders are LWW without history |
 | Tampered record header or forged tombstone | Protected | Header bound through AAD (D21) |
 | Corrupted record | Protected | AEAD authentication |
@@ -268,11 +269,15 @@ B generates its identity (in memory only)
 
 `Noise_XX` transmits both static keys during the handshake, so B's identity MUST exist before it. B holds the identity only in memory until it has the Master Key, and discards it if pairing aborts.
 
-A writes B's Device record only after B acknowledges receiving the Master Key, bound to the static key A authenticated in the handshake, so B cannot choose its key at registration; the key is immutable afterwards (D26). Every device MUST reject a Device record whose `recordId` is not `BLAKE2b-128` of its public key, or whose public key differs from the one already stored for that `recordId`. Only the display name and the `retired` flag can change (D30). Device records cannot be deleted in v1, so a pairing interrupted after the record was written leaves it in place; the UI shows a registered device that has never synced as "never synced".
+A writes B's Device record only after B acknowledges receiving the Master Key, bound to the static key A authenticated in the handshake, so B cannot choose its key at registration; the key is immutable afterwards (D26). Every device MUST reject a Device record whose `recordId` is not `BLAKE2b-128` of its public key, or whose public key differs from the one already stored for that `recordId`. Only the display name and the `retired` flag can change, and `retired` only from false to true (D30, D31). Device records cannot be deleted in v1, so a pairing interrupted after the record was written leaves it in place; the UI shows a registered device that has never synced as "never synced".
 
 **Who writes Device records (D30).** The vault creator writes its own Device record at vault creation. Every other Device record is written by A after SAS confirmation, in pairing or re-admission: A writes B's record and, if A has none of its own (a device restored from backup, section 10), its own as well, since both static keys were authenticated in the confirmed handshake. No device writes a Device record in any other situation.
 
-**Retired devices (D30).** Any registered device can mark a Device record as retired, and undo it, for a device that was lost, wiped or never finished pairing. Retirement only hides the device in the UI and removes it from recovery recommendations. It is not revocation (section 20): a retired device that still holds its identity and the Master Key can still sync, and the UI MUST say so when the user retires a device.
+**Retired devices (D30, D31).** Any registered device can mark another Device record as retired, for a device that was lost, wiped or never finished pairing. Retirement hides the device in the UI, removes it from recovery recommendations, and blocks it from syncing: a device ends a sync session as soon as `Noise_KK` authenticates a peer whose Device record is retired, before any summary is exchanged.
+
+Retirement is **irreversible**. The HLC's `deviceId` is not authenticated as the writer, so any holder of the Master Key, including the retired device, can forge a write that appears to come from another device; a reversible flag could therefore be undone through a peer that has not yet received the retirement. Instead, a Device record with `retired = true` is never replaced by one with `retired = false`, whatever their HLCs; among records with the same `retired` value, LWW applies as usual. Every device converges on the retirement, and no write can undo it. A device retired by mistake must be erased and paired again, getting a new identity. The UI MUST ask for confirmation stating that retirement cannot be undone.
+
+Retirement is not revocation (section 20). The retired device keeps everything it already had and still holds the Master Key, and until the retirement reaches a peer it can still sync with that peer. The UI MUST say so, and MUST point to re-founding (D28) when the device may be in someone else's hands.
 
 **Incomplete pairing (D30).** Until B creates its local password, it holds the Master Key only in memory. If B stops before that step, its storage holds encrypted records and no Local Config. On startup, a device that finds records without Local Config treats them as an incomplete pairing, tells the user, and erases them; the user pairs again, and the Device record A already wrote can be marked retired.
 
@@ -309,12 +314,13 @@ A browser cannot discover peers or accept inbound connections, so every WebRTC s
 
 ```
 connect → Noise_KK (proves possession of the registered identity, bound to the session)
+→ end the session if the peer's Device record is retired (D31)
 → exchange summaries (recordId, hlc, deleted, keyEpoch, recordType)
 → transfer divergent records (always encrypted) → merge → persist → ack
 ```
 
 - **Transfer:** only records that differ SHOULD be transferred. Transferred contents always remain encrypted.
-- **Conflicts:** last-write-wins per item, ordered by HLC, for simple deterministic v1 conflict handling. The losing version MUST go to history and never be discarded, so no item conflict silently loses data. Folder conflicts lose the older write (section 6).
+- **Conflicts:** last-write-wins per item, ordered by HLC, for simple deterministic v1 conflict handling. The losing version MUST go to history and never be discarded, so no item conflict silently loses data. Folder conflicts lose the older write (section 6). Device records are the one exception to plain LWW: a retired version always beats a non-retired one (D31).
 - **HLC (D19):** `(physicalMs, counter, deviceId)`, compared lexicographically, so two records never tie. Monotonic per device, canonical fixed-length serialization, clock-skew handling, and a future-clock bound so malformed timestamps cannot gain unbounded future dominance. A record whose timestamp is beyond the bound is rejected, never normalized, and the UI warns; it is accepted once the receiver's clock brings it within the bound.
 - **Tombstones (D27):** a tombstone is a record with `deleted = true`. Until purge it keeps its encrypted content, so it can be restored from the trash. After purge only the header, the wrapped record key and an AEAD tag over empty content remain, so it stays authenticated (D21). Tombstones are synchronized and kept indefinitely in v1, so a stale offline device cannot resurrect deleted content. A tombstone beats an older edit. A newer edit may restore the item. Tombstones MUST NOT be removed merely because the local device has not seen the item recently. A future version MAY compact tombstones once device membership and acknowledgment state prove that all known devices have observed them.
 - **History (D6):** Item Versions are synchronized records. `versionId = BLAKE2b-keyed(version-ID subkey, itemId ‖ hlc)`, where the version-ID subkey is a `crypto_kdf` subkey of the Master Key with its own context. It is deterministic, so when two devices each store the same conflict loser they produce the same record; opaque to anyone without the Master Key; and independent of `keyEpoch`, so re-encrypting a version under a new epoch does not change its ID. A version record's header `hlc` is the `hlc` of the snapshotted state, so devices that store the same loser produce the same header. Each device keeps the 20 greatest `(hlc, versionId)` per item and drops a received version below that cut, or belonging to a purged item, on arrival, so every device converges on the same history. Pruned and purged versions are dropped without a tombstone. Pruning is done while unlocked.
@@ -511,6 +517,7 @@ tests/{crypto,pairing,sync,recovery,integration}/
 | CRYPTO-INV-012 | Unknown or incompatible format and protocol versions are rejected, never interpreted as compatible |
 | CRYPTO-INV-013 | A tombstone is never removed in v1, and a write older than a record's tombstone never restores it |
 | CRYPTO-INV-014 | Re-admission writes no Device record until both devices prove, bound to the session, that they hold the same Master Key (D29) |
+| CRYPTO-INV-015 | No sync summary or record is exchanged with a peer whose Device record is retired, and a retired Device record never becomes non-retired (D31) |
 
 Every invariant MUST have at least one associated negative test.
 
@@ -608,4 +615,5 @@ This document is **normative**.
 | D27 | Trash and tombstones | Trashing writes the tombstone (`deleted = true`) and keeps the content until purge; purge is local, re-encrypts empty content under the unchanged header and requires unlock; restore is a newer write. Amends D7 and D21 |
 | D28 | Re-founding | Response to a Master Key compromise in v1: an unlocked device creates a new Master Key, `vaultId`, Vault Key, Recovery Phrase and device identity, re-encrypts live Items and Folders (same IDs, new HLCs), drops history, tombstones, trash and Device records, and swaps vaults in one storage transaction without persisting plaintext. Other devices pair again; old backups are destroyed. Amends D11 and section 14 |
 | D29 | Re-admission key confirmation | After SAS, each side sends BLAKE2b keyed by a Master Key re-admission subkey over its role label and the final handshake hash; a mismatch aborts. Replaces the `vaultId` comparison, since `vaultId` is not secret. Amends D22, D23 and D25 |
-| D30 | Device admission and retirement | Device records are written only for the vault creator at creation, or by A after SAS confirmation: B's record, plus A's own if A has none (restored device). B sends its display name with its Master Key acknowledgement. A synchronized, mutable `retired` flag hides a device and removes it from recovery recommendations; it is not revocation. Records found without Local Config at startup are an incomplete pairing and are erased after a notice. Local wraps use `AAD = purpose label ‖ vaultId`. Amends D26 |
+| D30 | Device admission and retirement | Device records are written only for the vault creator at creation, or by A after SAS confirmation: B's record, plus A's own if A has none (restored device). B sends its display name with its Master Key acknowledgement. A synchronized `retired` flag hides a device and removes it from recovery recommendations; it is not revocation (sync block and irreversibility added by D31). Records found without Local Config at startup are an incomplete pairing and are erased after a notice. Local wraps use `AAD = purpose label ‖ vaultId`. Amends D26 |
+| D31 | Retirement blocks sync | A device ends a sync session right after `Noise_KK` when the peer's Device record is retired. Retirement is irreversible: a retired Device record is never replaced by a non-retired one, whatever the HLCs, because the HLC's `deviceId` is not authenticated and a reversible flag could be undone by a forged write through a lagging peer. A device retired by mistake is erased and paired again. Not revocation: past data stays exposed and the block applies only at peers that have received the retirement. Amends D30 |

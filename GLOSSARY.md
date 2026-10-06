@@ -151,7 +151,7 @@ A device whose identity is recorded in a Device record of the vault.
 _Avoid_: paired device, trusted device, enrolled device
 
 **Retired device**:
-A registered device the user has marked as gone, so it is hidden and no longer recommended; it is not revoked.
+A registered device the user has permanently marked as gone, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
 
 **Pairing**:
