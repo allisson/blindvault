@@ -163,7 +163,7 @@ A device holding the vault whose identity has no Device record, typically one re
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
 **Retired device**:
-A registered device the user has permanently marked as gone, so it is hidden and other devices refuse to sync with it; it is not revoked.
+A registered device the user has permanently marked as gone from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
 
 **Pairing**:
