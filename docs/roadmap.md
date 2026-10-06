@@ -161,7 +161,9 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning
 - [ ] Forgotten local password recovery via recovery phrase
-- [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, and backups show their `phraseId` (D2)
+- [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2)
+- [ ] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
+- [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, vault swapped in one transaction (D28)
 - [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
 
 ### Gate B
@@ -174,6 +176,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
 - [ ] Restore merge preserves the losing version in history
 - [ ] Merging a backup with a different `vaultId` is rejected (D13)
+- [ ] Re-founding interrupted midway leaves the old vault intact; afterwards old backups and old devices cannot open or sync with the new vault (D28)
 
 ---
 
@@ -194,7 +197,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts
 - [ ] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15)
 - [ ] Input adaptation via `pointer`/`hover` media queries (44 px touch targets)
-- [ ] Full onboarding, making clear that no server can reset the vault
+- [ ] Full onboarding with three starts (create, pair, restore), making clear that no server can reset the vault
 
 ### PWA Gate
 
@@ -220,9 +223,11 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] `Noise_XX` handshake integration with the defined prologue (D1)
 - [ ] SAS derivation and display on both devices, with explicit confirmation
 - [ ] Vault key material transferred over the Noise channel only after confirmation
-- [ ] New device initialization: local password, KEK, wrapped master key, identity, Device record
+- [ ] New device initialization: display name sent with the acknowledgement, local password, KEK, wrapped master key, identity, Device record written by A (D30)
+- [ ] Startup cleanup of an incomplete pairing (records without Local Config) (D30)
+- [ ] Retire and un-retire a Device record, with UI stating it is not revocation (D30)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
-- [ ] Re-admission of a same-`vaultId` device restored from backup: SAS, Device record, merge sync, no Master Key transfer (D22)
+- [ ] Re-admission of a device restored from backup: SAS, mutual Master Key confirmation bound to the handshake hash, Device records, merge sync, no Master Key transfer (D22, D29)
 - [ ] Camera QR scanning and copy/paste fallback
 - [ ] Pairing session expiration
 - [ ] LAN-only mode (no STUN) and configurable STUN list
@@ -237,7 +242,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Pairing interrupted midway leaves no partially trusted device
 - [ ] Duplicate pairing and expired sessions handled
 - [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
-- [ ] A device restored from backup is re-admitted and then syncs; re-admission with a different `vaultId` aborts (D22)
+- [ ] A device restored from backup is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
+- [ ] No Device record is written outside vault creation or a SAS-confirmed pairing (CRYPTO-INV-007)
 - [ ] Official Noise test vectors pass in CI
 
 ---

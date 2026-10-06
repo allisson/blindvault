@@ -20,6 +20,10 @@ _Avoid_: entry, secret, record (in UI copy)
 One typed value inside an item, such as a URL, a secret or a TOTP.
 _Avoid_: attribute, property
 
+**Seed phrase**:
+A cryptocurrency wallet's BIP39 phrase stored as a field of an item; unrelated to the Recovery Phrase.
+_Avoid_: seed, BIP39 seed, wallet seed
+
 **Template**:
 A field layout an item is created from, such as Login or Card.
 _Avoid_: type, category, item type
@@ -114,6 +118,10 @@ _Avoid_: phrase key, seed key
 The record that holds the vault's Master Key protected by the Recovery Phrase, together with what any unlocked device needs to make backups that phrase can open; shared by every device and every backup.
 _Avoid_: recovery wrapping, recovery mechanism
 
+**Re-founding**:
+Replacing every key of the vault, and the vault's identity, while keeping its current items and folders; the response to a compromised Master Key.
+_Avoid_: rekey, Master Key rotation, new vault + import
+
 ## Backup
 
 **Backup**:
@@ -142,12 +150,16 @@ _Avoid_: device entry, device profile
 A device whose identity is recorded in a Device record of the vault.
 _Avoid_: paired device, trusted device, enrolled device
 
+**Retired device**:
+A registered device the user has marked as gone, so it is hidden and no longer recommended; it is not revoked.
+_Avoid_: revoked device, removed device, deleted device
+
 **Pairing**:
-The SAS-confirmed procedure by which one registered device registers another device's identity.
+The SAS-confirmed procedure by which a device holding the vault registers another device's identity.
 _Avoid_: enrollment, linking
 
 **Re-admission**:
-A pairing of a device that already holds the same vault, so no Master Key is transferred.
+A pairing of a device that proves it already holds the same Master Key, so no Master Key is transferred.
 _Avoid_: re-pairing, rejoin
 
 **SAS**:
