@@ -8,10 +8,10 @@ This is a security-critical project. Correctness and safety come before speed or
 
 Read these before making non-trivial changes:
 
-- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, decision log D1–D15). It prevails over any other document, including the original spec.
+- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D15). It prevails over any other document.
 - `docs/roadmap.md`: phases, tasks and gates. Work on the current phase only.
 - `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
-- `docs/spec.md`: the original technical design specification. Use it for details the overview does not cover (UI security requirements, onboarding, backup reminders). Where it conflicts with the overview, the overview wins.
+- `GLOSSARY.md`: canonical domain terms. Use them in code, docs and UI copy.
 
 If a task would contradict `docs/overview.md`, stop and explain the conflict instead of implementing it. Design changes are made by updating the overview and recording a new `Dn` decision first.
 

@@ -1,44 +1,66 @@
 # BlindVault — Overview
 
-> Normative reference document for implementation.
-> Based on: *BlindVault — Technical Design Specification* (2026-10-04), with amendments D1–D15 (section 18).
-> Where this document and the original spec disagree, **this document prevails**.
-> The words MUST, MUST NOT, SHOULD and MAY follow RFC 2119.
+> Normative design document for implementation. It prevails over every other document in this repository.
+> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D15 (section 21).
+> Status: Proposed · Author: Allisson Azevedo · License: MIT.
+> The words MUST, MUST NOT, SHOULD and MAY follow RFC 2119. Terms follow `GLOSSARY.md`.
 
 ---
 
 ## 1. Vision
 
-BlindVault is a **local-first** encrypted personal vault for any kind of private information. It runs entirely in the browser, can be installed as a PWA, and **has no server that stores user data**.
+BlindVault is a **local-first** encrypted personal vault for any kind of private information. It runs entirely in the browser, can be installed as a PWA, and **has no server that stores user data**. It is intentionally not a cloud password manager: there is no account system and no server-side vault.
 
 > The user's vault belongs to the user, not to a service.
 
 Data exists only on the user's devices or in encrypted backup files the user controls. Synchronization is peer-to-peer between explicitly paired devices.
 
-BlindVault is derived from BlindPass: it reuses the cryptographic model and domain packages, and removes the server, database, sessions, API and administration layers.
+BlindVault is derived from BlindPass: it reuses the cryptographic model and domain packages, and removes the server, database, sessions, API and administration layers (section 15).
 
-**v1 success criterion:** a user can create a vault, protect it cryptographically, recover it after losing local storage, pair another device without trusting a server, synchronize safely, and understand exactly what happens if every device except the backup is lost.
+**v1 success criterion:** a user can create a vault, protect it cryptographically, recover it after losing local storage, pair another device without trusting a server, synchronize safely, and understand exactly what happens if every device except the backup is lost. The criterion is not feature count.
+
+**Highest-priority engineering risks**, in order: pairing protocol correctness, application/PWA integrity, browser storage behavior, recovery UX, and synchronization edge cases. None of them requires abandoning the architecture, but cryptography, pairing, synchronization and recovery MUST be implemented as explicit protocols rather than informal application logic. The project SHOULD resist adding features before these foundations are thoroughly tested.
 
 ---
 
 ## 2. Principles
 
-1. **No data server.** Network services are used only for static assets and STUN. None of them receive plaintext vault contents.
-2. **Encryption first.** All sensitive content is encrypted before persistence or synchronization. Keys exist in plaintext only in memory, while the vault is unlocked.
-3. **Local-first.** Once installed, the app works offline. There is no account, backend, authentication server or sync service.
-4. **Synchronization is replication.** Every paired device holds a complete encrypted copy of the vault. A `.bvault` file is an additional recovery mechanism.
-5. **Small attack surface.** Few dependencies, small security-sensitive modules, clear cryptographic boundaries, deterministic builds and extensive tests.
-6. **Generic model.** Items are made of typed fields. Templates are a UI convenience and do not change the cryptographic model.
+1. **No data server.** BlindVault MUST NOT require a server to store vault data, which minimizes the attack surface. Network services are used only for static assets and STUN. None of them receive plaintext vault contents, and STUN providers MUST NOT be treated as trusted data services.
+2. **Encryption first.** All sensitive content is encrypted before persistence or synchronization. Keys exist in plaintext only in memory, while the vault is unlocked; the only keys at rest are explicitly encrypted local key-wrapping material.
+3. **Local-first.** A browser/PWA application keeps the vault local and portable. Once installed, the app works offline. There is no account, backend, authentication server, cloud database or sync service.
+4. **Synchronization is replication**, not a hosted backup service. Every paired device holds a complete encrypted copy of the vault. A `.bvault` file is an additional recovery mechanism.
+5. **Small attack surface.** Few dependencies, small security-sensitive modules, clear cryptographic boundaries, deterministic builds, extensive tests, and no unnecessary network functionality.
+6. **Generic model.** BlindVault is a vault, not only a password manager. Items are made of typed fields. Templates are a UI convenience and MUST NOT alter the cryptographic model.
 
 ---
 
 ## 3. Threat model
 
+**Protected assets:** vault contents, secrets, passwords, credentials, recovery material, cryptographic keys, encrypted backups and synchronized records.
+
 **Threats considered:** loss or theft of a device, access to a locked device, network interception, malicious peers, MITM during pairing, compromised STUN, corrupted sync data, browser storage eviction, accidental deletion, stale devices reconnecting, and malicious application hosting.
 
 **Out of scope (MUST be documented to users):** a compromised operating system, malware that reads browser memory, malicious extensions, an attacker holding an unlocked device, keyloggers, a malicious browser, and a malicious JavaScript bundle executed before integrity verification, including the first load (TOFU, see D5).
 
-Cryptographic confidentiality and application integrity are separate properties. A malicious bundle can read vault contents after unlock, even with perfect cryptography.
+Cryptographic confidentiality and application integrity are separate properties. A malicious bundle can read vault contents after unlock, even with perfect cryptography; a compromised browser, OS, extension or JavaScript bundle can therefore compromise an unlocked vault and is outside the cryptographic threat model.
+
+| Threat | Status | Mitigation |
+| --- | --- | --- |
+| Server database compromise | Eliminated | No data server |
+| Network interception | Protected | Noise over DTLS + encrypted records |
+| MITM during pairing | Protected | SAS derived from the handshake + user confirmation |
+| Malicious STUN provider | Limited | No vault data; optional LAN-only mode |
+| Browser storage eviction | Partially protected | Persistent storage + backup + replication |
+| Weak password | Partially protected | Argon2id + password-strength checks |
+| Lost device | Partially protected | Local password + auto-lock |
+| Stolen unlocked device | Out of scope | OS/device security required |
+| Malicious extension | Out of scope | Browser security required |
+| Malware | Out of scope | Trusted runtime required |
+| Malicious PWA host | Partially protected | Reproducible builds + hashes + self-hosting |
+| Browser compromise | Out of scope | Trusted browser required |
+| Stale device resurrecting data | Protected | Persistent tombstones |
+| Sync conflict | Protected | HLC + history |
+| Corrupted record | Protected | AEAD authentication |
 
 ---
 
@@ -71,11 +93,11 @@ Cryptographic confidentiality and application integrity are separate properties.
 
 | Package | Responsibilities | Constraints |
 | --- | --- | --- |
-| `packages/crypto` | Key generation, Argon2id, AEAD, X25519, recovery KEK, WebAuthn wrapping, RNG, cryptographic serialization (AAD and transcripts) | No UI logic. No dependency on other packages |
+| `packages/crypto` | Key generation, Argon2id, AEAD, X25519, recovery material, recovery KEK, WebAuthn wrapping, RNG, cryptographic serialization (AAD and transcripts) | No UI logic. No dependency on other packages |
 | `packages/vault` | Domain model: items, fields, templates, collections, tags, versions, tombstones, key references | No IndexedDB or network access |
-| `packages/storage` | IndexedDB schema, encrypted record persistence, transactions, migrations, `navigator.storage` | Accepts only already-encrypted records |
-| `packages/backup` | `.bvault` format, keyslots, export, import, validation, format migration | — |
-| `packages/sync` | Pairing, Noise handshake, WebRTC, QR encoding, sync protocol, HLC, merge, tombstones | Transport abstracted so tests run without WebRTC |
+| `packages/storage` | IndexedDB schema, encrypted record persistence, transactions, migrations, `navigator.storage` (persistence requests and estimation) | Accepts only already-encrypted records |
+| `packages/backup` | `.bvault` format, keyslots, backup encryption, export, import, validation, format migration | — |
+| `packages/sync` | Pairing, device authentication, Noise handshake, WebRTC, QR encoding, sync protocol, HLC, merge and conflict resolution, tombstones | Transport abstracted so tests run without WebRTC |
 | `apps/web` | PWA, UI, service worker, onboarding | Does not implement cryptography directly |
 
 ---
@@ -107,41 +129,43 @@ Device Identity (X25519, local, encrypted at rest under the Master Key)
 
 ### 5.3 Keys
 
-**Master Key.** Root of the vault, identical on all devices. Generated by a CSPRNG. MUST NOT be persisted directly, synchronized in plaintext, or stored directly in IndexedDB. Exists in plaintext only in memory while unlocked. Not rotated in v1 (D11).
+**Master Key.** Root of the vault, identical on all devices, which is what makes device replication possible. Generated by a CSPRNG. MUST NOT be persisted directly, synchronized in plaintext, or stored directly in IndexedDB. Exists in plaintext only in memory while unlocked. Not rotated in v1 (D11).
 
-**Device KEK.** `KEK = Argon2id(password, local salt, local parameters)`. The salt, parameters, wrapped master key, biometric material and preferences are local and MUST NOT be synchronized. Each device may have a different password. Changing the password only re-wraps the master key. Parameters are **calibrated on the device** at vault creation, targeting about 1 s, with a **64 MiB memory floor** (D9). Weak passwords are rejected with zxcvbn, which is not cryptographic protection.
+**Device KEK.** `KEK = Argon2id(password, local salt, local parameters)`. The salt, parameters, wrapped master key, PRF KEK material and preferences are local and MUST NOT be synchronized. Each device may have a different password, so each device's security is independent. Changing the password on one device MUST NOT require synchronization and only re-wraps the master key. Parameters are **calibrated on the device** at vault creation, targeting about 1 s, with a **64 MiB memory floor** (D9). The application SHOULD reject weak passwords with zxcvbn (or equivalent); strength checks MUST NOT be treated as cryptographic protection.
 
-**Vault Key.** Random, protected by the master key, always tagged with a `keyEpoch` to allow future rotation.
+**Vault Key.** Random (not derived from user credentials), protected by the master key, always tagged with a `keyEpoch` so the key can be rotated later without redesigning the record format.
 
-**Item Key.** Random and independent per item, wrapped by the vault key with AAD (D8).
+**Item Key.** Random and independent per item, wrapped by the vault key with AAD (D8). Item-level keys give item isolation, independent encryption contexts, simpler future rotation, and safer handling of deleted or migrated records.
 
 ### 5.4 Recovery Phrase (D2)
 
-- 256 bits from a CSPRNG, displayed as a 24-word BIP39 phrase. In the UI it is called "Recovery Phrase", never "seed".
+- 256 bits from a CSPRNG, displayed as a 24-word BIP39 phrase. In the UI it is called "Recovery Phrase", never "seed": it represents vault recovery entropy, not a cryptocurrency wallet.
 - `Recovery KEK = crypto_kdf_derive_from_key(entropy, fixed context)`. No Argon2, since entropy is already high.
-- The Recovery KEK wraps the master key. This envelope is a **synchronized record**, so every device and future backup holds the current envelope.
+- The Recovery KEK wraps the master key. This Recovery Envelope is a **synchronized record**, so every device and future backup holds the current envelope.
+- Combined with a `.bvault` backup, the phrase MUST be sufficient to recover the vault. It MAY be used to set a new local password on a device.
 - Shown at creation and, by default, only once, with confirmation that it was written down. MUST NOT be persisted or logged in plaintext.
-- **Regeneration:** with the vault unlocked, a new phrase and a new envelope are created. The old one is removed only after the new one is persisted and synchronized. **Documented limitation:** older `.bvault` backups can still be opened with the old phrase.
+- **Regeneration:** with the vault unlocked, a new phrase and a new envelope are created; this MUST NOT require changing vault contents. The old one is removed only after the new one is persisted and synchronized. **Documented limitation:** older `.bvault` backups can still be opened with the old phrase.
 
 ### 5.5 WebAuthn PRF
 
-Optional and detected at runtime. Derives a local key that wraps the master key. It does not replace the hierarchy. Password unlock always remains available. Without support, the app falls back to the password gracefully.
+Optional, for convenient local unlock, and detected at runtime. Derives a PRF KEK that wraps the master key. It does not replace the hierarchy. Password unlock always remains available. Without support, the app falls back to the password gracefully.
 
 ### 5.6 AAD and nonces
 
-Every encrypted record MUST bind its ciphertext to its logical identity through AAD:
+Every encrypted record MUST bind its ciphertext to its logical identity through AAD, so ciphertext from one record cannot be substituted for another's:
 
 ```
 AAD = protocolVersion || recordType || vaultId || recordId || keyEpoch
 ```
 
-This also applies to wrapped item keys (D8) and the recovery envelope. Nonces follow libsodium requirements: random 24-byte nonces for XChaCha20-Poly1305 and `secretstream` for large data. Nonce reuse under the same key MUST NOT occur.
+This also applies to wrapped item keys (D8) and the Recovery Envelope. Nonces follow libsodium requirements: random 24-byte nonces for XChaCha20-Poly1305 and `secretstream` for large data. Nonce reuse under the same key MUST NOT occur.
 
-### 5.7 Serialization (D10)
+### 5.7 Serialization and versioning (D10)
 
 - **AAD, transcripts and prologues:** fixed binary layout, every field length-prefixed in a fixed order. No dependencies, with test vectors.
 - **Records and protocol messages:** deterministic CBOR (RFC 8949, §4.2). The decoder is strict and rejects non-canonical encodings.
-- Every format is versioned. An incompatible format MUST NOT be silently interpreted as compatible. Downgrade attacks MUST be considered during version negotiation.
+- No binary or textual representation may have multiple equivalent encodings that could produce different cryptographic transcripts.
+- The encrypted record format, `.bvault`, the pairing protocol, the sync protocol and cryptographic envelopes MUST be versioned. An incompatible format MUST NOT be silently interpreted as compatible. Downgrade attacks MUST be considered during version negotiation.
 
 ---
 
@@ -158,9 +182,9 @@ Only the minimum metadata needed for synchronization is in cleartext.
 | Vault Key | `vaultId`, `keyEpoch` | Vault key |
 | Recovery Envelope (D2) | `vaultId`, `hlc`, version | Master key wrapped by the Recovery KEK |
 | Device | `deviceId`, public identity key, `pairedAt` | Device display name |
-| Local Config (not synchronized) | — | Local KEK material, biometric state, preferences |
+| Local Config (not synchronized) | — | Local KEK material, PRF KEK state, preferences |
 
-Collections and tags MUST remain encrypted, including the collection tree structure (`parentId`).
+Collections and tags MUST remain encrypted, including the collection tree structure (`parentId`), so synchronization metadata does not expose how the user organizes the vault.
 
 **Collections / folders (D14).** Collections are nested folders with unlimited depth.
 
@@ -175,7 +199,7 @@ Collections and tags MUST remain encrypted, including the collection tree struct
 
 **Field types (v1):** text, long text, secret, URL, email, phone, date, number, TOTP, BIP39 seed, wallet fields. Attachments come after v1.
 
-**Factory templates:** Login, Secure Note, Card, Identity, Developer Credential, Crypto Wallet, Document.
+**Factory templates:** Login, Secure Note, Card, Identity, Developer Credential, Crypto Wallet, Document. Templates are data definitions, not separate security models.
 
 ---
 
@@ -183,6 +207,7 @@ Collections and tags MUST remain encrypted, including the collection tree struct
 
 - IndexedDB stores only already-encrypted records. `localStorage` stores only non-sensitive preferences (theme, language, UI).
 - Call `navigator.storage.persist()` at vault creation, show the persistence status, and monitor `navigator.storage.estimate()`.
+- Browser storage eviction is a data-availability risk. The application MUST NOT imply that browser storage is permanent.
 - If persistence is denied and there is only one device, show a persistent warning recommending a backup and pairing.
 - **On lock:** remove plaintext items from state, release keys, clear caches, and block cryptographic operations. Auto-lock is configurable with a conservative default. Memory zeroization in JS is not guaranteed, and this MUST be documented.
 
@@ -190,35 +215,37 @@ Collections and tags MUST remain encrypted, including the collection tree struct
 
 ## 8. Identity and pairing
 
+Pairing is one of the most security-sensitive protocols in BlindVault. It MUST be implemented as a formally specified protocol (`pairing-protocol.md`), not an informal WebRTC exchange.
+
 ### 8.1 Identity
 
-Each device has an X25519 key pair, which is the device's **Noise static key**. The private key is local and encrypted at rest. The public key is synchronized in the Device record.
+Each device has an X25519 key pair, which is the device's **Noise static key**. The private key is local, encrypted at rest, and MUST NOT be included in synchronized cleartext metadata. The public key is synchronized in the Device record. Device identity MUST be authenticated during synchronization.
 
 ### 8.2 Handshake (D1)
 
 - Suite: `Noise_*_25519_ChaChaPoly_BLAKE2b`, an existing implementation on top of libsodium, validated against the official test vectors.
 - **Pairing:** `Noise_XX`. **Synchronization:** `Noise_KK`, since both sides already know each other's static key.
-- Prologue = versioned protocol label + hash of the QR payload + DTLS fingerprints of both sides.
-- The SAS is derived from the final handshake hash. SAS length and brute-force analysis, including commitment in copy/paste mode, are defined in `pairing-protocol.md`.
-- WebRTC DTLS is transport only and MUST NOT be the trust mechanism.
+- Prologue = versioned protocol label + hash of the pairing payload + DTLS fingerprints of both sides. The transcript MUST include all security-relevant negotiation values, with a canonical, versioned encoding.
+- The SAS is derived from the final handshake hash. It MUST bind both peers and the session, MUST prevent replay across sessions, and MUST be displayed on both devices and explicitly confirmed by the user. SAS length and brute-force analysis, including commitment in copy/paste mode, are defined in `pairing-protocol.md`.
+- WebRTC DTLS is transport only and MUST NOT be the trust mechanism. A device MUST NOT be trusted merely because a WebRTC connection succeeded.
 
-### 8.3 QR (D4)
+### 8.3 Pairing payload and QR (D4)
 
-- Binary payload with version, session ID, DTLS fingerprint (32 bytes), ICE ufrag, ICE pwd, candidates (host and srflx), Noise ephemeral key and capabilities. Encoded in base45 (QR alphanumeric mode).
+- Binary pairing payload with version, session ID, DTLS fingerprint (32 bytes), ICE ufrag, ICE pwd, candidates (host and srflx), Noise ephemeral key and capabilities. Encoded in base45 (QR alphanumeric mode). The original spec estimated about 200–300 bytes; this is not yet measured.
 - The receiver rebuilds the SDP from the payload. ICE gathering completes before the QR is generated, with no trickle.
 - Bidirectional exchange: A shows its QR and B scans it, then B shows its response and A scans it. Copy/paste is the fallback for desktops without a camera.
-- Animated QR MUST NOT be implemented without evidence that a static QR is insufficient.
-- The QR MUST NOT contain vault data.
+- Animated QR MUST NOT be implemented without real-world evidence that a static QR is insufficient.
+- The pairing payload MUST NOT contain vault data.
 
 ### 8.4 Flow
 
 ```
 A's QR → B's QR → WebRTC/DTLS → Noise_XX handshake → SAS on both devices
 → human confirmation → vault key material transferred over the Noise channel
-→ B creates local password, derives KEK, wraps master key, generates identity, (WebAuthn) → B trusted
+→ B creates local password, derives KEK, wraps master key, generates identity, (WebAuthn) → B is a paired device
 ```
 
-A mismatched SAS MUST abort. No key or recovery secret is transferred before confirmation.
+A mismatched SAS MUST abort. No key or recovery secret is transferred before confirmation, and the transfer MUST occur inside the authenticated Noise channel.
 
 The new device MUST have no vault (D13). If it already holds one, pairing requires the user to explicitly erase it first, after a warning recommending a backup.
 
@@ -226,11 +253,13 @@ The new device MUST have no vault (D13). If it already holds one, pairing requir
 
 ## 9. Synchronization
 
+QR + WebRTC synchronization avoids any permanent synchronization infrastructure.
+
 ### 9.1 Session establishment (D12)
 
 A browser cannot discover peers or accept inbound connections, so every WebRTC session needs a fresh exchange of connection data (SDP and ICE candidates) through some out-of-band channel. In v1 there is no automatic background sync between devices.
 
-- **v1: manual sync.** The user starts a sync on two devices and exchanges a **reconnection payload** by QR (or copy/paste), in both directions. It is smaller than the pairing payload because identities are already known: no SAS and no enrollment, authentication comes from `Noise_KK` (CRYPTO-INV-008).
+- **v1: manual sync.** The user starts a sync on two devices and exchanges a **reconnection payload** by QR (or copy/paste), in both directions. It is smaller than the pairing payload because identities are already known: no SAS and no enrollment, authentication comes from `Noise_KK` (CRYPTO-INV-008). A peer MUST prove possession of the private key for its registered identity, bound to the current session; replaying an old authentication exchange MUST NOT authenticate a device.
 - **Live session.** While a DataChannel is open, changes made on either device are pushed immediately, until either side closes the session or locks the vault.
 - **Transport-agnostic payload.** The reconnection payload is defined independently of how it is delivered (QR, copy/paste, or a future relay), and is encrypted to the peer's static key, so a relay added later needs no protocol change.
 - **After v1: optional signaling relay.** Devices drop encrypted reconnection payloads for each other in a mailbox, enabling automatic sync when both are online. The plan:
@@ -251,12 +280,13 @@ connect → Noise_KK (proves possession of the registered identity, bound to the
 → transfer divergent records (always encrypted) → merge → persist → ack
 ```
 
-- **Conflicts:** last-write-wins per item, ordered by HLC. The losing version MUST go to history and never be discarded.
-- **HLC:** physical time + logical counter, monotonic per device, canonical serialization, and a future-clock bound (timestamps beyond the bound are rejected or normalized).
-- **Tombstones:** synchronized and kept indefinitely in v1. A tombstone beats an older edit. A newer edit may restore the item.
+- **Transfer:** only records that differ SHOULD be transferred. Transferred contents always remain encrypted.
+- **Conflicts:** last-write-wins per item, ordered by HLC, for simple deterministic v1 conflict handling. The losing version MUST go to history and never be discarded, so no conflict silently loses data.
+- **HLC:** physical time + logical counter, monotonic per device, canonical serialization, clock-skew handling, and a future-clock bound so malformed timestamps cannot gain unbounded future dominance (timestamps beyond the bound are rejected or normalized).
+- **Tombstones:** a tombstone holds roughly `id`, `hlc` and `deleted = true`. Tombstones are synchronized and kept indefinitely in v1, so a stale offline device cannot resurrect deleted content. A tombstone beats an older edit. A newer edit may restore the item. Tombstones MUST NOT be removed merely because the local device has not seen the item recently. A future version MAY compact tombstones once device membership and acknowledgment state prove that all known devices have observed them.
 - **History:** the latest 20 versions per item, encrypted. Pruning is done locally while unlocked (D6).
 - **Trash (D7):** purge date = physical time of the tombstone's HLC + 30 days, computed independently by each device. Only content and history are deleted; the tombstone remains.
-- **Network:** default STUN providers are Google and Cloudflare, configurable. A LAN-only mode without STUN MUST exist. No TURN in v1; fallbacks are same-network sync and `.bvault`. STUN sees the public IP and provides no anonymity.
+- **Network:** STUN is used only to assist connectivity. Default STUN providers are Google and Cloudflare, configurable. STUN sees the public IP and MUST NOT be assumed to provide anonymity. A LAN-only mode without STUN MUST exist, for users who want network privacy. Symmetric NAT, especially on some cellular networks, may prevent direct connections; v1 MUST NOT require TURN, and the fallbacks are same-network sync and `.bvault`. A future TURN mode MAY be considered only if it preserves the privacy model.
 
 ### 9.3 Collection tree rules (D14)
 
@@ -272,35 +302,48 @@ These rules never write records; once all devices have the same records, they sh
 
 ## 10. `.bvault` backup (D3)
 
+The `.bvault` file gives offline recovery without any network service.
+
 ```
 [magic][format version][parameters]
 [keyslot: recovery phrase]                ← mandatory
 [keyslot: export password, Argon2id]      ← optional
 [payload: secretstream(file key)]
     ├── encrypted records (as stored in IndexedDB)
-    ├── master key recovery envelope
+    ├── master key Recovery Envelope
     └── master key wrapped by the file key (for the password slot)
 ```
 
+- The header carries magic, format version, cryptographic and key-derivation parameters, and migration/versioning information; the payload is integrity-protected.
 - A random file key encrypts the payload. Each keyslot wraps the file key.
 - The recovery phrase **always** opens the backup. The export password is an extra path.
-- The outer layer hides IDs, HLCs and the number of records.
+- The outer layer hides IDs, HLCs and the number of records. A backup MUST remain encrypted when copied to untrusted storage.
 - Automatic upload MUST NOT exist. The format is versioned and documented in `backup-format.md`.
-- Restore creates a new vault or merges into an existing one, using the same rules as sync. Merge MUST be rejected if the backup's `vaultId` differs from the local vault's (D13); restoring a different vault requires explicitly replacing the local one.
+- **Restore** MUST support creating a new vault from a backup, restoring after device loss, restoring after browser storage loss, and merging into the existing vault when explicitly requested. Merge uses the same rules as sync. Merge MUST be rejected if the backup's `vaultId` differs from the local vault's (D13); restoring a different vault requires explicitly replacing the local one.
 
 ---
 
 ## 11. Application integrity (D5)
 
 - The service worker serves cache-first with a versioned cache. A new version is activated **only after explicit user confirmation**, showing the version and hash. Code is never upgraded silently.
-- Reproducible build with pinned lockfile and Node version and `SOURCE_DATE_EPOCH`. CI rebuilds and compares the hash.
-- The asset manifest hash is published on GitHub Releases and displayed in the app.
-- Static self-hosting MUST work.
+- Reproducible build with pinned lockfile and Node version and `SOURCE_DATE_EPOCH`, to make application integrity verifiable. CI rebuilds and compares the hash.
+- The asset manifest hash (SHA-256) is published on GitHub Releases and displayed in the app together with the running version.
+- Static self-hosting MUST work, so a user who does not trust the official host can build and host BlindVault independently.
 - The first load relies on trust on first use, and this is recorded in the threat model.
 
 ---
 
-## 12. User interface and layouts (D15)
+## 12. Release and distribution
+
+- The official application SHOULD be distributed as a static web application: GitHub Pages by default, any compatible static host for self-hosting. Static hosting means there is no operational backend.
+- Each release SHOULD publish the source code, release version, build hash, reproducible-build instructions and release notes. Release artifacts SHOULD be signed where practical.
+- The project is open source under the MIT license.
+
+---
+
+## 13. User interface
+
+### 13.1 Layouts (D15)
 
 Unlike BlindPass, which uses a single mobile layout everywhere, BlindVault has a dedicated layout per form factor.
 
@@ -314,11 +357,43 @@ Unlike BlindPass, which uses a single mobile layout everywhere, BlindVault has a
 - **Input adapts separately from layout**, using `pointer` and `hover` media queries: touch targets of at least 44 px on coarse pointers, hover affordances only where hover exists, and keyboard shortcuts on desktop (search, new item, lock).
 - One set of domain state and components, with three layout shells. Layout code MUST NOT duplicate business or security logic.
 - **Security rules are identical in every layout.** Secrets stay masked by default even when wider layouts show more at once, revealing requires an explicit action, lock/unlock state is always visible, and auto-lock behaves the same.
-- The UI requirements in `spec.md` section 56 (lock state, masking, backup and sync status, persistence warnings) apply to all three layouts.
+- The UI security requirements (section 13.2) apply to all three layouts.
+
+### 13.2 UI security requirements
+
+The UI MUST:
+
+- clearly indicate locked/unlocked state;
+- avoid displaying secrets unnecessarily;
+- mask secret fields by default;
+- require explicit action to reveal secrets;
+- provide clear backup and recovery warnings;
+- clearly show synchronization state;
+- show the last successful backup and the last successful synchronization;
+- warn about storage persistence problems.
+
+### 13.3 Onboarding
+
+The onboarding flow SHOULD be:
+
+```
+Create vault → Generate Recovery Phrase → Confirm Recovery Phrase → Create local password
+→ Optional WebAuthn setup → Vault ready → Recommend backup → Recommend pairing another device
+```
+
+Onboarding MUST explain that BlindVault has no server that can reset the user's vault, which is why the Recovery Phrase is critical.
+
+### 13.4 Backup reminders
+
+The application SHOULD record the last backup date and the last synchronization date, and SHOULD warn when the configured backup interval expires. The default recommendation is 30 days.
+
+### 13.5 UX principles
+
+BlindVault favors explicit security decisions, understandable warnings, safe defaults, minimal configuration and clear recovery flows. Security-critical operations MUST NOT be hidden behind ambiguous UI.
 
 ---
 
-## 13. Recovery
+## 14. Recovery
 
 | Situation | Recovery |
 | --- | --- |
@@ -326,17 +401,34 @@ Unlike BlindPass, which uses a single mobile layout everywhere, BlindVault has a
 | Device lost | Pair a new device or restore `.bvault` |
 | All devices lost | `.bvault` + recovery phrase |
 | Browser storage erased | `.bvault` or another paired device |
+| Recovery Phrase lost or exposed | Regenerate it while unlocked (section 5.4) |
 | Master key compromised (D11) | Create a new vault and import the content |
 
-There is no administrator recovery. Losing all data and all recovery mechanisms means permanent loss, and this MUST be communicated to users.
+There is no administrator recovery, hidden or otherwise. Losing all data and all recovery mechanisms means permanent loss, and this MUST be communicated to users.
 
 ---
 
-## 14. Stack and repository
+## 15. BlindPass import and reuse
+
+BlindVault SHOULD support migration from BlindPass. The importer MUST:
+
+1. decrypt the BlindPass representation;
+2. validate the source data;
+3. transform it into BlindVault's domain model;
+4. encrypt the resulting records using BlindVault's cryptographic format;
+5. never persist plaintext migration data after import.
+
+The BlindPass storage and encryption format is documented in `blindpass-format.md`.
+
+**Code reuse.** BlindPass cryptographic and domain code is **copied** into the matching BlindVault package, never imported at runtime or linked as a dependency. Where BlindPass differs on a primitive, AAD layout, key hierarchy or serialization, this document wins and the difference is recorded in `architecture.md`. Copied cryptographic code gets the same tests and review as new code. The BlindPass server application, API schema, PostgreSQL, Redis, Docker and Terraform code are not reused.
+
+---
+
+## 16. Stack and repository
 
 **Stack:** TypeScript, React, Vite, Tailwind, `libsodium-wrappers-sumo`, `@scure/bip39`, `zxcvbn` (or equivalent), a Noise implementation on top of libsodium, a CBOR library with a deterministic mode, Vitest and Playwright.
 
-**Dependency policy:** every new dependency needs a justification. Cryptographic dependencies must be actively maintained and have a good security history. Updates are reviewed for cryptographic or serialization changes.
+**Dependency policy:** security-sensitive dependencies SHOULD be minimized, and every new dependency needs a justification. Cryptographic dependencies must be actively maintained, have a good security history, and avoid custom cryptographic implementations. Updates are reviewed for cryptographic or serialization changes.
 
 ```
 apps/web/
@@ -352,7 +444,7 @@ tests/{crypto,pairing,sync,recovery,integration}/
 
 ---
 
-## 15. Security invariants
+## 17. Security invariants
 
 | ID | Invariant |
 | --- | --- |
@@ -362,22 +454,44 @@ tests/{crypto,pairing,sync,recovery,integration}/
 | CRYPTO-INV-004 | Every encrypted record authenticates its identity and `keyEpoch` via AAD |
 | CRYPTO-INV-005 | Keys MUST NOT appear in logs |
 | CRYPTO-INV-006 | Recovery material MUST NOT be logged or persisted in plaintext |
-| CRYPTO-INV-007 | No device becomes trusted without explicit SAS confirmation |
+| CRYPTO-INV-007 | No device becomes a paired device without explicit SAS confirmation |
 | CRYPTO-INV-008 | Before syncing, a peer proves possession of its registered identity (Noise_KK) |
 | CRYPTO-INV-009 | Every sync message is authenticated and bound to the active session |
 | CRYPTO-INV-010 | Secrets are removed from application-accessible memory on lock, as far as JS permits |
 
 Every invariant MUST have at least one associated negative test.
 
+The following limitations are not testable invariants but MUST hold in the design and be stated in user documentation: application integrity is separate from cryptographic confidentiality (section 3); device revocation cannot erase already-replicated data (section 20); there is no administrator recovery, and losing every copy and every recovery mechanism means permanent loss (section 14).
+
 ---
 
-## 16. Rules for AI agents
+## 18. Testing
+
+Security correctness MUST be tested independently of UI correctness. Layers, from fastest to broadest: unit, property, protocol, integration, browser, multi-device, and security gates.
+
+**Cryptographic tests** MUST cover: key generation, Argon2id parameter handling, encryption/decryption, invalid ciphertext, invalid authentication tags, AAD mismatch, key epoch mismatch, nonce handling, recovery, key wrapping, migration, and corrupted backup files.
+
+**Pairing tests** MUST cover: successful pairing, rejected SAS mismatch, replayed pairing, modified QR payload, modified SDP, wrong device identity, aborted pairing, duplicate pairing, interrupted transfer, reconnect, and session expiration.
+
+**Synchronization tests** MUST cover: identical vaults, one-way changes, bidirectional changes, concurrent edits, delete vs edit, edit vs delete, restore, stale devices, tombstones, history, duplicate records, duplicate messages, out-of-order messages, and corrupted records.
+
+**Recovery tests**, at minimum:
+
+```
+Create vault → Backup → Destroy local storage → Restore → Verify all records
+Device A → Pair device B → Destroy A → Continue with B
+Destroy A and B → Restore from .bvault with the Recovery Phrase → Verify vault
+```
+
+---
+
+## 19. Rules for AI agents
 
 This document is **normative**.
 
 **Agents MUST NOT:** invent cryptographic primitives; replace a specified primitive or protocol without explicit approval; weaken authentication for convenience; persist plaintext secrets for debugging; add telemetry containing vault data; add a backend to simplify sync; silently change the key hierarchy or the backup format; remove security checks to make tests pass.
 
-**Agents SHOULD:** read package boundaries before changing a package; preserve the invariants; add tests for all security-sensitive behavior; explain any security-model change **before** implementing it.
+**Agents SHOULD:** read package boundaries before changing a package; batch-read related files when investigating architecture; preserve the invariants; add tests for all security-sensitive behavior; explain any security-model change **before** implementing it.
 
 ### Definition of Done for security-sensitive changes
 
@@ -393,14 +507,14 @@ This document is **normative**.
 
 ---
 
-## 17. Out of scope for v1
+## 20. Out of scope for v1
 
-- **Device revocation.** Revocation cannot erase data already replicated. Rotating the vault key only protects future data. `keyEpoch` is already reserved.
+- **Device revocation**, deferred because it is complex and of limited benefit: revocation cannot erase data already replicated, and rotating the vault key only protects data encrypted afterwards. `keyEpoch` is already reserved. A future revocation SHOULD: revoke the device → new key epoch → new vault key → re-encrypt active data → exclude the revoked device from future sync. Documentation MUST keep stating that previous copies cannot be remotely erased.
 - **Master key rotation** (D11).
-- **Attachments** (up to 10 MB, chunked `secretstream`). They must not complicate the basic sync protocol.
-- **Sharing between people.** Requires a different trust model and MUST NOT reuse device pairing.
-- **Browser extension and autofill**, which are a separate security boundary.
-- **Cloud storage plugins** (Drive, Dropbox), which would only receive `.bvault`-format data.
+- **Attachments** (up to 10 MB, chunked `secretstream`, encrypted blob sync, storage quota management), deferred to keep v1 simple. They MUST NOT complicate the basic sync protocol. Improved backup workflows come with them.
+- **Sharing between people.** Requires a different trust model (multiple principals, independent identities, permissions, revocation, partial access, key rotation, auditability), MUST be designed separately and MUST NOT reuse device pairing.
+- **Browser extension and autofill**, which are a separate security boundary with a much larger attack surface.
+- **Cloud storage plugins** (Drive, Dropbox), which would only receive `.bvault`-format data. The core app MUST remain functional without them.
 - **TURN.**
 - **Signaling relay for automatic sync** (D12): mailbox interface with Nostr and ntfy adapters, off by default, no official instance. Must never receive vault data.
 - **User-created templates.**
@@ -408,14 +522,14 @@ This document is **normative**.
 
 ---
 
-## 18. Decision log
+## 21. Decision log
 
 | # | Topic | Decision |
 | --- | --- | --- |
-| D1 | Device authentication | Noise `25519_ChaChaPoly_BLAKE2b`: XX for pairing, KK for sync. Prologue binds the QR and DTLS fingerprints; SAS derived from the handshake hash |
-| D2 | Recovery Phrase | Recovery KEK via `crypto_kdf` wraps the master key; envelope is synchronized; older backups remain openable with the old phrase |
+| D1 | Device authentication | Noise `25519_ChaChaPoly_BLAKE2b`: XX for pairing, KK for sync. Prologue binds the pairing payload and DTLS fingerprints; SAS derived from the handshake hash |
+| D2 | Recovery Phrase | Recovery KEK via `crypto_kdf` wraps the master key; the Recovery Envelope is synchronized; older backups remain openable with the old phrase |
 | D3 | `.bvault` | File key + secretstream; keyslots: recovery (mandatory) and Argon2id password (optional) |
-| D4 | QR and SDP | Minimal binary payload in base45, SDP rebuilt by the receiver, no ICE trickle, bidirectional exchange, copy/paste fallback, SAS always required |
+| D4 | QR and SDP | Minimal binary pairing payload in base45, SDP rebuilt by the receiver, no ICE trickle, bidirectional exchange, copy/paste fallback, SAS always required |
 | D5 | PWA integrity | Updates only with user confirmation, reproducible build verified in CI, hash published and displayed, TOFU documented |
 | D6 | Version metadata | Only `versionId` and `hlc` in cleartext |
 | D7 | Trash | Purge = physical time of the tombstone's HLC + 30 days; tombstone remains |

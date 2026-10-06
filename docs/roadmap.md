@@ -1,6 +1,6 @@
 # BlindVault — Implementation Roadmap
 
-> Complements `overview.md`, which is the normative reference. `Dn` references point to the decision log (overview, section 18).
+> Complements `overview.md`, which is the normative reference. `Dn` references point to the decision log (overview, section 21 "Decision log").
 > Hobby project, one developer, no deadline: **the phase order and the gates are the commitment, not dates.**
 
 ---
@@ -51,7 +51,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### Documentation
 
-- [ ] Copy `overview.md` and `roadmap.md` into `docs/`, and the original spec as `docs/spec.md`
+- [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
 - [ ] `docs/crypto-spec.md`: key hierarchy, envelopes, AAD (D8), Recovery KEK (D2), Argon2id parameters (D9)
 - [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 010, each mapped to the test that covers it (filled in across phases)
 - [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
@@ -102,7 +102,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### `packages/vault`
 
-- [ ] Item model with typed fields (list in overview, section 6)
+- [ ] Item model with typed fields (list in overview, section 6 "Data model")
 - [ ] Factory templates
 - [ ] Collection record with encrypted name and `parentId` (D14)
 - [ ] Item `collectionId` (optional; absent = vault root); tags inside the encrypted content
@@ -308,4 +308,4 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ## After v1
 
-Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), attachments (up to 10 MB, chunked secretstream), storage quotas, device revocation via `keyEpoch`, master key rotation, cloud storage plugins, sharing between people, and a browser extension. Details in the overview, section 17.
+Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), attachments (up to 10 MB, chunked secretstream), storage quotas, device revocation via `keyEpoch`, master key rotation, cloud storage plugins, sharing between people, and a browser extension. Details in the overview, section 20 "Out of scope for v1".
