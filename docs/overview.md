@@ -1,7 +1,7 @@
 # BlindVault — Overview
 
 > Normative design document for implementation. It prevails over every other document in this repository.
-> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D15 (section 21).
+> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D20 (section 21).
 > Status: Proposed · Author: Allisson Azevedo · License: MIT.
 > The words MUST, MUST NOT, SHOULD and MAY follow RFC 2119. Terms follow `GLOSSARY.md`.
 
@@ -43,6 +43,10 @@ BlindVault is derived from BlindPass: it reuses the cryptographic model and doma
 **Out of scope (MUST be documented to users):** a compromised operating system, malware that reads browser memory, malicious extensions, an attacker holding an unlocked device, keyloggers, a malicious browser, and a malicious JavaScript bundle executed before integrity verification, including the first load (TOFU, see D5).
 
 Cryptographic confidentiality and application integrity are separate properties. A malicious bundle can read vault contents after unlock, even with perfect cryptography; a compromised browser, OS, extension or JavaScript bundle can therefore compromise an unlocked vault and is outside the cryptographic threat model.
+
+**Accepted metadata leakage.** The cleartext record header (section 6) is visible to anyone who can read IndexedDB on a locked device: record types and counts, `keyEpoch`, deletion state, and the HLC of every change (which reveals editing times and the `deviceId` that made them). During sync the same header is visible to the peer, never to the network. A `.bvault` file hides all of it (section 10).
+
+**Device admission.** Anyone holding the Vault Key can write a Device record and so register a device. This is accepted: holding the Vault Key already grants full access to the vault.
 
 | Threat | Status | Mitigation |
 | --- | --- | --- |
@@ -94,7 +98,7 @@ Cryptographic confidentiality and application integrity are separate properties.
 | Package | Responsibilities | Constraints |
 | --- | --- | --- |
 | `packages/crypto` | Key generation, Argon2id, AEAD, X25519, recovery material, recovery KEK, WebAuthn wrapping, RNG, cryptographic serialization (AAD and transcripts) | No UI logic. No dependency on other packages |
-| `packages/vault` | Domain model: items, fields, templates, collections, tags, versions, tombstones, key references | No IndexedDB or network access |
+| `packages/vault` | Domain model: items, fields, templates, folders, tags, versions, tombstones, key references | No IndexedDB or network access |
 | `packages/storage` | IndexedDB schema, encrypted record persistence, transactions, migrations, `navigator.storage` (persistence requests and estimation) | Accepts only already-encrypted records |
 | `packages/backup` | `.bvault` format, keyslots, backup encryption, export, import, validation, format migration | — |
 | `packages/sync` | Pairing, device authentication, Noise handshake, WebRTC, QR encoding, sync protocol, HLC, merge and conflict resolution, tombstones | Transport abstracted so tests run without WebRTC |
@@ -116,13 +120,13 @@ Custom cryptographic primitives MUST NOT be implemented. Protocols (Noise) MUST 
 Local password ──Argon2id──► Device KEK ─┐
 WebAuthn PRF (optional) ──► PRF KEK ─────┼──► unwraps ──► Master Key
 Recovery Phrase ─crypto_kdf─► Recovery KEK ─┘                 │
-                                                              ├──► Vault Key (per keyEpoch)
-                                                              │        │
+        │  (envelope subkey)                                  ├──► Vault Key (per keyEpoch)
+        │                                                     │        │
+        └─crypto_kdf─► Recovery keyslot keypair (D16)         │        ▼
+             public key synchronized, private key             │    Record key (per record)
+             derived only from the phrase                     │        │ AEAD
                                                               │        ▼
-                                                              │    Item Key (per item)
-                                                              │        │ AEAD
-                                                              │        ▼
-                                                              │    Encrypted item
+                                                              │    Encrypted record content
                                                               │
 Device Identity (X25519, local, encrypted at rest under the Master Key)
 ```
@@ -135,16 +139,19 @@ Device Identity (X25519, local, encrypted at rest under the Master Key)
 
 **Vault Key.** Random (not derived from user credentials), protected by the master key, always tagged with a `keyEpoch` so the key can be rotated later without redesigning the record format.
 
-**Item Key.** Random and independent per item, wrapped by the vault key with AAD (D8). Item-level keys give item isolation, independent encryption contexts, simpler future rotation, and safer handling of deleted or migrated records.
+**Record key (D18).** Random and independent per content record (Item, Item Version, Folder, Device), wrapped by the Vault Key of the record's `keyEpoch` with the record's AAD, and stored in the record. Record keys give record isolation, independent encryption contexts, simpler future rotation, and safer handling of deleted or migrated records. Two records are not encrypted with a record key: the Vault Key record (wrapped by the Master Key) and the Recovery Envelope (wrapped by the Recovery KEK envelope subkey).
 
 ### 5.4 Recovery Phrase (D2)
 
 - 256 bits from a CSPRNG, displayed as a 24-word BIP39 phrase. In the UI it is called "Recovery Phrase", never "seed": it represents vault recovery entropy, not a cryptocurrency wallet.
-- `Recovery KEK = crypto_kdf_derive_from_key(entropy, fixed context)`. No Argon2, since entropy is already high.
-- The Recovery KEK wraps the master key. This Recovery Envelope is a **synchronized record**, so every device and future backup holds the current envelope.
+- `Recovery KEK = crypto_kdf_derive_from_key(entropy, fixed context)`. No Argon2, since entropy is already high. The Recovery KEK is never used directly: each use derives its own `crypto_kdf` subkey with a distinct subkey ID (key separation).
+- The **envelope subkey** wraps the master key. This Recovery Envelope is a **synchronized record** with a fixed `recordId` per vault, merged by LWW, so every device and future backup holds the current envelope.
+- **Recovery keyslot keypair (D16).** A second subkey seeds an X25519 keypair (`crypto_box_seed_keypair`). The Recovery Envelope also carries the **public key** in its encrypted content. Any unlocked device can therefore create a backup's recovery-phrase keyslot (`crypto_box_seal` of the file key) without holding the phrase or any recovery secret. The private key exists only while the phrase is being used.
+- Each phrase has a random `phraseId` and a creation date, stored in the Recovery Envelope and in every backup header, and shown to the user when the phrase is generated, when a backup is listed, and when a backup is restored ("opens with the Recovery Phrase from 2026-10-06").
 - Combined with a `.bvault` backup, the phrase MUST be sufficient to recover the vault. It MAY be used to set a new local password on a device.
 - Shown at creation and, by default, only once, with confirmation that it was written down. MUST NOT be persisted or logged in plaintext.
-- **Regeneration:** with the vault unlocked, a new phrase and a new envelope are created; this MUST NOT require changing vault contents. The old one is removed only after the new one is persisted and synchronized. **Documented limitation:** older `.bvault` backups can still be opened with the old phrase.
+- **Check Recovery Phrase:** while unlocked, the user can type the phrase and the app confirms whether it matches the current Recovery Envelope.
+- **Regeneration:** with the vault unlocked, a new phrase and a new envelope replace the current envelope; this MUST NOT require changing vault contents. The new envelope reaches other devices only when they sync, and the UI MUST show that the new phrase is not yet on other devices. If two devices regenerate concurrently, LWW keeps one envelope; a device that receives an envelope newer than the one it created MUST warn the user that the phrase they wrote down was superseded. **Documented limitations:** older `.bvault` backups can still be opened with the old phrase, and a device that has not yet synced keeps producing backups for the old phrase; the `phraseId` shown with every backup makes this visible.
 
 ### 5.5 WebAuthn PRF
 
@@ -158,7 +165,7 @@ Every encrypted record MUST bind its ciphertext to its logical identity through 
 AAD = protocolVersion || recordType || vaultId || recordId || keyEpoch
 ```
 
-This also applies to wrapped item keys (D8) and the Recovery Envelope. Nonces follow libsodium requirements: random 24-byte nonces for XChaCha20-Poly1305 and `secretstream` for large data. Nonce reuse under the same key MUST NOT occur.
+The fields come from the record header (section 6). The same AAD binds the wrapped record key, the Vault Key record and the Recovery Envelope (D8, D18). Nonces follow libsodium requirements: random 24-byte nonces for XChaCha20-Poly1305 and `secretstream` for large data. Nonce reuse under the same key MUST NOT occur.
 
 ### 5.7 Serialization and versioning (D10)
 
@@ -173,29 +180,32 @@ This also applies to wrapped item keys (D8) and the Recovery Envelope. Nonces fo
 
 Only the minimum metadata needed for synchronization is in cleartext.
 
-| Record | Cleartext metadata | Encrypted content |
+**Record header (D18).** Every synchronized record has the same cleartext header: `recordType`, `recordId`, `hlc`, `deleted`, `keyEpoch`. The header is the source of the AAD (section 5.6) and of the sync summaries (section 9.2). `vaultId` and `protocolVersion` are bound through the AAD.
+
+| Record | Header specifics | Encrypted content |
 | --- | --- | --- |
-| Item | `id`, `hlc`, `deleted`, `keyEpoch` | Template, title, fields, `collectionId` (optional), tags, notes |
-| Collection (D14) | `id`, `hlc`, `deleted`, `keyEpoch` | Name, `parentId` (optional) |
-| Item Version (D6) | `versionId` (random), `hlc` | `itemId`, `deviceId`, full item snapshot |
-| Template | `id`, `hlc`, `deleted` | Name and field definitions |
-| Vault Key | `vaultId`, `keyEpoch` | Vault key |
-| Recovery Envelope (D2) | `vaultId`, `hlc`, version | Master key wrapped by the Recovery KEK |
-| Device | `deviceId`, public identity key, `pairedAt` | Device display name |
-| Local Config (not synchronized) | — | Local KEK material, PRF KEK state, preferences |
+| Item | `recordId` = item ID | Record key (wrapped); `templateId`, `templateVersion`, title, fields, `folderId` (optional), tags, notes |
+| Folder (D14) | `recordId` = folder ID | Record key (wrapped); name, `parentId` (optional), `trashOperationId` (when trashed) |
+| Item Version (D6) | `recordId` = `versionId` (deterministic, opaque) | Record key (wrapped); `itemId`, `deviceId`, full item snapshot |
+| Vault Key | `recordId` fixed per `keyEpoch` | Vault Key wrapped by the Master Key |
+| Recovery Envelope (D2, D16) | `recordId` fixed per vault | Master Key wrapped by the envelope subkey; recovery keyslot public key, `phraseId`, phrase creation date |
+| Device | `recordId` = `deviceId` | Record key (wrapped); public identity key, display name, `pairedAt` |
+| Local Config (not synchronized) | — | Local KEK material, PRF KEK state, encrypted device identity, preferences |
 
-Collections and tags MUST remain encrypted, including the collection tree structure (`parentId`), so synchronization metadata does not expose how the user organizes the vault.
+An Item also carries `trashOperationId` in its encrypted content while trashed. Templates are not records in v1 (D20): factory templates are versioned definitions in code, and an item references one by `templateId` and `templateVersion`. The `Template` record type is reserved for user-created templates after v1.
 
-**Collections / folders (D14).** Collections are nested folders with unlimited depth.
+Folders and tags MUST remain encrypted, including the folder tree structure (`parentId`), so synchronization metadata does not expose how the user organizes the vault.
 
-- An item belongs to **exactly one** collection or to the vault root (no `collectionId`). It never appears in more than one place. Tags remain flat and are the way to classify items across folders.
-- Moving a collection edits its `parentId`; moving an item edits its `collectionId` and creates an item version like any other edit.
+**Folders (D14).** Folders nest with unlimited depth.
+
+- An item belongs to **exactly one** folder or to the vault root (no `folderId`). It never appears in more than one place. Tags remain flat and are the way to classify items across folders.
+- Moving a folder edits its `parentId`; moving an item edits its `folderId` and creates an item version like any other edit.
 - Siblings are sorted alphabetically. There is no manual ordering in v1.
-- Deleting a collection sends it, its subcollections and their items to the trash, each with its own tombstone. Restoring from the trash brings the subtree back.
-- Collections have no version history. Concurrent edits to the same collection (for example, rename on one device and move on another) are resolved by LWW and one of them is lost; this limitation is documented.
+- Deleting a folder sends it, its subfolders and their items to the trash, each with its own tombstone, and records the same random `trashOperationId` in every record trashed by that action. Restoring the folder restores exactly the records carrying that `trashOperationId`; an item trashed earlier by a separate action stays in the trash.
+- Folders have no version history. Concurrent edits to the same folder (for example, rename on one device and move on another) are resolved by LWW and one of them is lost; this limitation is documented.
 - The tree is **derived at read time** with deterministic rules, so every device shows the same tree without writing anything (see section 9.3).
 
-**Single vault (D13).** Each installation holds exactly one vault, and multiple vaults are not planned. Collections (folders in the UI) and tags are the way to organize items. `vaultId` is still kept in records and AAD, because it prevents mixing records from different vaults during restore, merge or pairing.
+**Single vault (D13).** Each installation holds exactly one vault, and multiple vaults are not planned. Folders and tags are the way to organize items. `vaultId` is still kept in AAD, because it prevents mixing records from different vaults during restore, merge or pairing.
 
 **Field types (v1):** text, long text, secret, URL, email, phone, date, number, TOTP, BIP39 seed, wallet fields. Attachments come after v1.
 
@@ -219,13 +229,15 @@ Pairing is one of the most security-sensitive protocols in BlindVault. It MUST b
 
 ### 8.1 Identity
 
-Each device has an X25519 key pair, which is the device's **Noise static key**. The private key is local, encrypted at rest, and MUST NOT be included in synchronized cleartext metadata. The public key is synchronized in the Device record. Device identity MUST be authenticated during synchronization.
+Each device has an X25519 key pair, which is the device's **Noise static key**. The private key is local, encrypted at rest under the Master Key, and MUST NOT be synchronized. The public key is synchronized in the Device record. Device identity MUST be authenticated during synchronization.
+
+`deviceId = BLAKE2b-128(static public key)` (D19). It is derived, so a device cannot claim another device's ID with a different key.
 
 ### 8.2 Handshake (D1)
 
 - Suite: `Noise_*_25519_ChaChaPoly_BLAKE2b`, an existing implementation on top of libsodium, validated against the official test vectors.
 - **Pairing:** `Noise_XX`. **Synchronization:** `Noise_KK`, since both sides already know each other's static key.
-- Prologue = versioned protocol label + hash of the pairing payload + DTLS fingerprints of both sides. The transcript MUST include all security-relevant negotiation values, with a canonical, versioned encoding.
+- Prologue = versioned protocol label ‖ hash of the initiator's pairing payload ‖ hash of the responder's pairing payload ‖ DTLS fingerprints of both sides, in fixed role order (initiator first). Both pairing payloads are bound, not only the first. The transcript MUST include all security-relevant negotiation values, with a canonical, versioned encoding.
 - The SAS is derived from the final handshake hash. It MUST bind both peers and the session, MUST prevent replay across sessions, and MUST be displayed on both devices and explicitly confirmed by the user. SAS length and brute-force analysis, including commitment in copy/paste mode, are defined in `pairing-protocol.md`.
 - WebRTC DTLS is transport only and MUST NOT be the trust mechanism. A device MUST NOT be trusted merely because a WebRTC connection succeeded.
 
@@ -240,10 +252,18 @@ Each device has an X25519 key pair, which is the device's **Noise static key**. 
 ### 8.4 Flow
 
 ```
-A's QR → B's QR → WebRTC/DTLS → Noise_XX handshake → SAS on both devices
-→ human confirmation → vault key material transferred over the Noise channel
-→ B creates local password, derives KEK, wraps master key, generates identity, (WebAuthn) → B is a paired device
+B generates its identity (in memory only)
+→ A's QR → B's QR → WebRTC/DTLS → Noise_XX handshake → SAS on both devices
+→ human confirmation → A writes B's Device record (static key seen in the handshake)
+→ Master Key transferred over the Noise channel
+→ first full sync over the same channel (sync protocol, no new exchange)
+→ B creates local password, derives KEK, wraps Master Key, persists its identity encrypted, (WebAuthn)
+→ B is a paired device
 ```
+
+`Noise_XX` transmits both static keys during the handshake, so B's identity MUST exist before it. B holds the identity only in memory until it has the Master Key, and discards it if pairing aborts.
+
+A writes B's Device record, bound to the static key A authenticated in the handshake, so B cannot choose or alter its registered key.
 
 A mismatched SAS MUST abort. No key or recovery secret is transferred before confirmation, and the transfer MUST occur inside the authenticated Noise channel.
 
@@ -261,7 +281,7 @@ A browser cannot discover peers or accept inbound connections, so every WebRTC s
 
 - **v1: manual sync.** The user starts a sync on two devices and exchanges a **reconnection payload** by QR (or copy/paste), in both directions. It is smaller than the pairing payload because identities are already known: no SAS and no enrollment, authentication comes from `Noise_KK` (CRYPTO-INV-008). A peer MUST prove possession of the private key for its registered identity, bound to the current session; replaying an old authentication exchange MUST NOT authenticate a device.
 - **Live session.** While a DataChannel is open, changes made on either device are pushed immediately, until either side closes the session or locks the vault.
-- **Transport-agnostic payload.** The reconnection payload is defined independently of how it is delivered (QR, copy/paste, or a future relay), and is encrypted to the peer's static key, so a relay added later needs no protocol change.
+- **Transport-agnostic payload.** The reconnection payload is defined independently of how it is delivered (QR, copy/paste, or a future relay), so a relay added later needs no protocol change. It is encrypted to the peer with the one-way pattern `Noise_K` (both static keys known, sender authenticated), same suite as D1 (D17). No ad-hoc construction such as `crypto_box_seal` on the Noise static key is used. `Noise_K` gives no replay protection; that comes from the `Noise_KK` session that follows. Details are in `sync-protocol.md`.
 - **After v1: optional signaling relay.** Devices drop encrypted reconnection payloads for each other in a mailbox, enabling automatic sync when both are online. The plan:
     - `packages/sync` defines a minimal **mailbox interface**: publish a blob to a topic, subscribe to a topic. Everything above it (payload format, `Noise_KK`) stays unchanged.
     - **First adapter: Nostr**, used directly (not through Trystero). Payloads are published as ephemeral events, which relays do not store, to several relays at once for redundancy. No account is needed and relays can be self-hosted.
@@ -282,19 +302,19 @@ connect → Noise_KK (proves possession of the registered identity, bound to the
 
 - **Transfer:** only records that differ SHOULD be transferred. Transferred contents always remain encrypted.
 - **Conflicts:** last-write-wins per item, ordered by HLC, for simple deterministic v1 conflict handling. The losing version MUST go to history and never be discarded, so no conflict silently loses data.
-- **HLC:** physical time + logical counter, monotonic per device, canonical serialization, clock-skew handling, and a future-clock bound so malformed timestamps cannot gain unbounded future dominance (timestamps beyond the bound are rejected or normalized).
+- **HLC (D19):** `(physicalMs, counter, deviceId)`, compared lexicographically, so two records never tie. Monotonic per device, canonical fixed-length serialization, clock-skew handling, and a future-clock bound so malformed timestamps cannot gain unbounded future dominance (timestamps beyond the bound are rejected or normalized).
 - **Tombstones:** a tombstone holds roughly `id`, `hlc` and `deleted = true`. Tombstones are synchronized and kept indefinitely in v1, so a stale offline device cannot resurrect deleted content. A tombstone beats an older edit. A newer edit may restore the item. Tombstones MUST NOT be removed merely because the local device has not seen the item recently. A future version MAY compact tombstones once device membership and acknowledgment state prove that all known devices have observed them.
-- **History:** the latest 20 versions per item, encrypted. Pruning is done locally while unlocked (D6).
+- **History (D6):** Item Versions are synchronized records. `versionId = BLAKE2b-keyed(history subkey of the Vault Key, itemId ‖ hlc)`: deterministic, so when two devices each store the same conflict loser they produce the same record, and opaque to anyone without the Vault Key. Each device keeps the 20 greatest `(hlc, versionId)` per item and drops a received version below that cut on arrival, so every device converges on the same history. Pruning is done while unlocked.
 - **Trash (D7):** purge date = physical time of the tombstone's HLC + 30 days, computed independently by each device. Only content and history are deleted; the tombstone remains.
 - **Network:** STUN is used only to assist connectivity. Default STUN providers are Google and Cloudflare, configurable. STUN sees the public IP and MUST NOT be assumed to provide anonymity. A LAN-only mode without STUN MUST exist, for users who want network privacy. Symmetric NAT, especially on some cellular networks, may prevent direct connections; v1 MUST NOT require TURN, and the fallbacks are same-network sync and `.bvault`. A future TURN mode MAY be considered only if it preserves the privacy model.
 
-### 9.3 Collection tree rules (D14)
+### 9.3 Folder tree rules (D14)
 
-Each collection record converges independently through LWW, which can produce inconsistent trees. The tree is built at read time with these deterministic rules:
+Each folder record converges independently through LWW, which can produce inconsistent trees. The tree is built at read time with these deterministic rules:
 
-- **Cycles.** Concurrent moves (A into B on one device, B into A on another) can create a cycle. The collection in the cycle with the greatest `(hlc, id)` is displayed at the root.
-- **Orphans.** An item or collection whose parent is a tombstone or does not exist is displayed at the root.
-- **Missing parent on arrival.** A collection or item received before its parent is held at the root until the parent arrives.
+- **Cycles.** Concurrent moves (A into B on one device, B into A on another) can create a cycle. The folder in the cycle with the greatest `hlc` (D19) is displayed at the root.
+- **Orphans.** An item or folder whose parent is a tombstone or does not exist is displayed at the root.
+- **Missing parent on arrival.** A folder or item received before its parent is held at the root until the parent arrives.
 
 These rules never write records; once all devices have the same records, they show the same tree.
 
@@ -305,17 +325,16 @@ These rules never write records; once all devices have the same records, they sh
 The `.bvault` file gives offline recovery without any network service.
 
 ```
-[magic][format version][parameters]
-[keyslot: recovery phrase]                ← mandatory
-[keyslot: export password, Argon2id]      ← optional
+[magic][format version][parameters][phraseId, phrase creation date]
+[keyslot: recovery phrase, crypto_box_seal]   ← mandatory (D16)
+[keyslot: export password, Argon2id]          ← optional
 [payload: secretstream(file key)]
-    ├── encrypted records (as stored in IndexedDB)
-    ├── master key Recovery Envelope
-    └── master key wrapped by the file key (for the password slot)
+    ├── encrypted records (as stored in IndexedDB), including the Recovery Envelope
+    └── Master Key wrapped by the file key
 ```
 
-- The header carries magic, format version, cryptographic and key-derivation parameters, and migration/versioning information; the payload is integrity-protected.
-- A random file key encrypts the payload. Each keyslot wraps the file key.
+- The header carries magic, format version, cryptographic and key-derivation parameters, the `phraseId` of the recovery keyslot, and migration/versioning information; the header is authenticated and the payload is integrity-protected.
+- A random file key encrypts the payload. Each keyslot wraps the file key, so either slot reaches the payload and the Master Key inside it. The recovery keyslot is sealed to the recovery keyslot public key from the Recovery Envelope (section 5.4), so a device can create it without the phrase.
 - The recovery phrase **always** opens the backup. The export password is an extra path.
 - The outer layer hides IDs, HLCs and the number of records. A backup MUST remain encrypted when copied to untrusted storage.
 - Automatic upload MUST NOT exist. The format is versioned and documented in `backup-format.md`.
@@ -436,7 +455,7 @@ packages/{crypto,vault,storage,sync,backup}/
 docs/
     architecture.md  crypto-spec.md  threat-model.md
     pairing-protocol.md  sync-protocol.md
-    security-invariants.md  backup-format.md
+    security-invariants.md  backup-format.md  blindpass-format.md
 tests/{crypto,pairing,sync,recovery,integration}/
 ```
 
@@ -517,7 +536,7 @@ This document is **normative**.
 - **Cloud storage plugins** (Drive, Dropbox), which would only receive `.bvault`-format data. The core app MUST remain functional without them.
 - **TURN.**
 - **Signaling relay for automatic sync** (D12): mailbox interface with Nostr and ntfy adapters, off by default, no official instance. Must never receive vault data.
-- **User-created templates.**
+- **User-created templates**, which will use the reserved `Template` record type (D20).
 - **Multiple vaults:** not planned at all (D13).
 
 ---
@@ -526,18 +545,23 @@ This document is **normative**.
 
 | # | Topic | Decision |
 | --- | --- | --- |
-| D1 | Device authentication | Noise `25519_ChaChaPoly_BLAKE2b`: XX for pairing, KK for sync. Prologue binds the pairing payload and DTLS fingerprints; SAS derived from the handshake hash |
-| D2 | Recovery Phrase | Recovery KEK via `crypto_kdf` wraps the master key; the Recovery Envelope is synchronized; older backups remain openable with the old phrase |
+| D1 | Device authentication | Noise `25519_ChaChaPoly_BLAKE2b`: XX for pairing, KK for sync. Prologue binds both pairing payloads and both DTLS fingerprints; SAS derived from the handshake hash. The joining device's identity exists before the handshake, and the existing device writes its Device record |
+| D2 | Recovery Phrase | Recovery KEK via `crypto_kdf`, used only through subkeys; the envelope subkey wraps the master key; one synchronized Recovery Envelope per vault (LWW) carrying a `phraseId`; older backups remain openable with the old phrase; concurrent regeneration warns the superseded device |
 | D3 | `.bvault` | File key + secretstream; keyslots: recovery (mandatory) and Argon2id password (optional) |
 | D4 | QR and SDP | Minimal binary pairing payload in base45, SDP rebuilt by the receiver, no ICE trickle, bidirectional exchange, copy/paste fallback, SAS always required |
 | D5 | PWA integrity | Updates only with user confirmation, reproducible build verified in CI, hash published and displayed, TOFU documented |
-| D6 | Version metadata | Only `versionId` and `hlc` in cleartext |
+| D6 | Version metadata | Standard record header only (D18); `itemId` stays encrypted. `versionId` is a keyed BLAKE2b of `itemId ‖ hlc`, so duplicates collapse; each device keeps the 20 greatest `(hlc, versionId)` per item |
 | D7 | Trash | Purge = physical time of the tombstone's HLC + 30 days; tombstone remains |
-| D8 | Item key AAD | `vaultId`, `recordId`, `keyEpoch`, record type |
+| D8 | Wrapped key AAD | Wrapped record keys use the same AAD layout as records (section 5.6) |
 | D9 | Argon2id | Calibrated on device, ~1 s, 64 MiB floor |
 | D10 | Serialization | Fixed length-prefixed binary for AAD and transcripts; strict deterministic CBOR for records and messages |
 | D11 | Master key rotation | Out of v1; compromise = new vault + import |
 | D12 | Session establishment | v1 sync is manual: reconnection payload exchanged by QR or copy/paste, then live push while the session is open. Payload is transport-agnostic and encrypted to the peer's static key. After v1: optional relay through a mailbox interface, with Nostr (first) and ntfy adapters, off by default, user-configured, no official instance. No sync while the app is closed |
-| D13 | Number of vaults | One vault per installation, permanently; organization through collections (folders) and tags. `vaultId` kept to reject cross-vault merge, restore and pairing |
-| D14 | Collections / folders | Nested, unlimited depth; separate encrypted Collection record with encrypted `parentId`. An item is in exactly one collection or at the root. Alphabetical order, no collection history, subtree delete to trash. Cycles and orphans resolved deterministically at read time |
+| D13 | Number of vaults | One vault per installation, permanently; organization through folders and tags. `vaultId` kept to reject cross-vault merge, restore and pairing |
+| D14 | Folders | Nested, unlimited depth; separate encrypted Folder record with encrypted `parentId`. An item is in exactly one folder or at the root. Alphabetical order, no folder history, subtree delete to trash tagged with a `trashOperationId` so restore brings back exactly that action's records. Cycles and orphans resolved deterministically at read time. "Folder" is the term in code, docs and UI |
 | D15 | Layouts | Dedicated mobile, tablet and desktop layouts chosen by viewport width (< 640, 640–1023, ≥ 1024 px); input adapts via pointer/hover queries; one domain layer with three layout shells; identical security behavior in all layouts |
+| D16 | Recovery keyslot | A `crypto_kdf` subkey of the Recovery KEK seeds an X25519 keypair; the public key is stored in the Recovery Envelope; every backup's recovery keyslot is a `crypto_box_seal` of the file key to it, so devices create backups without holding the phrase |
+| D17 | Reconnection payload encryption | Noise one-way pattern `Noise_K` with the D1 suite and the devices' static keys; no ad-hoc construction; replay protection comes from the following `Noise_KK` session |
+| D18 | Record header and record keys | Every synchronized record has the cleartext header `recordType, recordId, hlc, deleted, keyEpoch`, the source of AAD and sync summaries. Content records use a random record key wrapped by the epoch's Vault Key; the Vault Key and Recovery Envelope are the explicit exceptions |
+| D19 | HLC and device ID | HLC = `(physicalMs, counter, deviceId)`, compared lexicographically, so there are no ties; `deviceId = BLAKE2b-128(static public key)` |
+| D20 | Templates in v1 | Factory templates are versioned definitions in code; items reference `templateId` and `templateVersion`; no Template record in v1, type reserved for user templates |

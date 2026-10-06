@@ -92,23 +92,24 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Async libsodium initialization and RNG
 - [ ] Binary AAD serialization with test vectors (D10)
 - [ ] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
-- [ ] Generation of master key, vault key (with `keyEpoch`) and item keys
+- [ ] Generation of master key, vault key (with `keyEpoch`) and record keys (D18)
 - [ ] Key wrap and unwrap with AAD (D8)
 - [ ] Device KEK derivation with Argon2id and local calibration (D9)
-- [ ] Recovery KEK generation and derivation with `crypto_kdf` (D2)
+- [ ] Recovery KEK generation and derivation with `crypto_kdf`, used only through subkeys (D2); recovery keyslot keypair from a subkey (D16)
 - [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
-- [ ] Device X25519 identity generation
+- [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
 - [ ] WebAuthn PRF wrapping (optional, detected at runtime)
 
 ### `packages/vault`
 
 - [ ] Item model with typed fields (list in overview, section 6 "Data model")
-- [ ] Factory templates
-- [ ] Collection record with encrypted name and `parentId` (D14)
-- [ ] Item `collectionId` (optional; absent = vault root); tags inside the encrypted content
+- [ ] Factory templates as versioned code definitions; items store `templateId` and `templateVersion` (D20)
+- [ ] Folder record with encrypted name and `parentId` (D14)
+- [ ] Item `folderId` (optional; absent = vault root); tags inside the encrypted content
 - [ ] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
-- [ ] Collection deletion sends the subtree and its items to the trash; restore brings it back
-- [ ] Tombstone and version representation (D6)
+- [ ] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore brings back exactly those records (D14)
+- [ ] Record header (`recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18)
+- [ ] Tombstone and version representation; deterministic keyed `versionId` (D6)
 
 ### `packages/storage`
 
@@ -138,7 +139,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Changing the local password re-wraps the master key without changing records
 - [ ] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
 - [ ] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
-- [ ] Collection names and `parentId` never appear in cleartext metadata
+- [ ] Folder names and `parentId` never appear in cleartext metadata
 
 ---
 
@@ -151,13 +152,15 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] `docs/backup-format.md`: magic, version, parameters, keyslots and payload (D3)
 - [ ] `packages/backup`: `.bvault` serialization with secretstream
 - [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional)
-- [ ] Recovery Envelope record (D2)
+- [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
+- [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
+- [ ] "Check Recovery Phrase" while unlocked
 - [ ] Export and import with version and integrity validation
 - [ ] Restore as a new vault
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning
 - [ ] Forgotten local password recovery via recovery phrase
-- [ ] Recovery phrase regeneration: the old envelope is removed only after the new one is persisted
+- [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, and backups show their `phraseId` (D2)
 - [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
 
 ### Gate B
@@ -243,18 +246,18 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 ### Tasks
 
 - [ ] `docs/sync-protocol.md`: reconnection payload, messages, summaries, ordering, idempotency, versioning
-- [ ] Transport-agnostic reconnection payload, encrypted to the peer's static key (D12)
+- [ ] Transport-agnostic reconnection payload, encrypted to the peer with `Noise_K` (D12, D17)
 - [ ] Keep payload delivery behind an interface so a mailbox transport (Nostr, ntfy) can be added after v1 without protocol changes
 - [ ] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions
 - [ ] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008)
 - [ ] Messages bound to the session (CRYPTO-INV-009)
-- [ ] HLC: monotonic, canonical serialization, future-clock bound
+- [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, future-clock bound (D19)
 - [ ] Summary exchange and transfer of divergent records only
 - [ ] Per-item LWW merge, with the losing version stored in history
-- [ ] History pruned to 20 versions, locally (D6)
+- [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6)
 - [ ] Tombstones synchronized and kept indefinitely
 - [ ] Trash with deterministic purge (D7)
-- [ ] Recovery Envelope synchronization (D2)
+- [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user (D2)
 - [ ] Live push of changes while the DataChannel is open; session ends on close or lock
 - [ ] UI: sync state and last successful sync date
 
