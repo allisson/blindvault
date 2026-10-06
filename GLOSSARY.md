@@ -184,12 +184,16 @@ _Avoid_: wipe, reset, factory reset
 A registered device the user has permanently marked as gone from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
 
+**Admission**:
+The SAS-confirmed procedure by which a device joins the devices that sync a vault, through pairing or re-admission.
+_Avoid_: pairing (as the umbrella term), enrollment
+
 **Pairing**:
-The SAS-confirmed procedure by which a device holding the vault registers another device's identity.
+The admission flow in which a device holding the vault gives its Master Key to a device with no vault and registers that device's identity.
 _Avoid_: enrollment, linking
 
 **Re-admission**:
-A pairing between two devices that already hold the same vault, in which each registers whichever identity it lacks after both prove they hold the same Master Key, so no Master Key is transferred.
+The admission flow between two devices that already hold the same vault, in which each registers whichever identity it lacks after both prove they hold the same Master Key, so no Master Key is transferred.
 _Avoid_: re-pairing, rejoin
 
 **SAS**:
@@ -205,7 +209,7 @@ The connection data two registered devices exchange to start a sync session.
 _Avoid_: sync QR, sync invitation
 
 **Sync session**:
-One authenticated connection between two registered devices, live until either side closes it or locks the vault.
+One authenticated connection over which two devices holding the same vault exchange records, live until either side closes it or locks the vault.
 _Avoid_: live session, connection
 
 **LAN-only mode**:

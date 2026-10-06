@@ -53,7 +53,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
 - [ ] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
-- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 015, each mapped to the test that covers it (filled in across phases)
+- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 017, each mapped to the test that covers it (filled in across phases)
 - [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
 - [ ] Specification of the binary layout for AAD and transcripts (D10), with test vectors
 
@@ -72,6 +72,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
     - [ ] Test camera QR scanning in the installed PWA on iOS and Android
 - [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
 - [ ] **WebAuthn PRF:** verify real support across the browser matrix
+- [ ] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result
 
 ### Gate 0
 
@@ -117,6 +118,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] API that only accepts encrypted records (distinct TypeScript type)
 - [ ] Local Config persistence (KEK salt, parameters, wrapped master key)
 - [ ] `navigator.storage.persist()` and `estimate()`
+- [ ] Single active instance through an exclusive Web Lock, with take-over (D51)
 
 ### `apps/web` (minimal)
 
@@ -158,7 +160,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [ ] "Check Recovery Phrase" while unlocked
 - [ ] Export and import with version and integrity validation
-- [ ] Restore as a new vault, committed in one storage transaction (D33); records beyond the future-clock bound are accepted with a warning (D37)
+- [ ] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning
 - [ ] Forgotten local password recovery via recovery phrase
