@@ -150,6 +150,10 @@ _Avoid_: device entry, device profile
 A device whose identity is recorded in a Device record of the vault.
 _Avoid_: paired device, trusted device, enrolled device
 
+**Unregistered device**:
+A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync only after re-admission.
+_Avoid_: orphan device, unpaired device, restored device (as a status)
+
 **Retired device**:
 A registered device the user has permanently marked as gone, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
@@ -159,7 +163,7 @@ The SAS-confirmed procedure by which a device holding the vault registers anothe
 _Avoid_: enrollment, linking
 
 **Re-admission**:
-A pairing of a device that proves it already holds the same Master Key, so no Master Key is transferred.
+A pairing that registers an unregistered device after it proves it already holds the same Master Key, so no Master Key is transferred.
 _Avoid_: re-pairing, rejoin
 
 **SAS**:

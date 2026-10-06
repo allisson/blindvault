@@ -53,7 +53,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
 - [ ] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
-- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 010, each mapped to the test that covers it (filled in across phases)
+- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 015, each mapped to the test that covers it (filled in across phases)
 - [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
 - [ ] Specification of the binary layout for AAD and transcripts (D10), with test vectors
 
@@ -108,7 +108,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Item `folderId` (optional; absent = vault root); tags inside the encrypted content
 - [ ] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
 - [ ] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore brings back exactly those records (D14)
-- [ ] Record header (`recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18)
+- [ ] Record header (`recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18, D32)
 - [ ] Tombstone and version representation; deterministic keyed `versionId` (D6)
 
 ### `packages/storage`
@@ -131,6 +131,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] Encrypt/decrypt tests for every record type
 - [ ] Tampered ciphertext, invalid tag, swapped AAD and wrong `keyEpoch` are rejected
+- [ ] A record with an unknown or edited `recordFormatVersion` is rejected (D32)
 - [ ] An edited header (`hlc`, `deleted`), a forged tombstone and older ciphertext replayed under a newer `hlc` are rejected (D21)
 - [ ] Test that substituting one item's ciphertext for another's fails
 - [ ] Wrong password fails without leaking information
@@ -152,12 +153,12 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] `docs/backup-format.md`: magic, version, parameters, keyslots and payload (D3)
 - [ ] `packages/backup`: `.bvault` serialization with secretstream
-- [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional)
+- [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check and warning that it yields the Master Key (D36)
 - [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [ ] "Check Recovery Phrase" while unlocked
 - [ ] Export and import with version and integrity validation
-- [ ] Restore as a new vault
+- [ ] Restore as a new vault, committed in one storage transaction (D33); records beyond the future-clock bound are accepted with a warning (D37)
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning
 - [ ] Forgotten local password recovery via recovery phrase
@@ -176,6 +177,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
 - [ ] Restore merge preserves the losing version in history
 - [ ] Merging a backup with a different `vaultId` is rejected (D13)
+- [ ] Restore interrupted midway leaves storage untouched (D33)
+- [ ] Restoring a backup whose HLCs are beyond the future-clock bound keeps every record and warns (D37)
 - [ ] Re-founding interrupted midway leaves the old vault intact; afterwards old backups and old devices cannot open or sync with the new vault (D28)
 
 ---
@@ -223,11 +226,11 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] `Noise_XX` handshake integration with the defined prologue (D1)
 - [ ] SAS derivation and display on both devices, with explicit confirmation
 - [ ] Vault key material transferred over the Noise channel only after confirmation
-- [ ] New device initialization: display name sent with the acknowledgement, local password, KEK, wrapped master key, identity, Device record written by A (D30)
-- [ ] Startup cleanup of an incomplete pairing (records without Local Config) (D30)
+- [ ] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
+- [ ] Last completed sync per peer in Local Config, shown next to `pairedAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [ ] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
-- [ ] Re-admission of a device restored from backup: SAS, mutual Master Key confirmation bound to the handshake hash, Device records, merge sync, no Master Key transfer (D22, D29)
+- [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
 - [ ] Camera QR scanning and copy/paste fallback
 - [ ] Pairing session expiration
 - [ ] LAN-only mode (no STUN) and configurable STUN list
@@ -235,14 +238,14 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 ### Gate C
 
 - [ ] Full pairing between two browsers (Playwright) and between iOS and Android (manual, recorded)
-- [ ] Mismatched SAS aborts without transferring anything (CRYPTO-INV-007)
+- [ ] Mismatched SAS aborts without transferring anything (CRYPTO-INV-011)
 - [ ] Replay of an old pairing session fails
 - [ ] A modified QR payload or SDP makes the handshake or SAS fail
 - [ ] A wrong identity is rejected
-- [ ] Pairing interrupted midway leaves no partially trusted device
+- [ ] Pairing interrupted at any step before the commit, including a failed first sync, leaves the new device's storage empty (D33)
 - [ ] Duplicate pairing and expired sessions handled
 - [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
-- [ ] A device restored from backup is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
+- [ ] An unregistered device is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
 - [ ] No Device record is written outside vault creation or a SAS-confirmed pairing (CRYPTO-INV-007)
 - [ ] Official Noise test vectors pass in CI
 
@@ -269,7 +272,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Trash with deterministic purge (D7)
 - [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user (D2)
 - [ ] Live push of changes while the DataChannel is open; session ends on close or lock
-- [ ] UI: sync state and last successful sync date
+- [ ] UI: sync state and last successful sync date; only devices with a known Device record are offered as peers
 
 ### Gate D
 

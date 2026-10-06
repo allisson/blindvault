@@ -1,7 +1,7 @@
 # BlindVault — Overview
 
 > Normative design document for implementation. It prevails over every other document in this repository.
-> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D31 (section 21).
+> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D37 (section 21).
 > Status: Proposed · Author: Allisson Azevedo · License: MIT.
 > The words MUST, MUST NOT, SHOULD and MAY follow RFC 2119. Terms follow `GLOSSARY.md`.
 
@@ -167,17 +167,18 @@ Optional, for convenient local unlock, and detected at runtime. Derives a PRF KE
 Every encrypted record MUST bind its ciphertext to its logical identity through AAD, so ciphertext from one record cannot be substituted for another's:
 
 ```
-AAD = protocolVersion || recordType || vaultId || recordId || keyEpoch || hlc || deleted
+AAD = recordFormatVersion || recordType || vaultId || recordId || keyEpoch || hlc || deleted
 ```
 
-The fields come from the record header (section 6). The same AAD binds the wrapped record key, the Vault Key record and the Recovery Envelope (D8, D18). Binding `hlc` and `deleted` (D21) means the whole cleartext header is authenticated: a header cannot be edited to win LWW, to delete a record, or to replay older ciphertext as a newer write. Local wraps, which are not records (the Master Key under the Device KEK or the PRF KEK, and the device identity under its Master Key subkey), use `AAD = versioned purpose label || vaultId`, so a wrap cannot be moved to another purpose or another vault. Nonces follow libsodium requirements: random 24-byte nonces for XChaCha20-Poly1305 and `secretstream` for large data. Nonce reuse under the same key MUST NOT occur.
+The fields come from the record header (section 6), except `vaultId`, which comes from Local Config. The same AAD binds the wrapped record key, the Vault Key record and the Recovery Envelope (D8, D18). Binding `hlc` and `deleted` (D21) means the whole cleartext header is authenticated: a header cannot be edited to win LWW, to delete a record, or to replay older ciphertext as a newer write. Local wraps, which are not records (the Master Key under the Device KEK or the PRF KEK, and the device identity under its Master Key subkey), use `AAD = versioned purpose label || vaultId`, so a wrap cannot be moved to another purpose or another vault. Nonces follow libsodium requirements: random 24-byte nonces for XChaCha20-Poly1305 and `secretstream` for large data. Nonce reuse under the same key MUST NOT occur.
 
 ### 5.7 Serialization and versioning (D10)
 
 - **AAD, transcripts and prologues:** fixed binary layout, every field length-prefixed in a fixed order. No dependencies, with test vectors.
 - **Records and protocol messages:** deterministic CBOR (RFC 8949, §4.2). The decoder is strict and rejects non-canonical encodings.
 - No binary or textual representation may have multiple equivalent encodings that could produce different cryptographic transcripts.
-- The encrypted record format, `.bvault`, the pairing protocol, the sync protocol and cryptographic envelopes MUST be versioned. An incompatible format MUST NOT be silently interpreted as compatible. Downgrade attacks MUST be considered during version negotiation.
+- The encrypted record format, `.bvault`, the pairing protocol, the sync protocol and cryptographic envelopes MUST be versioned.
+- **Record format version (D32).** Each record carries its own `recordFormatVersion` in the cleartext header, bound through the AAD. It is independent of the pairing and sync protocol versions: a protocol version change MUST NOT change the AAD of stored records. Records of an older supported format stay readable and are migrated by re-encryption; a record with an unknown `recordFormatVersion` is rejected. An incompatible format MUST NOT be silently interpreted as compatible. Downgrade attacks MUST be considered during version negotiation.
 
 ---
 
@@ -185,7 +186,7 @@ The fields come from the record header (section 6). The same AAD binds the wrapp
 
 Only the minimum metadata needed for synchronization is in cleartext.
 
-**Record header (D18, D21).** Every synchronized record has the same cleartext header: `recordType`, `recordId`, `hlc`, `deleted`, `keyEpoch`. The header is the source of the AAD (section 5.6) and of the sync summaries (section 9.2), and every header field is authenticated through the AAD. `vaultId` and `protocolVersion` are bound through the AAD.
+**Record header (D18, D21, D32).** Every synchronized record has the same cleartext header: `recordFormatVersion`, `recordType`, `recordId`, `hlc`, `deleted`, `keyEpoch`. The header is the source of the AAD (section 5.6) and of the sync summaries (section 9.2), and every header field is authenticated through the AAD. `vaultId` is not in the header but is bound through the AAD.
 
 | Record | Header specifics | Encrypted content |
 | --- | --- | --- |
@@ -195,7 +196,7 @@ Only the minimum metadata needed for synchronization is in cleartext.
 | Vault Key | `recordId` fixed per `keyEpoch` | Vault Key wrapped by the Master Key's wrapping subkey (D23) |
 | Recovery Envelope (D2, D16, D24) | `recordId` fixed per vault; `keyEpoch` = epoch of the Vault Key that wraps its record key | Master Key wrapped by the envelope subkey; record key (wrapped) protecting the metadata: recovery keyslot public key, `phraseId`, phrase creation date |
 | Device (D26, D30) | `recordId` = `deviceId` | Record key (wrapped); public identity key (immutable), display name, `retired` flag, `pairedAt` |
-| Local Config (not synchronized) | — | `vaultId` (D25), local KEK material, PRF KEK state, encrypted device identity, security preferences (auto-lock and similar) |
+| Local Config (not synchronized) | — | `vaultId` (D25), local KEK material, PRF KEK state, encrypted device identity, security preferences (auto-lock and similar), date of the last completed sync with each peer (D34) |
 
 An Item also carries `trashOperationId` in its encrypted content while trashed. Templates are not records in v1 (D20): factory templates are versioned definitions in code, and an item references one by `templateId` and `templateVersion`. The `Template` record type is reserved for user-created templates after v1.
 
@@ -257,21 +258,24 @@ Each device has an X25519 key pair, which is the device's **Noise static key**. 
 ### 8.4 Flow
 
 ```
-B generates its identity (in memory only)
+B generates its identity, creates the local password and derives the Device KEK (all in memory only)
 → A's QR → B's QR → WebRTC/DTLS → Noise_XX handshake → SAS on both devices
 → human confirmation → Master Key and vaultId transferred over the Noise channel
 → B acknowledges receipt and sends its display name
 → A writes B's Device record (static key seen in the handshake, B's display name)
-→ first full sync over the same channel (sync protocol, no new exchange)
-→ B creates local password, derives Device KEK, wraps Master Key, persists its identity encrypted, (WebAuthn)
-→ B is a registered device
+→ first full sync over the same channel (sync protocol, no new exchange); B keeps the received records in memory
+→ B wraps the Master Key and its identity, and persists the records and Local Config in one storage transaction (D33)
+→ B sends a commit acknowledgement; A records the completed sync with B (D34)
+→ B is a registered device → optional WebAuthn setup
 ```
 
-`Noise_XX` transmits both static keys during the handshake, so B's identity MUST exist before it. B holds the identity only in memory until it has the Master Key, and discards it if pairing aborts.
+`Noise_XX` transmits both static keys during the handshake, so B's identity MUST exist before it. B holds the identity, the Device KEK and the Master Key only in memory until the commit, and discards them if pairing aborts.
 
-A writes B's Device record only after B acknowledges receiving the Master Key, bound to the static key A authenticated in the handshake, so B cannot choose its key at registration; the key is immutable afterwards (D26). Every device MUST reject a Device record whose `recordId` is not `BLAKE2b-128` of its public key, or whose public key differs from the one already stored for that `recordId`. Only the display name and the `retired` flag can change, and `retired` only from false to true (D30, D31). Device records cannot be deleted in v1, so a pairing interrupted after the record was written leaves it in place; the UI shows a registered device that has never synced as "never synced".
+A writes B's Device record only after B acknowledges receiving the Master Key, bound to the static key A authenticated in the handshake, so B cannot choose its key at registration; the key is immutable afterwards (D26). Every device MUST reject a Device record whose `recordId` is not `BLAKE2b-128` of its public key, or whose public key differs from the one already stored for that `recordId`. Only the display name and the `retired` flag can change, and `retired` only from false to true (D30, D31). Device records cannot be deleted in v1, so a pairing interrupted after the record was written leaves it in place.
 
-**Who writes Device records (D30).** The vault creator writes its own Device record at vault creation. Every other Device record is written by A after SAS confirmation, in pairing or re-admission: A writes B's record and, if A has none of its own (a device restored from backup, section 10), its own as well, since both static keys were authenticated in the confirmed handshake. No device writes a Device record in any other situation.
+**Last sync per peer (D34).** No synchronized record says whether a device has ever synced. Each device keeps, in Local Config, the date of its last completed sync with each peer, and the UI shows it next to the Device record's `pairedAt` ("last synced with this device: never" or a date). In pairing, A records the sync only when it receives B's commit acknowledgement.
+
+**Who writes Device records (D30, D35).** The vault creator writes its own Device record at vault creation. Every other Device record is written after SAS confirmation, in pairing or re-admission, by a device that holds the vault: in pairing, A writes B's record and, if A is an unregistered device (section 10), its own as well, since both static keys were authenticated in the confirmed handshake. In re-admission, the registered side writes the unregistered side's record; if both are unregistered, the initiator writes both. No device writes a Device record in any other situation.
 
 **Retired devices (D30, D31).** Any registered device can mark another Device record as retired, for a device that was lost, wiped or never finished pairing. Retirement hides the device in the UI, removes it from recovery recommendations, and blocks it from syncing: a device ends a sync session as soon as `Noise_KK` authenticates a peer whose Device record is retired, before any summary is exchanged.
 
@@ -279,13 +283,13 @@ Retirement is **irreversible**. The HLC's `deviceId` is not authenticated as the
 
 Retirement is not revocation (section 20). The retired device keeps everything it already had and still holds the Master Key, and until the retirement reaches a peer it can still sync with that peer. The UI MUST say so, and MUST point to re-founding (D28) when the device may be in someone else's hands.
 
-**Incomplete pairing (D30).** Until B creates its local password, it holds the Master Key only in memory. If B stops before that step, its storage holds encrypted records and no Local Config. On startup, a device that finds records without Local Config treats them as an incomplete pairing, tells the user, and erases them; the user pairs again, and the Device record A already wrote can be marked retired.
+**Interrupted pairing (D33).** B persists nothing before the single commit transaction, so an interruption at any earlier step, including a failed first sync, leaves B's storage empty and the user pairs again. If A wrote B's Device record but never received the commit acknowledgement, A shows the pairing as not completed and offers to mark that record retired. If the commit succeeded but the acknowledgement was lost, B is a registered device and A updates its last-sync date at their next sync.
 
 A mismatched SAS MUST abort. No key or recovery secret is transferred before confirmation, and the transfer MUST occur inside the authenticated Noise channel.
 
 The new device MUST have no vault (D13), except for re-admission (below). If it holds a different vault, pairing requires the user to explicitly erase it first, after a warning recommending a backup.
 
-**Re-admission (D22, D29).** A device holding the same vault but no registered identity (typically restored from a `.bvault`) joins through the same `Noise_XX` pairing with SAS confirmation. After confirmation, each side sends a key-confirmation MAC inside the Noise channel: BLAKE2b keyed by the Master Key's re-admission subkey (D23) over its role label (initiator or responder) and the final handshake hash. Each side verifies the other's MAC; a mismatch aborts the pairing. This proves both devices hold the same Master Key, bound to this session, and reveals nothing when they do not. Comparing `vaultId` is not enough, because `vaultId` is not secret. A then writes the Device records (D30) and the two devices run a full merge sync; no Master Key is transferred, since B already holds it. This keeps one admission rule: a device joins the set of synchronizing devices only through SAS confirmation.
+**Re-admission (D22, D29).** An unregistered device holding the same vault (typically restored from a `.bvault`) joins through the same `Noise_XX` pairing with SAS confirmation. After confirmation, each side sends a key-confirmation MAC inside the Noise channel: BLAKE2b keyed by the Master Key's re-admission subkey (D23) over its role label (initiator or responder) and the final handshake hash. Each side verifies the other's MAC; a mismatch aborts the pairing. This proves both devices hold the same Master Key, bound to this session, and reveals nothing when they do not. Comparing `vaultId` is not enough, because `vaultId` is not secret. The Device records are then written as described above (D35), and the two devices run a full merge sync; no Master Key is transferred, since both already hold it. This keeps one admission rule: a device joins the set of synchronizing devices only through SAS confirmation.
 
 ---
 
@@ -298,6 +302,7 @@ QR + WebRTC synchronization avoids any permanent synchronization infrastructure.
 A browser cannot discover peers or accept inbound connections, so every WebRTC session needs a fresh exchange of connection data (SDP and ICE candidates) through some out-of-band channel. In v1 there is no automatic background sync between devices.
 
 - **v1: manual sync.** The user starts a sync on two devices and exchanges a **reconnection payload** by QR (or copy/paste), in both directions. It is smaller than the pairing payload because identities are already known: no SAS and no enrollment, authentication comes from `Noise_KK` (CRYPTO-INV-008). The `Noise_KK` prologue is the versioned protocol label ‖ hash of the initiator's reconnection payload ‖ hash of the responder's reconnection payload ‖ DTLS fingerprints of both sides, in fixed role order, mirroring pairing (D17). A peer MUST prove possession of the private key for its registered identity, bound to the current session; replaying an old authentication exchange MUST NOT authenticate a device.
+- **Known peers only.** `Noise_K` and `Noise_KK` need each side to hold the other's Device record. A device that has not yet received a peer's Device record cannot sync with it: if A pairs C, B can sync with C only after B has synced with A (or another device holding C's record). This follows from the admission rule (CRYPTO-INV-007) and is a documented limitation. The UI offers as sync peers only the devices whose Device records it holds, and tells the user to sync first with the device that paired a new one.
 - **Sync session.** While a DataChannel is open, changes made on either device are pushed immediately, until either side closes the session or locks the vault.
 - **Transport-agnostic payload.** The reconnection payload is defined independently of how it is delivered (QR, copy/paste, or a future relay), so a relay added later needs no protocol change. It is encrypted to the peer with the one-way pattern `Noise_K` (both static keys known, sender authenticated), same suite as D1 (D17). No ad-hoc construction such as `crypto_box_seal` on the Noise static key is used. `Noise_K` gives no replay protection; that comes from the `Noise_KK` session that follows. Details are in `sync-protocol.md`.
 - **After v1: optional signaling relay.** Devices drop encrypted reconnection payloads for each other in a mailbox, enabling automatic sync when both are online. The plan:
@@ -315,13 +320,13 @@ A browser cannot discover peers or accept inbound connections, so every WebRTC s
 ```
 connect → Noise_KK (proves possession of the registered identity, bound to the session)
 → end the session if the peer's Device record is retired (D31)
-→ exchange summaries (recordId, hlc, deleted, keyEpoch, recordType)
+→ exchange summaries (recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch)
 → transfer divergent records (always encrypted) → merge → persist → ack
 ```
 
 - **Transfer:** only records that differ SHOULD be transferred. Transferred contents always remain encrypted.
 - **Conflicts:** last-write-wins per item, ordered by HLC, for simple deterministic v1 conflict handling. The losing version MUST go to history and never be discarded, so no item conflict silently loses data. Folder conflicts lose the older write (section 6). Device records are the one exception to plain LWW: a retired version always beats a non-retired one (D31).
-- **HLC (D19):** `(physicalMs, counter, deviceId)`, compared lexicographically, so two records never tie. Monotonic per device, canonical fixed-length serialization, clock-skew handling, and a future-clock bound so malformed timestamps cannot gain unbounded future dominance. A record whose timestamp is beyond the bound is rejected, never normalized, and the UI warns; it is accepted once the receiver's clock brings it within the bound.
+- **HLC (D19):** `(physicalMs, counter, deviceId)`, compared lexicographically, so two records never tie. Monotonic per device, canonical fixed-length serialization, clock-skew handling, and a future-clock bound so malformed timestamps cannot gain unbounded future dominance. In sync and in a backup merge, a record whose timestamp is beyond the bound is rejected, never normalized, and the UI warns; it is accepted once the receiver's clock brings it within the bound. Restoring a backup as a new vault is the exception (D37): it accepts every record, advances the local HLC past the greatest restored one, and, if any timestamp is beyond the bound, warns that local edits will lose LWW to those records until the clock catches up.
 - **Tombstones (D27):** a tombstone is a record with `deleted = true`. Until purge it keeps its encrypted content, so it can be restored from the trash. After purge only the header, the wrapped record key and an AEAD tag over empty content remain, so it stays authenticated (D21). Tombstones are synchronized and kept indefinitely in v1, so a stale offline device cannot resurrect deleted content. A tombstone beats an older edit. A newer edit may restore the item. Tombstones MUST NOT be removed merely because the local device has not seen the item recently. A future version MAY compact tombstones once device membership and acknowledgment state prove that all known devices have observed them.
 - **History (D6):** Item Versions are synchronized records. `versionId = BLAKE2b-keyed(version-ID subkey, itemId ‖ hlc)`, where the version-ID subkey is a `crypto_kdf` subkey of the Master Key with its own context. It is deterministic, so when two devices each store the same conflict loser they produce the same record; opaque to anyone without the Master Key; and independent of `keyEpoch`, so re-encrypting a version under a new epoch does not change its ID. A version record's header `hlc` is the `hlc` of the snapshotted state, so devices that store the same loser produce the same header. Each device keeps the 20 greatest `(hlc, versionId)` per item and drops a received version below that cut, or belonging to a purged item, on arrival, so every device converges on the same history. Pruned and purged versions are dropped without a tombstone. Pruning is done while unlocked.
 - **Trash (D7, D27):** moving a record to the trash writes its tombstone. Purge date = physical time of the tombstone's HLC + 30 days, computed independently by each device. Purge is local: each device re-encrypts the record with empty content under the same header, so the header and `hlc` do not change and nothing is synchronized. Purge requires the vault to be unlocked. Only content and history are deleted; the tombstone remains. A tombstone received with content after its purge date is purged on arrival. Restoring from the trash is a newer write with `deleted = false`.
@@ -353,10 +358,10 @@ The `.bvault` file gives offline recovery without any network service.
 
 - The header carries magic, format version, cryptographic and key-derivation parameters, the `phraseId` of the recovery keyslot, and migration/versioning information; the header is authenticated and the payload is integrity-protected.
 - A random file key encrypts the payload. Each keyslot wraps the file key, so either slot reaches the payload and the Master Key inside it. The recovery keyslot is sealed to the recovery keyslot public key from the Recovery Envelope (section 5.4), so a device can create it without the phrase.
-- The Recovery Phrase **always** opens the backup. The export password is an extra path. Its Argon2id parameters are fixed at the D9 floor (64 MiB, about 1 s on a mid-range phone), not calibrated on the exporting device, so a backup made on a desktop can be opened on a phone; the parameters are stored in the header.
-- The outer layer hides IDs, HLCs and the number of records. A backup MUST remain encrypted when copied to untrusted storage.
+- The Recovery Phrase **always** opens the backup. The export password is an extra path. Because the payload holds the Master Key, which v1 never rotates (D11), anyone who opens a backup with its export password holds the Master Key permanently: a weak or exposed export password is a Master Key compromise (section 14). The export password MUST pass the same strength check as the local password, and the export UI MUST state this consequence (D36). Its Argon2id parameters are fixed at the D9 floor (64 MiB, about 1 s on a mid-range phone), not calibrated on the exporting device, so a backup made on a desktop can be opened on a phone; the parameters are stored in the header.
+- The outer layer hides IDs, HLCs and the number of records; the file size still reveals the vault's approximate size. A backup MUST remain encrypted when copied to untrusted storage.
 - Automatic upload MUST NOT exist. The format is versioned and documented in `backup-format.md`.
-- **Restore** MUST support creating a new vault from a backup, restoring after device loss, restoring after browser storage loss, and merging into the existing vault when explicitly requested. Merge uses the same rules as sync. Merge MUST be rejected if the backup's `vaultId` differs from the local vault's (D13); restoring a different vault requires explicitly replacing the local one. A device restored as a new installation has a new identity that other devices do not know, and it does not write its own Device record (D30); to sync with them it must be re-admitted (D22). After such a restore, if the vault holds Device records not marked retired, the UI SHOULD recommend re-admission with one of them, warn that until then this device exchanges data only through backups, and offer to mark devices that no longer exist as retired. A restored device that is the only one left gets its own Device record the first time it pairs another device (D30).
+- **Restore** MUST support creating a new vault from a backup, restoring after device loss, restoring after browser storage loss, and merging into the existing vault when explicitly requested. Merge uses the same rules as sync. Merge MUST be rejected if the backup's `vaultId` differs from the local vault's (D13); restoring a different vault requires explicitly replacing the local one. Restoring as a new vault persists the records and the new Local Config in one storage transaction, as in pairing (D33). A device restored as a new installation is an unregistered device: it has a new identity that other devices do not know, and it does not write its own Device record (D30); to sync with them it must be re-admitted (D22). After such a restore, if the vault holds Device records not marked retired, the UI SHOULD recommend re-admission with one of them, warn that until then this device exchanges data only through backups, and offer to mark devices that no longer exist as retired. An unregistered device that is the only one left gets its own Device record the first time it pairs another device (D30).
 
 ---
 
@@ -364,7 +369,7 @@ The `.bvault` file gives offline recovery without any network service.
 
 - The service worker serves cache-first with a versioned cache. A new version is activated **only after explicit user confirmation**, showing the version and hash. Code is never upgraded silently.
 - Reproducible build with pinned lockfile and Node version and `SOURCE_DATE_EPOCH`, to make application integrity verifiable. CI rebuilds and compares the hash.
-- The asset manifest hash (SHA-256) is published on GitHub Releases and displayed in the app together with the running version.
+- The asset manifest hash (SHA-256) is published on GitHub Releases and displayed in the app together with the running version. The hash a build displays about itself is informational only, since a malicious bundle can display any value. The meaningful checks are the hash of an update computed by the previous, already trusted service worker before activation, and verification outside the app (rebuilding from source, or comparing the served assets with the release).
 - Static self-hosting MUST work, so a user who does not trust the official host can build and host BlindVault independently.
 - The first load relies on trust on first use, and this is recorded in the threat model.
 
@@ -417,7 +422,7 @@ A new installation offers three starts. The flows SHOULD be:
 Create vault → Generate Recovery Phrase → Confirm Recovery Phrase → Create local password
 → Optional WebAuthn setup → Vault ready → Recommend backup → Recommend pairing another device
 
-Pair with an existing device → Pairing (section 8.4) → Create local password
+Pair with an existing device → Create local password → Pairing (section 8.4)
 → Optional WebAuthn setup → Vault ready → Recommend backup
 
 Restore from backup → Choose .bvault → Recovery Phrase or export password → Create local password
@@ -442,12 +447,13 @@ BlindVault favors explicit security decisions, understandable warnings, safe def
 
 | Situation | Recovery |
 | --- | --- |
-| Local password forgotten | Recovery Phrase (keeps changes that exist only on this device), or erase local data and pair as a new device (loses them; the old Device record remains) |
+| Local password forgotten | Recovery Phrase (keeps changes that exist only on this device), or erase local data and pair as a new device (loses them; mark the old Device record retired) |
 | Device lost | Pair a new device, or restore `.bvault` and re-admit it (D22); mark the lost device retired (D30). If that device's local password was weak or the device was unlocked when lost, treat it as a Master Key compromise |
 | All devices lost | `.bvault` + Recovery Phrase; mark the old devices retired (D30) |
 | Browser storage erased | Pair again with another device, or restore `.bvault` and re-admit it (D22) |
 | Recovery Phrase lost | Regenerate it while unlocked (section 5.4), then make a new backup |
 | Recovery Phrase exposed | Master Key compromise: re-found the vault (D28), pair the other devices again, destroy old backups |
+| Export password exposed, with its backup (D36) | Master Key compromise: re-found the vault (D28), pair the other devices again, destroy old backups |
 | Master Key compromised (D11) | Re-found the vault (D28), pair the other devices again, destroy old backups |
 
 **Re-founding (D28).** The v1 response to a Master Key compromise, in place of Master Key rotation (D11). On an unlocked device, re-founding keeps the vault's current content under entirely new keys:
@@ -515,7 +521,7 @@ tests/{crypto,pairing,sync,recovery,integration}/
 | CRYPTO-INV-010 | Secrets are removed from application-accessible memory on lock, as far as JS permits |
 | CRYPTO-INV-011 | No Master Key or recovery secret is transferred before SAS confirmation |
 | CRYPTO-INV-012 | Unknown or incompatible format and protocol versions are rejected, never interpreted as compatible |
-| CRYPTO-INV-013 | A tombstone is never removed in v1, and a write older than a record's tombstone never restores it |
+| CRYPTO-INV-013 | Within a vault, a tombstone is never removed in v1, and a write older than a record's tombstone never restores it (re-founding creates a new vault, D28) |
 | CRYPTO-INV-014 | Re-admission writes no Device record until both devices prove, bound to the session, that they hold the same Master Key (D29) |
 | CRYPTO-INV-015 | No sync summary or record is exchanged with a peer whose Device record is retired, and a retired Device record never becomes non-retired (D31) |
 
@@ -569,7 +575,7 @@ This document is **normative**.
 
 ## 20. Out of scope for v1
 
-- **Device revocation**, deferred because it is complex and of limited benefit: revocation cannot erase data already replicated, and rotating the vault key only protects data encrypted afterwards. `keyEpoch` is already reserved. A future revocation SHOULD: revoke the device → new key epoch → new vault key → re-encrypt active data → exclude the revoked device from future sync. Because the Vault Key record is wrapped by the Master Key, which a revoked device holds, a new key epoch alone does not exclude it: revocation MUST either distribute the new Vault Key only to remaining devices (wrapped to each device's static key, with the Recovery Envelope handled accordingly) or rotate the Master Key (revisiting D11). Documentation MUST keep stating that previous copies cannot be remotely erased.
+- **Device revocation**, deferred because it is complex and of limited benefit: revocation cannot erase data already replicated, and rotating the vault key only protects data encrypted afterwards. `keyEpoch` is already reserved. A future revocation SHOULD: revoke the device → new key epoch → new vault key → re-encrypt active data → exclude the revoked device from future sync. Because the Vault Key record is wrapped by the Master Key, which a revoked device holds, a new key epoch alone does not exclude it: revocation MUST either distribute the new Vault Key only to remaining devices (wrapped to each device's static key, with the Recovery Envelope handled accordingly) or rotate the Master Key (revisiting D11). The Recovery Envelope's Master Key wrap is bound to the envelope's header through the AAD, including `keyEpoch` and `hlc`, so moving the envelope to a new epoch rewrites that wrap and needs the Recovery Phrase or a regeneration; a future revocation design MUST account for this. Documentation MUST keep stating that previous copies cannot be remotely erased.
 - **Master Key rotation** (D11). Re-founding (D28) is the v1 response to a compromise.
 - **Attachments** (up to 10 MB, chunked `secretstream`, encrypted blob sync, storage quota management), deferred to keep v1 simple. They MUST NOT complicate the basic sync protocol. Improved backup workflows come with them.
 - **Sharing between people.** Requires a different trust model (multiple principals, independent identities, permissions, revocation, partial access, key rotation, auditability), MUST be designed separately and MUST NOT reuse device pairing.
@@ -617,3 +623,9 @@ This document is **normative**.
 | D29 | Re-admission key confirmation | After SAS, each side sends BLAKE2b keyed by a Master Key re-admission subkey over its role label and the final handshake hash; a mismatch aborts. Replaces the `vaultId` comparison, since `vaultId` is not secret. Amends D22, D23 and D25 |
 | D30 | Device admission and retirement | Device records are written only for the vault creator at creation, or by A after SAS confirmation: B's record, plus A's own if A has none (restored device). B sends its display name with its Master Key acknowledgement. A synchronized `retired` flag hides a device and removes it from recovery recommendations; it is not revocation (sync block and irreversibility added by D31). Records found without Local Config at startup are an incomplete pairing and are erased after a notice. Local wraps use `AAD = purpose label ‖ vaultId`. Amends D26 |
 | D31 | Retirement blocks sync | A device ends a sync session right after `Noise_KK` when the peer's Device record is retired. Retirement is irreversible: a retired Device record is never replaced by a non-retired one, whatever the HLCs, because the HLC's `deviceId` is not authenticated and a reversible flag could be undone by a forged write through a lagging peer. A device retired by mistake is erased and paired again. Not revocation: past data stays exposed and the block applies only at peers that have received the retirement. Amends D30 |
+| D32 | Record format version | `recordFormatVersion` is a cleartext header field, bound through the AAD in place of `protocolVersion`, and included in sync summaries. It is independent of the pairing and sync protocol versions, so a protocol change never invalidates stored records. Older supported formats stay readable and are migrated by re-encryption; unknown ones are rejected. Amends D18 and D21 |
+| D33 | Atomic pairing and restore commit | The joining device creates its local password and derives its Device KEK before the handshake, keeps everything received in memory, and persists records, Local Config and its encrypted identity in one storage transaction after the first full sync, then sends a commit acknowledgement. An interruption before the commit leaves its storage empty. Restore as a new vault commits the same way. Replaces D30's startup cleanup of records found without Local Config |
+| D34 | Last sync per peer | Each device keeps in Local Config the date of its last completed sync with each peer; the UI shows it next to `pairedAt`. A pairing whose commit acknowledgement never arrived is shown as not completed, with an offer to retire the record. Replaces D26's "never synced" label |
+| D35 | Device record writer in re-admission | The registered side writes the unregistered side's Device record; if neither is registered, the initiator writes both. Amends D30 |
+| D36 | Export password | Subject to the same strength check as the local password; the export UI states that opening a backup yields the Master Key, so an exposed export password with its backup is a Master Key compromise handled by re-founding |
+| D37 | Future-clock bound on restore | The bound applies to sync and backup merge. Restore as a new vault accepts every record, advances the local HLC past the greatest one, and warns if any timestamp is beyond the bound. Amends D19 |
