@@ -118,6 +118,14 @@ _Avoid_: phrase key, seed key
 The record that holds the vault's Master Key protected by the Recovery Phrase, together with what any unlocked device needs to make backups that phrase can open; shared by every device and every backup.
 _Avoid_: recovery wrapping, recovery mechanism
 
+**Check Recovery Phrase**:
+Confirming, on an unlocked device, that a typed Recovery Phrase opens the current Recovery Envelope and the backups made for it.
+_Avoid_: verify phrase, test phrase
+
+**Regeneration**:
+Replacing the Recovery Phrase and the Recovery Envelope with new ones without changing the Master Key; the response to a lost phrase, not an exposed one.
+_Avoid_: reset phrase, rotate phrase, new phrase
+
 **Re-founding**:
 Replacing every key of the vault, and the vault's identity, while keeping its current items and folders; the response to a compromised Master Key.
 _Avoid_: rekey, Master Key rotation, new vault + import
@@ -153,6 +161,10 @@ _Avoid_: device key, device certificate, static key (in UI copy)
 **Device record**:
 The record that registers one device's identity and display name in the vault.
 _Avoid_: device entry, device profile
+
+**Vault creator**:
+The device that creates a vault, or re-founds one, and so registers itself without pairing.
+_Avoid_: owner device, primary device, master device
 
 **Registered device**:
 A device whose identity is recorded in a Device record of the vault.
