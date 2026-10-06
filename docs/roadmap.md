@@ -52,7 +52,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 ### Documentation
 
 - [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
-- [ ] `docs/crypto-spec.md`: key hierarchy, envelopes, AAD (D8), Recovery KEK (D2), Argon2id parameters (D9)
+- [ ] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
 - [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 010, each mapped to the test that covers it (filled in across phases)
 - [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
 - [ ] Specification of the binary layout for AAD and transcripts (D10), with test vectors
@@ -131,6 +131,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] Encrypt/decrypt tests for every record type
 - [ ] Tampered ciphertext, invalid tag, swapped AAD and wrong `keyEpoch` are rejected
+- [ ] An edited header (`hlc`, `deleted`), a forged tombstone and older ciphertext replayed under a newer `hlc` are rejected (D21)
 - [ ] Test that substituting one item's ciphertext for another's fails
 - [ ] Wrong password fails without leaking information
 - [ ] Inspecting IndexedDB after use finds no plaintext content or keys (CRYPTO-INV-001, 003)
@@ -221,6 +222,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Vault key material transferred over the Noise channel only after confirmation
 - [ ] New device initialization: local password, KEK, wrapped master key, identity, Device record
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
+- [ ] Re-admission of a same-`vaultId` device restored from backup: SAS, Device record, merge sync, no Master Key transfer (D22)
 - [ ] Camera QR scanning and copy/paste fallback
 - [ ] Pairing session expiration
 - [ ] LAN-only mode (no STUN) and configurable STUN list
@@ -234,14 +236,15 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] A wrong identity is rejected
 - [ ] Pairing interrupted midway leaves no partially trusted device
 - [ ] Duplicate pairing and expired sessions handled
-- [ ] Pairing into a device that already holds a vault is blocked until the user erases it (D13)
+- [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
+- [ ] A device restored from backup is re-admitted and then syncs; re-admission with a different `vaultId` aborts (D22)
 - [ ] Official Noise test vectors pass in CI
 
 ---
 
 ## Phase 5 — Synchronization
 
-**Goal:** paired devices converge safely without losing data in conflicts.
+**Goal:** registered devices converge safely without losing data in conflicts.
 
 ### Tasks
 
@@ -272,7 +275,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] A child received before its parent appears at the root, then moves under the parent when it arrives
 - [ ] Duplicate, out-of-order and repeated messages are idempotent
 - [ ] A corrupted record is rejected without affecting the others
-- [ ] An HLC timestamp far in the future is rejected or normalized
+- [ ] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected

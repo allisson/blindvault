@@ -43,7 +43,7 @@ _Avoid_: hard delete, empty trash
 ## Keys and recovery
 
 **Master Key**:
-The root secret of the vault, identical on every paired device.
+The root secret of the vault, identical on every registered device.
 _Avoid_: root key, vault password
 
 **Vault Key**:
@@ -94,9 +94,17 @@ _Avoid_: backup password, file password
 
 ## Devices and sync
 
-**Paired device**:
-A device that holds the vault and was admitted by a pairing confirmed with matching SAS on both screens.
-_Avoid_: trusted device, enrolled device
+**Registered device**:
+A device whose identity is recorded in a Device record of the vault.
+_Avoid_: paired device, trusted device, enrolled device
+
+**Pairing**:
+The SAS-confirmed procedure by which one registered device registers another device's identity.
+_Avoid_: enrollment, linking
+
+**Re-admission**:
+A pairing of a device that already holds the same vault, so no Master Key is transferred.
+_Avoid_: re-pairing, rejoin
 
 **SAS**:
 The short code shown on both screens that the user compares to confirm a pairing.
@@ -107,11 +115,11 @@ The connection data one device shows (by QR or copy/paste) so another can start 
 _Avoid_: pairing invitation, pairing response, pairing QR
 
 **Reconnection payload**:
-The connection data two paired devices exchange to start a sync session.
+The connection data two registered devices exchange to start a sync session.
 _Avoid_: sync QR, sync invitation
 
 **Sync session**:
-One authenticated connection between two paired devices, live until either side closes it or locks the vault.
+One authenticated connection between two registered devices, live until either side closes it or locks the vault.
 _Avoid_: live session, connection
 
 **LAN-only mode**:
