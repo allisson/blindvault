@@ -4,6 +4,14 @@ A local-first, end-to-end encrypted personal vault that lives only on the user's
 
 ## Vault contents
 
+**Vault**:
+The single body of encrypted items, folders and history a user owns, replicated across their registered devices and backups.
+_Avoid_: account, database, wallet
+
+**Vault root**:
+The top level of the vault, where an item or folder with no parent folder lives.
+_Avoid_: home, top folder, unfiled
+
 **Item**:
 One stored entry in the vault, made of typed fields.
 _Avoid_: entry, secret, record (in UI copy)
@@ -13,8 +21,12 @@ One typed value inside an item, such as a URL, a secret or a TOTP.
 _Avoid_: attribute, property
 
 **Template**:
-A built-in field layout an item is created from, such as Login or Card.
+A field layout an item is created from, such as Login or Card.
 _Avoid_: type, category, item type
+
+**Factory template**:
+A template that ships with BlindVault, as opposed to one a user creates.
+_Avoid_: built-in type, default template, preset
 
 **Folder**:
 A named, nestable container in the vault that holds items and other folders; each item lives in exactly one folder or at the vault root.
@@ -29,11 +41,15 @@ An encrypted past snapshot of an item, kept in its history.
 _Avoid_: revision, history entry
 
 **Trash**:
-The state of a deleted item or folder whose content can still be restored.
+The state of a tombstoned item or folder whose content has not yet been purged and can still be restored.
 _Avoid_: recycle bin, deleted items
 
+**Trash operation**:
+One user action that sent a set of records to the trash together, so they can be restored together.
+_Avoid_: batch delete, deletion group
+
 **Tombstone**:
-The permanent marker that a record was deleted, kept so no device can bring it back.
+A record marked as deleted; it keeps its content until purge and is never removed, so no device can bring the record back with an older write.
 _Avoid_: deletion marker, delete flag
 
 **Purge**:
@@ -54,6 +70,18 @@ _Avoid_: data key, encryption key
 The generation number of the Vault Key.
 _Avoid_: key version, key generation
 
+**Record**:
+One encrypted, synchronized unit of vault data, such as an item, a folder, an item version or a Device record.
+_Avoid_: row, document, object
+
+**Record header**:
+The small cleartext part of a record that identifies it and orders its changes; readable but authenticated.
+_Avoid_: metadata, envelope
+
+**HLC**:
+The hybrid logical clock value that orders every change to a record across devices.
+_Avoid_: timestamp, version number, revision
+
 **Record key**:
 A random key that protects the content of exactly one record.
 _Avoid_: item key, data key, per-item key
@@ -66,6 +94,10 @@ _Avoid_: master password, vault password
 The device-local key derived from the local password that unlocks the Master Key.
 _Avoid_: password key, local key
 
+**Local Config**:
+The per-device settings and key-wrapping material that are never synchronized.
+_Avoid_: local settings, device state, profile
+
 **PRF KEK**:
 A device-local key, derived from a WebAuthn PRF credential, that unlocks the vault on that device as an alternative to the local password.
 _Avoid_: biometric-derived wrapping key, biometric wrapping material
@@ -74,8 +106,12 @@ _Avoid_: biometric-derived wrapping key, biometric wrapping material
 The 24-word phrase that represents the vault's recovery secret.
 _Avoid_: seed, Bitcoin seed
 
+**Recovery KEK**:
+The key derived from the Recovery Phrase that opens the Recovery Envelope.
+_Avoid_: phrase key, seed key
+
 **Recovery Envelope**:
-The vault's Master Key protected by the Recovery Phrase, shared by every device and every backup.
+The record that holds the vault's Master Key protected by the Recovery Phrase, together with what any unlocked device needs to make backups that phrase can open; shared by every device and every backup.
 _Avoid_: recovery wrapping, recovery mechanism
 
 ## Backup
@@ -93,6 +129,14 @@ An optional password that opens one specific backup.
 _Avoid_: backup password, file password
 
 ## Devices and sync
+
+**Device identity**:
+The key pair that identifies one device to the others; its private half never leaves that device.
+_Avoid_: device key, device certificate, static key (in UI copy)
+
+**Device record**:
+The record that registers one device's identity and display name in the vault.
+_Avoid_: device entry, device profile
 
 **Registered device**:
 A device whose identity is recorded in a Device record of the vault.

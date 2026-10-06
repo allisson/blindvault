@@ -279,8 +279,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected
-- [ ] During a live session, an edit on one device reaches the other without a new exchange
-- [ ] Locking the vault on either side ends the live session
+- [ ] During a sync session, an edit on one device reaches the other without a new exchange
+- [ ] Locking the vault on either side ends the sync session
 - [ ] Simulation with 3 or more devices and injected failures, over the in-memory transport
 
 ---
