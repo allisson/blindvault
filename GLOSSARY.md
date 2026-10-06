@@ -5,7 +5,7 @@ A local-first, end-to-end encrypted personal vault that lives only on the user's
 ## Vault contents
 
 **Vault**:
-The single body of encrypted items, folders and history a user owns, replicated across their registered devices and backups.
+The single body of encrypted items, folders and history a user owns, replicated across their devices and backups.
 _Avoid_: account, database, wallet
 
 **Vault root**:
@@ -60,19 +60,7 @@ _Avoid_: deletion marker, delete flag
 The removal of a trashed record's content and history, leaving only its tombstone.
 _Avoid_: hard delete, empty trash
 
-## Keys and recovery
-
-**Master Key**:
-The root secret of the vault, identical on every registered device.
-_Avoid_: root key, vault password
-
-**Vault Key**:
-The key of one key epoch that protects every record key.
-_Avoid_: data key, encryption key
-
-**Key epoch**:
-The generation number of the Vault Key.
-_Avoid_: key version, key generation
+## Records
 
 **Record**:
 One encrypted, synchronized unit of vault data, such as an item, a folder, an item version or a Device record.
@@ -89,6 +77,20 @@ _Avoid_: timestamp, version number, revision
 **Record key**:
 A random key that protects the content of exactly one record.
 _Avoid_: item key, data key, per-item key
+
+## Keys and recovery
+
+**Master Key**:
+The root secret of the vault, identical on every registered device.
+_Avoid_: root key, vault password
+
+**Vault Key**:
+The key of one key epoch that protects every record key.
+_Avoid_: data key, encryption key
+
+**Key epoch**:
+The generation number of the Vault Key.
+_Avoid_: key version, key generation
 
 **Local password**:
 The per-device password that unlocks the vault on that device only.
@@ -174,6 +176,10 @@ _Avoid_: paired device, trusted device, enrolled device
 A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync only after re-admission.
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
+**Erase**:
+Removing the vault and the Local Config from one device, leaving it with no vault.
+_Avoid_: wipe, reset, factory reset
+
 **Retired device**:
 A registered device the user has permanently marked as gone from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
@@ -183,7 +189,7 @@ The SAS-confirmed procedure by which a device holding the vault registers anothe
 _Avoid_: enrollment, linking
 
 **Re-admission**:
-A pairing that registers an unregistered device after it proves it already holds the same Master Key, so no Master Key is transferred.
+A pairing between two devices that already hold the same vault, in which each registers whichever identity it lacks after both prove they hold the same Master Key, so no Master Key is transferred.
 _Avoid_: re-pairing, rejoin
 
 **SAS**:
