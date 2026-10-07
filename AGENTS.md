@@ -8,7 +8,7 @@ This is a security-critical project. Correctness and safety come before speed or
 
 Read these before making non-trivial changes:
 
-- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D132). It prevails over any other document.
+- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D141). It prevails over any other document.
 - `docs/roadmap.md`: phases, tasks and gates. Work on the current phase only.
 - `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
 - `GLOSSARY.md`: canonical domain terms. Use them in code, docs and UI copy.
@@ -44,7 +44,7 @@ packages/crypto/     libsodium wrappers, key hierarchy, AEAD, AAD serialization
 packages/vault/      domain model: items, fields, templates, versions, tombstones
 packages/storage/    IndexedDB schema, encrypted record persistence, migrations
 packages/sync/       pairing, Noise handshake, WebRTC, QR, sync protocol, HLC, merge
-packages/backup/     .bvault format, keyslots, export/import
+packages/backup/     .bvault format, keyslots, export/restore
 docs/                specs and decisions
 tests/               cross-package, protocol and recovery tests
 ```

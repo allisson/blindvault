@@ -53,7 +53,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
 - [ ] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
-- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 017, each mapped to the test that covers it (filled in across phases)
+- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 022, each mapped to the test that covers it (filled in across phases)
 - [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
 - [ ] Specification of the binary layout for AAD and transcripts (D10), with test vectors
 
@@ -106,7 +106,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
 - [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
 - [ ] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
-- [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129)
+- [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129); item cap leaving room for the Item Version and tombstone overhead (D139)
 - [ ] TOTP codes with WebCrypto HMAC (SHA1, SHA256, SHA512), `otpauth://` parser copied from BlindPass, RFC 6238 test vectors (D127)
 - [ ] Password generator: random characters or BIP39-English passphrase via `randombytes_uniform`, entropy shown, nothing persisted, defaults 20 characters or 6 words and minimums 12 or 4 (D128), characters drawn from the union of the selected sets (D138)
 
@@ -136,11 +136,11 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Layout system: mobile, tablet and desktop shells selected by viewport width, sharing one domain layer (D15)
 - [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock
 - [ ] Item CRUD with templates
-- [ ] Duplicate item: new item in the same folder with the current content, a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135)
+- [ ] Duplicate item: new item in the same folder with the current content, a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
 - [ ] Secret fields masked by default
 - [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
-- [ ] TOTP field: seed masked, current code shown, copy with clipboard clear (D127)
+- [ ] TOTP field: TOTP secret masked, current code shown, copy with clipboard clear (D127)
 - [ ] Configurable auto-lock that clears state and keys on lock
 
 ### Gate A
@@ -173,7 +173,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [ ] "Check Recovery Phrase" while unlocked
-- [ ] Export and import with version and integrity validation
+- [ ] Export and restore with version and integrity validation
 - [ ] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning; the new database commits before the old one is deleted (D89)
@@ -185,7 +185,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### Gate B
 
-- [ ] Create vault → backup → wipe storage → restore → all records match
+- [ ] Create vault → backup → destroy local storage → restore → all records match
 - [ ] Restore with the recovery phrase and also with the export password
 - [ ] Truncated (no final tag, or data after it), tampered or unknown-version `.bvault` is rejected with a clear error (D95); header values shown before a keyslot opens are marked unverified
 - [ ] Wrong recovery phrase fails without leaking information
@@ -249,6 +249,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Last completed sync per peer in Local Config, shown next to `pairedAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [ ] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
+- [ ] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
 - [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
 - [ ] Camera QR scanning and copy/paste fallback
 - [ ] Pairing session expiration; a lock on either device aborts the pairing (D93)
@@ -266,7 +267,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] A lock or hidden-app lock on either device aborts the pairing, leaving the joining device's storage empty (D93)
 - [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
 - [ ] An unregistered device is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
-- [ ] No Device record is written outside vault creation or a SAS-confirmed pairing (CRYPTO-INV-007)
+- [ ] No Device record is written outside vault creation, re-founding or a SAS-confirmed pairing or re-admission (CRYPTO-INV-007)
 - [ ] Official Noise test vectors pass in CI
 
 ---
@@ -331,7 +332,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Copy and adapt the BlindPass parsers into `packages/vault`: BlindPass, Chrome, LastPass, Apple Passwords, KeePassXC, Bitwarden, Proton Pass, 1Password, Dashlane (D123)
 - [ ] `.blindpass` export decryption in `packages/crypto` with BlindPass's fixed Argon2id parameters and `crypto_secretbox` (D125, D126)
 - [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); `otpauth://` URIs as `totp` fields whatever their key, bare base32 values only under TOTP-looking keys (D131, D133)
-- [ ] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the record size cap (D129), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
+- [ ] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the item cap (D129, D139), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
 - [ ] Import tests per format with valid, malformed and oversized input (section 18)
 - [ ] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
 - [ ] Dependency review

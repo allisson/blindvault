@@ -24,6 +24,10 @@ _Avoid_: attribute, property
 A cryptocurrency wallet's BIP39 phrase stored as a field of an item; unrelated to the Recovery Phrase.
 _Avoid_: seed, BIP39 seed, wallet seed
 
+**TOTP secret**:
+The shared secret of a TOTP field, from which its one-time codes are computed.
+_Avoid_: seed, TOTP seed, TOTP key
+
 **Template**:
 A field layout an item is created from, such as Login or Card.
 _Avoid_: type, category, item type
