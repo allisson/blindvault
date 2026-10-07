@@ -124,7 +124,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 ### `apps/web` (minimal)
 
 - [ ] Layout system: mobile, tablet and desktop shells selected by viewport width, sharing one domain layer (D15)
-- [ ] Create vault, local password with zxcvbn, unlock, lock
+- [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock
 - [ ] Item CRUD with templates
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
 - [ ] Secret fields masked by default
@@ -156,7 +156,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] `docs/backup-format.md`: magic, version, parameters, keyslots and payload (D3)
 - [ ] `packages/backup`: `.bvault` serialization with secretstream
-- [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check and warning that it yields the Master Key (D36)
+- [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at zxcvbn score 4 (D71) and warning that it yields the Master Key (D36)
 - [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [ ] "Check Recovery Phrase" while unlocked
@@ -167,7 +167,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Forgotten local password recovery via recovery phrase
 - [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2)
 - [ ] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
-- [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, vault swapped in one transaction (D28)
+- [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, vault swapped in one transaction (D28); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
 - [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
 
 ### Gate B
@@ -181,7 +181,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Restore merge preserves the losing version in history
 - [ ] Merging a backup with a different `vaultId` is rejected (D13)
 - [ ] Restore interrupted midway leaves storage untouched (D33)
-- [ ] Restoring a backup whose HLCs are beyond the future-clock bound keeps every record and warns (D37)
+- [ ] A fresh restore of a backup whose HLCs are beyond the future-clock bound keeps every record, read-only until within the bound (D39)
 - [ ] Re-founding interrupted midway leaves the old vault intact; afterwards old backups and old devices cannot open or sync with the new vault (D28)
 
 ---
@@ -266,11 +266,13 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions
 - [ ] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008)
 - [ ] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31)
+- [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)
+- [ ] Reject records in an unknown `recordFormatVersion` in sync, record it in Local Config, warn at export until cleared; abort a pairing before commit when its first full sync holds one (D68)
 - [ ] Messages bound to the session (CRYPTO-INV-009)
 - [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, future-clock bound (D19)
 - [ ] Summary exchange and transfer of divergent records only
 - [ ] Per-item LWW merge, with the losing version stored in history
-- [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6)
+- [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
 - [ ] Tombstones synchronized and kept indefinitely
 - [ ] Trash with deterministic purge (D7)
 - [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user (D2)

@@ -40,9 +40,9 @@ _Avoid_: collection, directory, group
 A flat label that classifies items across folders.
 _Avoid_: label, category
 
-**Read-only item**:
-An item the app shows but will not change, because it holds content from a newer app version or a timestamp beyond the future-clock bound.
-_Avoid_: locked item, frozen item
+**Read-only record**:
+An item or folder the app shows but will not change, because an item holds content from a newer app version or a record's timestamp is beyond the future-clock bound.
+_Avoid_: read-only item (for folders), locked item, frozen item
 
 **Item Version**:
 An encrypted past snapshot of an item, kept in its history.
@@ -77,6 +77,10 @@ _Avoid_: metadata, envelope
 **HLC**:
 The hybrid logical clock value that orders every change to a record across devices.
 _Avoid_: timestamp, version number, revision
+
+**Future-clock bound**:
+How far ahead of a device's own clock a change's HLC may be before that device refuses it or treats the record as read-only.
+_Avoid_: clock limit, skew window, max drift
 
 **Record key**:
 A random key that protects the content of exactly one record.
