@@ -40,6 +40,10 @@ _Avoid_: collection, directory, group
 A flat label that classifies items across folders.
 _Avoid_: label, category
 
+**Read-only item**:
+An item the app shows but will not change, because it holds content from a newer app version or a timestamp beyond the future-clock bound.
+_Avoid_: locked item, frozen item
+
 **Item Version**:
 An encrypted past snapshot of an item, kept in its history.
 _Avoid_: revision, history entry
@@ -193,7 +197,7 @@ The admission flow in which a device holding the vault gives its Master Key to a
 _Avoid_: enrollment, linking
 
 **Re-admission**:
-The admission flow between two devices that already hold the same vault, in which each registers whichever identity it lacks after both prove they hold the same Master Key, so no Master Key is transferred.
+The admission flow between two devices that already hold the same vault, in which the identity either side lacks is registered after both prove they hold the same Master Key, so no Master Key is transferred.
 _Avoid_: re-pairing, rejoin
 
 **SAS**:

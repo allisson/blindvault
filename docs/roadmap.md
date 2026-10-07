@@ -73,6 +73,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
 - [ ] **WebAuthn PRF:** verify real support across the browser matrix
 - [ ] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result
+- [ ] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs and it activates once all tabs close; measure whether the page reliably detects it (`updatefound`) and can warn before the next unlock; revise D63 with the result
 
 ### Gate 0
 
@@ -193,7 +194,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] PWA manifest and installation
 - [ ] Cache-first service worker with a versioned cache (D5)
-- [ ] Update flow: new-version notice, version and hash shown, activation only after confirmation
+- [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned (D63)
 - [ ] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile
 - [ ] CI job that builds twice and compares the asset manifest hash
 - [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages
