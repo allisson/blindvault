@@ -5,7 +5,7 @@ A local-first, end-to-end encrypted personal vault that lives only on the user's
 ## Vault contents
 
 **Vault**:
-The single body of encrypted items, folders and history a user owns, replicated across their devices and backups.
+The body of encrypted items, folders and history, replicated across the devices and backups of the people who can open it; either a personal vault or a shared vault.
 _Avoid_: account, database, wallet
 
 **Vault root**:
@@ -223,3 +223,25 @@ _Avoid_: live session, connection
 **LAN-only mode**:
 A network setting where devices sync only on the same local network, without contacting any STUN server.
 _Avoid_: local-network-only mode, offline mode
+
+## Vaults and Members
+
+**Personal vault**:
+A vault that belongs to one person, whose devices all hold its Master Key.
+_Avoid_: private vault, my vault, individual vault
+
+**Shared vault**:
+A vault several Members can open, whose membership is controlled by its Admins.
+_Avoid_: team vault, company vault, organization vault, group vault
+
+**Member**:
+A person admitted to a shared vault, represented by their devices.
+_Avoid_: user, employee, account, participant
+
+**Admin**:
+A Member allowed to admit and remove Members of a shared vault.
+_Avoid_: owner, manager, administrator (in UI copy)
+
+**Vault nickname**:
+A name the user gives a vault on one device so it can be told apart before unlocking; never synchronized.
+_Avoid_: label, alias, vault name
