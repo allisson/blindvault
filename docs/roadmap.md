@@ -120,7 +120,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Local Config persistence (KEK salt, parameters, wrapped master key)
 - [ ] `navigator.storage.persist()` and `estimate()`
 - [ ] Single active instance through an exclusive Web Lock, with take-over (D51)
-- [ ] IndexedDB database, Local Config storage key and Web Lock named by `vaultId` (D79)
+- [ ] IndexedDB database and Web Lock named by `vaultId`, Local Config in that database (D79, D82)
 
 ### `apps/web` (minimal)
 

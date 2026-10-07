@@ -8,7 +8,7 @@ This is a security-critical project. Correctness and safety come before speed or
 
 Read these before making non-trivial changes:
 
-- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D80). It prevails over any other document.
+- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D88). It prevails over any other document.
 - `docs/roadmap.md`: phases, tasks and gates. Work on the current phase only.
 - `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
 - `GLOSSARY.md`: canonical domain terms. Use them in code, docs and UI copy.
@@ -53,7 +53,7 @@ Package boundaries:
 
 - `packages/crypto` has no UI code and imports no other workspace package.
 - `packages/vault` never touches IndexedDB or the network.
-- `packages/storage` only accepts already-encrypted record types.
+- `packages/storage` only accepts already-encrypted record types and Local Config (D82).
 - `packages/sync` talks to a transport abstraction so protocol tests run without WebRTC.
 
 ## Commands
