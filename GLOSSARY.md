@@ -49,7 +49,7 @@ A record the app shows but will not change, because its HLC is beyond the future
 _Avoid_: read-only item (for other records), locked item, frozen item
 
 **Read-only vault**:
-A vault that refuses every write on one device, except retirement and the automatic purge, while that device's clock is behind the last HLC it issued.
+A vault that refuses every write on one device, except retirement and the automatic purge, while that device's clock is behind the greatest HLC it has issued or accepted.
 _Avoid_: frozen vault, locked vault
 
 **Item Version**:
@@ -247,7 +247,7 @@ One running tab or window of BlindVault on an installation; only one at a time o
 _Avoid_: instance, tab (as the general term)
 
 **Installation guard**:
-The exclusive claim one window of BlindVault holds on an installation while it creates, replaces or deletes a vault there.
+The exclusive claim one app window holds on an installation while it creates, replaces or deletes a vault there.
 _Avoid_: installation lock, global lock
 
 **Erase**:

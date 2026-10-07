@@ -53,7 +53,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
 - [ ] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
-- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 022, each mapped to the test that covers it (filled in across phases)
+- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 023, each mapped to the test that covers it (filled in across phases)
 - [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
 - [ ] Specification of the binary layout for AAD and transcripts (D10), with test vectors
 
@@ -77,7 +77,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
     - [ ] Confirm that the installed app does not share storage with the Safari tab, on iOS and macOS, and revise D103 with the result
     - [ ] Check whether the installed app can pair with a Safari tab on the same iPhone, and revise D110 with the result
     - [ ] Record which system UIs (file picker, WebAuthn prompt, camera and other permission prompts) report the app as hidden, per browser in the matrix, and revise D105 with the result
-- [ ] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs and it activates once all tabs close; measure whether the page reliably detects it (`updatefound`) and can warn before the next unlock; revise D63 with the result
+- [ ] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs, when it activates on its own, and that `skipWaiting` with `clients.claim` takes control of an open app window; measure whether the page reliably detects it (`updatefound`) in time to lock the vault (D142); revise D63 with the result
 
 ### Gate 0
 
@@ -106,7 +106,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
 - [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
 - [ ] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
-- [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129); item cap leaving room for the Item Version and tombstone overhead (D139)
+- [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129); item cap leaving room for an Item Version of a trashed state (D139, D143); a received Item or Item Version above the item cap rejected after decryption (D144)
 - [ ] TOTP codes with WebCrypto HMAC (SHA1, SHA256, SHA512), `otpauth://` parser copied from BlindPass, RFC 6238 test vectors (D127)
 - [ ] Password generator: random characters or BIP39-English passphrase via `randombytes_uniform`, entropy shown, nothing persisted, defaults 20 characters or 6 words and minimums 12 or 4 (D128), characters drawn from the union of the selected sets (D138)
 
@@ -125,7 +125,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] Versioned IndexedDB schema with migrations
 - [ ] API that only accepts encrypted records (distinct TypeScript type)
-- [ ] Local Config persistence (KEK salt, parameters, wrapped master key)
+- [ ] Local Config persistence (KEK salt, parameters, wrapped master key); everything not needed for unlock encrypted under the Local Config subkey (D58, CRYPTO-INV-019); every local wrap bound to `vaultId` and `localConfigId` (D121, CRYPTO-INV-023)
 - [ ] `navigator.storage.persist()` and `estimate()`
 - [ ] Single active app window through an exclusive Web Lock, with take-over (D51)
 - [ ] IndexedDB database and Web Lock named by `vaultId`, Local Config in that database (D79, D82)
@@ -137,6 +137,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock
 - [ ] Item CRUD with templates
 - [ ] Duplicate item: new item in the same folder with the current content, a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
+- [ ] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
 - [ ] Secret fields masked by default
 - [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
@@ -207,7 +208,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] PWA manifest and installation
 - [ ] Cache-first service worker with a versioned cache (D5)
-- [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned (D63)
+- [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned, locking the vault at once (D63, D142); all code and WebAssembly loaded before the first unlock, none afterwards (D142)
 - [ ] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile
 - [ ] CI job that builds twice and compares the asset manifest hash
 - [ ] Choose and configure the dedicated custom domain for the official build (D90)
@@ -246,7 +247,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] SAS derivation and display on both devices, with explicit confirmation
 - [ ] Vault key material transferred over the Noise channel only after confirmation
 - [ ] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
-- [ ] Last completed sync per peer in Local Config, shown next to `pairedAt`; a pairing without commit acknowledgement shown as not completed (D34)
+- [ ] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [ ] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
 - [ ] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
@@ -287,14 +288,14 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)
 - [ ] Reject records in an unknown `recordFormatVersion` in sync, record it in Local Config, warn at export until cleared; abort a pairing before commit when its first full sync holds one (D68)
 - [ ] Messages bound to the session (CRYPTO-INV-009)
-- [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, 24-hour future-clock bound (D19, D76); no write while the device clock is behind the last issued HLC (D73)
+- [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, 24-hour future-clock bound (D19, D76); no new HLC issued while the device clock is behind its HLC state, the greatest HLC issued or accepted (D73, D109)
 - [ ] Summary exchange and transfer of divergent records only
 - [ ] Per-item LWW merge, with the losing version stored in history
 - [ ] An Item Version is dropped for a purged item only once the whole transfer is merged, so a restore from the trash arriving with its versions keeps them (D137)
 - [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
 - [ ] Tombstones synchronized and kept indefinitely
 - [ ] Trash with deterministic, automatic-only purge; no manual purge (D7, D94)
-- [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user (D2)
+- [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user, naming the superseded phrase and offering a new backup (D2, D145)
 - [ ] Live push of changes while the DataChannel is open; session ends on close or lock
 - [ ] UI: sync state and last successful sync date; only devices with a known Device record are offered as peers
 
@@ -332,7 +333,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Copy and adapt the BlindPass parsers into `packages/vault`: BlindPass, Chrome, LastPass, Apple Passwords, KeePassXC, Bitwarden, Proton Pass, 1Password, Dashlane (D123)
 - [ ] `.blindpass` export decryption in `packages/crypto` with BlindPass's fixed Argon2id parameters and `crypto_secretbox` (D125, D126)
 - [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); `otpauth://` URIs as `totp` fields whatever their key, bare base32 values only under TOTP-looking keys (D131, D133)
-- [ ] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the item cap (D129, D139), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
+- [ ] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the item cap (D129, D139), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125); encrypted Bitwarden and Proton Pass exports rejected with a message to export unencrypted (D146)
 - [ ] Import tests per format with valid, malformed and oversized input (section 18)
 - [ ] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
 - [ ] Dependency review
