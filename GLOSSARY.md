@@ -222,6 +222,10 @@ _Avoid_: paired device, trusted device, enrolled device
 A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync with the vault's existing devices only after re-admission.
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
+**Installation guard**:
+The exclusive claim one window of BlindVault holds on an installation while it creates, replaces or deletes a vault there.
+_Avoid_: installation lock, global lock
+
 **Erase**:
 Removing the vault and the Local Config from one device, leaving it with no vault.
 _Avoid_: wipe, reset, factory reset
