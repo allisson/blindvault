@@ -314,13 +314,17 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ## Phase 6 — Import and final review
 
-**Goal:** BlindPass migration and security validation before v1.0.
+**Goal:** Import from BlindPass and other password managers, and security validation before v1.0.
 
 ### Tasks
 
-- [ ] BlindPass importer: decrypt, validate, transform, encrypt in BlindVault format, without persisting plaintext
-- [ ] Map BlindPass single-level collections to root folders; if a BlindPass item belongs to more than one collection, place it in the first and convert the others to tags (D14)
-- [ ] Importer tests with valid, corrupted and partial data
+- [ ] `docs/blindpass-format.md`: BlindPass export format (plaintext `.json`, encrypted `.blindpass`) (D123)
+- [ ] Justify `fflate` in `docs/architecture.md` (D125)
+- [ ] Copy and adapt the BlindPass parsers into `packages/vault`: BlindPass, Chrome, LastPass, Apple Passwords, KeePassXC, Bitwarden, Proton Pass, 1Password, Dashlane (D123)
+- [ ] `.blindpass` export decryption in `packages/crypto` (D125)
+- [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124)
+- [ ] Import flow: plaintext-export warning, preview, landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
+- [ ] Import tests per format with valid, malformed and oversized input (section 18)
 - [ ] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
 - [ ] Dependency review
 - [ ] Threat-model review against what was implemented

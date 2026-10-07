@@ -8,7 +8,7 @@ This is a security-critical project. Correctness and safety come before speed or
 
 Read these before making non-trivial changes:
 
-- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D122). It prevails over any other document.
+- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D125). It prevails over any other document.
 - `docs/roadmap.md`: phases, tasks and gates. Work on the current phase only.
 - `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
 - `GLOSSARY.md`: canonical domain terms. Use them in code, docs and UI copy.
@@ -30,7 +30,7 @@ Rules for using it:
 - Reuse is decided per module and recorded in `docs/architecture.md` (see the BlindPass inventory task in Phase 0). Copied code must be adapted to the overview: if BlindPass differs on a primitive, AAD layout, key hierarchy or serialization, the overview wins and the difference is noted.
 - Copied cryptographic code gets the same tests and review as new code. It is not trusted just because it already existed.
 - Do not copy the server application, API schema, PostgreSQL, Redis, Docker or Terraform code.
-- The BlindPass storage and encryption format is the input for the Phase 6 importer; document it in `docs/blindpass-format.md` when you first need it.
+- The BlindPass export format (plaintext `.json` and encrypted `.blindpass`) is the BlindPass input for the Phase 6 import (D123); document it in `docs/blindpass-format.md` when you first need it. The BlindPass import parsers for other password managers are copied and adapted under D124 and D125.
 
 ## Current phase
 

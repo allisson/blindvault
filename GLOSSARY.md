@@ -192,8 +192,8 @@ _Avoid_: restore as a new vault, new vault from backup
 Restoring a backup into the vault a device already holds, merging its records by the same rules as sync.
 _Avoid_: merge restore, import
 
-**BlindPass import**:
-Bringing a BlindPass vault's contents into BlindVault as new items; the only meaning of "import".
+**Import**:
+Bringing items from another password manager's export file, BlindPass included, into the vault as new items; the only meaning of "import".
 _Avoid_: migration, restore (for this action)
 
 ## Devices and sync
