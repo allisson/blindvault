@@ -41,7 +41,7 @@ A flat label that classifies items across folders.
 _Avoid_: label, category
 
 **Read-only record**:
-A record the app shows but will not change, because an item holds content from a newer app version or the record's timestamp is beyond the future-clock bound.
+A record the app shows but will not change, because it holds content from a newer app version or its timestamp is beyond the future-clock bound.
 _Avoid_: read-only item (for other records), locked item, frozen item
 
 **Read-only vault**:
@@ -71,7 +71,7 @@ _Avoid_: hard delete, empty trash
 ## Records
 
 **Record**:
-One encrypted, synchronized unit of vault data, such as an item, a folder, an item version or a Device record.
+One encrypted, synchronized unit of vault data, such as an item, a folder, an Item Version or a Device record.
 _Avoid_: row, document, object
 
 **Record header**:
