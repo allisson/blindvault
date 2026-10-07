@@ -41,7 +41,7 @@ A flat label that classifies items across folders.
 _Avoid_: label, category
 
 **Read-only record**:
-A record the app shows but will not change, because it holds content from a newer app version or its timestamp is beyond the future-clock bound.
+A record the app shows but will not change, because its timestamp is beyond the future-clock bound or, for an item, an Item Version or the Recovery Envelope, because it holds content from a newer app version.
 _Avoid_: read-only item (for other records), locked item, frozen item
 
 **Read-only vault**:
@@ -125,7 +125,7 @@ The 24-word phrase that represents the vault's recovery secret.
 _Avoid_: seed, Bitcoin seed
 
 **Recovery KEK**:
-The key derived from the Recovery Phrase that opens the Recovery Envelope.
+The key derived from the Recovery Phrase that opens the Recovery Envelope and the backups made for it.
 _Avoid_: phrase key, seed key
 
 **Recovery Envelope**:
@@ -191,6 +191,10 @@ _Avoid_: restore as a new vault, new vault from backup
 **Backup merge**:
 Restoring a backup into the vault a device already holds, merging its records by the same rules as sync.
 _Avoid_: merge restore, import
+
+**BlindPass import**:
+Bringing a BlindPass vault's contents into BlindVault as new items; the only meaning of "import".
+_Avoid_: migration, restore (for this action)
 
 ## Devices and sync
 
