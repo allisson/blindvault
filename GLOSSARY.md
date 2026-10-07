@@ -44,6 +44,10 @@ _Avoid_: label, category
 A record the app shows but will not change, because an item holds content from a newer app version or the record's timestamp is beyond the future-clock bound.
 _Avoid_: read-only item (for other records), locked item, frozen item
 
+**Read-only vault**:
+A vault that refuses every write on one device, except retirement and the automatic purge, while that device's clock is behind the last HLC it issued.
+_Avoid_: frozen vault, locked vault
+
 **Item Version**:
 An encrypted past snapshot of an item, kept in its history.
 _Avoid_: revision, history entry
@@ -61,7 +65,7 @@ A record marked as deleted; it keeps its content until purge and is never remove
 _Avoid_: deletion marker, delete flag
 
 **Purge**:
-The removal of a trashed record's content and history, leaving only its tombstone.
+The automatic removal of a trashed record's content and history, leaving only its tombstone.
 _Avoid_: hard delete, empty trash
 
 ## Records
@@ -89,7 +93,7 @@ _Avoid_: item key, data key, per-item key
 ## Keys and recovery
 
 **Master Key**:
-The root secret of the vault, identical on every registered device.
+The root secret of the vault, identical on every device that holds the vault.
 _Avoid_: root key, vault password
 
 **Vault Key**:
@@ -144,7 +148,11 @@ _Avoid_: rekey, Master Key rotation, new vault + import
 
 **Backup**:
 An encrypted `.bvault` file holding a full copy of the vault.
-_Avoid_: export, archive, snapshot
+_Avoid_: export (for the file), archive, snapshot
+
+**Export**:
+Making a backup on a device; the backup is the file, export is the action.
+_Avoid_: save, download, dump
 
 **Keyslot**:
 One independent way to open a backup: the Recovery Phrase or an export password.
@@ -153,6 +161,10 @@ _Avoid_: key slot, unlock method
 **Export password**:
 An optional password that opens one specific backup.
 _Avoid_: backup password, file password
+
+**Restore**:
+Bringing a backup's records onto a device, as either a fresh restore or a backup merge.
+_Avoid_: import, recover (as the action)
 
 **Fresh restore**:
 Restoring a backup onto a device that does not hold the vault, which installs the same vault there as an unregistered device.

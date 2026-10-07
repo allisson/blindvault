@@ -101,6 +101,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
 - [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
+- [ ] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
 
 ### `packages/vault`
 
@@ -121,6 +122,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] `navigator.storage.persist()` and `estimate()`
 - [ ] Single active instance through an exclusive Web Lock, with take-over (D51)
 - [ ] IndexedDB database and Web Lock named by `vaultId`, Local Config in that database (D79, D82)
+- [ ] A database counts as a vault only once its Local Config is committed; startup deletes databases without one, and a database replaced by another committed one (D89)
 
 ### `apps/web` (minimal)
 
@@ -164,18 +166,18 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Export and import with version and integrity validation
 - [ ] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
-- [ ] Restoring a different vault requires explicitly replacing the local one, after a warning
+- [ ] Restoring a different vault requires explicitly replacing the local one, after a warning; the new database commits before the old one is deleted (D89)
 - [ ] Forgotten local password recovery via recovery phrase
 - [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2)
 - [ ] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
-- [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, vault swapped in one transaction (D28); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
+- [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, new vault committed to its own database before the old one is deleted (D28, D89); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
 - [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
 
 ### Gate B
 
 - [ ] Create vault → backup → wipe storage → restore → all records match
 - [ ] Restore with the recovery phrase and also with the export password
-- [ ] Truncated, tampered or unknown-version `.bvault` is rejected with a clear error
+- [ ] Truncated (no final tag, or data after it), tampered or unknown-version `.bvault` is rejected with a clear error (D95); header values shown before a keyslot opens are marked unverified
 - [ ] Wrong recovery phrase fails without leaking information
 - [ ] The phrase never appears in IndexedDB, `localStorage` or logs (CRYPTO-INV-006)
 - [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
@@ -183,7 +185,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Merging a backup with a different `vaultId` is rejected (D13)
 - [ ] Restore interrupted midway leaves storage untouched (D33)
 - [ ] A fresh restore of a backup whose HLCs are beyond the future-clock bound keeps every record, read-only until within the bound (D39)
-- [ ] Re-founding interrupted midway leaves the old vault intact; afterwards old backups and old devices cannot open or sync with the new vault (D28)
+- [ ] Re-founding interrupted midway, or locked before its commit, leaves the old vault intact; interrupted after the new database commits, startup keeps only the new vault; afterwards old backups and old devices cannot open or sync with the new vault (D28, D89, D93)
 
 ---
 
@@ -198,9 +200,12 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned (D63)
 - [ ] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile
 - [ ] CI job that builds twice and compares the asset manifest hash
-- [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages
+- [ ] Choose and configure the dedicated custom domain for the official build (D90)
+- [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages under the dedicated custom domain only (D90)
+- [ ] Startup warning when served under a sub-path of a `github.io` host (D90)
+- [ ] Strict CSP by `<meta>` starting from `default-src 'none'`, Trusted Types where supported, unlock refused while framed (D83, D91)
 - [ ] "About" screen with the version and hash of the running build
-- [ ] Self-hosting instructions
+- [ ] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90)
 - [ ] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts
 - [ ] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15)
 - [ ] Input adaptation via `pointer`/`hover` media queries (44 px touch targets)
@@ -236,7 +241,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
 - [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
 - [ ] Camera QR scanning and copy/paste fallback
-- [ ] Pairing session expiration
+- [ ] Pairing session expiration; a lock on either device aborts the pairing (D93)
 - [ ] LAN-only mode (no STUN) and configurable STUN list
 
 ### Gate C
@@ -248,6 +253,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] A wrong identity is rejected
 - [ ] Pairing interrupted at any step before the commit, including a failed first sync, leaves the new device's storage empty (D33)
 - [ ] Duplicate pairing and expired sessions handled
+- [ ] A lock or hidden-app lock on either device aborts the pairing, leaving the joining device's storage empty (D93)
 - [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
 - [ ] An unregistered device is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
 - [ ] No Device record is written outside vault creation or a SAS-confirmed pairing (CRYPTO-INV-007)
@@ -275,7 +281,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Per-item LWW merge, with the losing version stored in history
 - [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
 - [ ] Tombstones synchronized and kept indefinitely
-- [ ] Trash with deterministic purge (D7)
+- [ ] Trash with deterministic, automatic-only purge; no manual purge (D7, D94)
 - [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user (D2)
 - [ ] Live push of changes while the DataChannel is open; session ends on close or lock
 - [ ] UI: sync state and last successful sync date; only devices with a known Device record are offered as peers
