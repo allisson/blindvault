@@ -67,7 +67,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] **Signal-less pairing:** two tabs, then two phones (iOS Safari and Chromium Android) establish a DataChannel by exchanging only the compact QR payloads (D4)
     - [ ] Measure the actual payload size in bytes and the resulting QR
-    - [ ] Test mDNS (`.local`) candidates on the same Wi-Fi network
+    - [ ] Test mDNS (`.local`) candidates on the same Wi-Fi network, with and without camera permission on each side, including LAN-only mode, and revise D136 with the result
     - [ ] Test with STUN across different networks (Wi-Fi + 4G)
     - [ ] Test camera QR scanning in the installed PWA on iOS and Android
 - [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
@@ -108,7 +108,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
 - [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129)
 - [ ] TOTP codes with WebCrypto HMAC (SHA1, SHA256, SHA512), `otpauth://` parser copied from BlindPass, RFC 6238 test vectors (D127)
-- [ ] Password generator: random characters or BIP39-English passphrase via `randombytes_uniform`, entropy shown, nothing persisted, defaults 20 characters or 6 words and minimums 12 or 4 (D128)
+- [ ] Password generator: random characters or BIP39-English passphrase via `randombytes_uniform`, entropy shown, nothing persisted, defaults 20 characters or 6 words and minimums 12 or 4 (D128), characters drawn from the union of the selected sets (D138)
 
 ### `packages/vault`
 
@@ -117,7 +117,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Folder record with encrypted name and `parentId` (D14)
 - [ ] Item `folderId` (optional; absent = vault root); tags inside the encrypted content
 - [ ] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
-- [ ] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore brings back exactly those records (D14)
+- [ ] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore from the trash brings back exactly those records (D14)
 - [ ] Record header (`recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18, D32)
 - [ ] Tombstone and version representation; deterministic keyed `versionId` (D6)
 
@@ -127,7 +127,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] API that only accepts encrypted records (distinct TypeScript type)
 - [ ] Local Config persistence (KEK salt, parameters, wrapped master key)
 - [ ] `navigator.storage.persist()` and `estimate()`
-- [ ] Single active instance through an exclusive Web Lock, with take-over (D51)
+- [ ] Single active app window through an exclusive Web Lock, with take-over (D51)
 - [ ] IndexedDB database and Web Lock named by `vaultId`, Local Config in that database (D79, D82)
 - [ ] A database counts as a vault only once its Local Config is committed; startup deletes databases without one, and a database replaced by another committed one (D89)
 
@@ -136,6 +136,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Layout system: mobile, tablet and desktop shells selected by viewport width, sharing one domain layer (D15)
 - [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock
 - [ ] Item CRUD with templates
+- [ ] Duplicate item: new item in the same folder with the current content, a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135)
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
 - [ ] Secret fields masked by default
 - [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
@@ -168,7 +169,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] `docs/backup-format.md`: magic, version, parameters (fixed export `opslimit` and accepted Argon2id range, D78), keyslots and payload (D3)
 - [ ] `packages/backup`: `.bvault` serialization with secretstream
-- [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at zxcvbn score 4 (D71) and warning that it yields the Master Key (D36)
+- [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at an estimated 10^14 guesses, with a generated 6-word passphrase offered (D134) and warning that it yields the Master Key (D36)
 - [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [ ] "Check Recovery Phrase" while unlocked
@@ -190,7 +191,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Wrong recovery phrase fails without leaking information
 - [ ] The phrase never appears in IndexedDB, `localStorage` or logs (CRYPTO-INV-006)
 - [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
-- [ ] Restore merge preserves the losing version in history
+- [ ] Backup merge preserves the losing version in history
 - [ ] Merging a backup with a different `vaultId` is rejected (D13)
 - [ ] Restore interrupted midway leaves storage untouched (D33)
 - [ ] A fresh restore of a backup whose HLCs are beyond the future-clock bound keeps every record, read-only until within the bound (D39)
@@ -288,6 +289,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, 24-hour future-clock bound (D19, D76); no write while the device clock is behind the last issued HLC (D73)
 - [ ] Summary exchange and transfer of divergent records only
 - [ ] Per-item LWW merge, with the losing version stored in history
+- [ ] An Item Version is dropped for a purged item only once the whole transfer is merged, so a restore from the trash arriving with its versions keeps them (D137)
 - [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
 - [ ] Tombstones synchronized and kept indefinitely
 - [ ] Trash with deterministic, automatic-only purge; no manual purge (D7, D94)
@@ -328,7 +330,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Justify `fflate` in `docs/architecture.md` (D125)
 - [ ] Copy and adapt the BlindPass parsers into `packages/vault`: BlindPass, Chrome, LastPass, Apple Passwords, KeePassXC, Bitwarden, Proton Pass, 1Password, Dashlane (D123)
 - [ ] `.blindpass` export decryption in `packages/crypto` with BlindPass's fixed Argon2id parameters and `crypto_secretbox` (D125, D126)
-- [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); TOTP-parsable values as `totp` fields whatever their key (D131)
+- [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); `otpauth://` URIs as `totp` fields whatever their key, bare base32 values only under TOTP-looking keys (D131, D133)
 - [ ] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the record size cap (D129), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
 - [ ] Import tests per format with valid, malformed and oversized input (section 18)
 - [ ] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)

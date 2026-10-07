@@ -53,7 +53,7 @@ An encrypted past snapshot of an item, kept in its history.
 _Avoid_: revision, history entry
 
 **Trash**:
-The state of a tombstoned item or folder whose content has not yet been purged and can still be restored.
+The state of a tombstoned item or folder whose content has not yet been purged and can still be restored from the trash.
 _Avoid_: recycle bin, deleted items
 
 **Trash operation**:
@@ -67,6 +67,18 @@ _Avoid_: deletion marker, delete flag
 **Purge**:
 The automatic removal of a trashed record's content and history, leaving only its tombstone.
 _Avoid_: hard delete, empty trash
+
+**Restore from the trash**:
+Bringing a trashed item or folder back before its purge.
+_Avoid_: undelete, recover, restore (unqualified)
+
+**Restore a version**:
+Making an Item Version's content an item's current state again, as a new edit.
+_Avoid_: revert, roll back, restore (unqualified)
+
+**Duplicate**:
+Making a new item with another item's current content, its own identity and no history.
+_Avoid_: clone, copy (within one vault)
 
 ## Records
 
@@ -181,7 +193,7 @@ An optional password that opens one specific backup.
 _Avoid_: backup password, file password
 
 **Restore**:
-Bringing a backup's records onto a device, as either a fresh restore or a backup merge.
+Bringing a backup's records onto a device, as either a fresh restore or a backup merge; the only meaning of "restore" without a qualifier.
 _Avoid_: import, recover (as the action)
 
 **Fresh restore**:
@@ -226,6 +238,10 @@ _Avoid_: paired device, trusted device, enrolled device
 A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync with the vault's existing devices only after re-admission.
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
+**App window**:
+One running tab or window of BlindVault on an installation; only one at a time opens the vault.
+_Avoid_: instance, tab (as the general term)
+
 **Installation guard**:
 The exclusive claim one window of BlindVault holds on an installation while it creates, replaces or deletes a vault there.
 _Avoid_: installation lock, global lock
@@ -235,7 +251,7 @@ Removing the vault and the Local Config from one device, leaving it with no vaul
 _Avoid_: wipe, reset, factory reset
 
 **Retired device**:
-A registered device that the user, from another device, has permanently marked as gone, so it is hidden and other devices refuse to sync with it; it is not revoked.
+A device whose Device record has been permanently marked retired from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
 
 **Admission**:
