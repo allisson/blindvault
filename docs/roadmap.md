@@ -73,6 +73,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
 - [ ] **WebAuthn PRF:** verify real support across the browser matrix
 - [ ] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result
+    - [ ] Confirm that the installed app does not share storage with the Safari tab, on iOS and macOS, and revise D103 with the result
+    - [ ] Record which system UIs (file picker, WebAuthn prompt, camera and other permission prompts) report the app as hidden, per browser in the matrix, and revise D105 with the result
 - [ ] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs and it activates once all tabs close; measure whether the page reliably detects it (`updatefound`) and can warn before the next unlock; revise D63 with the result
 
 ### Gate 0

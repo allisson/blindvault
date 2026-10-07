@@ -144,6 +144,24 @@ _Avoid_: reset phrase, rotate phrase, new phrase
 Replacing every key of the vault, and the vault's identity, while keeping its current items and folders; the response to a compromised Master Key.
 _Avoid_: rekey, Master Key rotation, new vault + import
 
+## Locking
+
+**Unlock**:
+Opening the vault on one device with the local password, a WebAuthn credential or the Recovery Phrase, so its keys are held in memory.
+_Avoid_: log in, sign in, open (as the security action)
+
+**Lock**:
+Closing the vault on one device: its keys and decrypted content leave memory and every operation in progress is cancelled.
+_Avoid_: log out, sign out, close
+
+**Auto-lock**:
+The lock that happens after a set time without user activity.
+_Avoid_: timeout, session expiry
+
+**Hidden-app lock**:
+The lock that happens after the app has been out of view for a set time, independently of auto-lock.
+_Avoid_: background lock, blur lock
+
 ## Backup
 
 **Backup**:
@@ -175,6 +193,14 @@ Restoring a backup into the vault a device already holds, merging its records by
 _Avoid_: merge restore, import
 
 ## Devices and sync
+
+**Installation**:
+One copy of BlindVault with its own storage, on one origin in one browser profile or installed-app container; one phone or computer can hold several.
+_Avoid_: instance (for the copy), app, client
+
+**Device**:
+One installation as the vault sees it, with its own device identity; a Safari tab and the installed app on the same phone are two devices.
+_Avoid_: phone, computer (as an identity), browser
 
 **Device identity**:
 The key pair that identifies one device to the others; its private half never leaves that device.
