@@ -231,7 +231,7 @@ Removing the vault and the Local Config from one device, leaving it with no vaul
 _Avoid_: wipe, reset, factory reset
 
 **Retired device**:
-A registered device the user has permanently marked as gone from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
+A registered device that the user, from another device, has permanently marked as gone, so it is hidden and other devices refuse to sync with it; it is not revoked.
 _Avoid_: revoked device, removed device, deleted device
 
 **Admission**:
