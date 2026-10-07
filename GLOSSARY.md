@@ -41,8 +41,8 @@ A flat label that classifies items across folders.
 _Avoid_: label, category
 
 **Read-only record**:
-An item or folder the app shows but will not change, because an item holds content from a newer app version or a record's timestamp is beyond the future-clock bound.
-_Avoid_: read-only item (for folders), locked item, frozen item
+A record the app shows but will not change, because an item holds content from a newer app version or the record's timestamp is beyond the future-clock bound.
+_Avoid_: read-only item (for other records), locked item, frozen item
 
 **Item Version**:
 An encrypted past snapshot of an item, kept in its history.
@@ -181,7 +181,7 @@ A device whose identity is recorded in a Device record of the vault.
 _Avoid_: paired device, trusted device, enrolled device
 
 **Unregistered device**:
-A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync only after re-admission.
+A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync with the vault's existing devices only after re-admission.
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
 **Erase**:

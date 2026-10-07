@@ -100,7 +100,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Recovery KEK generation and derivation with `crypto_kdf`, used only through subkeys (D2); recovery keyslot keypair from a subkey (D16)
 - [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
-- [ ] WebAuthn PRF wrapping (optional, detected at runtime)
+- [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
 
 ### `packages/vault`
 
@@ -154,7 +154,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### Tasks
 
-- [ ] `docs/backup-format.md`: magic, version, parameters, keyslots and payload (D3)
+- [ ] `docs/backup-format.md`: magic, version, parameters (fixed export `opslimit` and accepted Argon2id range, D78), keyslots and payload (D3)
 - [ ] `packages/backup`: `.bvault` serialization with secretstream
 - [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at zxcvbn score 4 (D71) and warning that it yields the Master Key (D36)
 - [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
@@ -269,7 +269,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)
 - [ ] Reject records in an unknown `recordFormatVersion` in sync, record it in Local Config, warn at export until cleared; abort a pairing before commit when its first full sync holds one (D68)
 - [ ] Messages bound to the session (CRYPTO-INV-009)
-- [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, future-clock bound (D19)
+- [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, 24-hour future-clock bound (D19, D76); no write while the device clock is behind the last issued HLC (D73)
 - [ ] Summary exchange and transfer of divergent records only
 - [ ] Per-item LWW merge, with the losing version stored in history
 - [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
@@ -291,6 +291,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Duplicate, out-of-order and repeated messages are idempotent
 - [ ] A corrupted record is rejected without affecting the others
 - [ ] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
+- [ ] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
 - [ ] A retired peer cannot sync, and a forged newer non-retired Device record, even one claiming another device's HLC, never un-retires it (D31, CRYPTO-INV-015)
