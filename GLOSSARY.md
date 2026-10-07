@@ -41,7 +41,7 @@ A flat label that classifies items across folders.
 _Avoid_: label, category
 
 **Read-only record**:
-A record the app shows but will not change, because its timestamp is beyond the future-clock bound or, for an item, an Item Version or the Recovery Envelope, because it holds content from a newer app version.
+A record the app shows but will not change, because its HLC is beyond the future-clock bound or, for an item, an Item Version or the Recovery Envelope, because it holds content from a newer app version.
 _Avoid_: read-only item (for other records), locked item, frozen item
 
 **Read-only vault**:
@@ -245,6 +245,10 @@ _Avoid_: pairing (as the umbrella term), enrollment
 **Pairing**:
 The admission flow in which a device holding the vault gives its Master Key to a device with no vault and registers that device's identity.
 _Avoid_: enrollment, linking
+
+**Joining device**:
+The device with no vault that receives the vault in pairing; the other side is the device holding the vault.
+_Avoid_: new device (as a role), guest, B (in UI copy)
 
 **Re-admission**:
 The admission flow between two devices that already hold the same vault, in which the identity either side lacks is registered after both prove they hold the same Master Key, so no Master Key is transferred.

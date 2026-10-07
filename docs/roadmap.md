@@ -71,6 +71,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
     - [ ] Test with STUN across different networks (Wi-Fi + 4G)
     - [ ] Test camera QR scanning in the installed PWA on iOS and Android
 - [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
+    - [ ] Measure whether Argon2id at libsodium's `SENSITIVE` limits (1 GiB) runs on each browser of the matrix, for `.blindpass` import, and revise D126 with the result
 - [ ] **WebAuthn PRF:** verify real support across the browser matrix
 - [ ] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result
     - [ ] Confirm that the installed app does not share storage with the Safari tab, on iOS and macOS, and revise D103 with the result
@@ -105,6 +106,9 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
 - [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
 - [ ] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
+- [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129)
+- [ ] TOTP codes with WebCrypto HMAC (SHA1, SHA256, SHA512), `otpauth://` parser copied from BlindPass, RFC 6238 test vectors (D127)
+- [ ] Password generator: random characters or BIP39-English passphrase via `randombytes_uniform`, entropy shown, nothing persisted, defaults 20 characters or 6 words and minimums 12 or 4 (D128)
 
 ### `packages/vault`
 
@@ -134,6 +138,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Item CRUD with templates
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
 - [ ] Secret fields masked by default
+- [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
+- [ ] TOTP field: seed masked, current code shown, copy with clipboard clear (D127)
 - [ ] Configurable auto-lock that clears state and keys on lock
 
 ### Gate A
@@ -321,9 +327,9 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] `docs/blindpass-format.md`: BlindPass export format (plaintext `.json`, encrypted `.blindpass`) (D123)
 - [ ] Justify `fflate` in `docs/architecture.md` (D125)
 - [ ] Copy and adapt the BlindPass parsers into `packages/vault`: BlindPass, Chrome, LastPass, Apple Passwords, KeePassXC, Bitwarden, Proton Pass, 1Password, Dashlane (D123)
-- [ ] `.blindpass` export decryption in `packages/crypto` (D125)
-- [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124)
-- [ ] Import flow: plaintext-export warning, preview, landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
+- [ ] `.blindpass` export decryption in `packages/crypto` with BlindPass's fixed Argon2id parameters and `crypto_secretbox` (D125, D126)
+- [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); TOTP-parsable values as `totp` fields whatever their key (D131)
+- [ ] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the record size cap (D129), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125)
 - [ ] Import tests per format with valid, malformed and oversized input (section 18)
 - [ ] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
 - [ ] Dependency review
