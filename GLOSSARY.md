@@ -197,7 +197,7 @@ The admission flow between two devices that already hold the same vault, in whic
 _Avoid_: re-pairing, rejoin
 
 **SAS**:
-The short code shown on both screens that the user compares to confirm a pairing.
+The short code shown on both screens that the user compares to confirm an admission.
 _Avoid_: verification code, PIN, pairing code
 
 **Pairing payload**:
