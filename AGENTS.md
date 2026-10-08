@@ -8,7 +8,9 @@ This is a security-critical project. Correctness and safety come before speed or
 
 Read these before making non-trivial changes:
 
-- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log D1–D141). It prevails over any other document.
+- `docs/overview.md`: **normative** design (architecture, cryptography, protocols, invariants, UI security, onboarding, testing, decision log in section 21). It prevails over any other document.
+  Don't record the decision range or any counter here or in the overview header: the log in
+  section 21 is the only place that knows the last `Dn`.
 - `docs/roadmap.md`: phases, tasks and gates. Work on the current phase only.
 - `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
 - `GLOSSARY.md`: canonical domain terms. Use them in code, docs and UI copy.
@@ -20,7 +22,7 @@ If a task would contradict `docs/overview.md`, stop and explain the conflict ins
 BlindVault is derived from BlindPass. The BlindPass source code is available locally at:
 
 ```
-../blindpass   ← adjust to the real path
+../blindpass   (/Users/allisson/Projects/blindpass)
 ```
 
 Rules for using it:

@@ -1,7 +1,7 @@
 # BlindVault — Overview
 
 > Normative design document for implementation. It prevails over every other document in this repository.
-> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and decisions D1–D146 (section 21).
+> Consolidates the original *BlindVault — Technical Design Specification* (2026-10-04, available in git history at commit `6b1ae3a`) and the decision log (section 21).
 > Status: Proposed · Author: Allisson Azevedo · License: MIT.
 > The words MUST, MUST NOT, SHOULD and MAY follow RFC 2119. Terms follow `GLOSSARY.md`.
 
