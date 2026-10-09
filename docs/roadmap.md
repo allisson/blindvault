@@ -81,7 +81,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### Gate 0
 
-- [ ] CI green on the empty monorepo
+- [x] CI green on the empty monorepo
 - [ ] `crypto-spec.md` reviewed and consistent with the overview
 - [ ] Pairing spike result recorded: **go**, or **no-go** with D4 revised
 - [ ] Argon2id 64 MiB floor confirmed viable on iOS, or D9 revised
