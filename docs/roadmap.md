@@ -31,16 +31,16 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### Repository and CI
 
-- [ ] Monorepo with workspaces: `apps/web`, `packages/{crypto,vault,storage,sync,backup}`, `docs/`, `tests/`
-- [ ] TypeScript in strict mode, ESLint, Prettier
-- [ ] Vitest configured per package
-- [ ] Playwright with projects for Chromium, Firefox and WebKit
-- [ ] CI: lint, typecheck and tests on every push
-- [ ] Pinned Node version (`.nvmrc` or `engines`) and committed lockfile
-- [ ] Lint rule preventing `packages/crypto` from importing other packages or React
-- [ ] `AGENTS.md` at the root pointing to `docs/overview.md` and `docs/roadmap.md`, with the actual commands filled in and the real BlindPass path set
-- [ ] Use the same package manager as BlindPass (unless there is a documented reason not to)
-- [ ] `LICENSE` file (MIT)
+- [x] Monorepo with workspaces: `apps/web`, `packages/{crypto,vault,storage,sync,backup}`, `docs/`, `tests/`
+- [x] TypeScript in strict mode, ESLint, Prettier
+- [x] Vitest configured per package
+- [x] Playwright with projects for Chromium, Firefox and WebKit
+- [x] CI: lint, typecheck and tests on every push
+- [x] Pinned Node version (`.nvmrc` or `engines`) and committed lockfile
+- [x] Lint rule preventing `packages/crypto` from importing other packages or React
+- [x] `AGENTS.md` at the root pointing to `docs/overview.md` and `docs/roadmap.md`, with the actual commands filled in and the real BlindPass path set
+- [x] Use the same package manager as BlindPass (unless there is a documented reason not to)
+- [x] `LICENSE` file (MIT)
 
 ### BlindPass inventory
 

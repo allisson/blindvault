@@ -1,0 +1,9 @@
+# Normative docs keep their own hand formatting.
+*.md
+
+pnpm-lock.yaml
+**/dist/
+**/coverage/
+**/.tsbuild/
+**/playwright-report/
+**/test-results/

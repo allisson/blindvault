@@ -1,0 +1,18 @@
+{
+  "name": "@blindvault/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "IndexedDB schema and encrypted record persistence.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "5.0.2",
+    "vitest": "5.0.2"
+  }
+}

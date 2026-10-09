@@ -60,7 +60,25 @@ Package boundaries:
 
 ## Commands
 
-To be defined during Phase 0. Fill in the real commands here once tooling exists (install, dev, build, lint, typecheck, unit tests, a single test file, Playwright).
+Node `24.21.0` (`.nvmrc`) and pnpm `10.33.0` (`packageManager`, through corepack: `corepack enable pnpm`).
+`minimumReleaseAge` in `pnpm-workspace.yaml` refuses versions published less than 14 days ago, and
+`.npmrc` saves exact versions.
+
+```sh
+pnpm install --frozen-lockfile            # install
+pnpm --filter @blindvault/web dev         # dev server
+pnpm --filter @blindvault/web build       # production build
+pnpm lint                                 # ESLint (strictTypeChecked + package boundaries)
+pnpm typecheck                            # tsc -b over every project
+pnpm format:check                         # Prettier (pnpm format to fix)
+pnpm test                                 # Vitest in every workspace
+pnpm test:coverage                        # same, enforcing 95% coverage on packages/*
+pnpm --filter @blindvault/crypto exec vitest run src/foo.test.ts   # a single test file
+pnpm test:e2e                             # Playwright: Chromium, Firefox, WebKit
+pnpm run ci                               # what CI runs, except Playwright
+```
+
+First Playwright run: `pnpm --filter @blindvault/web exec playwright install chromium firefox webkit`.
 
 ## Stack
 

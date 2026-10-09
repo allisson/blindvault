@@ -1,0 +1,18 @@
+{
+  "name": "@blindvault/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cryptographic primitives, key hierarchy, AEAD and AAD serialization.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "5.0.2",
+    "vitest": "5.0.2"
+  }
+}

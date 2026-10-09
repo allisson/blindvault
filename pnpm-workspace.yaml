@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+  - tests
+
+# Supply-chain hygiene: never resolve a version published less than 14 days ago.
+minimumReleaseAge: 20160
+
+# No dependency runs install scripts unless listed here.
+onlyBuiltDependencies: []
