@@ -223,7 +223,7 @@ One copy of BlindVault with its own storage, on one origin in one browser profil
 _Avoid_: instance (for the copy), app, client
 
 **Device**:
-One installation as the vault sees it, with its own device identity; a Safari tab and the installed app on the same phone are two devices.
+One installation as one vault sees it, with its own device identity for that vault; a Safari tab and the installed app on the same phone are two devices.
 _Avoid_: phone, computer (as an identity), browser
 
 **Device identity**:
@@ -267,12 +267,16 @@ The SAS-confirmed procedure by which a device joins the devices that sync a vaul
 _Avoid_: pairing (as the umbrella term), enrollment
 
 **Pairing**:
-The admission flow in which a device holding the vault gives its Master Key to a device with no vault, or one whose different vault the pairing replaces, and registers that device's identity.
+The admission flow in which a device holding the vault gives its Master Key to a device with no vault, or one whose vault the pairing replaces, and registers that device's identity.
 _Avoid_: enrollment, linking
 
 **Joining device**:
-The device with no vault, or one whose different vault the pairing replaces, that receives the vault in pairing; the other side is the device holding the vault.
+The device with no vault, or one whose vault the pairing replaces, that receives the vault in pairing; the other side is the device holding the vault.
 _Avoid_: new device (as a role), guest, B (in UI copy)
+
+**Replace by pairing**:
+Pairing a device that already holds a vault, so the vault it receives replaces the one it held, whether the same vault or another.
+_Avoid_: re-pair, overwrite
 
 **Re-admission**:
 The admission flow between two devices that already hold the same vault, in which the identity either side lacks is registered after both prove they hold the same Master Key, so no Master Key is transferred.
