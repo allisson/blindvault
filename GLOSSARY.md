@@ -16,6 +16,10 @@ _Avoid_: home, top folder, unfiled
 One stored entry in the vault, made of typed fields.
 _Avoid_: entry, secret, record (in UI copy)
 
+**Item cap**:
+The largest content an item may hold, so it can always be edited, trashed and kept in history.
+_Avoid_: item size limit, max item size
+
 **Field**:
 One typed value inside an item, such as a URL, a secret or a TOTP.
 _Avoid_: attribute, property
@@ -49,7 +53,7 @@ A record the app shows but will not change, because its HLC is beyond the future
 _Avoid_: read-only item (for other records), locked item, frozen item
 
 **Read-only vault**:
-A vault that refuses every write on one device, except retirement and the automatic purge, while that device's clock is behind the greatest HLC it has issued or accepted.
+A vault that refuses every write on one device, except retirement and the automatic purge, while the greatest HLC that device has issued or accepted is beyond the future-clock bound of its clock.
 _Avoid_: frozen vault, locked vault
 
 **Item Version**:
@@ -263,11 +267,11 @@ The SAS-confirmed procedure by which a device joins the devices that sync a vaul
 _Avoid_: pairing (as the umbrella term), enrollment
 
 **Pairing**:
-The admission flow in which a device holding the vault gives its Master Key to a device with no vault and registers that device's identity.
+The admission flow in which a device holding the vault gives its Master Key to a device with no vault, or one whose different vault the pairing replaces, and registers that device's identity.
 _Avoid_: enrollment, linking
 
 **Joining device**:
-The device with no vault that receives the vault in pairing; the other side is the device holding the vault.
+The device with no vault, or one whose different vault the pairing replaces, that receives the vault in pairing; the other side is the device holding the vault.
 _Avoid_: new device (as a role), guest, B (in UI copy)
 
 **Re-admission**:
