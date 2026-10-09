@@ -127,7 +127,7 @@ Primary implementation: **libsodium** (`libsodium-wrappers-sumo`). Primitives: A
 
 Two more primitives serve item features only and never protect vault data: `crypto_secretbox` (XSalsa20-Poly1305), used only to decrypt a BlindPass `.blindpass` export during import (D126), and HMAC-SHA1, HMAC-SHA256 and HMAC-SHA512 from WebCrypto (`crypto.subtle`), used only to compute TOTP codes (D127).
 
-Custom cryptographic primitives MUST NOT be implemented. Protocols (Noise) MUST come from an existing, validated implementation (D1).
+Custom cryptographic primitives MUST NOT be implemented. Protocols (Noise) MUST come from an existing, validated implementation (D1). The Noise handshake state machine is copied from `noise-protocol` with its primitives bound to libsodium, and it stays acceptable only while it passes the official test vectors for both patterns in CI (D157).
 
 ### 5.2 Key hierarchy
 
@@ -729,7 +729,7 @@ This document is **normative**.
 
 | # | Topic | Decision |
 | --- | --- | --- |
-| D1 | Device authentication | Noise `25519_ChaChaPoly_BLAKE2b`: XX for pairing, KK for sync. Prologue binds both pairing payloads and both DTLS fingerprints; SAS derived from the handshake hash. The joining device's identity exists before the handshake, and the existing device writes its Device record. *Amended by D35, D148.* |
+| D1 | Device authentication | Noise `25519_ChaChaPoly_BLAKE2b`: XX for pairing, KK for sync. Prologue binds both pairing payloads and both DTLS fingerprints; SAS derived from the handshake hash. The joining device's identity exists before the handshake, and the existing device writes its Device record. *Amended by D35, D148, D157.* |
 | D2 | Recovery Phrase | Recovery KEK via `crypto_kdf`, used only through subkeys; the envelope subkey wraps the Master Key; one synchronized Recovery Envelope per vault (LWW) carrying a `phraseId`; older backups remain openable with the old phrase; concurrent regeneration warns the superseded device. *Amended by D24, D43, D145.* |
 | D3 | `.bvault` | File key + secretstream; keyslots: recovery (mandatory) and Argon2id password (optional). *Amended by D43, D78, D95.* |
 | D4 | QR and SDP | Minimal binary pairing payload in base45 with no Noise keys, SDP rebuilt by the receiver, no ICE trickle, bidirectional exchange, copy/paste fallback, SAS always required. *Amended by D50, D117, D122, D136.* |
@@ -885,3 +885,4 @@ This document is **normative**.
 | D154 | Vault Web Lock for removing a vault | Erase, replacing the vault by pairing or restore, and re-founding hold the Web Lock of the vault they remove, taking it over from another app window (which locks the vault there), and acquire it before the installation guard, so two app windows never wait on each other; the startup cleanup requests a replaced vault's Web Lock without waiting and skips the deletion while another app window holds it. Erase and replacement run without unlocking, so otherwise an app window could remove a vault another app window holds unlocked. Extends CRYPTO-INV-017. Amends D51 and D97 |
 | D155 | Generated export passphrase | An export password taken unchanged from the password generator is checked against the 10^14 threshold by the generator's exact entropy (about 2^66 for the 6-word default), not by zxcvbn's estimate, which can rate common BIP39 words lower and would reject the UI's own suggestion; once the user edits it, zxcvbn applies. Amends D134 |
 | D156 | Duplicate placement | Duplicate writes the copy in the folder where the original is displayed, the vault root when the orphan rule applies (section 9.3), so a copy of an item whose folder is in the trash does not move into that folder when it is restored, as D112 requires of restored records. Amends D135 |
+| D157 | Noise implementation | No maintained JavaScript library offers both `Noise_XX` and `Noise_KK` in `25519_ChaChaPoly_BLAKE2b`. The handshake state machine of `noise-protocol` (ISC) is copied into `packages/sync` with its DH, hash and cipher bound to `libsodium-wrappers-sumo`; the handshake logic is not modified. It counts as the existing, validated implementation D1 requires only while CI passes the official cacophony and snow vectors for both protocol names, prologue and handshake hash included. Amends D1 |

@@ -44,10 +44,10 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### BlindPass inventory
 
-- [ ] List BlindPass packages and modules (crypto, domain, utilities, tests), read-only
-- [ ] For each, decide: reuse as is, reuse with changes, or do not reuse, and record the decision in `docs/architecture.md`
-- [ ] Note every difference between BlindPass crypto and the overview (primitives, AAD, key hierarchy, serialization); the overview wins
-- [ ] Identify BlindPass test vectors and tests that can be carried over
+- [x] List BlindPass packages and modules (crypto, domain, utilities, tests), read-only
+- [x] For each, decide: reuse as is, reuse with changes, or do not reuse, and record the decision in `docs/architecture.md`
+- [x] Note every difference between BlindPass crypto and the overview (primitives, AAD, key hierarchy, serialization); the overview wins
+- [x] Identify BlindPass test vectors and tests that can be carried over
 
 ### Documentation
 
@@ -59,9 +59,9 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### Dependency selection
 
-- [ ] Noise implementation on top of libsodium: evaluate maintenance, track record, and whether it passes the official test vectors (D1)
-- [ ] CBOR library with a deterministic mode and a strict decoder (D10)
-- [ ] Record the justification for each dependency in `docs/architecture.md`
+- [x] Noise implementation on top of libsodium: evaluate maintenance, track record, and whether it passes the official test vectors (D1)
+- [x] CBOR library with a deterministic mode and a strict decoder (D10)
+- [x] Record the justification for each dependency in `docs/architecture.md`
 
 ### Spikes (throwaway code, outside `packages/`)
 
@@ -85,7 +85,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] `crypto-spec.md` reviewed and consistent with the overview
 - [ ] Pairing spike result recorded: **go**, or **no-go** with D4 revised
 - [ ] Argon2id 64 MiB floor confirmed viable on iOS, or D9 revised
-- [ ] Noise and CBOR dependencies chosen and justified
+- [x] Noise and CBOR dependencies chosen and justified
 
 ---
 
