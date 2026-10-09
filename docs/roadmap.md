@@ -52,10 +52,10 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 ### Documentation
 
 - [x] Copy `overview.md` and `roadmap.md` into `docs/` (original spec merged into the overview)
-- [ ] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
-- [ ] `docs/security-invariants.md`: CRYPTO-INV-001 to 023, each mapped to the test that covers it (filled in across phases)
-- [ ] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
-- [ ] Specification of the binary layout for AAD and transcripts (D10), with test vectors
+- [x] `docs/crypto-spec.md`: key hierarchy, Master Key subkeys (D23), envelopes, AAD (D8, D21), Recovery KEK (D2), Argon2id parameters (D9)
+- [x] `docs/security-invariants.md`: CRYPTO-INV-001 to 023, each mapped to the test that covers it (filled in across phases)
+- [x] `docs/threat-model.md`: threats, out of scope, TOFU (D5)
+- [x] Specification of the binary layout for AAD and transcripts (D10), with test vectors
 
 ### Dependency selection
 
