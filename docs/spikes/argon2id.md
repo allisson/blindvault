@@ -71,4 +71,5 @@ Same laptop. Firefox does not expose `deviceMemory`. All runs succeeded.
 ## Pending
 
 - The 1 GiB button now runs ops 4 (D126's limits) from the next deploy; the A54 can rerun it.
-- iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox), Safari on the iPhone and the Mac only on storage follow-up days or after day 15.
+- iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox). Safari on the iPhone and the Mac
+  only on storage follow-up days or after day 15.
