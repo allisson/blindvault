@@ -1,7 +1,6 @@
 # Spike result — Safari storage (D55, D103, D105, D110)
 
-Status: **in progress**. Day 0 and D110 recorded; D105 (system UI) and days 1, 4,
-8 and 15 pending.
+Status: **in progress**. Day 0, D110 and D105 (iPhone tab) recorded; days 1, 4, 8 and 15 pending.
 
 Day 0 was 2026-10-10. Follow-up days: 2026-10-11, 2026-10-14, 2026-10-18 and 2026-10-25. The site
 is not opened on these devices between follow-ups.
@@ -27,8 +26,9 @@ Site build: `swVersion` 1, built 2026-10-10T00:09:19Z.
 - **Persistent storage:** granted to the installed app, refused to the tab, on both iOS and macOS,
   with no prompt.
 - Quota is the same in the tab and the app on each device.
-- The iPhone app's usage is about 300 times that of the other contexts. The spike doesn't show
-  what holds it; it was opened twice (two visits recorded).
+- The iPhone app's usage is about 300 times that of the other contexts. The iPhone tab reached
+  106,563 bytes later on day 0, after the pairing page was opened in it, so the difference comes
+  from what was loaded, not from tab versus app.
 
 ## D110 — same-device pairing on iPhone (2026-10-10)
 
@@ -42,7 +42,16 @@ the tester to finish. No connection state was recorded on either side.
 - The first attempts failed because "Use pasted offer" was pressed with an empty box (the label
   suggested it read the clipboard); the spike's Paste buttons now read the clipboard.
 
+## D105 — system UI and visibility (2026-10-10)
+
+| Context | File picker | Camera prompt | WebAuthn prompt |
+| --- | --- | --- | --- |
+| iPhone, Safari tab | visible | visible | visible |
+
+Each prompt was opened and cancelled; none reported the page as hidden. The other devices are not
+measured yet.
+
 ## Pending
 
-- D105: the three system-UI buttons on every device.
+- D105 on the other devices (optional; the iPhone was the case D105 was written for).
 - Days 1, 4, 8 and 15: whether each context still has its marker.
