@@ -1,7 +1,7 @@
 # Spike result — signal-less pairing (D4, D136)
 
 Status: **in progress**. Desktop engines measured locally; Windows Firefox ↔ A54 by QR on the same
-Wi-Fi; iPhone, STUN and the installed apps pending.
+Wi-Fi; Mac Chrome ↔ A54 across networks with STUN; iPhone and the installed apps pending.
 
 ## Local desktop run (2026-10-09)
 
@@ -43,4 +43,23 @@ Same Wi-Fi, LAN-only (no STUN). Planned as copy/paste (README run 7), done with 
   `connected`. The spike doesn't record why; the ping exchange had completed on both sides.
 - Time to connect is not meaningful here (40 s on B, 154 s on A): it is dominated by the tester
   moving between devices.
+
+## Mac Chrome (A, Wi-Fi) ↔ Samsung A54 Chrome (B, mobile data), QR, STUN (2026-10-10)
+
+Different networks: the A54 had Wi-Fi off. STUN on (Google and Cloudflare).
+
+| | Mac Chrome 155 (A, offer) | A54 Chrome 155 (B, answer) |
+| --- | --- | --- |
+| Candidates sent | 1 mDNS host, 1 IPv4 srflx | 1 IPv4 host, 2 IPv6 host, 1 IPv4 srflx |
+| Payload | 99 bytes, 149 chars, QR version 6 | 125 bytes, 188 chars, QR version 8 |
+| Gathering | 129 ms | 10,002 ms (the spike's 10 s cap) |
+| Scan time | 5.9 s, native `BarcodeDetector` | 0.06 s, native `BarcodeDetector` |
+| Selected pair (local → remote) | IPv4 srflx → IPv4 srflx | IPv4 srflx → IPv4 srflx |
+
+- **Connected across NATs** through STUN alone, no relay; round trips of 58–78 ms.
+- **Gathering on mobile data never reported complete:** the A54 waited the full 10 s cap, although
+  its srflx candidate was already in the payload. The product should stop gathering once it has a
+  srflx candidate (or after a short cap), not wait for `complete`.
+- The largest payload so far is 125 bytes (QR version 8), still under the original 200–300-byte
+  estimate (§8.3).
 
