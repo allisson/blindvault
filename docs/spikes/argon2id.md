@@ -50,7 +50,7 @@ Reports 8 cores and 16 GiB of device memory. All runs succeeded.
 | 1 GiB | 1,961 ms | 2,960 ms |
 
 - **Calibration at 64 MiB:** ops 19 is the first to reach 1 s (1,003 ms), inside the accepted range.
-- About 1.7 times as fast as the A54 in every cell.
+- 1.6 to 1.9 times as fast as the A54, cell by cell.
 
 ## Pending
 
