@@ -1,7 +1,6 @@
 # Spike result — WebAuthn PRF (§5.5, D75, D84, D120)
 
-Status: **in progress**. Samsung A54 (Chrome) measured except output stability; the other devices
-pending.
+Status: **in progress**. Samsung A54 (Chrome tab) measured; the other devices pending.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
 fixed 32-byte input at create and at get.
@@ -11,7 +10,7 @@ fixed 32-byte input at create and at get.
 | Step | Attachment | UV | BE | BS | PRF | Page hidden |
 | --- | --- | --- | --- | --- | --- | --- |
 | create | platform | yes | yes | yes | enabled, 32-byte output at create | no |
-| get | — | yes | yes | yes | 32-byte output | no |
+| get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
 
 - PRF works on the platform authenticator, and Chrome already returns the output at create, so
   setup needs no second prompt.
@@ -23,6 +22,5 @@ fixed 32-byte input at create and at get.
 
 ## Pending
 
-- A54: a second get, to confirm the output is stable across assertions.
 - A54 installed app; iPhone 14 (Safari, tab and installed app), MacBook Air M1 (Safari, Chrome,
   Firefox), Windows laptop (Chrome or Edge, Firefox).
