@@ -1,6 +1,7 @@
 # Spike result — WebAuthn PRF (§5.5, D75, D84, D120)
 
-Status: **in progress**. Samsung A54 (Chrome tab) measured; the other devices pending.
+Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome failed at create; the
+other devices pending.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
 fixed 32-byte input at create and at get.
@@ -20,7 +21,14 @@ fixed 32-byte input at create and at get.
 - `getClientCapabilities()` reports `extension:prf`, `signalUnknownCredential` and
   `signalAllAcceptedCredentials`.
 
+## Windows laptop, Chrome 155 (2026-10-10)
+
+`getClientCapabilities()` reports the same set as the A54, `extension:prf` included. Create failed
+with `NotAllowedError` ("timed out or was not allowed"), so get had no credential to use. WebAuthn
+gives the same error for a cancel, a timeout and a missing authenticator, so the cause is not known
+yet.
+
 ## Pending
 
 - A54 installed app; iPhone 14 (Safari, tab and installed app), MacBook Air M1 (Safari, Chrome,
-  Firefox), Windows laptop (Chrome or Edge, Firefox).
+  Firefox), Windows laptop (Chrome again once the create failure is understood, Firefox).

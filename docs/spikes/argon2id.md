@@ -1,6 +1,7 @@
 # Spike result — Argon2id in the browser (D9, D126)
 
-Status: **in progress**. Samsung A54 (Chrome) measured, 1 GiB included; the other devices pending.
+Status: **in progress**. Samsung A54 (Chrome) and Windows laptop (Chrome) measured, 1 GiB included;
+the other devices pending.
 
 Setup: `libsodium-wrappers-sumo` 0.8.4 `crypto_pwhash` (Argon2id 1.3, parallelism 1), in a fresh
 Web Worker per run. Times exclude worker start and libsodium load (`loadMs`, under 50 ms everywhere).
@@ -37,8 +38,21 @@ Button 3 ran twice: 6 runs per cell, all succeeded, no reload or crash.
   One pass costs about 1.3 s here, so ops 4 would land near 6 s by extrapolation, not measured.
   Acceptable for a one-off import behind a progress indicator.
 
+## Windows laptop, Chrome 155 (2026-10-10)
+
+Reports 8 cores and 16 GiB of device memory. All runs succeeded.
+
+| Memory | ops 2 | ops 3 |
+| --- | --- | --- |
+| 64 MiB | 111 ms | 146 ms |
+| 128 MiB | 224 ms | 314 ms |
+| 256 MiB | 463 ms | 673 ms |
+| 1 GiB | 1,961 ms | 2,960 ms |
+
+- **Calibration at 64 MiB:** ops 19 is the first to reach 1 s (1,003 ms), inside the accepted range.
+- About 1.7 times as fast as the A54 in every cell.
+
 ## Pending
 
 - The 1 GiB button now runs ops 4 (D126's limits) from the next deploy; the A54 can rerun it.
-- iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox), Windows laptop (Chrome or Edge,
-  Firefox). Safari on the iPhone and the Mac only on storage follow-up days or after day 15.
+- iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox), Windows laptop (Firefox). Safari on the iPhone and the Mac only on storage follow-up days or after day 15.
