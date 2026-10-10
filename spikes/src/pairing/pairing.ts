@@ -1,5 +1,5 @@
 import { $, errorText, log, mountResults, record, tracked } from '../common';
-import { decode as fromBase45, encode as toBase45 } from './base45';
+import { ALPHABET as BASE45, decode as fromBase45, encode as toBase45 } from './base45';
 import { buildSdp, decodePayload, encodePayload, parseSdp, type Payload } from './payload';
 import { renderQr, scanQr } from './qr';
 
@@ -102,9 +102,33 @@ async function createOffer(): Promise<void> {
   showPayload(payload, 'A offer', gatherMs, dropped);
 }
 
+// Messaging apps may wrap long text: line breaks and tabs are dropped. An encoded payload never starts
+// or ends with a space, so trim() is safe. Failures record what arrived, to compare with the sender's
+// base45Chars.
+function readIncoming(raw: string, label: string): Payload {
+  const text = raw.replace(/[\r\n\t]/g, '').trim();
+  try {
+    const payload = decodePayload(fromBase45(text));
+    log(`${label}: ${String(text.length)} chars received`);
+    return payload;
+  } catch (e) {
+    const outside = [...new Set([...text].filter((ch) => !BASE45.includes(ch)))];
+    record(`${label} received`, {
+      chars: text.length,
+      rawChars: raw.length,
+      charsMod3: text.length % 3,
+      charsOutsideBase45: outside.map((ch) => `U+${ch.codePointAt(0)?.toString(16).toUpperCase() ?? ''}`),
+      head: text.slice(0, 6),
+      tail: text.slice(-6),
+      error: errorText(e),
+    });
+    throw e;
+  }
+}
+
 async function acceptOffer(text: string): Promise<void> {
   startedAt = performance.now();
-  const offer = decodePayload(fromBase45(text.trim()));
+  const offer = readIncoming(text, 'B offer');
   if (!offer.offer) throw new Error('this is an answer, not an offer');
   sessionId = offer.sessionId;
   const conn = newConnection();
@@ -116,7 +140,7 @@ async function acceptOffer(text: string): Promise<void> {
 }
 
 async function acceptAnswer(text: string): Promise<void> {
-  const answer = decodePayload(fromBase45(text.trim()));
+  const answer = readIncoming(text, 'A answer');
   if (answer.offer) throw new Error('this is an offer, not an answer');
   if (answer.sessionId.join() !== sessionId.join()) throw new Error('answer is for another session');
   if (!pc) throw new Error('create the offer first');
@@ -233,8 +257,13 @@ $('#paste-offer').addEventListener(
   'click',
   run('paste offer', () => acceptOffer(($('#incoming') as HTMLTextAreaElement).value)),
 );
-$('#copy-outgoing').addEventListener('click', () => {
-  void navigator.clipboard.writeText(($('#outgoing') as HTMLTextAreaElement).value);
-});
+$('#copy-outgoing').addEventListener(
+  'click',
+  run('copy payload', async () => {
+    const text = ($('#outgoing') as HTMLTextAreaElement).value;
+    await navigator.clipboard.writeText(text);
+    log(`copied ${String(text.length)} chars`);
+  }),
+);
 updateRole();
 mountResults('pairing');

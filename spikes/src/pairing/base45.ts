@@ -1,5 +1,5 @@
 // RFC 9285 base45: every character is in the QR alphanumeric set.
-const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+export const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
 
 export function encode(bytes: Uint8Array): string {
   let out = '';

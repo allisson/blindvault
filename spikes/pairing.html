@@ -39,10 +39,10 @@
     <video id="video" muted hidden></video>
     <h3 id="outgoing-label">Outgoing payload</h3>
     <div id="qr"></div>
-    <textarea id="outgoing" readonly></textarea>
+    <textarea id="outgoing" readonly autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     <button type="button" id="copy-outgoing">Copy payload text</button>
     <h3>Paste the other device's payload</h3>
-    <textarea id="incoming"></textarea>
+    <textarea id="incoming" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     <h3>Log</h3>
     <pre id="log"></pre>
     <script type="module" src="./src/pairing/pairing.ts"></script>
