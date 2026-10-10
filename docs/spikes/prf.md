@@ -1,7 +1,8 @@
 # Spike result — WebAuthn PRF (§5.5, D75, D84, D120)
 
 Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome (Google Password
-Manager) and Windows Firefox (Windows Hello) measured; the other devices pending.
+Manager), Windows Firefox (Windows Hello) and Mac Chrome (iCloud Keychain) measured; the other
+devices pending.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
 fixed 32-byte input at create and at get.
@@ -53,7 +54,17 @@ create and a stable output across assertions.
   `signalAllAcceptedCredentials` and `conditionalCreate` are false: the product cannot rely on the
   signal API to clean up a stale passkey in Firefox.
 
+## MacBook Air M1, Chrome 155, iCloud Keychain (2026-10-10)
+
+| Step | Attachment | UV | BE | BS | PRF | Page hidden |
+| --- | --- | --- | --- | --- | --- | --- |
+| create | platform | yes | yes | yes | enabled, 32-byte output at create | no |
+| get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
+
+- PRF works with the passkey saved to iCloud Keychain from Chrome. BE and BS are set: synced through
+  iCloud, so the PRF secret should reach the user's iPhone too (to check from Safari on the iPhone).
+
 ## Pending
 
-- A54 installed app; iPhone 14 (Safari, tab and installed app), MacBook Air M1 (Safari, Chrome,
+- A54 installed app; iPhone 14 (Safari, tab and installed app), MacBook Air M1 (Safari,
   Firefox), Windows laptop (Chrome with Bitwarden, optional).
