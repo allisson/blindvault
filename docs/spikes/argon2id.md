@@ -1,7 +1,7 @@
 # Spike result — Argon2id in the browser (D9, D126)
 
-Status: **in progress**. Samsung A54 (Chrome) and Windows laptop (Chrome) measured, 1 GiB included;
-the other devices pending.
+Status: **in progress**. Samsung A54 (Chrome) and Windows laptop (Chrome, Firefox) measured, 1 GiB
+included; the other devices pending.
 
 Setup: `libsodium-wrappers-sumo` 0.8.4 `crypto_pwhash` (Argon2id 1.3, parallelism 1), in a fresh
 Web Worker per run. Times exclude worker start and libsodium load (`loadMs`, under 50 ms everywhere).
@@ -52,7 +52,23 @@ Reports 8 cores and 16 GiB of device memory. All runs succeeded.
 - **Calibration at 64 MiB:** ops 19 is the first to reach 1 s (1,003 ms), inside the accepted range.
 - 1.6 to 1.9 times as fast as the A54, cell by cell.
 
+## Windows laptop, Firefox 157 (2026-10-10)
+
+Same laptop. Firefox does not expose `deviceMemory`. All runs succeeded.
+
+| Memory | ops 2 | ops 3 |
+| --- | --- | --- |
+| 64 MiB | 158 ms | 218 ms |
+| 128 MiB | 347 ms | 463 ms |
+| 256 MiB | 692 ms | 1,063 ms |
+| 1 GiB | 3,015 ms | 4,592 ms |
+
+- **Calibration at 64 MiB:** ops 13 is the first to reach 1 s (1,095 ms). The steps are noisier
+  than in Chrome (ops 11 ran faster than ops 10).
+- 1.4 to 1.6 times slower than Chrome on the same laptop, so the same laptop calibrates to ops 19 in
+  Chrome and ops 13 in Firefox. Calibration is per installation (D9), so each keeps about 1 s.
+
 ## Pending
 
 - The 1 GiB button now runs ops 4 (D126's limits) from the next deploy; the A54 can rerun it.
-- iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox), Windows laptop (Firefox). Safari on the iPhone and the Mac only on storage follow-up days or after day 15.
+- iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox), Safari on the iPhone and the Mac only on storage follow-up days or after day 15.
