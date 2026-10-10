@@ -26,12 +26,17 @@ Follow-ups: 2026-10-11, 2026-10-14, 2026-10-18 and 2026-10-25. Site build: `swVe
 | --- | --- | --- | --- | --- | --- |
 | Mac, Safari 26.6.2 tab | own only | false | false | 82,463,372,084 | 235,008 |
 | Mac, Dock app | own only | true | true | 82,463,372,084 | 123,364 |
-| A54, Chrome tab | pending | | | | |
-| A54, installed app | pending | | | | |
+| A54, Chrome 155 tab | own only (written first) | false | false | 10,737,421,304 | 3,064 |
+| A54, installed app | both | true | true | 10,737,422,354 | 4,114 |
 
 - **Mac, D103:** the Safari tab and the Dock app don't share storage; each sees only its own marker
   and visits.
 - **Mac, persistent storage:** granted to the Dock app, refused to the tab, with no prompt.
+- **A54:** the Chrome tab and the installed app share storage: the app sees the tab's marker and
+  visits. D103's separate installation is a Safari behavior; on Android Chrome the installed app
+  opens the tab's vault directly.
+- **A54, persistent storage:** refused to the tab, granted to the installed app minutes later with
+  no prompt. Storage is per origin here, so the grant covers the tab's data too.
 - The Dock app's visit log shows four openings between 14:58 and 15:34 UTC, before day 0. They don't
   affect the run, which counts from the new marker.
 
