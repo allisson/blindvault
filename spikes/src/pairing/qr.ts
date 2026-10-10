@@ -48,6 +48,11 @@ export async function scanQr(video: HTMLVideoElement, signal: AbortSignal): Prom
   await video.play();
   try {
     while (!signal.aborted) {
+      // detect() throws InvalidStateError until the video has a frame.
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        await new Promise((r) => setTimeout(r, 50));
+        continue;
+      }
       const found = await detector.detect(video);
       const first = found[0];
       if (first) return { text: first.rawValue, native, ms: Math.round(performance.now() - started) };
@@ -58,6 +63,7 @@ export async function scanQr(video: HTMLVideoElement, signal: AbortSignal): Prom
     stream.getTracks().forEach((t) => {
       t.stop();
     });
-    video.srcObject = null;
+    // A newer scan may already own the shared video element.
+    if (video.srcObject === stream) video.srcObject = null;
   }
 }
