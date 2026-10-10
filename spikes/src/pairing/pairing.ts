@@ -229,6 +229,18 @@ async function scanInto(target: (text: string) => Promise<void>): Promise<void> 
   }
 }
 
+// The box wins when filled; otherwise the clipboard is read (iOS shows its Paste callout). An empty
+// box once reached decodePayload and failed as "payload truncated".
+async function incomingText(): Promise<string> {
+  const box = $('#incoming') as HTMLTextAreaElement;
+  if (box.value.trim() === '') {
+    box.value = await navigator.clipboard.readText();
+    log(`read ${String(box.value.length)} chars from the clipboard`);
+  }
+  if (box.value.trim() === '') throw new Error('nothing to use: the paste box and the clipboard are empty');
+  return box.value;
+}
+
 function run(name: string, fn: () => Promise<void>): () => void {
   return () => {
     fn().catch((e: unknown) => {
@@ -250,12 +262,12 @@ $('#create-offer').addEventListener('click', run('create offer', createOffer));
 $('#scan-answer').addEventListener('click', run('scan answer', () => scanInto(acceptAnswer)));
 $('#paste-answer').addEventListener(
   'click',
-  run('paste answer', () => acceptAnswer(($('#incoming') as HTMLTextAreaElement).value)),
+  run('paste answer', async () => acceptAnswer(await incomingText())),
 );
 $('#scan-offer').addEventListener('click', run('scan offer', () => scanInto(acceptOffer)));
 $('#paste-offer').addEventListener(
   'click',
-  run('paste offer', () => acceptOffer(($('#incoming') as HTMLTextAreaElement).value)),
+  run('paste offer', async () => acceptOffer(await incomingText())),
 );
 $('#copy-outgoing').addEventListener(
   'click',
