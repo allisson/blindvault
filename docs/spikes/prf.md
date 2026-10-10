@@ -1,7 +1,7 @@
 # Spike result — WebAuthn PRF (§5.5, D75, D84, D120)
 
 Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome (Google Password
-Manager), Windows Firefox (Windows Hello) Mac Chrome and Firefox (iCloud
+Manager), Windows Firefox (Windows Hello), Mac Chrome and Firefox (iCloud
 Keychain) measured; Safari and the installed apps pending.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
