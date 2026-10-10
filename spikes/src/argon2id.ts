@@ -35,9 +35,9 @@ function derive(opslimit: number, memMiB: number): Promise<Run> {
 
 const runs: Run[] = [];
 
-async function matrix(memories: number[]): Promise<void> {
+async function matrix(memories: number[], opsList: number[] = [2, 3]): Promise<void> {
   for (const memMiB of memories) {
-    for (const ops of [2, 3]) {
+    for (const ops of opsList) {
       for (let i = 0; i < 3; i++) {
         log(`running ${String(memMiB)} MiB, ops ${String(ops)}, #${String(i + 1)}`);
         const r = await derive(ops, memMiB);
@@ -74,7 +74,8 @@ function button(id: string, fn: () => Promise<void>): void {
 
 button('#run-matrix', () => matrix([64, 128, 256]));
 button('#run-calibrate', calibrate);
-button('#run-1gib', () => matrix([1024]));
+// D126: libsodium's SENSITIVE limits are 1 GiB at opslimit 4.
+button('#run-1gib', () => matrix([1024], [4]));
 record('hardwareConcurrency', navigator.hardwareConcurrency);
 record('deviceMemoryGiB', (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null);
 mountResults('argon2id');
