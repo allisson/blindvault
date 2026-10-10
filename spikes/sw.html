@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spike: service worker</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <p><a href="index.html">← spikes</a></p>
+    <h1>Service-worker integrity (D63, D142)</h1>
+    <p>
+      Keep this page open while a new version is deployed. Do not reload it. Press "Check for update" a few times;
+      the browser also checks on its own.
+    </p>
+    <div class="row">
+      <button type="button" id="check">Check for update</button>
+      <button type="button" id="refresh">Refresh status</button>
+    </div>
+    <h3>Log</h3>
+    <pre id="log"></pre>
+    <script type="module" src="./src/sw.ts"></script>
+  </body>
+</html>

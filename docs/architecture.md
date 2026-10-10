@@ -47,6 +47,14 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 Runtime cryptographic, serialization and protocol dependencies are added with their phase. The
 ones already chosen are below.
 
+### Phase 0 spikes (`spikes/`, throwaway)
+
+`libsodium-wrappers-sumo`, `qrcode-generator`, `barcode-detector` and `zxing-wasm` (its WASM served
+from the same origin, never a CDN) are dependencies of the throwaway spike workspace only, outside
+lint and CI, and are deleted with it after Gate 0. They become product dependencies only when a
+phase adds them here with a justification; the spike measures the QR pair the product would use
+(`docs/spikes/README.md`).
+
 ### Chosen for later phases (Phase 0 selection, Gate 0)
 
 **Noise: copied `noise-protocol` state machine, no runtime dependency (D1, D157).** Evaluated on

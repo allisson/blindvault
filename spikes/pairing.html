@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spike: signal-less pairing</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <p><a href="index.html">← spikes</a></p>
+    <h1>Signal-less pairing (D4, D136)</h1>
+    <p>
+      Device A shows its QR, B scans it and shows its own, A scans B's. Copy/paste works instead of the camera.
+      STUN goes to Google and Cloudflare unless LAN-only is checked.
+    </p>
+    <div class="row">
+      <label>This device is <select id="role"><option value="A">A (shows first)</option><option value="B">B (scans first)</option></select></label>
+      <label><input type="checkbox" id="lan-only" /> LAN-only (no STUN)</label>
+      <button type="button" id="grant-camera">Grant camera before gathering</button>
+    </div>
+
+    <div id="a-steps">
+      <h2>A</h2>
+      <div class="row">
+        <button type="button" id="create-offer">1. Create offer QR</button>
+        <button type="button" id="scan-answer">2. Scan B's answer</button>
+        <button type="button" id="paste-answer">2. Use pasted answer</button>
+      </div>
+    </div>
+    <div id="b-steps" hidden>
+      <h2>B</h2>
+      <div class="row">
+        <button type="button" id="scan-offer">1. Scan A's offer</button>
+        <button type="button" id="paste-offer">1. Use pasted offer</button>
+      </div>
+    </div>
+
+    <video id="video" muted hidden></video>
+    <h3 id="outgoing-label">Outgoing payload</h3>
+    <div id="qr"></div>
+    <textarea id="outgoing" readonly></textarea>
+    <button type="button" id="copy-outgoing">Copy payload text</button>
+    <h3>Paste the other device's payload</h3>
+    <textarea id="incoming"></textarea>
+    <h3>Log</h3>
+    <pre id="log"></pre>
+    <script type="module" src="./src/pairing/pairing.ts"></script>
+  </body>
+</html>
