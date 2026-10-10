@@ -1,36 +1,31 @@
-# Spike result — Safari storage (D55, D103, D105, D110)
+# Spike result — browser storage (D55, D103, D105, D110)
 
-Status: **in progress**. Day 0, D110 and D105 (iPhone tab) recorded; days 1, 4, 8 and 15 pending.
+Status: **restarting**. The storage run moved to the Samsung A54 and the MacBook Air M1; the day-0
+results of 2026-10-10 (iPhone and Mac) were discarded. Day 0 is the day the markers are written
+again; follow-ups on days 1, 4, 8 and 15 after it.
 
-Day 0 was 2026-10-10. Follow-up days: 2026-10-11, 2026-10-14, 2026-10-18 and 2026-10-25. The site
-is not opened on these devices between follow-ups.
+## Devices and contexts
 
-## Devices
+| Device | Browser tab | Installed app |
+| --- | --- | --- |
+| MacBook Air M1 | Safari | Safari, File → Add to Dock |
+| Samsung A54 | Chrome | Chrome, menu → Add to Home screen → Install |
 
-- iPhone 14, Safari 26.6.1 (the user agent reports `iPhone OS 18_7`).
-- MacBook Air M1, Safari 26.6.2 (the user agent reports `Intel Mac OS X 10_15_7`).
+Safari on the Mac is the WebKit case D55 and D103 are about. Chrome on Android has no comparable
+deletion of storage after days without use, so the A54 is the control.
 
-Site build: `swVersion` 1, built 2026-10-10T00:09:19Z.
+The iPhone is no longer in this run, so iOS behavior (Home Screen app storage, D110) is not
+measured by it.
 
-## Day 0 (2026-10-10)
+## Day 0
 
-| Context | Markers seen | `persist()` | `persisted` after | Quota (bytes) | Usage (bytes) |
-| --- | --- | --- | --- | --- | --- |
-| iPhone, Safari tab | own only | false | false | 41,231,686,042 | 339 |
-| iPhone, Home Screen app | own only | true | true | 41,231,686,042 | 106,805 |
-| Mac, Safari tab | own only | false | false | 82,463,372,084 | 321 |
-| Mac, Dock app | own only | true | true | 82,463,372,084 | 327 |
+Pending.
 
-- **D103 confirmed on both platforms:** the tab and the installed app don't share storage. Each sees
-  only its own day-0 marker and its own visits.
-- **Persistent storage:** granted to the installed app, refused to the tab, on both iOS and macOS,
-  with no prompt.
-- Quota is the same in the tab and the app on each device.
-- The iPhone app's usage is about 300 times that of the other contexts. The iPhone tab reached
-  106,563 bytes later on day 0, after the pairing page was opened in it, so the difference comes
-  from what was loaded, not from tab versus app.
+## Separate findings from 2026-10-10 (iPhone)
 
-## D110 — same-device pairing on iPhone (2026-10-10)
+These answer different questions from the storage run and are kept.
+
+### D110 — same-device pairing on iPhone
 
 Safari tab as A, Home Screen app as B, copy/paste, LAN-only. B decoded A's offer and produced its
 answer (92 bytes, 138 base45 characters each, one mDNS host candidate). The run stopped there: going
@@ -42,16 +37,12 @@ the tester to finish. No connection state was recorded on either side.
 - The first attempts failed because "Use pasted offer" was pressed with an empty box (the label
   suggested it read the clipboard); the spike's Paste buttons now read the clipboard.
 
-## D105 — system UI and visibility (2026-10-10)
+### D105 — system UI and visibility
 
 | Context | File picker | Camera prompt | WebAuthn prompt |
 | --- | --- | --- | --- |
 | iPhone, Safari tab | visible | visible | visible |
 
-Each prompt was opened and cancelled; none reported the page as hidden. The other devices are not
-measured yet.
-
-## Pending
-
-- D105 on the other devices (optional; the iPhone was the case D105 was written for).
-- Days 1, 4, 8 and 15: whether each context still has its marker.
+Each prompt was opened and cancelled; none reported the page as hidden. The PRF spike adds Chrome
+and Firefox on Android, Windows and macOS: no WebAuthn prompt reported the page as hidden
+(`prf.md`).
