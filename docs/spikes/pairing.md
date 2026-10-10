@@ -57,9 +57,10 @@ Different networks: the A54 had Wi-Fi off. STUN on (Google and Cloudflare).
 | Selected pair (local → remote) | IPv4 srflx → IPv4 srflx | IPv4 srflx → IPv4 srflx |
 
 - **Connected across NATs** through STUN alone, no relay; round trips of 58–78 ms.
-- **Gathering on mobile data never reported complete:** the A54 waited the full 10 s cap, although
-  its srflx candidate was already in the payload. The product should stop gathering once it has a
-  srflx candidate (or after a short cap), not wait for `complete`.
+- **Gathering on mobile data never reported complete:** the A54 waited the full 10 s cap. The
+  spike doesn't record when the srflx candidate arrived, so how early gathering could stop is not
+  measured. The product should not wait for `complete`; stopping once a srflx candidate arrives is
+  the option to measure in Phase 4.
 - The largest payload so far is 125 bytes (QR version 8), still under the original 200–300-byte
   estimate (§8.3).
 
