@@ -1,6 +1,6 @@
 # Spike result — Argon2id in the browser (D9, D126)
 
-Status: **in progress**. Samsung A54 (Chrome) measured; 1 GiB and the other devices pending.
+Status: **in progress**. Samsung A54 (Chrome) measured, 1 GiB included; the other devices pending.
 
 Setup: `libsodium-wrappers-sumo` 0.8.4 `crypto_pwhash` (Argon2id 1.3, parallelism 1), in a fresh
 Web Worker per run. Times exclude worker start and libsodium load (`loadMs`, under 50 ms everywhere).
@@ -24,8 +24,21 @@ Reports 8 cores and 8 GiB of device memory.
 - 256 MiB at ops 2 takes under 1 s too: on this phone, more memory at fewer passes is an option the
   calibration doesn't use today.
 
+### 1 GiB (D126)
+
+Button 3 ran twice: 6 runs per cell, all succeeded, no reload or crash.
+
+| Memory | ops 2 | ops 3 |
+| --- | --- | --- |
+| 1 GiB | 3,250–3,391 ms | 4,603–4,833 ms |
+
+- The A54 can allocate 1 GiB in a worker, which was the open risk for importing a `.blindpass`.
+- D126 uses libsodium's `SENSITIVE` limits, whose `opslimit` is 4; the spike measured only 2 and 3.
+  One pass costs about 1.3 s here, so ops 4 would land near 6 s by extrapolation, not measured.
+  Acceptable for a one-off import behind a progress indicator.
+
 ## Pending
 
-- A54: button 3 (1 GiB, D126).
+- The 1 GiB button should also run ops 4, to match D126 exactly.
 - iPhone 14 (Safari), MacBook Air M1 (Safari, Chrome, Firefox), Windows laptop (Chrome or Edge,
   Firefox). Safari on the iPhone and the Mac only on storage follow-up days or after day 15.
