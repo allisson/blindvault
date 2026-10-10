@@ -39,8 +39,8 @@ Same Wi-Fi, LAN-only (no STUN). Planned as copy/paste (README run 7), done with 
 - Chrome on Android sent raw IP host candidates instead of mDNS because the camera permission was
   granted before gathering, as expected: scanning first reveals the LAN address to the other device.
 - The laptop webcam read a version 6 QR from the phone screen in under 3 s with the WASM decoder.
-- Windows later reported `disconnected`, after the A54 left the page to copy its result; the
-  connection itself held for the ping exchange.
+- Windows reported `disconnected` by the time its result was copied, while the A54 still showed
+  `connected`. The spike doesn't record why; the ping exchange had completed on both sides.
 - Time to connect is not meaningful here (40 s on B, 154 s on A): it is dominated by the tester
   moving between devices.
 
