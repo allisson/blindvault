@@ -17,9 +17,23 @@ deletion of storage after days without use, so the A54 is the control.
 The iPhone is no longer in this run, so iOS behavior (Home Screen app storage, D110) is not
 measured by it.
 
-## Day 0
+## Day 0 (2026-10-10, 20:26 UTC)
 
-Pending.
+Follow-ups: 2026-10-11, 2026-10-14, 2026-10-18 and 2026-10-25. Site build: `swVersion` 1, built
+2026-10-10T11:27:35Z.
+
+| Context | Markers seen | `persist()` | `persisted` after | Quota (bytes) | Usage (bytes) |
+| --- | --- | --- | --- | --- | --- |
+| Mac, Safari 26.6.2 tab | own only | false | false | 82,463,372,084 | 235,008 |
+| Mac, Dock app | own only | true | true | 82,463,372,084 | 123,364 |
+| A54, Chrome tab | pending | | | | |
+| A54, installed app | pending | | | | |
+
+- **Mac, D103:** the Safari tab and the Dock app don't share storage; each sees only its own marker
+  and visits.
+- **Mac, persistent storage:** granted to the Dock app, refused to the tab, with no prompt.
+- The Dock app's visit log shows four openings between 14:58 and 15:34 UTC, before day 0. They don't
+  affect the run, which counts from the new marker.
 
 ## Separate findings from 2026-10-10 (iPhone)
 
