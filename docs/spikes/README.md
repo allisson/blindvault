@@ -42,17 +42,19 @@ its own, and copy again; if the tab reloads or crashes, say so. Keep the screen 
 On every device: button 1, then button 2 twice, copy the result. Delete the "BlindVault spike"
 passkey afterwards. On the phones, repeat from the installed app.
 
-## 4. Safari storage (D55, D103, D105, D110) — `storage.html`
+## 4. Browser storage (D55, D103, D105, D110) — `storage.html`
 
-1. **Day 0, iPhone and Mac:** open the page in a Safari tab, press "Write day-0 marker" and
-   "Request persistent storage". Install the app (iOS: Share → Add to Home Screen; macOS: File →
-   Add to Dock), open the page there, and do the same. Copy both results: whether each context sees
-   the other's marker answers D103.
-2. **Day 0, iPhone only:** run the pairing spike between the Safari tab and the installed app on the
-   same phone, copy/paste mode (D110).
-3. **Day 0, every device:** press the three system-UI buttons and cancel each prompt (D105).
-4. **Days 1, 4, 8 and 15:** do not open the site in between. On each day, open the page in each of
-   the four contexts and copy the result: a missing marker means WebKit deleted the storage.
+Devices: MacBook Air M1 (Safari) and Samsung A54 (Chrome, the control). The iPhone run of
+2026-10-10 was discarded.
+
+1. **Day 0, Mac and A54:** open the page in a browser tab, press "Write day-0 marker" and "Request
+   persistent storage", copy the result. Install the app (macOS Safari: File → Add to Dock; Android
+   Chrome: menu → Add to Home screen → Install), open the page there, do the same, copy the result.
+   Whether each context sees the other's marker answers D103. "Write day-0 marker" replaces an older
+   marker of the same context.
+2. **Days 1, 4, 8 and 15:** do not open the site on these two browsers in between (any page of
+   `allisson.github.io` counts as a visit). On each day, open the page in each of the four contexts
+   and copy the result: a missing marker means the browser deleted the storage.
 
 Gate 0 can close on day 15 at the earliest.
 
