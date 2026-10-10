@@ -1,7 +1,7 @@
 # Spike result — WebAuthn PRF (§5.5, D75, D84, D120)
 
-Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome cancelled at create, to
-retry; the other devices pending.
+Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome (Google Password
+Manager) measured; the other devices pending.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
 fixed 32-byte input at create and at get.
@@ -29,7 +29,17 @@ tester cancelled. The Bitwarden extension offered to save the passkey first, the
 Google Password Manager; both were cancelled. A password-manager extension can take over the
 WebAuthn prompt, so the product cannot assume which authenticator answers.
 
+Retry, saved to Google Password Manager:
+
+| Step | Attachment | UV | BE | BS | PRF | Page hidden |
+| --- | --- | --- | --- | --- | --- | --- |
+| create | platform | yes | yes | yes | enabled, 32-byte output at create | no |
+| get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
+
+Same behavior as the A54: PRF works through Google Password Manager on Windows, with the output at
+create and a stable output across assertions.
+
 ## Pending
 
 - A54 installed app; iPhone 14 (Safari, tab and installed app), MacBook Air M1 (Safari, Chrome,
-  Firefox), Windows laptop (Chrome with Google Password Manager, Chrome with Bitwarden, Firefox).
+  Firefox), Windows laptop (Chrome with Bitwarden, optional; Firefox).
