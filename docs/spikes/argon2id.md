@@ -1,7 +1,7 @@
 # Spike result — Argon2id in the browser (D9, D126)
 
 Status: **in progress**. Samsung A54 (Chrome), Windows laptop (Chrome, Firefox) and MacBook Air M1
-(Chrome) measured, 1 GiB included; the other browsers pending.
+(Chrome, Firefox) measured, 1 GiB included; Safari pending.
 
 Setup: `libsodium-wrappers-sumo` 0.8.4 `crypto_pwhash` (Argon2id 1.3, parallelism 1), in a fresh
 Web Worker per run. Times exclude worker start and libsodium load (`loadMs`, under 50 ms everywhere).
@@ -83,8 +83,22 @@ Reports 8 cores and 16 GiB of device memory. All runs succeeded.
 - The fastest device so far, with the steadiest times (spread within a cell under 10% except the
   first 64 MiB run).
 
+## MacBook Air M1, Firefox 157 (2026-10-10)
+
+Same Mac. All runs succeeded.
+
+| Memory | ops 2 | ops 3 |
+| --- | --- | --- |
+| 64 MiB | 113 ms | 145 ms |
+| 128 MiB | 210 ms | 295 ms |
+| 256 MiB | 424 ms | 599 ms |
+| 1 GiB | 1,694 ms | 2,445 ms |
+
+- **Calibration at 64 MiB:** ops 23 is the first to reach 1 s (1,022 ms).
+- 1.2 to 1.4 times slower than Chrome on the same Mac, a smaller gap than on Windows.
+
 ## Pending
 
 - The 1 GiB button now runs ops 4 (D126's limits) from the next deploy; the A54 can rerun it.
-- iPhone 14 (Safari), MacBook Air M1 (Safari, Firefox). Safari on the iPhone and the Mac
+- iPhone 14 (Safari), MacBook Air M1 (Safari). Safari on the iPhone and the Mac
   only on storage follow-up days or after day 15.
