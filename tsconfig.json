@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/crypto" },
+    { "path": "packages/vault" },
+    { "path": "packages/storage" },
+    { "path": "packages/sync" },
+    { "path": "packages/backup" },
+    { "path": "apps/web" },
+    { "path": "tests" }
+  ]
+}

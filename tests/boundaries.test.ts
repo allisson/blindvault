@@ -1,0 +1,32 @@
+import { fileURLToPath } from 'node:url';
+import { ESLint } from 'eslint';
+import tseslint from 'typescript-eslint';
+import { describe, expect, it } from 'vitest';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+const cryptoFile = `${root}packages/crypto/src/boundary-probe.ts`;
+const vaultFile = `${root}packages/vault/src/boundary-probe.ts`;
+
+async function restrictedImports(code: string, filePath: string): Promise<string[]> {
+  // The probe files do not exist on disk, so the type-aware project service cannot load them.
+  const eslint = new ESLint({ cwd: root, overrideConfig: tseslint.configs.disableTypeChecked });
+  const [result] = await eslint.lintText(code, { filePath });
+  return (result?.messages ?? [])
+    .filter((m) => m.ruleId === 'no-restricted-imports')
+    .map((m) => m.message);
+}
+
+describe('packages/crypto import boundary', () => {
+  it.each([
+    "import '@blindvault/vault';",
+    "import '@blindvault/storage';",
+    "import 'react';",
+    "import 'react-dom/client';",
+  ])('rejects %s', async (code) => {
+    expect(await restrictedImports(`${code}\nexport {};\n`, cryptoFile)).toHaveLength(1);
+  });
+
+  it('does not restrict other packages', async () => {
+    expect(await restrictedImports("import 'react';\nexport {};\n", vaultFile)).toEqual([]);
+  });
+});

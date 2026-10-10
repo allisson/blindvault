@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spike: Safari storage</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <p><a href="index.html">← spikes</a></p>
+    <h1>Safari storage and system UIs (D55, D103, D105, D110)</h1>
+    <p>
+      Day 0: write the marker here, in the Safari tab and in the installed app (Share → Add to Home Screen on iOS,
+      File → Add to Dock on macOS). Then do not open this site until each check day. Each visit is logged.
+    </p>
+    <div class="row">
+      <button type="button" id="write-marker">Write day-0 marker for this context</button>
+      <button type="button" id="persist">Request persistent storage</button>
+    </div>
+    <h2>System UIs (D105)</h2>
+    <p>Each button opens a system UI; cancel it. The result records whether the page reported itself hidden.</p>
+    <div class="row">
+      <button type="button" id="ui-file">File picker</button>
+      <button type="button" id="ui-camera">Camera prompt</button>
+      <button type="button" id="ui-webauthn">WebAuthn prompt</button>
+    </div>
+    <h3>Log</h3>
+    <pre id="log"></pre>
+    <script type="module" src="./src/storage.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spike: Argon2id</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <p><a href="index.html">← spikes</a></p>
+    <h1>Argon2id on this device (D9, D126)</h1>
+    <p>libsodium WASM in a Web Worker. Keep the screen on and the page in front while it runs.</p>
+    <div class="row">
+      <button type="button" id="run-matrix">1. 64, 128, 256 MiB × ops 2, 3 × 3 runs</button>
+      <button type="button" id="run-calibrate">2. Calibrate ops to 1 s at 64 MiB</button>
+    </div>
+    <p>Run last, on its own: it may crash the tab on a phone. If the tab reloads, note it in the conversation.</p>
+    <button type="button" id="run-1gib">3. 1 GiB (BlindPass import, D126)</button>
+    <h3>Log</h3>
+    <pre id="log"></pre>
+    <script type="module" src="./src/argon2id.ts"></script>
+  </body>
+</html>
