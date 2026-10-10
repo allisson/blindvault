@@ -1,6 +1,6 @@
 # Spike result — Safari storage (D55, D103, D105, D110)
 
-Status: **in progress**. Day 0 recorded; D110 (same-device pairing), D105 (system UI) and days 1, 4,
+Status: **in progress**. Day 0 and D110 recorded; D105 (system UI) and days 1, 4,
 8 and 15 pending.
 
 Day 0 was 2026-10-10. Follow-up days: 2026-10-11, 2026-10-14, 2026-10-18 and 2026-10-25. The site
@@ -30,8 +30,19 @@ Site build: `swVersion` 1, built 2026-10-10T00:09:19Z.
 - The iPhone app's usage is about 300 times that of the other contexts. The spike doesn't show
   what holds it; it was opened twice (two visits recorded).
 
+## D110 — same-device pairing on iPhone (2026-10-10)
+
+Safari tab as A, Home Screen app as B, copy/paste, LAN-only. B decoded A's offer and produced its
+answer (92 bytes, 138 base45 characters each, one mDNS host candidate). The run stopped there: going
+back and forth between the two contexts on one phone, with copy and paste each way, was too hard for
+the tester to finish. No connection state was recorded on either side.
+
+- **D110 stands:** on iPhone, moving a tab's vault to the installed app goes through backup and
+  restore, not pairing. Same-device pairing is not a path to offer even if it could connect.
+- The first attempts failed because "Use pasted offer" was pressed with an empty box (the label
+  suggested it read the clipboard); the spike's Paste buttons now read the clipboard.
+
 ## Pending
 
-- D110: pairing between the Safari tab and the installed app on the same iPhone, copy/paste mode.
 - D105: the three system-UI buttons on every device.
 - Days 1, 4, 8 and 15: whether each context still has its marker.
