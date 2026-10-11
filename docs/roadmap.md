@@ -73,9 +73,9 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
     - [ ] Measure whether Argon2id at libsodium's `SENSITIVE` limits (1 GiB) runs on each browser of the matrix, for `.blindpass` import, and revise D126 with the result
 - [ ] **WebAuthn PRF:** verify real support across the browser matrix
-- [ ] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result
-    - [ ] Confirm that the installed app does not share storage with the Safari tab, on iOS and macOS, and revise D103 with the result
-    - [ ] Check whether the installed app can pair with a Safari tab on the same iPhone, and revise D110 with the result
+- [x] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result (run ended after day 1: no result could relax D55, which now rests on WebKit's documentation, D160)
+    - [x] Confirm that the installed app does not share storage with the Safari tab, on iOS and macOS, and revise D103 with the result
+    - [x] Check whether the installed app can pair with a Safari tab on the same iPhone, and revise D110 with the result
     - [ ] Record which system UIs (file picker, WebAuthn prompt, camera and other permission prompts) report the app as hidden, per browser in the matrix, and revise D105 with the result
 - [ ] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs, when it activates on its own, and that `skipWaiting` with `clients.claim` takes control of an open app window; measure whether the page reliably detects it (`updatefound`) in time to lock the vault (D142); revise D63 with the result
 
