@@ -1,8 +1,23 @@
 # Spike result — browser storage (D55, D103, D105, D110)
 
-Status: **restarting**. The storage run moved to the Samsung A54 and the MacBook Air M1; the day-0
-results of 2026-10-10 (iPhone and Mac) were discarded. Day 0 is the day the markers are written
-again; follow-ups on days 1, 4, 8 and 15 after it.
+Status: **ended after day 1** (D160). The storage run moved to the Samsung A54 and the MacBook Air
+M1; the day-0 results of the morning of 2026-10-10 (iPhone and Mac) were discarded from the run.
+The follow-ups planned for 2026-10-14, 10-18 and 10-25 are cancelled.
+
+## Conclusion
+
+- **D55 stands, on WebKit's documentation.** No result of a multi-day run could relax it: WebKit
+  documents that a tab's script-writable storage is deleted after seven days of Safari use without
+  user interaction on the site ("Full Third-Party Cookie Blocking and More", 2020), so a tab that
+  survives a test does not show its storage is safe. An installed app has its own counter of days of
+  use; Safari grants `persist()` by heuristics such as running as a Home Screen app ("Updates to
+  Storage Policy", 2023).
+- **D103 confirmed on iOS and macOS:** the tab and the installed app each saw only their own marker,
+  on the Mac in this run and on the iPhone in the discarded morning snapshot of 2026-10-10 (commit
+  `dc13261`: iPhone 14, Safari 26.6.1).
+- **`persist()`:** refused to the tab and granted to the installed app with no prompt, on the
+  iPhone, the Mac and the A54.
+- **D110 stands** (below). D105 is recorded per browser here and in `prf.md`.
 
 ## Devices and contexts
 
@@ -39,6 +54,23 @@ Follow-ups: 2026-10-11, 2026-10-14, 2026-10-18 and 2026-10-25. Site build: `swVe
   no prompt. Storage is per origin here, so the grant covers the tab's data too.
 - The Dock app's visit log shows four openings between 14:58 and 15:34 UTC, before day 0. They don't
   affect the run, which counts from the new marker.
+
+## Day 1 (2026-10-11, 20:48 UTC)
+
+| Context | Markers seen | Marker age (days) | `persisted` | Quota (bytes) | Usage (bytes) |
+| --- | --- | --- | --- | --- | --- |
+| Mac, Safari 26.6.2 tab | own only | 1.02 | false | 82,463,372,084 | 131,315 |
+| Mac, Dock app | own only | 1.02 | true | 82,463,372,084 | 147,862 |
+| A54, Chrome 155 tab | not checked (see below) | | | | |
+| A54, installed app | both | 1.02, 1.01 | true | 10,737,422,326 | 4,086 |
+
+- All markers from day 0 are present in the contexts checked. Nothing was deleted after one day.
+- **A54 tab not checked:** the result pasted for the tab reports `standalone: true` and
+  `thisContext: "installed app"`, and its visit was recorded as the installed app. Chrome opened the
+  URL in the installed app instead of a tab. The tab's last visit is still 2026-10-10 21:21 UTC. Not
+  repeated, since the run ended that day.
+- Mac Safari tab usage dropped from 235,008 to 131,315 bytes with the marker kept; usage is an
+  estimate, not a deletion signal.
 
 ## Separate findings from 2026-10-10 (iPhone)
 
