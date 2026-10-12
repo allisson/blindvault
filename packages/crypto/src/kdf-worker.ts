@@ -143,6 +143,12 @@ export async function deriveDeviceKek(
 }
 
 /**
+ * A KEK at given parameters, for any password: the Device KEK, or the export password KEK of a
+ * backup at the export parameters (backup-format.md §3, §4), which share the accepted range.
+ */
+export const derivePasswordKek = deriveDeviceKek;
+
+/**
  * Calibrates and derives the Device KEK of a new local password (D166). Returns the parameters to
  * store with the salt. `password` is wiped.
  */

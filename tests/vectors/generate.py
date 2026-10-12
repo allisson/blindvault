@@ -1308,6 +1308,26 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         except BvReject as r:
             assert r.reason == reason, f"{case}: {r}"
         rs.append({"case": case, "reason": reason, **({"edit": f} if isinstance(f, dict) else {"file": b64(f)})})
+    # --- password keyslot parameters, checked before Argon2id (section 4, D78) ---
+    def params_accepted(slot) -> bool:
+        return 64 * 1024 * 1024 <= slot["mem"] <= 256 * 1024 * 1024 and 2 <= slot["ops"] <= 64
+
+    assert params_accepted(password_slot)
+    out_of_range = [
+        ("memlimit below 64 MiB", {"mem": 64 * 1024 * 1024 - 1}),
+        ("memlimit above 256 MiB", {"mem": 256 * 1024 * 1024 + 1}),
+        ("memlimit of 1 GiB", {"mem": 1024 * 1024 * 1024}),
+        ("opslimit 1", {"ops": 1}),
+        ("opslimit 65", {"ops": 65}),
+        ("opslimit 2^32", {"ops": 2**32}),
+    ]
+    rp = []
+    for case, over in out_of_range:
+        f = with_slots(recovery_slot, slot(password_slot, **over))
+        bv_parse_header(f)  # structurally valid: only the password keyslot is refused
+        assert not params_accepted({**password_slot, **over})
+        rp.append({"case": case, "reason": "malformed", "file": b64(f)})
+
     # the largest record is accepted
     largest = [bv_filler(MAX_ENVELOPE)]
     bv_read(payload_file(bv_payload(bv_meta(largest), largest)))
@@ -1326,6 +1346,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         "valid": valid,
         "rejectHeader": rh,
         "rejectStream": rs,
+        "rejectPasswordKeyslot": rp,
     }
 
 

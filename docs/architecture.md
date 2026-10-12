@@ -48,7 +48,10 @@ every project through the references in the root `tsconfig.json`.
   (`BackupStreamWriter`, `openBackupStream`), as it does the Local Config encrypted part. The file
   format around it, header and keyslots (§2, §3, §7), lives in `packages/backup`, which depends on
   `crypto` only. A payload is parsed only once its final chunk authenticates, and the plaintext is
-  wiped either way.
+  wiped either way. The keyslots seal and open the file key in `crypto` too (`sealKeyTo`,
+  `openSealedKey`, `wrapKey`); the export password KEK comes from the Argon2id worker at the fixed
+  export parameters (`derivePasswordKek`) and lives in a keyring of its own, wiped once the file key
+  is wrapped or unwrapped.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
