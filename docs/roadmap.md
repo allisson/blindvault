@@ -77,7 +77,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
     - [x] Confirm that the installed app does not share storage with the Safari tab, on iOS and macOS, and revise D103 with the result
     - [x] Check whether the installed app can pair with a Safari tab on the same iPhone, and revise D110 with the result
     - [ ] Record which system UIs (file picker, WebAuthn prompt, camera and other permission prompts) report the app as hidden, per browser in the matrix, and revise D105 with the result
-- [ ] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs, when it activates on its own, and that `skipWaiting` with `clients.claim` takes control of an open app window; measure whether the page reliably detects it (`updatefound`) in time to lock the vault (D142); revise D63 with the result
+- [x] **Service-worker integrity:** serve a changed `sw.js` and confirm across the browser matrix that its install code runs, when it activates on its own, and that `skipWaiting` with `clients.claim` takes control of an open app window; measure whether the page reliably detects it (`updatefound`) in time to lock the vault (D142); revise D63 with the result (D162; activation without `skipWaiting` not measured)
 
 ### Gate 0
 
@@ -208,7 +208,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [ ] PWA manifest and installation
 - [ ] Cache-first service worker with a versioned cache (D5)
-- [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned, locking the vault at once (D63, D142); all code and WebAssembly loaded before the first unlock, none afterwards (D142)
+- [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned, locking the vault synchronously in the `updatefound` handler, with `registration.update()` whenever the app becomes visible (D63, D142, D162); all code and WebAssembly loaded before the first unlock, none afterwards (D142)
 - [ ] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile
 - [ ] CI job that builds twice and compares the asset manifest hash
 - [ ] Choose and configure the dedicated custom domain for the official build (D90)
