@@ -1,3 +1,4 @@
+import { encodeCbor } from '@blindvault/crypto';
 import { describe, expect, it } from 'vitest';
 
 import { ContentInvalidError } from './errors';
@@ -5,6 +6,8 @@ import {
   DEFAULT_PREFERENCES,
   type LocalConfigState,
   localConfigStateToCbor,
+  localConfigToCbor,
+  localConfigWithoutReplaces,
   parseLocalConfig,
   readLocalConfigState,
 } from './local-config';
@@ -42,5 +45,36 @@ describe('Local Config writers (record-content.md §9)', () => {
     expect(() => parseLocalConfig(new Uint8Array([0xff]))).toThrow(
       new ContentInvalidError('local config'),
     );
+  });
+});
+
+describe('clearing replacesVaultId (D96)', () => {
+  const sealed = (byte: number, length: number) => ({
+    n: new Uint8Array(24).fill(byte),
+    c: new Uint8Array(length).fill(byte),
+  });
+  const base = {
+    vaultId: id(1),
+    localConfigId: id(2),
+    kek: { salt: id(3), opslimit: 2, memlimit: 67_108_864, mkWrap: sealed(4, 48) },
+    encrypted: sealed(5, 64),
+  };
+
+  it('drops only replacesVaultId, keeping the PRF wrap and every other byte', () => {
+    const prf = {
+      credentialId: new Uint8Array([7]),
+      prfInput: new Uint8Array(32),
+      mkWrap: sealed(6, 48),
+    };
+    const replacing = encodeCbor(localConfigToCbor({ ...base, prf, replacesVaultId: id(9) }));
+    const cleared = localConfigWithoutReplaces(replacing);
+    expect(parseLocalConfig(cleared)).toEqual({ ...base, prf });
+    expect(cleared).toEqual(encodeCbor(localConfigToCbor({ ...base, prf })));
+    const plain = encodeCbor(localConfigToCbor(base));
+    expect(localConfigWithoutReplaces(plain)).toEqual(plain);
+  });
+
+  it('refuses a Local Config it cannot read', () => {
+    expect(() => localConfigWithoutReplaces(new Uint8Array([0xff]))).toThrow(ContentInvalidError);
   });
 });

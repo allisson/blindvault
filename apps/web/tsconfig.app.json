@@ -8,5 +8,16 @@
     "outDir": ".tsbuild/app",
     "tsBuildInfoFile": ".tsbuild/app.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../packages/crypto"
+    },
+    {
+      "path": "../../packages/vault"
+    },
+    {
+      "path": "../../packages/storage"
+    }
+  ]
 }

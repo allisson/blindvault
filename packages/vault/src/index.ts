@@ -60,6 +60,7 @@ export {
   UnsupportedLocalConfigError,
   localConfigStateToCbor,
   localConfigToCbor,
+  localConfigWithoutReplaces,
   parseLocalConfig,
   preferencesValid,
   readLocalConfig,

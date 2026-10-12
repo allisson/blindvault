@@ -153,11 +153,11 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### `apps/web` (minimal)
 
-- [ ] Layout system: mobile, tablet and desktop shells selected by viewport width, sharing one domain layer (D15)
-- [ ] In-memory navigation with no router and no vault identifier in the URL or history (D167)
-- [ ] UI copy in `en` and `pt-BR`; template role names localized (D165)
-- [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock; Phase 1 banner (no Recovery Phrase)
-- [ ] Change the local password, requiring the current one (D168)
+- [x] Layout system: mobile, tablet and desktop shells selected by viewport width, sharing one domain layer (D15)
+- [x] In-memory navigation with no router and no vault identifier in the URL or history (D167)
+- [x] UI copy in `en` and `pt-BR`; template role names localized (D165)
+- [x] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock; Phase 1 banner (no Recovery Phrase)
+- [x] Change the local password, requiring the current one (D168)
 - [ ] WebAuthn PRF unlock: setup in settings with the synced-passkey notice (D84), unlock, assertion without user verification rejected (D75)
 - [ ] Item CRUD with templates
 - [ ] Duplicate item: new item in the same folder with the current content, a localized " (copy)" title suffix (D169), a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
@@ -166,7 +166,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Secret fields masked by default
 - [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
 - [ ] TOTP field: TOTP secret masked, current code shown, copy with clipboard clear (D127)
-- [ ] Configurable auto-lock that clears state and keys on lock
+- [x] Configurable auto-lock that clears state and keys on lock
 
 ### Gate A
 
@@ -179,7 +179,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Inspecting IndexedDB after use finds no plaintext content or keys (CRYPTO-INV-001, 003)
 - [ ] After locking, no cryptographic operation works without a new unlock (CRYPTO-INV-010)
 - [ ] Logs contain no keys or secrets (CRYPTO-INV-005)
-- [ ] Changing the local password re-wraps the master key without changing records
+- [x] Changing the local password re-wraps the master key without changing records
 - [ ] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
 - [x] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
 - [x] Folder names and `parentId` never appear in cleartext metadata

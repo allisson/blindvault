@@ -53,6 +53,25 @@ export default defineConfig(
     },
   },
   {
+    // D167: navigation lives in memory. Nothing writes the URL or the history.
+    files: ['apps/web/src/**'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        ...['pushState', 'replaceState'].map((property) => ({
+          object: 'history',
+          property,
+          message: 'No vault state in the history (D167).',
+        })),
+        ...['hash', 'search', 'assign', 'replace'].map((property) => ({
+          object: 'location',
+          property,
+          message: 'No vault state in the URL (D167).',
+        })),
+      ],
+    },
+  },
+  {
     // packages/storage persists sealed records and Local Config: crypto types only, no domain, no UI.
     files: ['packages/storage/**'],
     rules: {

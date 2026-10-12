@@ -1,0 +1,259 @@
+// UI copy in `en` and `pt-BR` (D165). `pt-BR` has exactly the shape of `en`, checked by the type and
+// by `messages.test.ts`. Template and role names are keyed by `templateId` and `templateId.role`,
+// since one role name can mean different things in two templates (`identity.address`,
+// `crypto-wallet.address`).
+
+const en = {
+  app: {
+    name: 'BlindVault',
+    locked: 'Locked',
+    unlocked: 'Unlocked',
+    lock: 'Lock',
+    settings: 'Settings',
+    back: 'Back',
+    retry: 'Try again',
+  },
+  phase1: {
+    banner:
+      'Preview build: there is no Recovery Phrase yet. If you forget the local password or this browser loses its storage, the vault cannot be recovered.',
+  },
+  start: {
+    starting: 'Opening…',
+    busy: 'BlindVault is busy in another window. Finish there, then try again.',
+    elsewhere: 'BlindVault is open in another window.',
+    takeOver: 'Use here',
+    takeOverNote: 'This locks the vault in the other window.',
+    updateRequired:
+      'This vault was written by a newer version of BlindVault. Update the app to open it.',
+    corrupt: 'The local configuration of this vault cannot be read.',
+    unsupported: 'This browser lacks IndexedDB or Web Locks, which BlindVault needs.',
+  },
+  create: {
+    title: 'Create a vault',
+    intro:
+      'BlindVault has no server: nobody can reset your vault for you. Your data stays on your devices.',
+    password: 'Local password',
+    confirm: 'Repeat the password',
+    submit: 'Create vault',
+    working: 'Creating the vault…',
+    mismatch: 'The passwords do not match.',
+    weak: 'This password is too easy to guess. Use a longer passphrase.',
+    strong: 'Strong enough.',
+  },
+  unlock: {
+    title: 'Unlock the vault',
+    password: 'Local password',
+    submit: 'Unlock',
+    working: 'Unlocking…',
+    wrong: 'Wrong password.',
+  },
+  vault: {
+    folders: 'Folders',
+    allItems: 'All items',
+    items: 'Items',
+    detail: 'Details',
+    empty: 'No items yet.',
+    nothingSelected: 'Select an item.',
+  },
+  settings: {
+    title: 'Settings',
+    password: 'Change the local password',
+    current: 'Current password',
+    next: 'New password',
+    confirm: 'Repeat the new password',
+    change: 'Change password',
+    changing: 'Changing the password…',
+    changed: 'Password changed.',
+    wrong: 'The current password is wrong.',
+    locking: 'Locking',
+    autoLock: 'Lock after inactivity (minutes, 1–60)',
+    hiddenLock: 'Lock after the app is hidden (seconds, 0–900)',
+    hiddenImmediate:
+      'At 0 the vault locks as soon as the app is hidden, including during a file picker or passkey prompt on some systems.',
+    clipboard: 'Clear the clipboard after (seconds, 10–120)',
+    save: 'Save',
+    saved: 'Saved.',
+    outOfRange: 'A value is outside its range.',
+    language: 'Language',
+  },
+  templates: {
+    login: 'Login',
+    'secure-note': 'Secure note',
+    card: 'Payment card',
+    identity: 'Identity',
+    'developer-credential': 'Developer credential',
+    'crypto-wallet': 'Crypto wallet',
+    document: 'Document',
+  },
+  roles: {
+    'login.username': 'Username',
+    'login.password': 'Password',
+    'login.url': 'Website',
+    'card.cardholder': 'Cardholder',
+    'card.number': 'Card number',
+    'card.expiry': 'Expiry',
+    'card.cvv': 'Security code',
+    'card.pin': 'PIN',
+    'identity.firstName': 'First name',
+    'identity.lastName': 'Last name',
+    'identity.birthDate': 'Date of birth',
+    'identity.email': 'Email',
+    'identity.phone': 'Phone',
+    'identity.address': 'Address',
+    'developer-credential.provider': 'Provider',
+    'developer-credential.baseUrl': 'Base URL',
+    'developer-credential.keyId': 'Key ID',
+    'developer-credential.secret': 'Secret',
+    'crypto-wallet.walletName': 'Wallet name',
+    'crypto-wallet.network': 'Network',
+    'crypto-wallet.seedPhrase': 'Seed phrase',
+    'crypto-wallet.passphrase': 'Passphrase',
+    'crypto-wallet.derivationPath': 'Derivation path',
+    'crypto-wallet.address': 'Wallet address',
+    'document.documentType': 'Document type',
+    'document.number': 'Document number',
+    'document.fullName': 'Full name',
+    'document.issuer': 'Issuer',
+    'document.issueDate': 'Issue date',
+    'document.expiryDate': 'Expiry date',
+  },
+};
+
+export type Messages = typeof en;
+
+const ptBR: Messages = {
+  app: {
+    name: 'BlindVault',
+    locked: 'Bloqueado',
+    unlocked: 'Desbloqueado',
+    lock: 'Bloquear',
+    settings: 'Configurações',
+    back: 'Voltar',
+    retry: 'Tentar de novo',
+  },
+  phase1: {
+    banner:
+      'Versão de prévia: ainda não há Frase de Recuperação. Se você esquecer a senha local ou este navegador perder os dados, o cofre não pode ser recuperado.',
+  },
+  start: {
+    starting: 'Abrindo…',
+    busy: 'O BlindVault está ocupado em outra janela. Termine lá e tente de novo.',
+    elsewhere: 'O BlindVault está aberto em outra janela.',
+    takeOver: 'Usar aqui',
+    takeOverNote: 'Isso bloqueia o cofre na outra janela.',
+    updateRequired:
+      'Este cofre foi gravado por uma versão mais nova do BlindVault. Atualize o app para abri-lo.',
+    corrupt: 'A configuração local deste cofre não pode ser lida.',
+    unsupported: 'Este navegador não tem IndexedDB ou Web Locks, de que o BlindVault precisa.',
+  },
+  create: {
+    title: 'Criar um cofre',
+    intro:
+      'O BlindVault não tem servidor: ninguém pode redefinir o seu cofre. Seus dados ficam nos seus dispositivos.',
+    password: 'Senha local',
+    confirm: 'Repita a senha',
+    submit: 'Criar cofre',
+    working: 'Criando o cofre…',
+    mismatch: 'As senhas não coincidem.',
+    weak: 'Esta senha é fácil de adivinhar. Use uma frase-senha mais longa.',
+    strong: 'Forte o bastante.',
+  },
+  unlock: {
+    title: 'Desbloquear o cofre',
+    password: 'Senha local',
+    submit: 'Desbloquear',
+    working: 'Desbloqueando…',
+    wrong: 'Senha incorreta.',
+  },
+  vault: {
+    folders: 'Pastas',
+    allItems: 'Todos os itens',
+    items: 'Itens',
+    detail: 'Detalhes',
+    empty: 'Nenhum item ainda.',
+    nothingSelected: 'Selecione um item.',
+  },
+  settings: {
+    title: 'Configurações',
+    password: 'Trocar a senha local',
+    current: 'Senha atual',
+    next: 'Nova senha',
+    confirm: 'Repita a nova senha',
+    change: 'Trocar senha',
+    changing: 'Trocando a senha…',
+    changed: 'Senha trocada.',
+    wrong: 'A senha atual está incorreta.',
+    locking: 'Bloqueio',
+    autoLock: 'Bloquear após inatividade (minutos, 1–60)',
+    hiddenLock: 'Bloquear após o app ficar oculto (segundos, 0–900)',
+    hiddenImmediate:
+      'Com 0 o cofre bloqueia assim que o app fica oculto, inclusive durante um seletor de arquivos ou um pedido de passkey em alguns sistemas.',
+    clipboard: 'Limpar a área de transferência após (segundos, 10–120)',
+    save: 'Salvar',
+    saved: 'Salvo.',
+    outOfRange: 'Um valor está fora do intervalo.',
+    language: 'Idioma',
+  },
+  templates: {
+    login: 'Login',
+    'secure-note': 'Nota segura',
+    card: 'Cartão de pagamento',
+    identity: 'Identidade',
+    'developer-credential': 'Credencial de desenvolvedor',
+    'crypto-wallet': 'Carteira de criptomoedas',
+    document: 'Documento',
+  },
+  roles: {
+    'login.username': 'Usuário',
+    'login.password': 'Senha',
+    'login.url': 'Site',
+    'card.cardholder': 'Titular',
+    'card.number': 'Número do cartão',
+    'card.expiry': 'Validade',
+    'card.cvv': 'Código de segurança',
+    'card.pin': 'PIN',
+    'identity.firstName': 'Nome',
+    'identity.lastName': 'Sobrenome',
+    'identity.birthDate': 'Data de nascimento',
+    'identity.email': 'E-mail',
+    'identity.phone': 'Telefone',
+    'identity.address': 'Endereço',
+    'developer-credential.provider': 'Provedor',
+    'developer-credential.baseUrl': 'URL base',
+    'developer-credential.keyId': 'ID da chave',
+    'developer-credential.secret': 'Segredo',
+    'crypto-wallet.walletName': 'Nome da carteira',
+    'crypto-wallet.network': 'Rede',
+    'crypto-wallet.seedPhrase': 'Frase-semente',
+    'crypto-wallet.passphrase': 'Frase-senha',
+    'crypto-wallet.derivationPath': 'Caminho de derivação',
+    'crypto-wallet.address': 'Endereço da carteira',
+    'document.documentType': 'Tipo de documento',
+    'document.number': 'Número do documento',
+    'document.fullName': 'Nome completo',
+    'document.issuer': 'Emissor',
+    'document.issueDate': 'Data de emissão',
+    'document.expiryDate': 'Data de validade',
+  },
+};
+
+export const LANGUAGES = ['en', 'pt-BR'] as const;
+export type Language = (typeof LANGUAGES)[number];
+
+export const MESSAGES: Record<Language, Messages> = { en, 'pt-BR': ptBR };
+
+/** The first supported language of the browser's list, by primary subtag; `en` otherwise. */
+export function pickLanguage(preferred: readonly string[]): Language {
+  for (const tag of preferred) {
+    const primary = tag.toLowerCase().split('-')[0];
+    if (primary === 'pt') return 'pt-BR';
+    if (primary === 'en') return 'en';
+  }
+  return 'en';
+}
+
+/** The localized name of a template role, or `undefined` for one this app does not know. */
+export function roleName(m: Messages, templateId: string, role: string): string | undefined {
+  const key = `${templateId}.${role}`;
+  return Object.hasOwn(m.roles, key) ? m.roles[key as keyof Messages['roles']] : undefined;
+}
