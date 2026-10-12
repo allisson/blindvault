@@ -1,7 +1,8 @@
 # Spike result — Argon2id in the browser (D9, D126)
 
-Status: **in progress**. Samsung A54 (Chrome), Windows laptop (Chrome, Firefox) and MacBook Air M1
-(Chrome, Firefox) measured, 1 GiB included; Safari pending.
+Status: **Gate 0 answered, spike still open**. Samsung A54 (Chrome), Windows laptop (Chrome,
+Firefox), MacBook Air M1 (Chrome, Firefox) and iPhone 14 (Safari) measured, 1 GiB included; Mac
+Safari pending. The 64 MiB floor is viable on iOS and D9 stands (see Conclusion).
 
 Setup: `libsodium-wrappers-sumo` 0.8.4 `crypto_pwhash` (Argon2id 1.3, parallelism 1), in a fresh
 Web Worker per run. Times exclude worker start and libsodium load (`loadMs`, under 50 ms everywhere).
@@ -97,8 +98,34 @@ Same Mac. All runs succeeded.
 - **Calibration at 64 MiB:** ops 23 is the first to reach 1 s (1,022 ms).
 - 1.2 to 1.4 times slower than Chrome on the same Mac, a smaller gap than on Windows.
 
+## iPhone 14, Safari 26.6 (2026-10-12)
+
+Safari tab, not the installed app. The user agent says iOS 18_7, but Safari 26 freezes that field;
+the Safari version is the reliable one. Reports 4 cores (Safari caps `hardwareConcurrency`) and no
+`deviceMemory`. All runs succeeded, no reload or crash.
+
+| Memory | ops 2 | ops 3 |
+| --- | --- | --- |
+| 64 MiB | 81 ms | 118 ms |
+| 128 MiB | 163 ms | 245 ms |
+| 256 MiB | 337 ms | 501 ms |
+| 1 GiB | 1,437 ms | 2,145 ms |
+
+- **Calibration at 64 MiB:** ops 28 is the first to reach 1 s (1,028 ms), inside the accepted range
+  (ops 2..64). About 37 ms per extra pass, linear across the whole ladder.
+- Spread within a cell is under 10%, except the first 64 MiB run of the session (101 ms against 80).
+- As fast as Chrome on the M1 cell by cell, and 2.2 to 2.4 times as fast as the A54.
+- **1 GiB (D126):** runs in a Safari tab on iOS. The live build ran ops 2 and 3; one pass costs about
+  0.7 s, so ops 4 would land near 2.9 s by extrapolation, not measured.
+
+## Conclusion (D9)
+
+The 64 MiB floor is viable on every device measured, iOS Safari included: 64 MiB reaches about 1 s
+at ops 12 (A54, the slowest) to 29 (M1 Chrome), always inside the accepted range, and no run failed.
+D9 stands unchanged. The iPhone is one of the fastest devices measured, so the A54 remains the
+binding case for the fixed export parameters (D78).
+
 ## Pending
 
 - The 1 GiB button now runs ops 4 (D126's limits) from the next deploy; the A54 can rerun it.
-- iPhone 14 (Safari), MacBook Air M1 (Safari). Safari on the iPhone and the Mac
-  only on storage follow-up days or after day 15.
+- MacBook Air M1 (Safari): 64 MiB matrix and 1 GiB, which closes the D126 sub-item.

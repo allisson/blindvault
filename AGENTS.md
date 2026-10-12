@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 0 — Foundations and risk spikes. Update this line when a gate passes.
+Phase 1 — Cryptography and local vault. Update this line when a gate passes.
 
 ## Repository layout
 
