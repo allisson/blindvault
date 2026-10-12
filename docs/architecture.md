@@ -24,6 +24,23 @@ every project through the references in the root `tsconfig.json`.
   in-memory decrypted state and every domain operation. It writes through a `RecordStore` interface
   it defines; `packages/storage` implements it, and `apps/web` only wires them together. `vault`
   depends on `crypto`; `storage` depends on the encrypted record types from `crypto`.
+- **Record store (D163).** `RecordStore` has two calls: `records()`, read once at unlock, and
+  `commit()`, which applies records put, records deleted (only pruned and purged Item Versions) and
+  the whole new Local Config in one transaction. Every commit re-seals the Local Config encrypted
+  part around the current HLC state (D62). The session runs one operation at a time, builds its
+  writes from the held state, and applies them in memory only once the commit succeeds; an
+  operation that changes nothing commits nothing. A lock aborts the operation in progress.
+- **Unlock.** The KEK opens the Master Key wrap (any failure is one `UnlockRejectedError`), the
+  Master Key's subkey opens the encrypted part (a failure is a corrupt Local Config), and every
+  record is verified as on receipt (`crypto-spec.md` §9.5). A record that fails, an invalid Folder
+  or Device value (D59), or a record stored under another key than its header's is kept aside as
+  corrupt: never shown, never written.
+- **Maintenance.** The automatic purge and the history cut run at unlock and every hour while
+  unlocked, against an injectable clock; they issue no HLC, so they run while the vault is
+  read-only (D73, D94). A failed pass changes nothing and is retried at the next one.
+- **Device identity bytes.** The encrypted part of Local Config holds the identity's private key,
+  so `packages/crypto` seals and opens that part (`sealLocalConfigPart`, `openLocalConfigPart`):
+  `packages/vault` never reads the private key as bytes, and the opened plaintext is wiped.
 - **Envelopes in `crypto`.** The record envelope codec and the verification steps of
   `crypto-spec.md` §9.5 live in `packages/crypto`, since its tests reproduce the vectors.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose

@@ -54,6 +54,7 @@ export { type Hlc, LocalPurpose, type RecordHeader, localAad, recordAad } from '
 export { NONCE_LENGTH, type Sealed, TAG_LENGTH, open, seal, unwrapKey, wrapKey } from './aead';
 export { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';
 export { PAD_BLOCK, pad, unpad } from './pad';
+export { openLocalConfigPart, sealLocalConfigPart } from './local-config';
 export {
   PUBLIC_KEY_LENGTH,
   deviceId,
