@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": ".tsbuild",
-    "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo",
+    "resolveJsonModule": true
   },
-  "include": ["src", "vitest.config.ts"]
+  "references": [{ "path": "../crypto" }],
+  "include": ["src", "test-vectors/*.json", "vitest.config.ts"]
 }

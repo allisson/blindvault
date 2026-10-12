@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pynacl==1.6.2", "mnemonic==0.21"]
 # ///
-"""Independent generator for docs/crypto-spec.md test vectors (record format v1).
+"""Independent generator for docs/crypto-spec.md and docs/record-content.md test vectors (v1).
 
 Uses hashlib (BLAKE2b, crypto_kdf) and PyNaCl (AEAD, Argon2id, seed key pair, padding), never the
 TypeScript code, so the TypeScript implementation is checked against a second implementation.
@@ -21,7 +21,9 @@ from pathlib import Path
 from mnemonic import Mnemonic
 from nacl import bindings, pwhash
 
-OUT = Path(__file__).resolve().parents[2] / "packages/crypto/test-vectors/crypto-v1.json"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "packages/crypto/test-vectors/crypto-v1.json"
+OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
 
 RECORD_FORMAT_VERSION = 1
 RT_ITEM, RT_FOLDER, RT_ITEM_VERSION, RT_VAULT_KEY, RT_RECOVERY_ENVELOPE, RT_DEVICE = 1, 2, 3, 4, 5, 6
@@ -381,6 +383,563 @@ def verify(data: bytes, vault_id: bytes, vault_keys: dict, k_vkwrap: bytes, k_ve
     return content
 
 
+# --- reference validator for record-content.md, used only to check the content vectors ---------
+
+# Characters with the Unicode White_Space property (PropList.txt); str.isspace() differs.
+WHITE_SPACE = set("\u0009\u000a\u000b\u000c\u000d \u0085      　") | {
+    chr(c) for c in range(0x2000, 0x200B)
+}
+
+TEMPLATES = {
+    "login": {"username": "text", "password": "secret", "url": "url"},
+    "secure-note": {},
+    "card": {"cardholder": "text", "number": "secret", "expiry": "date", "cvv": "secret", "pin": "secret"},
+    "identity": {"firstName": "text", "lastName": "text", "birthDate": "date", "email": "email",
+                 "phone": "phone", "address": "long-text"},
+    "developer-credential": {"provider": "text", "baseUrl": "url", "keyId": "text", "secret": "secret"},
+    "crypto-wallet": {"walletName": "text", "network": "text", "seedPhrase": "seed-phrase", "passphrase": "secret",
+                      "derivationPath": "text", "address": "text"},
+    "document": {"documentType": "text", "number": "text", "fullName": "text", "issuer": "text",
+                 "issueDate": "date", "expiryDate": "date"},
+}
+TEMPLATE_VERSION = 1
+MONTH_PRECISION_ROLES = {("card", "expiry")}
+FIELD_TYPES = {"text", "long-text", "secret", "url", "email", "phone", "date", "number", "totp", "seed-phrase"}
+ITEM_KEYS = {"templateId", "templateVersion", "title", "fields", "tags", "notes", "folderId", "trashOperationId"}
+FIELD_KEYS = {"type", "value", "role", "label"}
+TOTP_KEYS = {"secret", "algorithm", "digits", "period", "issuer", "accountName"}
+BIP39_WORDS = set(Mnemonic("english").wordlist)
+
+
+class ReadOnly(Exception):
+    def __init__(self, rule: int, why: str):
+        super().__init__(f"rule {rule}: {why}")
+        self.rule = rule
+
+
+class Invalid(Exception):
+    pass
+
+
+def is_uint(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= 2**64 - 1
+
+
+def is_text(x) -> bool:
+    return isinstance(x, str) and len(x) >= 1
+
+
+def single_line(x) -> bool:
+    return is_text(x) and "\n" not in x and "\r" not in x
+
+
+def trimmed(x: str) -> bool:
+    return x[0] not in WHITE_SPACE and x[-1] not in WHITE_SPACE
+
+
+def is_id(x) -> bool:
+    return isinstance(x, bytes) and len(x) == 16
+
+
+def bounded_line(x, n: int) -> bool:
+    return single_line(x) and trimmed(x) and len(x) <= n
+
+
+def valid_date(x, month_only: bool) -> bool:
+    import datetime
+    import re
+    if not isinstance(x, str):
+        return False
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}", x):
+        y, m = int(x[:4]), int(x[5:])
+        return 1 <= y and 1 <= m <= 12
+    if month_only or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", x):
+        return False
+    try:
+        datetime.date(int(x[:4]), int(x[5:7]), int(x[8:]))
+        return True
+    except ValueError:
+        return False
+
+
+def valid_seed_phrase(x) -> bool:
+    if not isinstance(x, str):
+        return False
+    words = x.split(" ")
+    return (len(words) in (12, 15, 18, 21, 24) and unicodedata.normalize("NFKD", x) == x
+            and all(w in BIP39_WORDS for w in words))
+
+
+def check_value(ftype: str, value, template_id: str, role) -> None:
+    import re
+    ok = {
+        "text": lambda: single_line(value),
+        "long-text": lambda: is_text(value),
+        "secret": lambda: is_text(value),
+        "url": lambda: single_line(value),
+        "email": lambda: single_line(value),
+        "phone": lambda: single_line(value),
+        "date": lambda: valid_date(value, (template_id, role) in MONTH_PRECISION_ROLES),
+        "number": lambda: isinstance(value, str) and re.fullmatch(r"-?[0-9]+(\.[0-9]+)?", value) is not None,
+        "seed-phrase": lambda: valid_seed_phrase(value),
+    }
+    if ftype == "totp":
+        if not isinstance(value, dict) or not all(isinstance(k, str) for k in value):
+            raise ReadOnly(6, "totp value is not a text-keyed map")
+        if set(value) - TOTP_KEYS:
+            raise ReadOnly(3, "unknown totp key")
+        if not (isinstance(value.get("secret"), str) and re.fullmatch(r"[A-Z2-7]+", value["secret"])
+                and value.get("algorithm") in ("SHA1", "SHA256", "SHA512")
+                and is_uint(value.get("digits")) and 6 <= value["digits"] <= 8
+                and is_uint(value.get("period")) and 15 <= value["period"] <= 300
+                and all(single_line(value[k]) for k in ("issuer", "accountName") if k in value)):
+            raise ReadOnly(6, "invalid totp value")
+        return
+    if not ok[ftype]():
+        raise ReadOnly(6, f"invalid {ftype} value")
+
+
+def check_item(item, deleted: bool | None) -> None:
+    """Raises ReadOnly(rule) for content from a newer app version (record-content.md section 2).
+    `deleted` is the Item record's header flag, or None inside an Item Version."""
+    if not isinstance(item, dict) or not all(isinstance(k, str) for k in item):
+        raise ReadOnly(6, "item is not a text-keyed map")
+    if set(item) - ITEM_KEYS:
+        raise ReadOnly(1, "unknown item key")
+    tid, tver = item.get("templateId"), item.get("templateVersion")
+    if not is_uint(tver) or tver < 1:
+        raise ReadOnly(6, "templateVersion")
+    if tid not in TEMPLATES or tver > TEMPLATE_VERSION:
+        raise ReadOnly(5, "unknown template or newer templateVersion")
+    roles = TEMPLATES[tid]
+    if not bounded_line(item.get("title"), 512):
+        raise ReadOnly(6, "title")
+    fields = item.get("fields")
+    if not isinstance(fields, list):
+        raise ReadOnly(6, "fields")
+    for f in fields:
+        if not isinstance(f, dict) or not all(isinstance(k, str) for k in f):
+            raise ReadOnly(6, "field is not a text-keyed map")
+        if set(f) - FIELD_KEYS:
+            raise ReadOnly(3, "unknown field key")
+        if f.get("type") not in FIELD_TYPES:
+            if isinstance(f.get("type"), str):
+                raise ReadOnly(2, "unknown field type")
+            raise ReadOnly(6, "field type")
+        if "role" in f and isinstance(f["role"], str) and f["role"] not in roles:
+            raise ReadOnly(4, "role not defined by the template")
+    seen_roles = set()
+    for f in fields:
+        role = f.get("role")
+        if "role" in f:
+            if not isinstance(role, str) or role in seen_roles or roles[role] != f["type"]:
+                raise ReadOnly(6, "role repeated or of another type")
+            seen_roles.add(role)
+        if "label" in f and not bounded_line(f["label"], 128):
+            raise ReadOnly(6, "label")
+        if "role" not in f and "label" not in f:
+            raise ReadOnly(6, "user field without a label")
+        if "value" not in f:
+            raise ReadOnly(6, "field without a value")
+        check_value(f["type"], f["value"], tid, role)
+    tags = item.get("tags")
+    if not isinstance(tags, list) or len(tags) > 32:
+        raise ReadOnly(6, "tags")
+    for t in tags:
+        if not (bounded_line(t, 64) and unicodedata.normalize("NFC", t) == t):
+            raise ReadOnly(6, "tag")
+    if len({t.lower() for t in tags}) != len(tags):
+        raise ReadOnly(6, "duplicate tag")
+    encoded = [t.encode("utf-8") for t in tags]
+    if encoded != sorted(encoded):
+        raise ReadOnly(6, "tags not in ascending UTF-8 order")
+    if "notes" in item and not is_text(item["notes"]):
+        raise ReadOnly(6, "notes")
+    if "folderId" in item and not is_id(item["folderId"]):
+        raise ReadOnly(6, "folderId")
+    if "trashOperationId" in item and not is_id(item["trashOperationId"]):
+        raise ReadOnly(6, "trashOperationId")
+    if deleted is not None and ("trashOperationId" in item) != deleted:
+        raise ReadOnly(6, "trashOperationId does not match deleted")
+
+
+def classify_item(item, deleted: bool | None) -> tuple[str, int | None]:
+    try:
+        check_item(item, deleted)
+        return "valid", None
+    except ReadOnly as e:
+        return "read-only", e.rule
+
+
+def check_folder(folder, deleted: bool) -> list[str]:
+    """Returns the unknown keys, kept unchanged; raises Invalid on a known key's invalid value."""
+    if not isinstance(folder, dict) or not all(isinstance(k, str) for k in folder):
+        raise Invalid("folder is not a text-keyed map")
+    if not bounded_line(folder.get("name"), 256):
+        raise Invalid("name")
+    for k in ("parentId", "trashOperationId"):
+        if k in folder and not is_id(folder[k]):
+            raise Invalid(k)
+    if ("trashOperationId" in folder) != deleted:
+        raise Invalid("trashOperationId does not match deleted")
+    return sorted(set(folder) - {"name", "parentId", "trashOperationId"})
+
+
+def check_device(device) -> list[str]:
+    if not isinstance(device, dict) or not all(isinstance(k, str) for k in device):
+        raise Invalid("device is not a text-keyed map")
+    if not (isinstance(device.get("publicKey"), bytes) and len(device["publicKey"]) == 32):
+        raise Invalid("publicKey")
+    if not bounded_line(device.get("displayName"), 64):
+        raise Invalid("displayName")
+    if not isinstance(device.get("retired"), bool):
+        raise Invalid("retired")
+    if not is_uint(device.get("registeredAt")):
+        raise Invalid("registeredAt")
+    return sorted(set(device) - {"publicKey", "displayName", "retired", "registeredAt"})
+
+
+def classify_kept(check, *args) -> tuple[str, list[str]]:
+    try:
+        return "valid", check(*args)
+    except Invalid:
+        return "invalid", []
+
+
+def is_sealed(x, c_len: int | None = None) -> bool:
+    return (isinstance(x, dict) and set(x) == {"n", "c"} and isinstance(x["n"], bytes) and len(x["n"]) == 24
+            and isinstance(x["c"], bytes) and (len(x["c"]) == c_len if c_len else len(x["c"]) >= 16))
+
+
+def classify_local_cleartext(lc) -> str:
+    if not isinstance(lc, dict) or not all(isinstance(k, str) for k in lc):
+        return "corrupt"
+    if is_uint(lc.get("localConfigFormatVersion")) and lc["localConfigFormatVersion"] != 1:
+        return "unsupported-version"
+    allowed = {"localConfigFormatVersion", "vaultId", "localConfigId", "kek", "prf", "replacesVaultId", "encrypted"}
+    kek, prf = lc.get("kek"), lc.get("prf")
+    ok = (
+        lc.get("localConfigFormatVersion") == 1 and not set(lc) - allowed
+        and is_id(lc.get("vaultId")) and is_id(lc.get("localConfigId"))
+        and isinstance(kek, dict) and set(kek) == {"salt", "opslimit", "memlimit", "mkWrap"}
+        and isinstance(kek["salt"], bytes) and len(kek["salt"]) == 16
+        and is_uint(kek["opslimit"]) and is_uint(kek["memlimit"]) and is_sealed(kek["mkWrap"], 48)
+        and (prf is None if "prf" not in lc else (
+            isinstance(prf, dict) and set(prf) == {"credentialId", "prfInput", "mkWrap"}
+            and isinstance(prf["credentialId"], bytes) and len(prf["credentialId"]) >= 1
+            and isinstance(prf["prfInput"], bytes) and len(prf["prfInput"]) == 32 and is_sealed(prf["mkWrap"], 48)))
+        and ("replacesVaultId" not in lc or is_id(lc["replacesVaultId"]))
+        and is_sealed(lc.get("encrypted"))
+    )
+    return "valid" if ok else "corrupt"
+
+
+def strictly_ascending(xs) -> bool:
+    return all(a < b for a, b in zip(xs, xs[1:]))
+
+
+def classify_local_encrypted(part) -> str:
+    if not isinstance(part, dict) or not all(isinstance(k, str) for k in part):
+        return "corrupt"
+    allowed = {"deviceIdentity", "preferences", "hlc", "lastBackupAt", "lastPhraseId", "lastSyncByPeer",
+               "seenDevices", "seenRetiredDevices", "rejectedPeers"}
+    ident, prefs, hlc = part.get("deviceIdentity"), part.get("preferences"), part.get("hlc")
+    def id_list(k):
+        return k not in part or (isinstance(part[k], list) and all(is_id(x) for x in part[k])
+                                 and strictly_ascending(part[k]))
+    def in_range(k, lo, hi):
+        return is_uint(prefs.get(k)) and lo <= prefs[k] <= hi
+    peers = part.get("lastSyncByPeer")
+    ok = (
+        not set(part) - allowed
+        and isinstance(ident, dict) and set(ident) == {"publicKey", "privateKey"}
+        and all(isinstance(ident[k], bytes) and len(ident[k]) == 32 for k in ident)
+        and isinstance(prefs, dict) and set(prefs) == {"autoLockMinutes", "hiddenLockSeconds", "clipboardClearSeconds"}
+        and in_range("autoLockMinutes", 1, 60) and in_range("hiddenLockSeconds", 0, 900)
+        and in_range("clipboardClearSeconds", 10, 120)
+        and isinstance(hlc, list) and len(hlc) == 3 and is_uint(hlc[0]) and hlc[0] <= 2**53 - 1
+        and is_uint(hlc[1]) and hlc[1] <= 2**32 - 1 and is_id(hlc[2])
+        and ("lastBackupAt" not in part or is_uint(part["lastBackupAt"]))
+        and ("lastPhraseId" not in part or is_id(part["lastPhraseId"]))
+        and (peers is None if "lastSyncByPeer" not in part else (
+            isinstance(peers, list) and all(isinstance(p, list) and len(p) == 2 and is_id(p[0]) and is_uint(p[1])
+                                            for p in peers)
+            and strictly_ascending([p[0] for p in peers])))
+        and id_list("seenDevices") and id_list("seenRetiredDevices") and id_list("rejectedPeers")
+    )
+    return "valid" if ok else "corrupt"
+
+
+LOCAL_ENCRYPTED_PART = {
+    "deviceIdentity": {"publicKey": STATIC_PK, "privateKey": STATIC_SK},
+    "preferences": {"autoLockMinutes": 5, "hiddenLockSeconds": 60, "clipboardClearSeconds": 30},
+    "hlc": list(HLC),
+}
+
+
+# --- record-content.md vectors -----------------------------------------------------------------
+
+FOLDER_ID = seq(0xF0, 16)
+TRASH_OP = seq(0x70, 16)
+SEED_12 = Mnemonic("english").to_mnemonic(seq(0x11, 16))
+
+
+def _login(**over) -> dict:
+    item = {
+        "templateId": "login", "templateVersion": 1, "title": "Example",
+        "fields": [
+            {"type": "text", "role": "username", "value": "alice"},
+            {"type": "secret", "role": "password", "value": "correct horse battery staple"},
+            {"type": "url", "role": "url", "value": "https://example.com/login"},
+        ],
+        "tags": [],
+    }
+    item.update(over)
+    return {k: v for k, v in item.items() if v is not None}
+
+
+def _with_field(field: dict, template: str = "login") -> dict:
+    return _login(templateId=template, fields=[field]) if template != "login" else _login(fields=[field])
+
+
+def _user_field(ftype: str, value) -> dict:
+    return {"type": ftype, "label": "Extra", "value": value}
+
+
+TOTP = {"secret": "JBSWY3DPEHPK3PXP", "algorithm": "SHA1", "digits": 6, "period": 30}
+
+VALID_ITEMS = [
+    ("login with three role fields", _login(), False),
+    ("login with tags, notes and a folder", _login(tags=["Bank", "personal", "Ünïcode"], notes="line 1\nline 2",
+                                                  folderId=FOLDER_ID), False),
+    ("trashed login carries trashOperationId", _login(trashOperationId=TRASH_OP), True),
+    ("secure note", {"templateId": "secure-note", "templateVersion": 1, "title": "Wi-Fi", "fields": [], "tags": [],
+                     "notes": "SSID home\npassword hunter2"}, False),
+    ("card with month-precision expiry", {"templateId": "card", "templateVersion": 1, "title": "Visa",
+        "fields": [{"type": "text", "role": "cardholder", "value": "ALICE B"},
+                   {"type": "secret", "role": "number", "value": "4111111111111111"},
+                   {"type": "date", "role": "expiry", "value": "2029-07"},
+                   {"type": "secret", "role": "cvv", "value": "123"}], "tags": []}, False),
+    ("identity with a full date and multi-line address", {"templateId": "identity", "templateVersion": 1,
+        "title": "Me", "fields": [{"type": "date", "role": "birthDate", "value": "2000-02-29"},
+                                  {"type": "long-text", "role": "address", "value": "1 Main St\nTown"}],
+        "tags": []}, False),
+    ("developer credential with a multi-line secret", {"templateId": "developer-credential", "templateVersion": 1,
+        "title": "Deploy key", "fields": [{"type": "secret", "role": "secret",
+                                           "value": "-----BEGIN KEY-----\nAAAA\n-----END KEY-----"}], "tags": []},
+        False),
+    ("crypto wallet with a 12-word seed phrase", {"templateId": "crypto-wallet", "templateVersion": 1,
+        "title": "Wallet", "fields": [{"type": "seed-phrase", "role": "seedPhrase", "value": SEED_12}], "tags": []},
+        False),
+    ("seed phrase with a bad checksum is still valid", {"templateId": "crypto-wallet", "templateVersion": 1,
+        "title": "Wallet", "fields": [{"type": "seed-phrase", "role": "seedPhrase",
+                                       "value": " ".join(SEED_12.split(" ")[:-1] + ["abandon"])}], "tags": []},
+        False),
+    ("document with dates", {"templateId": "document", "templateVersion": 1, "title": "Passport",
+        "fields": [{"type": "date", "role": "issueDate", "value": "2020-01-31"},
+                   {"type": "date", "role": "expiryDate", "value": "2030-01"}], "tags": []}, False),
+    ("role field with a label of the user's own", _with_field({"type": "text", "role": "username",
+                                                              "label": "Login name", "value": "alice"}), False),
+    ("user fields of every type", _login(fields=[
+        _user_field("text", "t"), _user_field("long-text", "a\nb"), _user_field("secret", "s"),
+        _user_field("url", "ftp://example.com"), _user_field("email", "not checked"), _user_field("phone", "+1 555"),
+        _user_field("date", "1999-12"), _user_field("number", "-007.50"),
+        _user_field("totp", {**TOTP, "issuer": "GitHub", "accountName": "alice@example.com"}),
+        _user_field("seed-phrase", SEED_12)]), False),
+    ("title of 512 astral code points", _login(title="\U0001F600" * 512), False),
+    ("32 tags of 64 code points", _login(tags=sorted(f"{i:02d}" + "x" * 62 for i in range(32))), False),
+    ("empty fields and tags", _login(fields=[]), False),
+]
+
+READ_ONLY_ITEMS = [
+    (1, "unknown item key", _login(favorite=True), False),
+    (2, "unknown field type", _with_field(_user_field("passkey", "x")), False),
+    (3, "unknown field key", _with_field({**_user_field("text", "x"), "hidden": True}), False),
+    (3, "unknown TOTP key", _with_field(_user_field("totp", {**TOTP, "counter": 0})), False),
+    (4, "role the template does not define", _with_field({"type": "text", "role": "pin", "value": "1"}), False),
+    (5, "unknown templateId", _login(templateId="passkey"), False),
+    (5, "newer templateVersion", _login(templateVersion=2), False),
+    (6, "templateVersion 0", _login(templateVersion=0), False),
+    (6, "missing title", _login(title=None), False),
+    (6, "empty title", _login(title=""), False),
+    (6, "title with a trailing space", _login(title="Example "), False),
+    (6, "title with a leading no-break space", _login(title=" Example"), False),
+    (6, "multi-line title", _login(title="Ex\nample"), False),
+    (6, "title of 513 astral code points", _login(title="\U0001F600" * 513), False),
+    (6, "missing fields", _login(fields=None), False),
+    (6, "missing tags", _login(tags=None), False),
+    (6, "33 tags", _login(tags=sorted(f"t{i:02d}" for i in range(33))), False),
+    (6, "tag of 65 code points", _login(tags=["x" * 65]), False),
+    (6, "tag not NFC", _login(tags=["café"]), False),
+    (6, "duplicate tags by case", _login(tags=["Bank", "bank"]), False),
+    (6, "tags not in ascending UTF-8 order", _login(tags=["b", "a"]), False),
+    (6, "empty notes", _login(notes=""), False),
+    (6, "folderId of 15 bytes", _login(folderId=seq(0xF0, 15)), False),
+    (6, "trashOperationId on a live Item", _login(trashOperationId=TRASH_OP), False),
+    (6, "trashed Item without trashOperationId", _login(), True),
+    (6, "user field without a label", _with_field({"type": "text", "value": "x"}), False),
+    (6, "label of 129 code points", _with_field({**_user_field("text", "x"), "label": "l" * 129}), False),
+    (6, "field without a value", _with_field({"type": "text", "label": "Extra"}), False),
+    (6, "empty text value", _with_field(_user_field("text", "")), False),
+    (6, "role used twice", _login(fields=[{"type": "text", "role": "username", "value": "a"},
+                                         {"type": "text", "role": "username", "value": "b"}]), False),
+    (6, "role with another field type", _with_field({"type": "text", "role": "password", "value": "x"}), False),
+    (6, "multi-line text value", _with_field(_user_field("text", "a\nb")), False),
+    (6, "multi-line url", _with_field(_user_field("url", "https://a\r\n.com")), False),
+    (6, "bytes as a text value", _with_field(_user_field("secret", b"x")), False),
+    (6, "29 February of a common year", _with_field(_user_field("date", "2023-02-29")), False),
+    (6, "month 13", _with_field(_user_field("date", "2023-13")), False),
+    (6, "year 0000", _with_field(_user_field("date", "0000-01-01")), False),
+    (6, "full date in a month-precision role", {"templateId": "card", "templateVersion": 1, "title": "Visa",
+        "fields": [{"type": "date", "role": "expiry", "value": "2029-07-01"}], "tags": []}, False),
+    (6, "number with a trailing dot", _with_field(_user_field("number", "1.")), False),
+    (6, "number with a plus sign", _with_field(_user_field("number", "+1")), False),
+    (6, "number as a CBOR integer", _with_field(_user_field("number", 1)), False),
+    (6, "lowercase TOTP secret", _with_field(_user_field("totp", {**TOTP, "secret": "jbswy3dp"})), False),
+    (6, "TOTP digits 9", _with_field(_user_field("totp", {**TOTP, "digits": 9})), False),
+    (6, "TOTP period 14", _with_field(_user_field("totp", {**TOTP, "period": 14})), False),
+    (6, "TOTP without an algorithm", _with_field(_user_field("totp", {k: v for k, v in TOTP.items()
+                                                                    if k != "algorithm"})), False),
+    (6, "TOTP with an empty issuer", _with_field(_user_field("totp", {**TOTP, "issuer": ""})), False),
+    (6, "seed phrase of 13 words", _with_field(_user_field("seed-phrase", SEED_12 + " zoo")), False),
+    (6, "seed phrase with a word outside the list", _with_field(_user_field("seed-phrase",
+        " ".join(SEED_12.split(" ")[:-1] + ["blindvault"]))), False),
+    (6, "seed phrase in uppercase", _with_field(_user_field("seed-phrase", SEED_12.upper())), False),
+    (6, "seed phrase with a double space", _with_field(_user_field("seed-phrase", SEED_12.replace(" ", "  ", 1))),
+     False),
+]
+
+FOLDERS = [
+    ("valid", "root folder", {"name": "Finance"}, False, []),
+    ("valid", "subfolder", {"name": "Banks", "parentId": FOLDER_ID}, False, []),
+    ("valid", "trashed folder", {"name": "Old", "trashOperationId": TRASH_OP}, True, []),
+    ("valid", "unknown keys kept", {"name": "Finance", "color": "blue", "icon": 3}, False, ["color", "icon"]),
+    ("valid", "name of 256 astral code points", {"name": "\U0001F4C1" * 256}, False, []),
+    ("invalid", "empty name", {"name": ""}, False, []),
+    ("invalid", "missing name", {"parentId": FOLDER_ID}, False, []),
+    ("invalid", "name of 257 code points", {"name": "f" * 257}, False, []),
+    ("invalid", "untrimmed name", {"name": " Finance"}, False, []),
+    ("invalid", "multi-line name", {"name": "Fin\nance"}, False, []),
+    ("invalid", "parentId of 17 bytes", {"name": "Banks", "parentId": seq(0xF0, 17)}, False, []),
+    ("invalid", "trashOperationId on a live Folder", {"name": "Old", "trashOperationId": TRASH_OP}, False, []),
+    ("invalid", "trashed Folder without trashOperationId", {"name": "Old"}, True, []),
+]
+
+_DEVICE = {"publicKey": STATIC_PK, "displayName": "Chrome on macOS", "retired": False,
+           "registeredAt": 1_760_000_000_000}
+DEVICES = [
+    ("valid", "device", _DEVICE, []),
+    ("valid", "retired device", {**_DEVICE, "retired": True}, []),
+    ("valid", "unknown keys kept", {**_DEVICE, "platform": "web", "z": [1, 2]}, ["platform", "z"]),
+    ("invalid", "publicKey of 31 bytes", {**_DEVICE, "publicKey": STATIC_PK[:31]}, []),
+    ("invalid", "empty displayName", {**_DEVICE, "displayName": ""}, []),
+    ("invalid", "displayName of 65 code points", {**_DEVICE, "displayName": "d" * 65}, []),
+    ("invalid", "retired as an integer", {**_DEVICE, "retired": 0}, []),
+    ("invalid", "negative registeredAt", {**_DEVICE, "registeredAt": -1}, []),
+    ("invalid", "missing registeredAt", {k: v for k, v in _DEVICE.items() if k != "registeredAt"}, []),
+]
+
+_SEALED48 = {"n": nonce(9), "c": seq(0x00, 48)}
+_LOCAL = {
+    "localConfigFormatVersion": 1, "vaultId": VAULT_ID, "localConfigId": LOCAL_CONFIG_ID,
+    "kek": {"salt": seq(0xF0, 16), "opslimit": 2, "memlimit": 67_108_864, "mkWrap": _SEALED48},
+    "encrypted": {"n": nonce(11), "c": seq(0x00, 272)},
+}
+_PRF = {"credentialId": seq(0x33, 20), "prfInput": seq(0x44, 32), "mkWrap": {"n": nonce(10), "c": seq(0x00, 48)}}
+LOCAL_CLEARTEXT = [
+    ("valid", "phase 1 Local Config", _LOCAL),
+    ("valid", "with PRF KEK state", {**_LOCAL, "prf": _PRF}),
+    ("valid", "with replacesVaultId", {**_LOCAL, "replacesVaultId": seq(0xA1, 16)}),
+    ("unsupported-version", "localConfigFormatVersion 2", {**_LOCAL, "localConfigFormatVersion": 2}),
+    ("corrupt", "unknown cleartext key", {**_LOCAL, "nickname": "home"}),
+    ("corrupt", "missing localConfigId", {k: v for k, v in _LOCAL.items() if k != "localConfigId"}),
+    ("corrupt", "salt of 15 bytes", {**_LOCAL, "kek": {**_LOCAL["kek"], "salt": seq(0xF0, 15)}}),
+    ("corrupt", "unknown key in kek", {**_LOCAL, "kek": {**_LOCAL["kek"], "alg": 2}}),
+    ("corrupt", "mkWrap with a short ciphertext", {**_LOCAL, "kek": {**_LOCAL["kek"],
+                                                                     "mkWrap": {"n": nonce(9), "c": seq(0, 47)}}}),
+    ("corrupt", "prfInput of 31 bytes", {**_LOCAL, "prf": {**_PRF, "prfInput": seq(0x44, 31)}}),
+    ("corrupt", "missing encrypted part", {k: v for k, v in _LOCAL.items() if k != "encrypted"}),
+]
+
+_E = LOCAL_ENCRYPTED_PART
+LOCAL_ENCRYPTED = [
+    ("valid", "phase 1 encrypted part", _E),
+    ("valid", "with every later-phase key", {**_E, "lastBackupAt": 1_760_000_000_000, "lastPhraseId": PHRASE_ID,
+        "lastSyncByPeer": [[seq(0x01, 16), 1_760_000_000_000], [seq(0x02, 16), 1_760_000_000_001]],
+        "seenDevices": [seq(0x01, 16), seq(0x02, 16)], "seenRetiredDevices": [seq(0x02, 16)],
+        "rejectedPeers": [seq(0x03, 16)]}),
+    ("valid", "preferences at their limits", {**_E, "preferences": {"autoLockMinutes": 60, "hiddenLockSeconds": 0,
+                                                                     "clipboardClearSeconds": 120}}),
+    ("corrupt", "unknown key", {**_E, "theme": "dark"}),
+    ("corrupt", "missing hlc", {k: v for k, v in _E.items() if k != "hlc"}),
+    ("corrupt", "missing a preference", {**_E, "preferences": {"autoLockMinutes": 5, "hiddenLockSeconds": 60}}),
+    ("corrupt", "autoLockMinutes 0", {**_E, "preferences": {**_E["preferences"], "autoLockMinutes": 0}}),
+    ("corrupt", "hiddenLockSeconds 901", {**_E, "preferences": {**_E["preferences"], "hiddenLockSeconds": 901}}),
+    ("corrupt", "clipboardClearSeconds 9", {**_E, "preferences": {**_E["preferences"], "clipboardClearSeconds": 9}}),
+    ("corrupt", "privateKey of 31 bytes", {**_E, "deviceIdentity": {"publicKey": STATIC_PK,
+                                                                    "privateKey": STATIC_SK[:31]}}),
+    ("corrupt", "hlc counter beyond u32", {**_E, "hlc": [HLC[0], 2**32, HLC[2]]}),
+    ("corrupt", "seenDevices not ascending", {**_E, "seenDevices": [seq(0x02, 16), seq(0x01, 16)]}),
+    ("corrupt", "seenDevices with a duplicate", {**_E, "seenDevices": [seq(0x01, 16), seq(0x01, 16)]}),
+    ("corrupt", "lastSyncByPeer not ascending", {**_E, "lastSyncByPeer": [[seq(0x02, 16), 1], [seq(0x01, 16), 1]]}),
+]
+
+
+def content_vectors() -> dict:
+    items = []
+    for name, item, deleted in VALID_ITEMS:
+        assert classify_item(item, deleted) == ("valid", None), name
+        items.append({"case": name, "deleted": deleted, "expected": "valid", "cbor": h(cbor(item))})
+    for rule, name, item, deleted in READ_ONLY_ITEMS:
+        assert classify_item(item, deleted) == ("read-only", rule), (name, classify_item(item, deleted))
+        items.append({"case": name, "deleted": deleted, "expected": "read-only", "rule": rule, "cbor": h(cbor(item))})
+    for _, item, _ in VALID_ITEMS[:1]:
+        assert len(cbor(item)) <= ITEM_CAP
+
+    versions = []
+    for name, item, expected, rule in (
+        ("version of a live item", _login(), "valid", None),
+        ("version of a trashed state", _login(trashOperationId=TRASH_OP), "valid", None),
+        ("version holding a newer template", _login(templateVersion=2), "read-only", 5),
+    ):
+        assert classify_item(item, None) == (expected, rule), name
+        versions.append({"case": name, "expected": expected, **({"rule": rule} if rule else {}),
+                         "cbor": h(cbor({"item": item, "itemId": ITEM_ID}))})
+
+    def kept(rows, check, with_deleted: bool):
+        out = []
+        for row in rows:
+            expected, name, value, *rest = row
+            deleted = rest[0] if with_deleted else None
+            unknown = rest[-1]
+            args = (value, deleted) if with_deleted else (value,)
+            assert classify_kept(check, *args) == (expected, unknown), name
+            out.append({"case": name, **({"deleted": deleted} if with_deleted else {}), "expected": expected,
+                        "unknownKeys": unknown, "cbor": h(cbor(value))})
+        return out
+
+    local = []
+    for expected, name, value in LOCAL_CLEARTEXT:
+        assert classify_local_cleartext(value) == expected, name
+        local.append({"case": name, "expected": expected, "cbor": h(cbor(value))})
+    encrypted = []
+    for expected, name, value in LOCAL_ENCRYPTED:
+        assert classify_local_encrypted(value) == expected, name
+        encrypted.append({"case": name, "expected": expected, "cbor": h(cbor(value))})
+
+    return {
+        "recordFormatVersion": RECORD_FORMAT_VERSION,
+        "localConfigFormatVersion": 1,
+        "generator": "tests/vectors/generate.py",
+        "items": items,
+        "itemVersions": versions,
+        "folders": kept(FOLDERS, check_folder, True),
+        "devices": kept(DEVICES, check_device, False),
+        "localConfig": local,
+        "localConfigEncrypted": encrypted,
+    }
+
+
 def main() -> None:
     v: dict = {"recordFormatVersion": RECORD_FORMAT_VERSION, "generator": "tests/vectors/generate.py"}
 
@@ -572,7 +1131,8 @@ def main() -> None:
     }
 
     # local wraps
-    lc_part = {"securityPreferences": {"autoLockMinutes": 5}}
+    lc_part = LOCAL_ENCRYPTED_PART
+    assert classify_local_encrypted(lc_part) == "valid"
     v["local"] = {
         "deviceKek": h(dkek), "prfKek": h(prf_kek), "localConfigKey": h(k_localconfig),
         "mkWrapDeviceKek": {k: h(x) for k, x in seal(dkek, local_aad("bv.v1.mk-wrap.device-kek"), MASTER_KEY, nonce(9)).items()},
@@ -743,9 +1303,10 @@ def main() -> None:
         ],
     }
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(v, indent=2, ensure_ascii=False) + "\n")
-    print(f"wrote {OUT}")
+    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors())):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        print(f"wrote {path}")
 
 
 if __name__ == "__main__":

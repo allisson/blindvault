@@ -125,7 +125,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### `packages/vault`
 
-- [ ] `docs/record-content.md` vectors: item, folder, device and Local Config content added to `tests/vectors/generate.py` (D165)
+- [x] `docs/record-content.md` vectors: item, folder, device and Local Config content added to `tests/vectors/generate.py` (D165)
 - [ ] HLC: issue, compare, receive rule and HLC state (D19, D62, D109, D163); CRYPTO-INV-020
 - [ ] Vault session over a `RecordStore` interface: keys, HLC, decrypted state loaded at unlock, domain operations (D163)
 - [ ] Content validators: unknown or invalid content makes an Item or Item Version read-only; Folder and Device keep unknown keys and fail verification on an invalid known value (D52, D59, D165)

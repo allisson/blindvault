@@ -14,6 +14,9 @@
   text holds no U+000A or U+000D. **Trimmed** text has no character with the Unicode `White_Space`
   property at either end. Text is stored as typed unless a rule here normalizes it.
 - **ID** is a 16-byte byte string. **Timestamp** is a uint holding Unix time in milliseconds.
+- A required key that is absent fails the validation of that key.
+- **Ascending**, for an array of IDs or of pairs keyed by an ID, means strictly ascending bytewise,
+  so the array holds no duplicates.
 - Validation runs on every write, which is refused when it fails, and on every decode.
 
 ## 2. Unknown and invalid content (D52, D59, D98, D165)
@@ -91,7 +94,7 @@ receipt. A held record that fails it is shown as corrupt and is not written.
 | `url` | text | single-line; any scheme is stored, only `http` and `https` are opened (D83) |
 | `email` | text | single-line |
 | `phone` | text | single-line |
-| `date` | text | `YYYY-MM-DD`, a valid calendar date, or `YYYY-MM` (month precision) |
+| `date` | text | `YYYY-MM-DD`, a valid proleptic Gregorian date, or `YYYY-MM` (month precision); year 0001 to 9999 |
 | `number` | text | a decimal numeral: `-?[0-9]+(\.[0-9]+)?`, leading zeros kept |
 | `totp` | map | below |
 | `seed-phrase` | text | below |
@@ -135,6 +138,8 @@ then hold fields beyond them, each of a v1 field type (D124). Every template is 
 | `developer-credential` | `provider` (text), `baseUrl` (url), `keyId` (text), `secret` (secret, multi-line) |
 | `crypto-wallet` | `walletName` (text), `network` (text), `seedPhrase` (seed-phrase), `passphrase` (secret), `derivationPath` (text), `address` (text) |
 | `document` | `documentType` (text), `number` (text), `fullName` (text), `issuer` (text), `issueDate` (date), `expiryDate` (date) |
+
+A role marked "month precision" accepts only `YYYY-MM`.
 
 **Template versioning.**
 
@@ -181,9 +186,14 @@ exactly the keys below, which CRYPTO-INV-019 allows:
 | `vaultId` | ID | |
 | `localConfigId` | ID | new with each Local Config |
 | `kek` | map | `salt` (bytes 16), `opslimit` (uint), `memlimit` (uint), `mkWrap` (`{n, c}`, `crypto-spec.md` §12) |
-| `prf` | map, optional | `credentialId` (bytes), `prfInput` (bytes 32), `mkWrap` (`{n, c}`) |
+| `prf` | map, optional | `credentialId` (bytes, at least 1), `prfInput` (bytes 32), `mkWrap` (`{n, c}`) |
 | `replacesVaultId` | ID, optional | the vault this database replaces, until its database is deleted (D96) |
 | `encrypted` | map | `{n, c}`: the encrypted part, sealed as in `crypto-spec.md` §12 |
+
+Every `{n, c}` map is exactly those two keys: `n` 24 bytes, and `c` 48 bytes in an `mkWrap` (a
+sealed 32-byte key) or at least 16 bytes in `encrypted`. The `kek` and `prf` maps hold exactly the
+keys listed; `opslimit` and `memlimit` are checked against the accepted range at unlock
+(`crypto-spec.md` §6), not here.
 
 The **encrypted part** holds the v1 keys below. Keys a later phase uses are defined now and stay
 absent until written, so no phase changes `localConfigFormatVersion`.
@@ -200,5 +210,22 @@ absent until written, so no phase changes `localConfigFormatVersion`.
 | `seenRetiredDevices` | array of ID, optional | 4 | Device records seen as retired, ascending |
 | `rejectedPeers` | array of ID, optional | 5 | peers whose records were rejected for format or type, ascending (D68, D81, D115) |
 
-A preference outside its range is refused when written and makes unlock report the Local Config as
-corrupt when read (D151).
+`preferences` always holds its three keys, written with their defaults at creation. A preference
+outside its range is refused when written and makes unlock report the Local Config as corrupt when
+read (D151).
+
+## 10. Test vectors (D170)
+
+`tests/vectors/generate.py` also writes `packages/vault/test-vectors/content-v1.json` from a
+reference validator of this document, and refuses to write a case it classifies differently.
+Every case is the CBOR of one content map with its expected result:
+
+| Section | Cases | Expected |
+| --- | --- | --- |
+| `items` | each template, every field type, length limits counted in code points (astral characters), and one case per violation, tagged with its section 2 rule | `valid`, or `read-only` with `rule` |
+| `itemVersions` | `{item, itemId}` of a live and a trashed state, and of a newer template | `valid` or `read-only` |
+| `folders`, `devices` | valid records, unknown keys to keep (`unknownKeys`), invalid known values | `valid` or `invalid` |
+| `localConfig` | cleartext part, with and without PRF state and `replacesVaultId` | `valid`, `corrupt` or `unsupported-version` |
+| `localConfigEncrypted` | encrypted part, with every later-phase key, preferences at their limits | `valid` or `corrupt` |
+
+Item cases carry the header's `deleted` flag, which `trashOperationId` must match.

@@ -427,6 +427,9 @@ in `pairing-protocol.md` and `sync-protocol.md`, using the layout encoding.
 
 ## 15. Test vectors
 
+The same generator writes the `record-content.md` vectors to
+`packages/vault/test-vectors/content-v1.json` (`record-content.md` §10).
+
 `tests/vectors/generate.py` computes every vector with Python's `hashlib` (BLAKE2b, `crypto_kdf`)
 and PyNaCl (AEAD, Argon2id, `crypto_box_seed_keypair`, padding), independently of the TypeScript
 code, and writes `packages/crypto/test-vectors/crypto-v1.json`. Inputs are fixed bytes, nonces
@@ -450,7 +453,7 @@ with.
 | `argon2id` | Device KEK at 64 MiB, ops 2; normalization (decomposed input, U+00A0, control character rejected, whitespace-only rejected); parameters outside the accepted range |
 | `pad` | `sodium_pad` at lengths 0, 1, 255, 256, 257 |
 | `records` | full v1 envelopes (Item, purged tombstone, Vault Key, Recovery Envelope, Item Version, Item with unknown float and negative-integer content, Item sharing the Vault Key `recordId`), each with a fresh record key; caps; `mustNotOpen` (wrong AAD field, flipped tag and ciphertext, `mk`/`wk` confusion) |
-| `local` | Master Key wraps, Local Config wrap, `mustNotOpen` (other `localConfigId`, `vaultId`, purpose) |
+| `local` | Master Key wraps, Local Config wrap of a valid `record-content.md` §9 encrypted part, `mustNotOpen` (other `localConfigId`, `vaultId`, purpose) |
 | `transcripts` | XX and KK prologues, re-admission MACs |
 | `negative` | envelopes that MUST be rejected, each violating one rule and tagged with the section 9.5 step that rejects it; size cases given by length |
 
