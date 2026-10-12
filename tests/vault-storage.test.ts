@@ -6,10 +6,22 @@ import {
   type CborValue,
   Keyring,
   MEMLIMIT,
+  LocalPurpose,
+  RecordType,
   type SymmetricKey,
   decodeCbor,
+  decodeEnvelope,
+  deriveMasterSubkeys,
   derivePrfKek,
+  generateKey,
+  generatePrfInput,
   initCrypto,
+  localAad,
+  open,
+  recordAad,
+  unpad,
+  unwrapKey,
+  wrapKey,
 } from '@blindvault/crypto';
 import { VaultDatabase, databaseName } from '@blindvault/storage';
 import {
@@ -133,6 +145,64 @@ async function created(factory: IDBFactory) {
   return { session, vaultId };
 }
 
+/**
+ * The bytes of `key`, through the public API only: wrapped under a fresh key and opened again.
+ * A test needs them to look for the key; the package never hands them out.
+ */
+function bytesOf(keyring: Keyring, key: SymmetricKey): Uint8Array {
+  const probe = generateKey(keyring);
+  const aad = new TextEncoder().encode('test probe');
+  return open(probe, aad, wrapKey(probe, aad, key));
+}
+
+/**
+ * Every key of the vault in `vaultId`, recovered from what IndexedDB holds and the Device KEK of
+ * `seed`: the Master Key, its four subkeys, each Vault Key, each Record Key and the device private
+ * key.
+ */
+async function vaultKeys(
+  factory: IDBFactory,
+  vaultId: Uint8Array,
+  seed: number,
+): Promise<Map<string, Uint8Array>> {
+  const db = await VaultDatabase.open(vaultId, factory);
+  databases.push(db);
+  const config = parseLocalConfig((await db.localConfig()) ?? new Uint8Array(0));
+  const keyring = new Keyring();
+  const keys = new Map<string, Uint8Array>();
+  const mkAad = localAad(LocalPurpose.mkWrapDeviceKek, vaultId, config.localConfigId);
+  keys.set('master key', open(kek(keyring, seed), mkAad, config.kek.mkWrap));
+  const masterKey = unwrapKey(keyring, kek(keyring, seed), mkAad, config.kek.mkWrap);
+  const subkeys = deriveMasterSubkeys(keyring, masterKey);
+  for (const [name, key] of Object.entries(subkeys) as [string, SymmetricKey][]) {
+    keys.set(`subkey ${name}`, bytesOf(keyring, key));
+  }
+
+  const part = open(
+    subkeys.localConfig,
+    localAad(LocalPurpose.localConfig, vaultId, config.localConfigId),
+    config.encrypted,
+  );
+  const identity = (decodeCbor(unpad(part)) as CborMap).get('deviceIdentity') as CborMap;
+  keys.set('device private key', identity.get('privateKey') as Uint8Array);
+
+  const records = (await db.records()).map((r) => decodeEnvelope(r.envelope));
+  const epochs = new Map<number, SymmetricKey>();
+  for (const { header, ct } of records) {
+    if (header.recordType !== RecordType.vaultKey) continue;
+    const aad = recordAad(header, vaultId);
+    keys.set(`vault key ${String(header.keyEpoch)}`, open(subkeys.vaultKeyWrap, aad, ct));
+    epochs.set(header.keyEpoch, unwrapKey(keyring, subkeys.vaultKeyWrap, aad, ct));
+  }
+  records.forEach(({ header, wk }, i) => {
+    const vaultKey = epochs.get(header.keyEpoch);
+    if (!wk || !vaultKey) return;
+    keys.set(`record key ${String(i)}`, open(vaultKey, recordAad(header, vaultId), wk));
+  });
+  keyring.wipeAll();
+  return keys;
+}
+
 async function unlocked(factory: IDBFactory, vaultId: Uint8Array, seed = 1) {
   const db = await VaultDatabase.open(vaultId, factory);
   databases.push(db);
@@ -197,5 +267,63 @@ describe('vault session over IndexedDB (D82, D163)', () => {
     await again.renameFolder(folderId, 'Taxes 2027');
     again.lock();
     expect((await unlocked(factory, vaultId)).folder(folderId)?.name).toBe('Taxes 2027');
+  });
+
+  it('holds no key and no plaintext after a full use, PRF wrap and password change included (CRYPTO-INV-001, 003)', async () => {
+    const factory = new IDBFactory();
+    const { session, vaultId } = await created(factory);
+    const folderId = await session.createFolder('Taxes 2026');
+    const itemId = await session.createItem({ ...login(), folderId });
+    // The old password stays in an Item Version, sealed.
+    await session.updateItem(itemId, {
+      ...login(),
+      folderId,
+      fields: [
+        { type: 'text', role: 'username', value: 'alice' },
+        { type: 'secret', role: 'password', value: 'correct-horse-rotated' },
+      ],
+    });
+    const trashed = await session.createItem({ ...login(), title: 'Old forum account' });
+    await session.trashItem(trashed);
+    const keyring = new Keyring();
+    await session.setPasskey({
+      current: kek(keyring, 1),
+      prfKek: kek(keyring, 3),
+      credentialId: new Uint8Array([1, 2, 3, 4]),
+      prfInput: generatePrfInput(),
+    });
+    await session.changePassword({
+      current: kek(keyring, 1),
+      next: kek(keyring, 2),
+      salt: new Uint8Array(16).fill(8),
+      kdfParams: { opslimit: 2, memlimit: MEMLIMIT },
+    });
+    const kekBytes = [1, 2, 3].map((seed) => bytesOf(keyring, kek(keyring, seed)));
+    keyring.wipeAll();
+    session.lock();
+
+    const keys = await vaultKeys(factory, vaultId, 2);
+    const recordKeys = [...keys.keys()].filter((name) => name.startsWith('record key'));
+    // Vault Key, Device record, folder, two items and the Item Version, each under its own key.
+    expect(recordKeys.length).toBeGreaterThanOrEqual(5);
+    const needles = [
+      ...keys.values(),
+      ...kekBytes,
+      ...[...SECRETS, 'correct-horse-rotated', 'Old forum account'].map((t) =>
+        new TextEncoder().encode(t),
+      ),
+    ];
+    for (const needle of needles) expect(needle.length).toBeGreaterThan(0);
+    for (const k of [...keys.values(), ...kekBytes]) expect(k.length).toBe(32);
+
+    const values = await dump(factory, databaseName(vaultId));
+    // The dump reads what unlock reads: the Master Key wrap is in it.
+    const db = await VaultDatabase.open(vaultId, factory);
+    databases.push(db);
+    const config = parseLocalConfig((await db.localConfig()) ?? new Uint8Array(0));
+    expect(config.prf).toBeDefined();
+    expect(values.some((bytes) => contains(bytes, config.kek.mkWrap.c))).toBe(true);
+    const found = needles.filter((needle) => values.some((bytes) => contains(bytes, needle)));
+    expect(found).toEqual([]);
   });
 });
