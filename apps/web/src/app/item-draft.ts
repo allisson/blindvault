@@ -41,7 +41,8 @@ export interface Draft {
   /** Comma-separated, as typed. */
   readonly tags: string;
   readonly notes: string;
-  readonly folderId?: Uint8Array;
+  /** Absent, or `undefined` once cleared: the vault root. */
+  readonly folderId?: Uint8Array | undefined;
 }
 
 export type FieldError =

@@ -95,8 +95,8 @@ every project through the references in the root `tsconfig.json`.
 - **Locks while unlocked.** `LockTimers` runs the inactivity lock (user input restarts it) and the
   hidden-app lock (`visibilitychange`, 0 locks at once) independently, from the vault's
   preferences (D54, D151). Ctrl/⌘ + Shift + L locks. Navigation resets to the vault root on lock.
-- **Navigation (D167).** An in-memory screen stack: a list (the vault or the trash), then at most
-  one detail (an item, its editor, a new item) or Settings; no router. ESLint forbids `history.pushState`,
+- **Navigation (D167).** An in-memory screen stack: a list (all items, a folder or the trash),
+  then at most one detail (an item, its editor, a new item) or Settings; no router. ESLint forbids `history.pushState`,
   `history.replaceState` and writing `location.hash`, `search`, `assign` and `replace` in
   `apps/web/src` (covered by `tests/boundaries.test.ts`); Playwright checks the URL and history
   length after the flows.
@@ -112,6 +112,12 @@ every project through the references in the root `tsconfig.json`.
   Editing loads the item's fields in order, then the template roles it lacks, empty, so saving
   untouched content writes nothing (D165). TOTP fields are kept as stored until the TOTP field
   lands. Panes read the session again after each write; the session is the only state.
+- **Folders (D14, D171).** The folder pane and the move targets come from the tree the session
+  derives, so orphans and cycles show as on every device. A folder's move targets leave out its
+  displayed subtree; the session still refuses a cycle or a target in the trash. A folder list
+  shows its subfolders, then its items; a new item starts in the folder shown. Trashing or
+  restoring a subtree that holds read-only records is refused as a whole, and the UI lists those
+  records and why (overview §6). The trash lists folders with Restore only (D143).
 - **Secrets in the UI (overview §13.2).** Secret, seed-phrase and TOTP-secret values show a
   fixed-length mask until the user reveals them, in every layout; the detail pane is keyed by
   item, so a reveal never carries to another item. In the editor a masked secret is a password

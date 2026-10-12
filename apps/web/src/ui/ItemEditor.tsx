@@ -8,6 +8,9 @@ import {
 } from '@blindvault/vault';
 import { useState } from 'react';
 
+import { folderRows } from '../app/folders';
+import { hex } from '../app/ids';
+
 import {
   type Draft,
   type DraftErrors,
@@ -18,7 +21,7 @@ import {
   newDraft,
 } from '../app/item-draft';
 import { type Navigation } from '../app/nav';
-import { useMessages } from '../i18n/context';
+import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, roleName } from '../i18n/messages';
 import { Button, Field, INPUT, Notice, TextArea } from './components';
 import { writeError } from './errors';
@@ -199,7 +202,7 @@ export function ItemEditor({
   readonly nav: Navigation;
   readonly onChange: () => void;
 }) {
-  const m = useMessages();
+  const { messages: m, language } = useLanguage();
   const [draft, setDraft] = useState<Draft | undefined>(() => {
     const item = id ? session.item(id)?.item : undefined;
     return item ? draftOf(item) : undefined;
@@ -211,8 +214,18 @@ export function ItemEditor({
 
   if (!draft) {
     if (id) return null;
-    return <TemplatePicker onPick={setDraft} />;
+    // A new item starts in the folder shown as the list, if any.
+    const list = nav.list();
+    return (
+      <TemplatePicker
+        onPick={(picked) => {
+          setDraft(list.name === 'folder' ? { ...picked, folderId: list.id } : picked);
+        }}
+      />
+    );
   }
+  const folders = folderRows(session.tree(new Intl.Collator(language).compare));
+  const folderKey = draft.folderId ? hex(draft.folderId) : '';
   const update = (next: Draft) => {
     setDraft(next);
     setFailure(undefined);
@@ -309,6 +322,29 @@ export function ItemEditor({
           {m.items.add}
         </Button>
       </div>
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        {m.folders.folder}
+        <select
+          className={INPUT}
+          value={folderKey}
+          onChange={(e) => {
+            const picked = folders.find((r) => hex(r.folder.id) === e.target.value);
+            update({ ...draft, folderId: picked?.folder.id });
+          }}
+          data-testid="item-folder"
+        >
+          <option value="">{m.folders.root}</option>
+          {folderKey !== '' && !folders.some((r) => hex(r.folder.id) === folderKey) ? (
+            // A folder not shown in the tree: kept unless the user picks another (D14).
+            <option value={folderKey}>{m.folders.root}</option>
+          ) : null}
+          {folders.map((r) => (
+            <option key={hex(r.folder.id)} value={hex(r.folder.id)}>
+              {`${'\u00a0\u00a0'.repeat(r.depth)}${r.folder.name}`}
+            </option>
+          ))}
+        </select>
+      </label>
       <Field
         label={m.items.tags}
         hint={m.items.tagsHint}

@@ -1,12 +1,14 @@
 // In-memory navigation (D167): no router, nothing in the URL or the history. Screens are plain
-// values; `back()` pops the stack. The stack is a list (the vault or the trash), then at most a
-// detail of that list (an item, its editor, a new item) or Settings.
+// values; `back()` pops the stack. The stack is a list (all items, a folder or the trash), then at
+// most a detail of that list (an item, its editor, a new item) or Settings.
 
-export type ListName = 'vault' | 'trash';
-
-export type Screen =
+export type ListScreen =
   | { readonly name: 'vault' }
   | { readonly name: 'trash' }
+  | { readonly name: 'folder'; readonly id: Uint8Array };
+
+export type Screen =
+  | ListScreen
   | { readonly name: 'settings' }
   | { readonly name: 'item'; readonly id: Uint8Array }
   | { readonly name: 'edit'; readonly id: Uint8Array }
@@ -18,15 +20,16 @@ export function isDetail(screen: Screen): screen is DetailScreen {
   return screen.name === 'item' || screen.name === 'edit' || screen.name === 'new';
 }
 
-function isList(screen: Screen): screen is { readonly name: ListName } {
-  return screen.name === 'vault' || screen.name === 'trash';
+export function isList(screen: Screen): screen is ListScreen {
+  return screen.name === 'vault' || screen.name === 'trash' || screen.name === 'folder';
 }
 
 function same(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
-const ROOT_SCREEN: Screen = { name: 'vault' };
+const ROOT_LIST: ListScreen = { name: 'vault' };
+const ROOT_SCREEN: Screen = ROOT_LIST;
 const ROOT: readonly Screen[] = [ROOT_SCREEN];
 
 export class Navigation {
@@ -41,9 +44,9 @@ export class Navigation {
   current = (): Screen => this.#stack.at(-1) ?? ROOT_SCREEN;
 
   /** The list shown, or that the current detail was selected from. */
-  list = (): ListName => {
+  list = (): ListScreen => {
     const top = this.#listStack().at(-1);
-    return top && isList(top) ? top.name : 'vault';
+    return top && isList(top) ? top : ROOT_LIST;
   };
 
   open(screen: Screen): void {
@@ -55,8 +58,9 @@ export class Navigation {
     this.#set([...this.#listStack(), screen]);
   }
 
-  showList(list: ListName): void {
-    this.#set(list === 'vault' ? ROOT : [...ROOT, { name: list }]);
+  /** A list in place of the current one: all items is the root, the others sit on it. */
+  showList(list: ListScreen): void {
+    this.#set(list.name === 'vault' ? ROOT : [...ROOT, list]);
   }
 
   replace(screen: Screen): void {
@@ -69,6 +73,11 @@ export class Navigation {
       (s) => (s.name === 'item' || s.name === 'edit') && same(s.id, id),
     );
     if (open) this.#set(this.#listStack());
+  }
+
+  /** Leaves folder `id`'s list, after it was trashed: back to all items. */
+  closeFolder(id: Uint8Array): void {
+    if (this.#stack.some((s) => s.name === 'folder' && same(s.id, id))) this.#set(ROOT);
   }
 
   back(): void {

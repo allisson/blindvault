@@ -162,7 +162,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Item CRUD with templates
 - [ ] Duplicate item: new item in the same folder with the current content, a localized " (copy)" title suffix (D169), a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
 - [x] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
-- [ ] Folder tree: create, rename, move, delete; move items between folders and the root
+- [x] Folder tree: create, rename, move, delete; move items between folders and the root
 - [x] Secret fields masked by default
 - [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
 - [ ] TOTP field: TOTP secret masked, current code shown, copy with clipboard clear (D127)
