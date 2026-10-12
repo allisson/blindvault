@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 1 — Cryptography and local vault. Update this line when a gate passes.
+Phase 2 — Backup and recovery. Update this line when a gate passes.
 
 ## Repository layout
 
