@@ -67,7 +67,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 - [x] **Signal-less pairing:** two tabs, then two phones (iOS Safari and Chromium Android) establish a DataChannel by exchanging only the compact QR payloads (D4)
     - [x] Measure the actual payload size in bytes and the resulting QR
-    - [ ] Test mDNS (`.local`) candidates on the same Wi-Fi network, with and without camera permission on each side, including LAN-only mode, and revise D136 with the result
+    - [x] Test mDNS (`.local`) candidates on the same Wi-Fi network, with and without camera permission on each side, including LAN-only mode, and revise D136 with the result (D161)
     - [x] Test with STUN across different networks (Wi-Fi + 4G)
     - [ ] Test camera QR scanning in the installed PWA on iOS and Android
 - [x] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
@@ -255,6 +255,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Camera QR scanning and copy/paste fallback
 - [ ] Pairing session expiration; a lock on either device aborts the pairing (D93)
 - [ ] LAN-only mode (no STUN) and configurable STUN list
+- [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste with no camera, reconnection), and revise D161 with the result
 
 ### Gate C
 
