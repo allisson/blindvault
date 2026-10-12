@@ -2,7 +2,7 @@
 
 Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome (Google Password
 Manager), Windows Firefox (Windows Hello), Mac Chrome and Firefox (iCloud
-Keychain) measured; Safari and the installed apps pending.
+Keychain) and iPhone 14 Safari (iCloud Keychain) measured; Mac Safari and the installed apps pending.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
 fixed 32-byte input at create and at get.
@@ -62,7 +62,8 @@ create and a stable output across assertions.
 | get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
 
 - PRF works with the passkey saved to iCloud Keychain from Chrome. BE and BS are set: synced through
-  iCloud, so the PRF secret should reach the user's iPhone too (to check from Safari on the iPhone).
+  iCloud, so the PRF secret should reach the user's other Apple devices. Not checked: the test
+  iPhone is signed in to a different Apple ID.
 
 ## MacBook Air M1, Firefox 157, iCloud Keychain (2026-10-10)
 
@@ -75,6 +76,28 @@ create and a stable output across assertions.
   Firefox on Windows, where the passkey stayed device-bound in Windows Hello.
 - As on Windows, Firefox reports the signal API and `conditionalCreate` as unsupported.
 
+## iPhone 14, Safari 26.6, iCloud Keychain (2026-10-12)
+
+Safari tab. Bitwarden is enabled as a passkey provider on this iPhone and offered to save the
+passkey first; saving there did not work. The passkey measured below was saved to iCloud Keychain.
+
+| Step | Attachment | UV | BE | BS | PRF | Page hidden |
+| --- | --- | --- | --- | --- | --- | --- |
+| create | platform | yes | yes | yes | enabled, 32-byte output at create | no |
+| get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
+
+- PRF works in Safari on iOS, with the output at create and a stable output across assertions, the
+  same behavior as Chrome on the A54.
+- `getClientCapabilities()` reports `extension:prf`, `signalUnknownCredential`,
+  `signalAllAcceptedCredentials`, `signalCurrentUserDetails` and `conditionalCreate`;
+  `extension:largeBlob` is false.
+- As with the extension on Windows, a third-party provider (Bitwarden) answers the WebAuthn prompt
+  first on iOS too.
+- The get used the passkey created in this session, so it does not show that the passkey created
+  from Mac Chrome reaches the iPhone; that check needs both devices on the same Apple ID.
+
 ## Pending
 
-- A54 installed app; iPhone 14 (Safari, tab and installed app), MacBook Air M1 (Safari), Windows laptop (Chrome with Bitwarden, optional).
+- A54 installed app; iPhone 14 installed app; MacBook Air M1 (Safari); Windows laptop (Chrome with
+  Bitwarden, optional).
+- Why the Bitwarden save failed on iOS (error not captured), optional.
