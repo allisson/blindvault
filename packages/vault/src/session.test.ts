@@ -279,6 +279,56 @@ describe('vault creation and unlock (D163)', () => {
     expect(keyring.wiped).toBe(true);
   });
 
+  it('fails a wrong KEK exactly as a tampered wrap, reading no record and writing nothing (Gate A)', async () => {
+    const { session, store } = await create();
+    await session.createItem(login());
+    session.lock();
+    const bytes = store.localConfig;
+    const commits = store.commits.length;
+    const config = parseLocalConfig(bytes);
+    const flip = (part: 'n' | 'c', at: number) => {
+      const sealed = config.kek.mkWrap;
+      const changed = sealed[part].slice();
+      const i = at < 0 ? changed.length + at : at;
+      changed[i] = must(changed[i]) ^ 1;
+      return { ...config, kek: { ...config.kek, mkWrap: { ...sealed, [part]: changed } } };
+    };
+    const attempts = [
+      { localConfig: config, seed: 2 },
+      { localConfig: config, seed: 200 },
+      { localConfig: flip('c', 0), seed: 1 },
+      { localConfig: flip('c', -1), seed: 1 },
+      { localConfig: flip('n', 0), seed: 1 },
+    ];
+    const reads = vi.spyOn(store, 'records');
+    const errors: unknown[] = [];
+    for (const { localConfig, seed } of attempts) {
+      const keyring = new Keyring();
+      errors.push(
+        await VaultSession.unlock({
+          store,
+          localConfig,
+          keyring,
+          kek: kek(keyring, seed),
+          method: 'password',
+        }).catch((error: unknown) => error),
+      );
+      expect(keyring.wiped).toBe(true);
+    }
+    // One error, whatever failed: no class, message or cause tells a near miss from tampering.
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(UnlockRejectedError);
+      expect(error).toEqual(new UnlockRejectedError());
+      expect((error as Error).cause).toBeUndefined();
+    }
+    // The Master Key wrap is the first thing opened: no record is read before it opens.
+    expect(reads).not.toHaveBeenCalled();
+    // No attempt counter or other trace is stored.
+    expect(store.commits).toHaveLength(commits);
+    expect(store.localConfig).toBe(bytes);
+    expect((await unlock(store)).items()).toHaveLength(1);
+  });
+
   it('rejects a passkey unlock while no PRF wrap is set up', async () => {
     const { store } = await create();
     const keyring = new Keyring();

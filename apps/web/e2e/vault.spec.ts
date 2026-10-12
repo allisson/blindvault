@@ -52,6 +52,58 @@ test('creates, locks, refuses a wrong password and unlocks, keeping the URL and 
   expect(await page.evaluate(() => window.history.length)).toBe(before);
 });
 
+/** The stored Local Config bytes, read straight from IndexedDB. */
+function storedLocalConfig(page: Page): Promise<number[]> {
+  return page.evaluate(async () => {
+    const [info] = (await indexedDB.databases()).filter((d) => d.name?.startsWith('blindvault-'));
+    const name = info?.name;
+    if (!name) throw new Error('no vault database');
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name);
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+      request.onerror = () => {
+        reject(new Error('open failed'));
+      };
+    });
+    try {
+      const value = await new Promise<unknown>((resolve, reject) => {
+        const request = db.transaction('localConfig').objectStore('localConfig').get('localConfig');
+        request.onsuccess = () => {
+          resolve(request.result);
+        };
+        request.onerror = () => {
+          reject(new Error('read failed'));
+        };
+      });
+      return Array.from(value as Uint8Array);
+    } finally {
+      db.close();
+    }
+  });
+}
+
+test('refuses a near miss and an unrelated password alike, changing nothing stored (Gate A)', async ({
+  page,
+}) => {
+  await create(page);
+  await page.getByRole('button', { name: 'Lock' }).click();
+  await expect(page.getByTestId('lock-state')).toHaveText('Locked');
+  const before = await storedLocalConfig(page);
+  for (const attempt of [`${PASSWORD.slice(0, -1)}5`, 'meadow-copper-signal-ferry-5830']) {
+    await unlock(page, attempt);
+    const alert = page.getByRole('alert');
+    await expect(alert).toHaveText('Wrong password.', { timeout: 30_000 });
+    // The typed password does not stay in the field.
+    await expect(page.getByTestId('unlock-password')).toHaveValue('');
+    await expect(page.getByTestId('lock-state')).toHaveText('Locked');
+  }
+  expect(await storedLocalConfig(page)).toEqual(before);
+  await unlock(page, PASSWORD);
+  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+});
+
 test('keeps the vault after a reload, locked', async ({ page }) => {
   await create(page);
   await page.reload();
