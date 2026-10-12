@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const cryptoFile = `${root}packages/crypto/src/boundary-probe.ts`;
 const vaultFile = `${root}packages/vault/src/boundary-probe.ts`;
+const storageFile = `${root}packages/storage/src/boundary-probe.ts`;
 
 async function restrictedImports(code: string, filePath: string): Promise<string[]> {
   // The probe files do not exist on disk, so the type-aware project service cannot load them.
@@ -28,5 +29,19 @@ describe('packages/crypto import boundary', () => {
 
   it('does not restrict other packages', async () => {
     expect(await restrictedImports("import 'react';\nexport {};\n", vaultFile)).toEqual([]);
+  });
+});
+
+describe('packages/storage import boundary', () => {
+  it.each(["import '@blindvault/vault';", "import '@blindvault/sync';", "import 'react';"])(
+    'rejects %s',
+    async (code) => {
+      expect(await restrictedImports(`${code}\nexport {};\n`, storageFile)).toHaveLength(1);
+    },
+  );
+
+  it('allows @blindvault/crypto', async () => {
+    const code = "import '@blindvault/crypto';\nexport {};\n";
+    expect(await restrictedImports(code, storageFile)).toEqual([]);
   });
 });

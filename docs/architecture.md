@@ -59,6 +59,32 @@ every project through the references in the root `tsconfig.json`.
 - **IndexedDB layout.** Database `blindvault-<vaultId>` (D79) with two object stores: `records`,
   keyed by `[recordType, recordId]` (D158) with no other index, and `localConfig`, holding the one
   Local Config value (`record-content.md` §9). Both are written in one transaction (D82).
+- **Storage (`packages/storage`).** It imports only `@blindvault/crypto` (ESLint, covered by
+  `tests/boundaries.test.ts`) and never parses records or Local Config. `vaultId` in names is
+  lowercase hex, and the vault's Web Lock has its database's name.
+  - **Sealed records only.** A record is accepted as `EncryptedRecord`, whose `RecordEnvelope`
+    type only `encodeEnvelope` (and so every `seal*` function) produces; `VaultSession`'s
+    `StoredRecord` is the same type. A commit also decodes each envelope (steps 1 to 5 of
+    `crypto-spec.md` §9.5, nothing decrypted) and refuses one whose header is not its key, before
+    any write. Each value is copied before it is written, since IndexedDB stores a view's whole
+    underlying buffer.
+  - **Commits.** One `readwrite` transaction with `durability: 'strict'`; a request that throws
+    aborts it, so nothing queued before it commits. On `versionchange` (erase or upgrade in another
+    app window) the connection closes instead of blocking it, and later calls throw
+    `StorageClosedError`.
+  - **Schema.** `MIGRATIONS[n]` moves version `n` to `n + 1` inside the `versionchange`
+    transaction. A database at a higher version than this app knows is refused
+    (`UnsupportedSchemaError`), never opened, rewritten or deleted.
+  - **Web Locks.** Requests are `ifAvailable`, or `steal` for take-over, so no app window waits
+    behind another; a held lock reports a take-over through `lost`, and the app then locks the
+    vault (D51). The installation guard is `blindvault-installation` (D97, D108).
+  - **Startup cleanup (D89, D96, D154).** Run under the installation guard: deletes every
+    `blindvault-<vaultId>` database without Local Config, then each committed database another
+    committed one names in `replacesVaultId`, only if its Web Lock is free, and finally clears that
+    `replacesVaultId` once the replaced database is gone, read and rewritten in one transaction.
+    `apps/web` passes the reader of `replacesVaultId` from `packages/vault`.
+  - **Persistence.** `requestPersistence()` and `storageStatus()` wrap `persist()`,
+    `persisted()` and `estimate()`, reporting `null` where the browser gives nothing.
 - **i18n.** UI copy in `en` and `pt-BR` from Phase 1; template role names are localized, so a
   field without a label reads in the viewer's language (D165).
 
@@ -81,6 +107,7 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `vite`, `@vitejs/plugin-react` | `apps/web` | Build and dev server (stack). |
 | `tailwindcss`, `@tailwindcss/vite` | `apps/web` | Styling (stack). |
 | `@types/react`, `@types/react-dom` | `apps/web` | Types for React. |
+| `fake-indexeddb` 6.2.5 | `packages/storage`, `tests` | An in-memory IndexedDB for Vitest in Node, which has none; the storage tests and the vault-over-IndexedDB test run on it, and Playwright covers real browsers. No runtime dependencies, no install scripts. Test only, never bundled. Phase 1. |
 
 ### Runtime
 

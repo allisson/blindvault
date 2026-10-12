@@ -9,6 +9,7 @@ import {
   MEMLIMIT,
   type MasterSubkeys,
   RECORD_FORMAT_VERSION,
+  type RecordEnvelope,
   type RecordHeader,
   RecordType,
   type SymmetricKey,
@@ -751,11 +752,12 @@ describe('read-only records (D52, D73, D74)', () => {
     const tampered = await session.createItem(login('Tampered'));
     const misfiled = await session.createItem(login('Misfiled'));
     const tamperedKey = { recordType: RecordType.item, recordId: tampered };
-    const envelope = (store.get(tamperedKey) as { envelope: Uint8Array }).envelope.slice();
+    // Tampered bytes at rest: storage hands back whatever it holds as an envelope.
+    const envelope = must(store.get(tamperedKey)).envelope.slice() as RecordEnvelope;
     envelope[envelope.length - 1] = (envelope[envelope.length - 1] ?? 0) ^ 1;
     store.put({ ...tamperedKey, envelope });
     const misfiledKey = { recordType: RecordType.item, recordId: misfiled };
-    const moved = store.get(misfiledKey) as { envelope: Uint8Array };
+    const moved = must(store.get(misfiledKey));
     store.held.clear();
     for (const r of store.commits.flatMap((c) => c.put)) {
       if (r.recordType !== RecordType.item || idKey(r.recordId) !== idKey(misfiled)) store.put(r);

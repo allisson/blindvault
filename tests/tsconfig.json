@@ -3,8 +3,20 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": ".tsbuild",
-    "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo",
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", ".tsbuild"]
+  "exclude": ["node_modules", ".tsbuild"],
+  "references": [
+    {
+      "path": "../packages/crypto"
+    },
+    {
+      "path": "../packages/vault"
+    },
+    {
+      "path": "../packages/storage"
+    }
+  ]
 }

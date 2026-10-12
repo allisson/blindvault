@@ -10,6 +10,12 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "5.0.2",
+    "fake-indexeddb": "6.2.5",
     "vitest": "5.0.2"
+  },
+  "dependencies": {
+    "@blindvault/crypto": "workspace:*",
+    "@blindvault/storage": "workspace:*",
+    "@blindvault/vault": "workspace:*"
   }
 }

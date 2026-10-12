@@ -14,6 +14,7 @@ import {
   LocalPurpose,
   type MasterSubkeys,
   RECORD_FORMAT_VERSION,
+  type RecordEnvelope,
   type RecordHeader,
   RecordType,
   type SymmetricKey,
@@ -200,7 +201,7 @@ interface Write {
   readonly header: RecordHeader;
   /** The content written; `null` for a purged tombstone and for a Vault Key record. */
   readonly content: CborMap | null;
-  readonly envelope: Uint8Array;
+  readonly envelope: RecordEnvelope;
 }
 
 interface Plan<T> {

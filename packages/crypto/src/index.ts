@@ -63,12 +63,14 @@ export {
   versionId,
 } from './ids';
 export {
+  type EncryptedRecord,
   type Envelope,
   ITEM_CAP,
   MAX_CIPHERTEXT_LENGTH,
   MAX_ENVELOPE_LENGTH,
   RECORD_CAP,
   RECORD_FORMAT_VERSION,
+  type RecordEnvelope,
   RecordRejectedError,
   RecordType,
   type VerificationKeys,

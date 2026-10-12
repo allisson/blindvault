@@ -142,14 +142,14 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### `packages/storage`
 
-- [ ] Versioned IndexedDB schema with migrations: `records` keyed by `[recordType, recordId]` and `localConfig` (D158, `architecture.md`)
-- [ ] Local Config format version; an unknown version refuses unlock (D164)
-- [ ] API that only accepts encrypted records (distinct TypeScript type)
-- [ ] Local Config persistence (KEK salt, parameters, wrapped master key); everything not needed for unlock encrypted under the Local Config subkey (D58, CRYPTO-INV-019); every local wrap bound to `vaultId` and `localConfigId` (D121, CRYPTO-INV-023)
-- [ ] `navigator.storage.persist()` and `estimate()`
-- [ ] Single active app window through an exclusive Web Lock, with take-over (D51)
-- [ ] IndexedDB database and Web Lock named by `vaultId`, Local Config in that database (D79, D82)
-- [ ] A database counts as a vault only once its Local Config is committed; startup deletes databases without one, and a database replaced by another committed one (D89)
+- [x] Versioned IndexedDB schema with migrations: `records` keyed by `[recordType, recordId]` and `localConfig` (D158, `architecture.md`)
+- [x] Local Config format version; an unknown version refuses unlock (D164)
+- [x] API that only accepts encrypted records (distinct TypeScript type)
+- [x] Local Config persistence (KEK salt, parameters, wrapped master key); everything not needed for unlock encrypted under the Local Config subkey (D58, CRYPTO-INV-019); every local wrap bound to `vaultId` and `localConfigId` (D121, CRYPTO-INV-023)
+- [x] `navigator.storage.persist()` and `estimate()`
+- [x] Single active app window through an exclusive Web Lock, with take-over (D51)
+- [x] IndexedDB database and Web Lock named by `vaultId`, Local Config in that database (D79, D82)
+- [x] A database counts as a vault only once its Local Config is committed; startup deletes databases without one, and a database replaced by another committed one (D89)
 
 ### `apps/web` (minimal)
 
