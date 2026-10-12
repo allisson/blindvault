@@ -6,10 +6,14 @@ import {
   type KdfPort,
   KdfParamsRejectedError,
   Keyring,
+  UserVerificationError,
   calibrateDeviceKek,
   deriveDeviceKek,
+  derivePrfKek,
+  generatePrfInput,
   generateSalt,
   initCrypto,
+  isBackupEligible,
   normalizePassword,
 } from '@blindvault/crypto';
 import {
@@ -27,10 +31,18 @@ import {
   type RecordStore,
   UnlockRejectedError,
   UnsupportedLocalConfigError,
+  VaultLockedError,
   VaultSession,
   localConfigWithoutReplaces,
   parseLocalConfig,
 } from '@blindvault/vault';
+
+import {
+  PasskeyCancelledError,
+  type PasskeyPort,
+  type PasskeyResult,
+  PrfUnavailableError,
+} from './passkey';
 
 export type Status =
   | { readonly kind: 'starting' }
@@ -51,6 +63,15 @@ export type Status =
 
 export type Outcome = 'ok' | 'wrong-password';
 
+/** A passkey unlock: `rejected` when the passkey does not open this vault's PRF wrap. */
+export type PasskeyOutcome =
+  'ok' | 'cancelled' | 'rejected' | 'no-user-verification' | 'unavailable';
+
+export type PasskeySetup =
+  /** `backupEligible`: a synced passkey, for the D84 notice. */
+  | { readonly kind: 'ok'; readonly backupEligible: boolean }
+  | { readonly kind: 'wrong-password' | 'cancelled' | 'no-user-verification' | 'unavailable' };
+
 export interface ControllerDeps {
   readonly factory: IDBFactory;
   readonly locks: LockManager;
@@ -58,6 +79,19 @@ export interface ControllerDeps {
   readonly kdf: () => KdfPort;
   readonly now?: () => number;
   readonly storage?: StorageManager;
+  /** WebAuthn, for passkey unlock (§5.5); absent where the browser has none. */
+  readonly passkeys?: PasskeyPort;
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+/** A ceremony that ended without a result: the user's choice or the authenticator's limits. */
+function ceremonyFailure(error: unknown): 'cancelled' | 'unavailable' {
+  if (error instanceof PasskeyCancelledError) return 'cancelled';
+  if (error instanceof PrfUnavailableError) return 'unavailable';
+  throw error;
 }
 
 class Aborted extends Error {
@@ -71,6 +105,8 @@ export class VaultController {
   #vaultId: Uint8Array | undefined;
   #db: VaultDatabase | undefined;
   #lock: HeldLock | undefined;
+  /** The PRF KEK state of the Local Config last read or written, for the unlock prompt. */
+  #passkey: { readonly credentialId: Uint8Array; readonly prfInput: Uint8Array } | undefined;
   /** Bumped by every lock: an operation started before it is aborted (D104). */
   #epoch = 0;
 
@@ -154,7 +190,9 @@ export class VaultController {
     const bytes = await db.localConfig();
     try {
       if (!bytes) throw new Error('no Local Config');
-      return parseLocalConfig(bytes);
+      const config = parseLocalConfig(bytes);
+      this.#passkey = config.prf;
+      return config;
     } catch (error) {
       this.#set({
         kind: error instanceof UnsupportedLocalConfigError ? 'update-required' : 'corrupt',
@@ -318,6 +356,78 @@ export class VaultController {
     }
   }
 
+  /** Whether this vault has passkey unlock set up on this device, as last read. */
+  get hasPasskey(): boolean {
+    return this.#passkey !== undefined && this.#deps.passkeys !== undefined;
+  }
+
+  /** Whether the browser offers WebAuthn with the PRF extension (detected at runtime, §5.5). */
+  async passkeysSupported(): Promise<boolean> {
+    return (await this.#deps.passkeys?.supported()) ?? false;
+  }
+
+  /**
+   * Unlocks with the passkey (§5.5). The assertion is requested first, while the click's user
+   * activation lasts; one without user verification never yields a PRF KEK (D75, CRYPTO-INV-021).
+   */
+  async unlockWithPasskey(): Promise<PasskeyOutcome> {
+    const db = this.#db;
+    const passkeys = this.#deps.passkeys;
+    const held = this.#passkey;
+    if (this.#status.kind !== 'locked' || !db || !passkeys || !held) return 'ok';
+    const epoch = this.#epoch;
+    this.#set({ kind: 'unlocking' });
+    let assertion: PasskeyResult;
+    try {
+      assertion = await passkeys.get(held.credentialId, held.prfInput);
+    } catch (error) {
+      if (epoch === this.#epoch) this.#set({ kind: 'locked' });
+      return ceremonyFailure(error);
+    }
+    const keyring = new Keyring();
+    try {
+      if (epoch !== this.#epoch) throw new Aborted();
+      const config = await this.#readConfig(db);
+      if (!config) return 'ok';
+      if (!config.prf || !sameBytes(config.prf.credentialId, assertion.credentialId)) {
+        throw new UnlockRejectedError();
+      }
+      if (!assertion.prfOutput) throw new PrfUnavailableError();
+      const kek = derivePrfKek(keyring, {
+        authenticatorData: assertion.authenticatorData,
+        prfOutput: assertion.prfOutput,
+      });
+      const session = await VaultSession.unlock({
+        store: db,
+        localConfig: config,
+        keyring,
+        kek,
+        method: 'passkey',
+        now: this.#now,
+      });
+      if (epoch !== this.#epoch) {
+        session.lock();
+        throw new Aborted();
+      }
+      this.#set({ kind: 'unlocked', session });
+      return 'ok';
+    } catch (error) {
+      keyring.wipeAll();
+      if (error instanceof Aborted) return 'ok';
+      if (error instanceof ContentInvalidError) {
+        this.#set({ kind: 'corrupt' });
+        return 'ok';
+      }
+      this.#set({ kind: 'locked' });
+      if (error instanceof UnlockRejectedError) return 'rejected';
+      if (error instanceof UserVerificationError) return 'no-user-verification';
+      if (error instanceof PrfUnavailableError) return 'unavailable';
+      throw error;
+    } finally {
+      assertion.prfOutput?.fill(0);
+    }
+  }
+
   /** Locks: wipes the session's keys and state and aborts what is in progress (overview §7). */
   lock(): void {
     this.#epoch += 1;
@@ -375,6 +485,87 @@ export class VaultController {
     } finally {
       keyring.wipeAll();
     }
+  }
+
+  /**
+   * Sets up passkey unlock (§5.5, D172). The credential is created first, while the click's user
+   * activation lasts; then `current` must open the Master Key wrap. A credential that ends up
+   * wrapping nothing, after a wrong password, a lock or a failure, is signalled as unknown (D120).
+   */
+  async setUpPasskey(current: string): Promise<PasskeySetup> {
+    const status = this.#status;
+    const db = this.#db;
+    const passkeys = this.#deps.passkeys;
+    if (status.kind !== 'unlocked' || !db || !passkeys) return { kind: 'unavailable' };
+    const epoch = this.#epoch;
+    const prfInput = generatePrfInput();
+    let created: PasskeyResult;
+    try {
+      created = await passkeys.create(prfInput);
+    } catch (error) {
+      return { kind: ceremonyFailure(error) };
+    }
+    const keyring = new Keyring();
+    let evaluated: PasskeyResult = created;
+    let committed = false;
+    try {
+      if (epoch !== this.#epoch) throw new Aborted();
+      // Every browser of the matrix evaluates the PRF at create (spikes/prf.md); others need a get.
+      if (!evaluated.prfOutput) evaluated = await passkeys.get(created.credentialId, prfInput);
+      if (!evaluated.prfOutput) throw new PrfUnavailableError();
+      const backupEligible = isBackupEligible(created.authenticatorData);
+      const prfKek = derivePrfKek(keyring, {
+        authenticatorData: evaluated.authenticatorData,
+        prfOutput: evaluated.prfOutput,
+      });
+      const config = await this.#readConfig(db);
+      if (!config) throw new Aborted();
+      const { salt, opslimit, memlimit } = config.kek;
+      const currentKek = await deriveDeviceKek(
+        keyring,
+        this.#deps.kdf(),
+        normalizePassword(current),
+        salt,
+        { opslimit, memlimit },
+      );
+      if (epoch !== this.#epoch) throw new Aborted();
+      await status.session.setPasskey({
+        current: currentKek,
+        prfKek,
+        credentialId: created.credentialId,
+        prfInput,
+      });
+      committed = true;
+      this.#passkey = { credentialId: created.credentialId, prfInput };
+      this.#set({ ...status });
+      return { kind: 'ok', backupEligible };
+    } catch (error) {
+      if (error instanceof UnlockRejectedError) return { kind: 'wrong-password' };
+      if (error instanceof UserVerificationError) return { kind: 'no-user-verification' };
+      if (error instanceof Aborted || error instanceof VaultLockedError)
+        return { kind: 'cancelled' };
+      return { kind: ceremonyFailure(error) };
+    } finally {
+      keyring.wipeAll();
+      created.prfOutput?.fill(0);
+      evaluated.prfOutput?.fill(0);
+      if (!committed) void passkeys.forget(created.credentialId);
+    }
+  }
+
+  /**
+   * Removes passkey unlock: the PRF wrap is deleted, then the authenticator is asked to remove the
+   * credential where the browser can (D120). `by-hand`: tell the user to delete it themselves.
+   */
+  async removePasskey(): Promise<'forgotten' | 'by-hand'> {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return 'by-hand';
+    const credentialId = status.session.passkeyCredentialId;
+    await status.session.removePasskey();
+    this.#passkey = undefined;
+    this.#set({ ...status });
+    if (!credentialId) return 'forgotten';
+    return (await this.#deps.passkeys?.forget(credentialId)) ? 'forgotten' : 'by-hand';
   }
 
   async setPreferences(preferences: Preferences): Promise<void> {

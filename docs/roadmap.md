@@ -158,7 +158,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] UI copy in `en` and `pt-BR`; template role names localized (D165)
 - [x] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock; Phase 1 banner (no Recovery Phrase)
 - [x] Change the local password, requiring the current one (D168)
-- [ ] WebAuthn PRF unlock: setup in settings with the synced-passkey notice (D84), unlock, assertion without user verification rejected (D75)
+- [x] WebAuthn PRF unlock: setup in settings with the synced-passkey notice (D84), unlock, assertion without user verification rejected (D75)
 - [x] Item CRUD with templates
 - [x] Duplicate item: new item in the same folder with the current content, a localized " (copy)" title suffix (D169), a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
 - [x] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
@@ -184,7 +184,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
 - [x] Folder names and `parentId` never appear in cleartext metadata
 - [ ] Content tests: each rule of `record-content.md` §2 makes an item read-only; a Folder or Device record keeps unknown keys through rename, move and trash
-- [ ] PRF unlock rejects an assertion without user verification, in Playwright with Chromium's virtual authenticator (CRYPTO-INV-021)
+- [x] PRF unlock rejects an assertion without user verification, in Playwright with Chromium's virtual authenticator (CRYPTO-INV-021)
 - [ ] Load test: unlock with 2,000 items × 20 versions; time recorded in `architecture.md`
 
 ---

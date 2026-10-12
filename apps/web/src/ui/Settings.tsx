@@ -1,10 +1,10 @@
 import { type Preferences, type VaultSession } from '@blindvault/vault';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { type VaultController } from '../app/controller';
+import { type PasskeySetup, type VaultController } from '../app/controller';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES } from '../i18n/messages';
-import { Button, Field } from './components';
+import { Button, Field, Notice } from './components';
 import { NewPassword } from './NewPassword';
 
 export function Settings({
@@ -19,6 +19,7 @@ export function Settings({
     <div className="flex max-w-md flex-col gap-8 p-4">
       <h1 className="text-xl font-semibold">{m.settings.title}</h1>
       <ChangePassword controller={controller} />
+      <PasskeySettings controller={controller} session={session} />
       <LockSettings controller={controller} preferences={session.preferences} />
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.settings.language}
@@ -160,5 +161,116 @@ function LockSettings({
         </p>
       ) : null}
     </form>
+  );
+}
+
+type PasskeyState =
+  | { readonly kind: 'idle' | 'working' | 'removed' | 'removed-by-hand' }
+  | { readonly kind: 'done'; readonly backupEligible: boolean }
+  | { readonly kind: Exclude<PasskeySetup['kind'], 'ok'> };
+
+/**
+ * Passkey unlock (§5.5): says what then protects a lost device (D75) and, for a synced passkey,
+ * what it then depends on (D84). Setup asks for the local password (D172).
+ */
+function PasskeySettings({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const m = useLanguage().messages;
+  const [supported, setSupported] = useState<boolean>();
+  const [password, setPassword] = useState('');
+  const [state, setState] = useState<PasskeyState>({ kind: 'idle' });
+  useEffect(() => {
+    let live = true;
+    void controller.passkeysSupported().then((s) => {
+      if (live) setSupported(s);
+    });
+    return () => {
+      live = false;
+    };
+  }, [controller]);
+  if (supported === undefined) return null;
+  const on = session.passkeyCredentialId !== undefined;
+  const error = {
+    'wrong-password': m.settings.wrong,
+    cancelled: m.settings.passkeyCancelled,
+    'no-user-verification': m.settings.passkeyNoVerification,
+    unavailable: m.settings.passkeyUnavailable,
+  };
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="font-semibold">{m.settings.passkey}</h2>
+      {!supported && !on ? (
+        <p className="text-sm text-zinc-500">{m.settings.passkeyUnsupported}</p>
+      ) : null}
+      {state.kind === 'done' ? <p role="status">{m.settings.passkeyDone}</p> : null}
+      {state.kind === 'done' && state.backupEligible ? (
+        <Notice>
+          <span data-testid="passkey-synced">{m.settings.passkeySynced}</span>
+        </Notice>
+      ) : null}
+      {state.kind === 'removed' ? <p role="status">{m.settings.passkeyRemoved}</p> : null}
+      {state.kind === 'removed-by-hand' ? (
+        <p role="status">{m.settings.passkeyRemovedByHand}</p>
+      ) : null}
+      {on ? (
+        <>
+          <p className="text-sm">{m.settings.passkeyOn}</p>
+          <Button
+            variant="quiet"
+            className="self-start"
+            disabled={state.kind === 'working'}
+            onClick={() => {
+              setState({ kind: 'working' });
+              void controller.removePasskey().then((outcome) => {
+                setState({ kind: outcome === 'forgotten' ? 'removed' : 'removed-by-hand' });
+              });
+            }}
+          >
+            {m.settings.passkeyRemove}
+          </Button>
+        </>
+      ) : null}
+      {!on && supported ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setState({ kind: 'working' });
+            // Called in the submit itself: WebAuthn needs the user activation.
+            void controller.setUpPasskey(password).then((outcome) => {
+              setPassword('');
+              setState(
+                outcome.kind === 'ok'
+                  ? { kind: 'done', backupEligible: outcome.backupEligible }
+                  : { kind: outcome.kind },
+              );
+            });
+          }}
+        >
+          <p className="text-sm">{m.settings.passkeyIntro}</p>
+          <Notice>{m.settings.passkeyLostDevice}</Notice>
+          <Field
+            label={m.settings.passkeyPassword}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setState({ kind: 'idle' });
+            }}
+            error={state.kind in error ? error[state.kind as keyof typeof error] : undefined}
+            data-testid="passkey-password"
+          />
+          <Button type="submit" disabled={password === '' || state.kind === 'working'}>
+            {state.kind === 'working' ? m.settings.passkeySettingUp : m.settings.passkeySetUp}
+          </Button>
+        </form>
+      ) : null}
+    </section>
   );
 }

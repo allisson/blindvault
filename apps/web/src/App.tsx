@@ -5,6 +5,7 @@ import { VaultController } from './app/controller';
 import { kdfWorker } from './app/kdf';
 import { LockTimers } from './app/lock-timers';
 import { Navigation } from './app/nav';
+import { browserPasskeys } from './app/passkey';
 import { LanguageProvider } from './i18n/context';
 import { Start } from './ui/Start';
 import { VaultShell } from './ui/VaultShell';
@@ -23,6 +24,7 @@ function Root() {
         locks: navigator.locks,
         kdf: kdfWorker,
         storage: navigator.storage,
+        passkeys: browserPasskeys(),
       }),
     [],
   );

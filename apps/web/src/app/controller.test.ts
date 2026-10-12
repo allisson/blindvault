@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { VaultController } from './controller';
+import { PasskeyCancelledError, type PasskeyPort, type PasskeyResult } from './passkey';
 
 const PASSWORD = 'correct horse battery staple orbit';
 
@@ -39,8 +40,69 @@ afterEach(async () => {
   for (const c of controllers.splice(0)) await c.close();
 });
 
-function controller(factory = new IDBFactory(), log?: KdfRequest['op'][]) {
-  const c = new VaultController({ factory, locks: navigator.locks, kdf: fakeKdf(log) });
+const UP = 0x01;
+const UV = 0x04;
+const BE = 0x08;
+
+/**
+ * A stand-in authenticator: the PRF output is the PRF input XOR a per-credential byte, so it is
+ * stable per credential and input. `flags` and `prf` change what the next ceremonies return.
+ */
+class FakeAuthenticator implements PasskeyPort {
+  flags = UP | UV;
+  /** `create`: PRF output at create, only on a later get, or never. */
+  prf: 'create' | 'get' | 'none' = 'create';
+  cancel = false;
+  signal = true;
+  readonly calls: string[] = [];
+  readonly forgotten: Uint8Array[] = [];
+  #next = 1;
+  readonly #known = new Set<number>();
+
+  #result(credentialId: Uint8Array, prfInput: Uint8Array, output: boolean): PasskeyResult {
+    const authenticatorData = new Uint8Array(37);
+    authenticatorData[32] = this.flags;
+    const key = credentialId[0] ?? 0;
+    return {
+      credentialId: credentialId.slice(),
+      authenticatorData,
+      ...(output ? { prfOutput: prfInput.map((b) => b ^ key) } : {}),
+    };
+  }
+
+  supported() {
+    return Promise.resolve(true);
+  }
+
+  create(prfInput: Uint8Array) {
+    this.calls.push('create');
+    if (this.cancel) return Promise.reject(new PasskeyCancelledError());
+    const id = this.#next++;
+    this.#known.add(id);
+    return Promise.resolve(this.#result(new Uint8Array([id]), prfInput, this.prf === 'create'));
+  }
+
+  get(credentialId: Uint8Array, prfInput: Uint8Array) {
+    this.calls.push('get');
+    if (this.cancel || !this.#known.has(credentialId[0] ?? 0)) {
+      return Promise.reject(new PasskeyCancelledError());
+    }
+    return Promise.resolve(this.#result(credentialId, prfInput, this.prf !== 'none'));
+  }
+
+  forget(credentialId: Uint8Array) {
+    this.forgotten.push(credentialId);
+    return Promise.resolve(this.signal);
+  }
+}
+
+function controller(factory = new IDBFactory(), log?: KdfRequest['op'][], passkeys?: PasskeyPort) {
+  const c = new VaultController({
+    factory,
+    locks: navigator.locks,
+    kdf: fakeKdf(log),
+    ...(passkeys ? { passkeys } : {}),
+  });
   controllers.push(c);
   return c;
 }
@@ -228,5 +290,168 @@ describe('vault controller', () => {
     const lock = await acquireVaultLock(vaultId);
     expect(lock).not.toBeNull();
     await lock?.release();
+  });
+});
+
+describe('passkey unlock (§5.5, D75, D84, D172)', () => {
+  async function withPasskey(authenticator = new FakeAuthenticator(), factory = new IDBFactory()) {
+    const c = controller(factory, undefined, authenticator);
+    await c.start();
+    await c.create(PASSWORD, 'Test device');
+    return { c, authenticator, factory };
+  }
+
+  it('sets up a passkey with the current password and unlocks with it', async () => {
+    const { c, authenticator, factory } = await withPasskey();
+    expect(c.hasPasskey).toBe(false);
+    expect(await c.passkeysSupported()).toBe(true);
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'ok', backupEligible: false });
+    expect(c.hasPasskey).toBe(true);
+    expect(authenticator.forgotten).toEqual([]);
+    const vaultId = session(c).vaultId;
+    c.lock();
+    expect(await c.unlockWithPasskey()).toBe('ok');
+    expect(session(c).vaultId).toEqual(vaultId);
+    // Known at the next start too, from the stored Local Config.
+    await c.close();
+    const next = controller(factory, undefined, authenticator);
+    await next.start();
+    expect(next.hasPasskey).toBe(true);
+    expect(await next.unlockWithPasskey()).toBe('ok');
+  });
+
+  it('reports a synced passkey for the notice (D84)', async () => {
+    const authenticator = new FakeAuthenticator();
+    authenticator.flags = UP | UV | BE;
+    const { c } = await withPasskey(authenticator);
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'ok', backupEligible: true });
+  });
+
+  it('evaluates the PRF with a get when the create gave no output', async () => {
+    const authenticator = new FakeAuthenticator();
+    authenticator.prf = 'get';
+    const { c } = await withPasskey(authenticator);
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'ok', backupEligible: false });
+    expect(authenticator.calls).toEqual(['create', 'get']);
+  });
+
+  it('refuses another current password and signals the new credential as unknown (D172, D120)', async () => {
+    const { c, authenticator } = await withPasskey();
+    expect(await c.setUpPasskey('not the password')).toEqual({ kind: 'wrong-password' });
+    expect(c.hasPasskey).toBe(false);
+    expect(session(c).passkeyCredentialId).toBeUndefined();
+    expect(authenticator.forgotten).toEqual([new Uint8Array([1])]);
+  });
+
+  it('never derives a PRF KEK from a credential created without user verification (D75)', async () => {
+    const authenticator = new FakeAuthenticator();
+    authenticator.flags = UP;
+    const { c } = await withPasskey(authenticator);
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'no-user-verification' });
+    expect(c.hasPasskey).toBe(false);
+    expect(authenticator.forgotten).toHaveLength(1);
+  });
+
+  it('rejects an unlock assertion without user verification (D75, CRYPTO-INV-021)', async () => {
+    const { c, authenticator } = await withPasskey();
+    await c.setUpPasskey(PASSWORD);
+    c.lock();
+    authenticator.flags = UP | BE;
+    expect(await c.unlockWithPasskey()).toBe('no-user-verification');
+    expect(c.status.kind).toBe('locked');
+    authenticator.flags = UP | UV;
+    expect(await c.unlockWithPasskey()).toBe('ok');
+  });
+
+  it('reports a cancelled prompt and a PRF the authenticator does not give', async () => {
+    const authenticator = new FakeAuthenticator();
+    authenticator.cancel = true;
+    const { c } = await withPasskey(authenticator);
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'cancelled' });
+    authenticator.cancel = false;
+    authenticator.prf = 'none';
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'unavailable' });
+    authenticator.prf = 'create';
+    await c.setUpPasskey(PASSWORD);
+    c.lock();
+    authenticator.cancel = true;
+    expect(await c.unlockWithPasskey()).toBe('cancelled');
+    expect(c.status.kind).toBe('locked');
+    authenticator.cancel = false;
+    authenticator.prf = 'none';
+    expect(await c.unlockWithPasskey()).toBe('unavailable');
+    expect(c.status.kind).toBe('locked');
+  });
+
+  it('rejects a passkey whose PRF output does not open the wrap', async () => {
+    const { c, factory } = await withPasskey();
+    await c.setUpPasskey(PASSWORD);
+    await c.close();
+    // Another authenticator answering for the same credential ID gives another PRF output.
+    const other = new FakeAuthenticator();
+    await other.create(new Uint8Array(32));
+    const next = controller(factory, undefined, {
+      supported: () => other.supported(),
+      create: (input) => other.create(input),
+      forget: (id) => other.forget(id),
+      get: async (id, input) => ({
+        ...(await other.get(id, input)),
+        prfOutput: new Uint8Array(32).fill(0x33),
+      }),
+    });
+    await next.start();
+    expect(await next.unlockWithPasskey()).toBe('rejected');
+    expect(next.status.kind).toBe('locked');
+    expect(await next.unlock(PASSWORD)).toBe('ok');
+  });
+
+  it('aborts a setup locked during the prompt, signalling the credential (D104, D105)', async () => {
+    const authenticator = new FakeAuthenticator();
+    const { c } = await withPasskey(authenticator);
+    const create = authenticator.create.bind(authenticator);
+    authenticator.create = (input) => {
+      c.lock();
+      return create(input);
+    };
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'cancelled' });
+    expect(c.status.kind).toBe('locked');
+    expect(c.hasPasskey).toBe(false);
+    expect(authenticator.forgotten).toHaveLength(1);
+  });
+
+  it('aborts an unlock locked during the prompt', async () => {
+    const authenticator = new FakeAuthenticator();
+    const { c } = await withPasskey(authenticator);
+    await c.setUpPasskey(PASSWORD);
+    c.lock();
+    const get = authenticator.get.bind(authenticator);
+    authenticator.get = (id, input) => {
+      c.lock();
+      return get(id, input);
+    };
+    expect(await c.unlockWithPasskey()).toBe('ok');
+    expect(c.status.kind).toBe('locked');
+  });
+
+  it('removes the passkey and asks the authenticator to forget it, or says to do it by hand (D120)', async () => {
+    const { c, authenticator } = await withPasskey();
+    await c.setUpPasskey(PASSWORD);
+    expect(await c.removePasskey()).toBe('forgotten');
+    expect(authenticator.forgotten).toEqual([new Uint8Array([1])]);
+    expect(c.hasPasskey).toBe(false);
+    c.lock();
+    expect(await c.unlockWithPasskey()).toBe('ok');
+    expect(c.status.kind).toBe('locked');
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    authenticator.signal = false;
+    await c.setUpPasskey(PASSWORD);
+    expect(await c.removePasskey()).toBe('by-hand');
+  });
+
+  it('offers no passkey without WebAuthn', async () => {
+    const c = await created();
+    expect(await c.passkeysSupported()).toBe(false);
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'unavailable' });
+    expect(c.hasPasskey).toBe(false);
   });
 });
