@@ -15,8 +15,10 @@ import {
   RecordType,
   type SymmetricKey,
   decodeEnvelope,
+  decodeCbor,
   deriveMasterSubkeys,
   derivePrfKek,
+  deviceId,
   encodeCbor,
   generateDeviceIdentity,
   initCrypto,
@@ -31,6 +33,8 @@ import {
   wrapKey,
 } from '@blindvault/crypto';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import vectors from '../test-vectors/content-v1.json' with { type: 'json' };
 
 import {
   ContentInvalidError,
@@ -1749,5 +1753,155 @@ describe('passkey unlock (§5.5, D75, D172)', () => {
     await expect(session.setPasskey(options)).rejects.toThrow(VaultLockedError);
     await expect(session.removePasskey()).rejects.toThrow(VaultLockedError);
     expect(() => session.passkeyCredentialId).toThrow(VaultLockedError);
+  });
+});
+
+function fromHex(hex: string): Uint8Array {
+  return Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16));
+}
+
+/** The content of a stored record, opened as another device of the vault would. */
+function contentOf(store: MemoryStore, keys: Keys, recordType: RecordType, recordId: Uint8Array) {
+  const record = must(store.get({ recordType, recordId }));
+  const keyring = new Keyring();
+  try {
+    return verifyRecord(keyring, record.envelope, {
+      vaultId: keys.vaultId,
+      vaultKey: () => keys.vaultKey,
+      vaultKeyWrapKey: keys.subkeys.vaultKeyWrap,
+      versionIdKey: keys.subkeys.versionId,
+    }).content;
+  } finally {
+    keyring.wipeAll();
+  }
+}
+
+describe('content rules through the session (record-content.md §2, Gate A)', () => {
+  const readOnlyItems = vectors.items.filter((row) => row.expected === 'read-only');
+
+  it('has a read-only vector for every rule of §2', () => {
+    expect(new Set(readOnlyItems.map((row) => row.rule))).toEqual(new Set([1, 2, 3, 4, 5, 6]));
+  });
+
+  it.each(readOnlyItems)(
+    'rule $rule, $case: read-only, every write blocked, the record unchanged',
+    async (row) => {
+      const { store } = await create();
+      const keys = keysOf(store);
+      const id = randomId();
+      const content = decodeCbor(fromHex(row.cbor)) as CborMap;
+      plant(store, keys, RecordType.item, id, hlcAt(T0 - 1), row.deleted, content);
+      const planted = must(store.get({ recordType: RecordType.item, recordId: id })).envelope;
+      const session = await unlock(store);
+      expect(session.item(id)).toMatchObject({
+        readOnly: 'newer-content',
+        readOnlyRule: row.rule,
+        inTrash: row.deleted,
+      });
+      expect(session.item(id)?.item).toBeUndefined();
+      const commits = store.commits.length;
+      for (const action of [
+        () => session.updateItem(id, login()),
+        () => session.trashItem(id),
+        () => session.restoreItem(id),
+        () => session.duplicateItem(id, ' (copy)'),
+        () => session.restoreVersion(id, randomId()),
+      ]) {
+        await expect(action()).rejects.toThrow(new RecordBlockedError('newer-content'));
+      }
+      expect(store.commits).toHaveLength(commits);
+      session.lock();
+      // A later unlock reads the same bytes, still read-only.
+      expect(must(store.get({ recordType: RecordType.item, recordId: id })).envelope).toEqual(
+        planted,
+      );
+      expect((await unlock(store)).item(id)?.readOnly).toBe('newer-content');
+    },
+  );
+
+  it('shows a read-only Item Version and refuses to restore it', async () => {
+    const { session, store } = await create();
+    const id = await session.createItem(login());
+    const keys = keysOf(store);
+    const [row] = vectors.itemVersions.filter((r) => r.expected === 'read-only');
+    const hlc = hlcAt(T0 - 5);
+    const version = versionId(keys.subkeys.versionId, id, hlc);
+    const content = decodeCbor(fromHex(must(row).cbor)) as CborMap;
+    content.set('itemId', id);
+    plant(store, keys, RecordType.itemVersion, version, hlc, false, content);
+    session.lock();
+    const again = await unlock(store);
+    expect(again.versions(id)).toMatchObject([
+      { readOnly: 'newer-content', readOnlyRule: must(row).rule },
+    ]);
+    await expect(again.restoreVersion(id, version)).rejects.toThrow(
+      new RecordBlockedError('newer-content'),
+    );
+    expect(again.item(id)?.item?.title).toBe('Example');
+  });
+
+  it('keeps a Folder record’s unknown keys, unchanged, through rename, move, trash and restore (D59)', async () => {
+    const { session, store } = await create();
+    const keys = keysOf(store);
+    const [row] = vectors.folders.filter((r) => r.case === 'unknown keys kept');
+    const original = decodeCbor(fromHex(must(row).cbor)) as CborMap;
+    const unknown = [...original.keys()].filter(
+      (k): k is string =>
+        typeof k === 'string' && !['name', 'parentId', 'trashOperationId'].includes(k),
+    );
+    expect(unknown.length).toBeGreaterThan(0);
+    const id = randomId();
+    plant(store, keys, RecordType.folder, id, hlcAt(T0 - 1), false, original);
+    session.lock();
+    const s = await unlock(store);
+    const parent = await s.createFolder('Projects');
+    const kept = (step: string) => {
+      const content = must(contentOf(store, keys, RecordType.folder, id) ?? undefined);
+      for (const k of unknown) {
+        expect(encodeCbor(must(content.get(k))), `${step}: ${k}`).toEqual(
+          encodeCbor(must(original.get(k))),
+        );
+      }
+      return content;
+    };
+    expect(await s.renameFolder(id, 'Office')).toBe(true);
+    expect(kept('rename').get('name')).toBe('Office');
+    expect(await s.moveFolder(id, parent)).toBe(true);
+    expect(kept('move').get('parentId')).toEqual(parent);
+    await s.trashFolder(id);
+    expect(kept('trash').has('trashOperationId')).toBe(true);
+    await s.restoreFolder(id);
+    expect(kept('restore').has('trashOperationId')).toBe(false);
+    expect(await s.moveFolder(id)).toBe(true);
+    expect(kept('move to the root').has('parentId')).toBe(false);
+    expect((await unlock(store)).folder(id)?.unknownKeys).toEqual(must(row).unknownKeys);
+  });
+
+  it('keeps a Device record’s unknown keys, and never blocks on them (D59)', async () => {
+    const { session, store } = await create();
+    const keys = keysOf(store);
+    const [row] = vectors.devices.filter((r) => r.case === 'unknown keys kept');
+    const original = decodeCbor(fromHex(must(row).cbor)) as CborMap;
+    const id = deviceId(original.get('publicKey') as Uint8Array);
+    plant(store, keys, RecordType.device, id, hlcAt(T0 - 1), false, original);
+    const planted = must(store.get({ recordType: RecordType.device, recordId: id })).envelope;
+    session.lock();
+    const s = await unlock(store);
+    const shown = s.devices().find((d) => idKey(d.deviceId) === idKey(id));
+    expect(shown?.unknownKeys).toEqual(must(row).unknownKeys);
+    expect(shown?.unknownKeys.length).toBeGreaterThan(0);
+    expect(s.corrupt()).toEqual([]);
+    // Every write still works, and leaves the Device record as it was.
+    const folderId = await s.createFolder('Work');
+    const itemId = await s.createItem({ ...login(), folderId });
+    await s.trashFolder(folderId);
+    await s.restoreFolder(folderId);
+    await s.trashItem(itemId);
+    expect(must(store.get({ recordType: RecordType.device, recordId: id })).envelope).toEqual(
+      planted,
+    );
+    expect(encodeCbor(must(contentOf(store, keys, RecordType.device, id) ?? undefined))).toEqual(
+      fromHex(must(row).cbor),
+    );
   });
 });
