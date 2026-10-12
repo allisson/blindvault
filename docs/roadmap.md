@@ -95,7 +95,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 **Throwaway vaults.** A Phase 1 vault has no Recovery Envelope: creating one writes the Vault Key,
 the creator's Device record (D30) and Local Config, and the Recovery Phrase flow arrives in Phase 2.
-Nothing is published before Phase 3, so Phase 2 owes no migration for these vaults. Until Phase 2,
+Nothing is published before Phase 3 but the preview of D177, whose vaults are just as throwaway,
+so Phase 2 owes no migration for these vaults. Until Phase 2,
 the app shows a permanent banner saying the vault has no Recovery Phrase and cannot be recovered.
 
 **Order of work.** `packages/crypto` lands in four changes: (1) initialization, layout and AAD,
@@ -240,7 +241,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] CI job that builds twice and compares the asset manifest hash
 - [ ] Choose and configure the dedicated custom domain for the official build (D90)
 - [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages under the dedicated custom domain only (D90)
-- [ ] Startup warning when served under a sub-path of a `github.io` host (D90)
+- [x] Startup warning when served under a sub-path of a `github.io` host (D90)
 - [ ] Strict CSP by `<meta>` starting from `default-src 'none'`, Trusted Types where supported, unlock refused while framed (D83, D91)
 - [ ] "About" screen with the version and hash of the running build
 - [ ] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90)

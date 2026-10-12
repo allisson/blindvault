@@ -6,6 +6,7 @@ import {
   useId,
 } from 'react';
 
+import { sharedOrigin } from '../app/origin';
 import { useMessages } from '../i18n/context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
@@ -151,6 +152,21 @@ export function Phase1Banner() {
   );
 }
 
+/** Shown on every screen when the app runs on an origin other sites share (D90). */
+export function SharedOriginWarning() {
+  const m = useMessages();
+  if (!sharedOrigin(location)) return null;
+  return (
+    <p
+      role="alert"
+      data-testid="shared-origin"
+      className="bg-red-50 px-4 py-2 text-sm text-red-900 dark:bg-red-950 dark:text-red-100"
+    >
+      {m.origin.shared}
+    </p>
+  );
+}
+
 /** A centered card for the screens shown before unlock. */
 export function Card({
   title,
@@ -162,6 +178,7 @@ export function Card({
   const m = useMessages();
   return (
     <div className="flex min-h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <SharedOriginWarning />
       <Phase1Banner />
       <main className="flex flex-1 items-center justify-center p-4">
         <section className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-white p-6 shadow-sm dark:bg-zinc-900">
