@@ -1,5 +1,8 @@
 # Phase 0 spikes — protocol
 
+**Ended.** The spike code and its workflow were deleted after the last Phase 0 item (D105); they
+remain in the history at commit `3f29c12`. The text below describes the protocol as it was run.
+
 Throwaway measurement pages in `spikes/`, published to `https://allisson.github.io/blindvault/` by
 the `Spikes (GitHub Pages)` workflow. They hold no vault data and make no network call apart from
 STUN in the pairing spike. Each page ends with a JSON result and a **Copy result** button: paste it

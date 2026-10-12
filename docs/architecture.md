@@ -47,7 +47,10 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 Runtime cryptographic, serialization and protocol dependencies are added with their phase. The
 ones already chosen are below.
 
-### Phase 0 spikes (`spikes/`, throwaway)
+### Phase 0 spikes (`spikes/`, throwaway, deleted)
+
+The spike workspace was deleted after Phase 0 (last version at commit `3f29c12`). What follows
+records how it was built.
 
 `libsodium-wrappers-sumo`, `qrcode-generator`, `barcode-detector` and `zxing-wasm` (its WASM served
 from the same origin, never a CDN) are dependencies of the throwaway spike workspace only, outside
