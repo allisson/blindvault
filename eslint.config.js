@@ -12,7 +12,6 @@ export default defineConfig(
       '**/.tsbuild/',
       '**/playwright-report/',
       '**/test-results/',
-      'spikes/',
     ],
   },
   js.configs.recommended,
