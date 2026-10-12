@@ -72,3 +72,19 @@ export class UserVerificationError extends CryptoError {
     super('assertion without user verification');
   }
 }
+
+/** A TOTP value or `otpauth://` URI outside `record-content.md` §4 (D127). */
+export class TotpRejectedError extends CryptoError {
+  override name = 'TotpRejectedError';
+  constructor(readonly reason: 'uri' | 'secret' | 'algorithm' | 'digits' | 'period' | 'label') {
+    super(`TOTP rejected: ${reason}`);
+  }
+}
+
+/** Generator settings below the minimums or outside the limits (D128). */
+export class GeneratorRejectedError extends CryptoError {
+  override name = 'GeneratorRejectedError';
+  constructor() {
+    super('generator settings rejected');
+  }
+}

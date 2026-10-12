@@ -6,11 +6,13 @@ export {
   CryptoNotReadyError,
   DecryptionError,
   EncodingError,
+  GeneratorRejectedError,
   KdfParamsRejectedError,
   KdfWorkerError,
   KeyWipedError,
   PasswordRejectedError,
   PhraseRejectedError,
+  TotpRejectedError,
   UserVerificationError,
 } from './errors';
 export { ID_LENGTH, initCrypto, randomBytes, randomId } from './sodium';
@@ -79,3 +81,24 @@ export {
   sealVaultKeyRecord,
   verifyRecord,
 } from './record';
+export {
+  type TotpAlgorithm,
+  type TotpValue,
+  checkTotpValue,
+  parseOtpauthUri,
+  parseTotpSecret,
+  totpCode,
+  totpSecondsRemaining,
+} from './totp';
+export {
+  CharacterSet,
+  type CharacterSetName,
+  DEFAULT_SETS,
+  GENERATOR_LIMITS,
+  type Generated,
+  WORD_SEPARATOR,
+  generatePassphrase,
+  generatePassword,
+  passphraseEntropyBits,
+  passwordEntropyBits,
+} from './generator';

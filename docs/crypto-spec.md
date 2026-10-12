@@ -453,3 +453,36 @@ with.
 | `local` | Master Key wraps, Local Config wrap, `mustNotOpen` (other `localConfigId`, `vaultId`, purpose) |
 | `transcripts` | XX and KK prologues, re-admission MACs |
 | `negative` | envelopes that MUST be rejected, each violating one rule and tagged with the section 9.5 step that rejects it; size cases given by length |
+
+## 16. TOTP and the password generator (D127, D128, D138)
+
+Neither protects vault data; both live in `packages/crypto` (overview §4).
+
+**TOTP.** RFC 6238 over WebCrypto HMAC (`SHA-1`, `SHA-256`, `SHA-512`): the key is the RFC 4648
+base32 decoding of `secret` (trailing bits that do not fill a byte are dropped), the counter is
+`floor(floor(nowMs / 1000) / period)` as a `u64`, and the code is the RFC 4226 dynamic truncation
+modulo `10^digits`, left-padded with zeros. Codes are tested against the RFC 6238 Appendix B
+vectors for the three algorithms. The value is checked against `record-content.md` §4 before
+computing.
+
+**`otpauth://` input.** Only `otpauth://totp/<label>?<params>`, with the scheme and type in any
+case and no fragment. Parameter names are case-insensitive; a repeated parameter, malformed
+percent-encoding, a missing or invalid `secret`, an algorithm other than SHA1, SHA256 or SHA512
+(any case), and `digits` or `period` that are not a decimal integer within the §4 range are
+rejected, never replaced by a default. `+` in a parameter value decodes as a space. The label is
+`issuer:accountName` or `accountName`; the `issuer` parameter wins over the label prefix. Empty
+`issuer` or `accountName` are omitted, and a control character in either rejects the URI. Unknown
+parameters are ignored. Absent `algorithm`, `digits` and `period` are written as SHA1, 6 and 30.
+
+**Password generator.** Every choice is one `randombytes_uniform(n)` call, with `n` the size of the
+alphabet or of the word list, so no modulo bias.
+
+| Setting | Value |
+| --- | --- |
+| Character sets | `lowercase` a–z, `uppercase` A–Z, `digits` 0–9, `symbols` the 32 ASCII punctuation characters `` !"#$%&'()*+,-./:;<=>?@[\]^_`{\|}~ `` |
+| Alphabet | union of the selected sets, in that fixed order (94 characters with all four) |
+| Characters | default 20, minimum 12, maximum 128 |
+| Words | BIP39 English list (2,048 words), default 6, minimum 4, maximum 24, joined by `-` |
+| Entropy | `length × log2(alphabet size)` or `words × 11` bits, exact |
+
+Settings outside these limits produce no value.
