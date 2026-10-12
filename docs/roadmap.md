@@ -70,7 +70,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
     - [ ] Test mDNS (`.local`) candidates on the same Wi-Fi network, with and without camera permission on each side, including LAN-only mode, and revise D136 with the result
     - [ ] Test with STUN across different networks (Wi-Fi + 4G)
     - [ ] Test camera QR scanning in the installed PWA on iOS and Android
-- [ ] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
+- [x] **Argon2id on mobile:** measure time and memory at 64 MiB and above, in Safari iOS and Chromium Android, using libsodium's WASM build (D9)
     - [ ] Measure whether Argon2id at libsodium's `SENSITIVE` limits (1 GiB) runs on each browser of the matrix, for `.blindpass` import, and revise D126 with the result
 - [ ] **WebAuthn PRF:** verify real support across the browser matrix
 - [x] **Safari storage:** measure whether IndexedDB survives several days without use in a Safari tab and in the installed app, on iOS and macOS, and revise D55 with the result (run ended after day 1: no result could relax D55, which now rests on WebKit's documentation, D160)
@@ -84,7 +84,7 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [x] CI green on the empty monorepo
 - [x] `crypto-spec.md` reviewed and consistent with the overview
 - [ ] Pairing spike result recorded: **go**, or **no-go** with D4 revised
-- [ ] Argon2id 64 MiB floor confirmed viable on iOS, or D9 revised
+- [x] Argon2id 64 MiB floor confirmed viable on iOS, or D9 revised
 - [x] Noise and CBOR dependencies chosen and justified
 
 ---
