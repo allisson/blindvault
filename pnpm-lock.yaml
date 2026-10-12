@@ -115,6 +115,9 @@ importers:
       '@blindvault/crypto':
         specifier: workspace:*
         version: link:../crypto
+      '@scure/bip39':
+        specifier: 2.4.0
+        version: 2.4.0
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 5.0.2

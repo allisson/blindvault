@@ -95,6 +95,7 @@ describe('TOTP value (record-content.md §4)', () => {
     ['an unknown algorithm', { algorithm: 'MD5' }, 'algorithm'],
     ['an empty issuer', { issuer: '' }, 'label'],
     ['a multi-line account name', { accountName: 'a\nb' }, 'label'],
+    ['an issuer with a carriage return', { issuer: 'a\rb' }, 'label'],
     ['a lowercase secret', { secret: 'jbswy3dp' }, 'secret'],
   ])('checkTotpValue rejects %s', (_name, change, reason) => {
     const value = { ...parseTotpSecret('JBSWY3DP'), ...change } as TotpValue;
@@ -174,6 +175,7 @@ describe('otpauth:// parser (adapted from BlindPass, D127)', () => {
     ['a period out of range', 'otpauth://totp/t?secret=JBSWY3DP&period=5', 'period'],
     ['a negative period', 'otpauth://totp/t?secret=JBSWY3DP&period=-30', 'period'],
     ['a multi-line issuer', 'otpauth://totp/t?secret=JBSWY3DP&issuer=a%0Ab', 'label'],
+    ['a tab in the account name', 'otpauth://totp/a%09b?secret=JBSWY3DP', 'label'],
   ])('rejects %s', (_name, uri, reason) => {
     expect(() => parseOtpauthUri(uri)).toThrow(expect.objectContaining({ reason }));
   });
@@ -186,5 +188,13 @@ describe('otpauth:// parser (adapted from BlindPass, D127)', () => {
       period: 30,
       accountName: 't',
     });
+  });
+});
+
+describe('stored TOTP labels (record-content.md §1)', () => {
+  it('accepts a tab in a stored label: single-line means no line break only', () => {
+    expect(() => {
+      checkTotpValue({ ...parseTotpSecret('JBSWY3DP'), issuer: 'a\tb' });
+    }).not.toThrow();
   });
 });

@@ -45,8 +45,9 @@ function inRange(value: number, min: number, max: number): boolean {
   return Number.isSafeInteger(value) && value >= min && value <= max;
 }
 
+/** `record-content.md` §1: at least 1 code point, no U+000A or U+000D. */
 function singleLine(value: string): boolean {
-  return value.length > 0 && !/\p{Cc}/u.test(value);
+  return value.length > 0 && !/[\n\r]/.test(value);
 }
 
 /** Throws unless `value` holds every rule of `record-content.md` §4. */
@@ -113,6 +114,8 @@ export function parseOtpauthUri(uri: string): TotpValue {
   const labelIssuer = colon === -1 ? '' : label.slice(0, colon).trim();
   const accountName = (colon === -1 ? label : label.slice(colon + 1)).trim();
   const issuer = (params.get('issuer') ?? labelIssuer).trim();
+  // Stricter than a stored value: a control character in a URI label is never intended.
+  if (/\p{Cc}/u.test(issuer + accountName)) throw new TotpRejectedError('label');
 
   const value: TotpValue = {
     secret: normalizeSecret(secret),
