@@ -199,6 +199,12 @@ describe('item drafts (record-content.md §3, §4)', () => {
     expect(errors(draft).fields.get(key ?? -1)).toBe('single-line');
   });
 
+  it('moves an item to the vault root when its folder is cleared', () => {
+    const draft = { ...login(), title: 'x', folderId: new Uint8Array(16).fill(3) };
+    expect(ok(draft).folderId).toEqual(new Uint8Array(16).fill(3));
+    expect(ok({ ...draft, folderId: undefined })).not.toHaveProperty('folderId');
+  });
+
   it('gives every field its own key', () => {
     const draft = addField(addField(login(), 'text'), 'secret');
     expect(new Set(draft.fields.map((f) => f.key)).size).toBe(draft.fields.length);

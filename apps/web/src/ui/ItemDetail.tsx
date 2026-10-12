@@ -138,6 +138,12 @@ export function ItemDetail({
               </div>
             );
           })}
+          {item.folderId && session.folder(item.folderId)?.inTrash === false ? (
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-xs font-medium text-zinc-500">{m.folders.folder}</dt>
+              <dd>{session.folder(item.folderId)?.name}</dd>
+            </div>
+          ) : null}
           {item.tags.length > 0 ? (
             <div className="flex flex-col gap-0.5">
               <dt className="text-xs font-medium text-zinc-500">{m.items.tags}</dt>

@@ -53,15 +53,29 @@ describe('item screens', () => {
 
   it('keeps the trash as the list a detail was selected from', () => {
     const nav = new Navigation();
-    nav.showList('trash');
-    expect(nav.list()).toBe('trash');
+    nav.showList({ name: 'trash' });
+    expect(nav.list()).toEqual({ name: 'trash' });
     nav.select({ name: 'item', id: a });
-    expect(nav.list()).toBe('trash');
+    expect(nav.list()).toEqual({ name: 'trash' });
     nav.back();
     expect(nav.current()).toEqual({ name: 'trash' });
-    nav.showList('vault');
+    nav.showList({ name: 'vault' });
     expect(nav.current()).toEqual({ name: 'vault' });
-    expect(nav.list()).toBe('vault');
+    expect(nav.list()).toEqual({ name: 'vault' });
+  });
+
+  it('shows a folder as a list over the root, and leaves it once trashed', () => {
+    const nav = new Navigation();
+    nav.showList({ name: 'folder', id: a });
+    nav.showList({ name: 'folder', id: b });
+    nav.select({ name: 'item', id: a });
+    expect(nav.list()).toEqual({ name: 'folder', id: b });
+    nav.closeFolder(a);
+    expect(nav.current()).toEqual({ name: 'item', id: a });
+    nav.closeFolder(b);
+    expect(nav.current()).toEqual({ name: 'vault' });
+    nav.back();
+    expect(nav.current()).toEqual({ name: 'vault' });
   });
 
   it('replaces the top screen, as a saved editor becomes the item', () => {

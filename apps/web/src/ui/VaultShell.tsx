@@ -2,42 +2,19 @@ import { type VaultSession } from '@blindvault/vault';
 import { type ReactNode, useReducer, useState, useSyncExternalStore } from 'react';
 
 import { type VaultController } from '../app/controller';
-import { type ListName, type Navigation, isDetail } from '../app/nav';
+import { type Navigation, isDetail } from '../app/nav';
 import { useMessages } from '../i18n/context';
 import { Button, LockState, Notice, Phase1Banner } from './components';
 import { useLayout } from './hooks';
-import { hex } from './ids';
+import { hex } from '../app/ids';
 import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
+import { FolderPane } from './Folders';
 import { ItemList } from './ItemList';
 import { Settings } from './Settings';
 
 // One set of panes, three shells (overview §13.1, D15): the shells place the panes and hold no
 // vault or security logic.
-
-function FolderPane({ nav }: { readonly nav: Navigation }) {
-  const m = useMessages();
-  const list = useSyncExternalStore(nav.subscribe, nav.list);
-  const entry = (name: ListName, label: string) => (
-    <Button
-      variant="quiet"
-      className="justify-start text-left aria-[current]:bg-zinc-100 dark:aria-[current]:bg-zinc-800"
-      aria-current={list === name ? 'true' : undefined}
-      onClick={() => {
-        nav.showList(name);
-      }}
-    >
-      {label}
-    </Button>
-  );
-  return (
-    <nav aria-label={m.vault.folders} className="flex flex-col gap-1 p-3">
-      <h2 className="px-2 text-xs font-semibold uppercase text-zinc-500">{m.vault.folders}</h2>
-      {entry('vault', m.vault.allItems)}
-      {entry('trash', m.vault.trash)}
-    </nav>
-  );
-}
 
 function DetailPane({
   session,
@@ -142,7 +119,8 @@ export function VaultShell({
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const m = useMessages();
   const detail = <DetailPane session={session} nav={nav} onChange={refresh} />;
-  const list = <ItemList session={session} nav={nav} />;
+  const list = <ItemList session={session} nav={nav} onChange={refresh} />;
+  const folders = <FolderPane session={session} nav={nav} onChange={refresh} />;
 
   let body: ReactNode;
   if (screen.name === 'settings') {
@@ -150,7 +128,7 @@ export function VaultShell({
   } else if (layout === 'desktop') {
     body = (
       <div className="grid flex-1 grid-cols-[16rem_20rem_1fr] divide-x divide-zinc-200 dark:divide-zinc-800">
-        <FolderPane nav={nav} />
+        {folders}
         {list}
         {detail}
       </div>
@@ -169,7 +147,7 @@ export function VaultShell({
           >
             {m.vault.folders}
           </Button>
-          {drawer ? <FolderPane nav={nav} /> : null}
+          {drawer ? folders : null}
           {list}
         </div>
         {detail}
@@ -178,9 +156,10 @@ export function VaultShell({
   } else if (isDetail(screen)) {
     body = detail;
   } else {
+    // Mobile drills down: folders and all items, then a folder or the trash, then the detail.
     body = (
       <div className="flex flex-1 flex-col">
-        <FolderPane nav={nav} />
+        {screen.name === 'vault' ? folders : null}
         {list}
       </div>
     );
@@ -201,7 +180,7 @@ export function VaultShell({
             variant="quiet"
             aria-current={screen.name === 'vault' ? 'page' : undefined}
             onClick={() => {
-              nav.showList('vault');
+              nav.showList({ name: 'vault' });
             }}
           >
             {m.vault.items}
