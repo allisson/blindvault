@@ -170,7 +170,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Gate A
 
-- [ ] Encrypt/decrypt tests for every record type
+- [x] Encrypt/decrypt tests for every record type
 - [x] Tampered ciphertext, invalid tag, swapped AAD and wrong `keyEpoch` are rejected
 - [x] A record with an unknown or edited `recordFormatVersion` is rejected (D32)
 - [x] An edited header (`hlc`, `deleted`), a forged tombstone and older ciphertext replayed under a newer `hlc` are rejected (D21)
