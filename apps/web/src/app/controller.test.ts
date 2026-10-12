@@ -278,6 +278,47 @@ describe('vault controller', () => {
     expect(await c.unlock(PASSWORD)).toBe('ok');
   });
 
+  it('after lock, derives, asks the authenticator and writes nothing until a new unlock (CRYPTO-INV-010)', async () => {
+    const log: KdfRequest['op'][] = [];
+    const factory = new IDBFactory();
+    const authenticator = new FakeAuthenticator();
+    const c = controller(factory, log, authenticator);
+    await c.start();
+    await c.create(PASSWORD, 'Test device');
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'ok', backupEligible: false });
+    const old = session(c);
+    const vaultId = old.vaultId;
+    const preferences = old.preferences;
+    c.lock();
+    expect(old.locked).toBe(true);
+    const stored = async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      try {
+        return await db.localConfig();
+      } finally {
+        db.close();
+      }
+    };
+    const before = await stored();
+    log.length = 0;
+    authenticator.calls.length = 0;
+
+    await c.changePassword(PASSWORD, 'a new password nobody will guess');
+    expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'unavailable' });
+    expect(await c.removePasskey()).toBe('by-hand');
+    await c.setPreferences({ ...preferences, clipboardClearSeconds: 45 });
+    expect(log).toEqual([]);
+    expect(authenticator.calls).toEqual([]);
+    expect(authenticator.forgotten).toEqual([]);
+    expect(c.status).toEqual({ kind: 'locked' });
+    expect(await stored()).toEqual(before);
+
+    // A new unlock opens a new session; the old one stays locked.
+    expect(await c.unlockWithPasskey()).toBe('ok');
+    expect(session(c)).not.toBe(old);
+    expect(old.locked).toBe(true);
+  });
+
   it('aborts an unlock locked before it completes', async () => {
     const c = await created();
     c.lock();

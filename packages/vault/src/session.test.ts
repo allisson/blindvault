@@ -1390,6 +1390,89 @@ describe('lock (CRYPTO-INV-010)', () => {
     await expect(session.updateItem(id, login('x'))).rejects.toThrow(VaultLockedError);
   });
 
+  it('refuses every public member after lock, touching neither a key nor the store, until a new unlock (CRYPTO-INV-010)', async () => {
+    const { session, store, keyring } = await create();
+    const itemId = await session.createItem(login());
+    const folderId = await session.createFolder('Work');
+    await session.updateItem(itemId, login('Example', 'rotated'));
+    const versionId = must(session.versions(itemId)[0]).versionId;
+    const commits = store.commits.length;
+    session.lock();
+    expect(keyring.wiped).toBe(true);
+    expect(keyring.size).toBe(0);
+    const reads = vi.spyOn(store, 'records');
+
+    // The caller's keys are good: only the lock refuses.
+    const caller = new Keyring();
+    const calls: Record<string, () => unknown> = {
+      changePassword: () =>
+        session.changePassword({
+          current: kek(caller),
+          next: kek(caller, 2),
+          salt: SALT,
+          kdfParams: PARAMS,
+        }),
+      setPasskey: () =>
+        session.setPasskey({
+          current: kek(caller),
+          prfKek: kek(caller, 3),
+          credentialId: new Uint8Array([1]),
+          prfInput: new Uint8Array(32),
+        }),
+      removePasskey: () => session.removePasskey(),
+      setPreferences: () => session.setPreferences(session.preferences),
+      vaultId: () => session.vaultId,
+      deviceId: () => session.deviceId,
+      preferences: () => session.preferences,
+      passkeyCredentialId: () => session.passkeyCredentialId,
+      writable: () => session.writable,
+      writableAt: () => session.writableAt,
+      items: () => session.items(),
+      item: () => session.item(itemId),
+      versions: () => session.versions(itemId),
+      devices: () => session.devices(),
+      folders: () => session.folders(),
+      folder: () => session.folder(folderId),
+      tree: () => session.tree(),
+      corrupt: () => session.corrupt(),
+      createItem: () => session.createItem(login()),
+      duplicateItem: () => session.duplicateItem(itemId, ' (copy)'),
+      updateItem: () => session.updateItem(itemId, login('x')),
+      trashItem: () => session.trashItem(itemId),
+      restoreItem: () => session.restoreItem(itemId),
+      restoreVersion: () => session.restoreVersion(itemId, versionId),
+      createFolder: () => session.createFolder('Home'),
+      renameFolder: () => session.renameFolder(folderId, 'Home'),
+      moveFolder: () => session.moveFolder(folderId),
+      trashFolder: () => session.trashFolder(folderId),
+      restoreFolder: () => session.restoreFolder(folderId),
+    };
+    // Every member but `lock` and `locked` is called: a new one fails here until it is listed.
+    const members = Object.getOwnPropertyNames(VaultSession.prototype).filter(
+      (name) => !['constructor', 'lock', 'locked'].includes(name),
+    );
+    expect(Object.keys(calls).sort()).toEqual(members.sort());
+    for (const [name, call] of Object.entries(calls)) {
+      let outcome: unknown;
+      try {
+        outcome = await call();
+      } catch (error) {
+        outcome = error;
+      }
+      expect(outcome, name).toBeInstanceOf(VaultLockedError);
+    }
+    expect(store.commits).toHaveLength(commits);
+    expect(reads).not.toHaveBeenCalled();
+    reads.mockRestore();
+    caller.wipeAll();
+
+    // Only a new unlock reads the vault again, through a new session.
+    const again = await unlock(store);
+    expect(again.item(itemId)?.item?.title).toBe('Example');
+    expect(session.locked).toBe(true);
+    expect(() => session.items()).toThrow(VaultLockedError);
+  });
+
   it('aborts an operation whose commit is in progress', async () => {
     const { session, store } = await create();
     const id = await session.createItem(login('A'));
