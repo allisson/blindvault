@@ -13,6 +13,7 @@ import {
   Keyring,
   LocalPurpose,
   type MasterSubkeys,
+  PRF_INPUT_LENGTH,
   RECORD_FORMAT_VERSION,
   type RecordEnvelope,
   type RecordHeader,
@@ -573,6 +574,59 @@ export class VaultSession {
   }
 
   /**
+   * Sets up passkey unlock (§5.5, D172): `current`, the Device KEK of the local password, must open
+   * the Master Key wrap (`UnlockRejectedError` otherwise), so a holder of the unlocked device cannot
+   * add a passkey of their own; the Master Key is then wrapped under `prfKek`, the PRF KEK of an
+   * assertion with user verification (D75). Replaces a passkey set up before. Only Local Config is
+   * written. The caller wipes both KEKs.
+   */
+  async setPasskey(options: {
+    readonly current: SymmetricKey;
+    readonly prfKek: SymmetricKey;
+    readonly credentialId: Uint8Array;
+    readonly prfInput: Uint8Array;
+  }): Promise<void> {
+    const { current, prfKek, credentialId, prfInput } = options;
+    if (credentialId.length === 0) throw new RangeError('credential ID is empty');
+    if (prfInput.length !== PRF_INPUT_LENGTH) throw new RangeError('PRF input is 32 bytes');
+    await this.#run(() => {
+      const { vaultId, localConfigId } = this.#cleartext;
+      let masterKey: SymmetricKey;
+      try {
+        masterKey = unwrapKey(
+          this.#keyring,
+          current,
+          localAad(LocalPurpose.mkWrapDeviceKek, vaultId, localConfigId),
+          this.#cleartext.kek.mkWrap,
+        );
+      } catch (error) {
+        if (error instanceof DecryptionError) throw new UnlockRejectedError();
+        throw error;
+      }
+      let mkWrap: Sealed;
+      try {
+        mkWrap = wrapKey(
+          prfKek,
+          localAad(LocalPurpose.mkWrapPrfKek, vaultId, localConfigId),
+          masterKey,
+        );
+      } finally {
+        this.#keyring.release(masterKey);
+      }
+      const prf = { credentialId: credentialId.slice(), prfInput: prfInput.slice(), mkWrap };
+      return { writes: [], deletes: [], result: undefined, cleartext: { ...this.#cleartext, prf } };
+    });
+  }
+
+  /** Removes passkey unlock: deletes the PRF wrap, not the credential (D120). */
+  async removePasskey(): Promise<void> {
+    await this.#run(() => {
+      const { prf, ...cleartext } = this.#cleartext;
+      return { writes: [], deletes: [], result: undefined, ...(prf ? { cleartext } : {}) };
+    });
+  }
+
+  /**
    * Sets the security preferences (D151). A value outside its range is refused with
    * `RangeError`, never clamped; unchanged preferences write nothing.
    */
@@ -629,6 +683,12 @@ export class VaultSession {
   get preferences(): Preferences {
     this.#unlocked();
     return this.#localState.preferences;
+  }
+
+  /** The credential ID of the passkey set up on this device, if any (§5.5). */
+  get passkeyCredentialId(): Uint8Array | undefined {
+    this.#unlocked();
+    return this.#cleartext.prf?.credentialId.slice();
   }
 
   /** False while the HLC state is beyond the future-clock cap: nothing but purge writes (D73). */

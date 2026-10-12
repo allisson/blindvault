@@ -46,6 +46,13 @@ const en = {
     submit: 'Unlock',
     working: 'Unlocking…',
     wrong: 'Wrong password.',
+    passkey: 'Unlock with passkey',
+    passkeyCancelled: 'The passkey prompt was closed. Try again, or use the password.',
+    passkeyRejected: 'This passkey does not unlock this vault. Use the password.',
+    passkeyNoVerification:
+      'The authenticator did not verify you with a PIN, fingerprint or face, so the passkey cannot unlock. Use the password.',
+    passkeyUnavailable:
+      'The authenticator did not give what BlindVault needs to unlock. Use the password.',
   },
   vault: {
     folders: 'Folders',
@@ -203,6 +210,28 @@ const en = {
     saved: 'Saved.',
     outOfRange: 'A value is outside its range.',
     language: 'Language',
+    passkey: 'Passkey unlock',
+    passkeyIntro:
+      'Unlock on this device with a passkey instead of typing the local password. The password keeps working.',
+    passkeyLostDevice:
+      "With a passkey, whoever holds this device needs only its screen lock, fingerprint or face, or the security key's PIN, not the local password. Use a strong device PIN.",
+    passkeyPassword: 'Local password',
+    passkeySetUp: 'Set up passkey',
+    passkeySettingUp: 'Setting up the passkey…',
+    passkeyOn: 'Passkey unlock is set up on this device.',
+    passkeyDone: 'Passkey set up.',
+    passkeySynced:
+      "This passkey is synced by a platform account, such as iCloud Keychain or Google Password Manager. Whoever controls that account and gets a copy of this device's storage can unlock the vault without this device: the vault now also depends on the security of that account.",
+    passkeyRemove: 'Remove passkey',
+    passkeyRemoved: 'Passkey removed. Your passkey manager was asked to delete it.',
+    passkeyRemovedByHand:
+      'Passkey removed. It no longer unlocks anything: delete the "BlindVault" passkey in your passkey manager.',
+    passkeyCancelled: 'The passkey prompt was closed, or the vault locked. Nothing was set up.',
+    passkeyNoVerification:
+      'The authenticator did not verify you, so nothing was set up. Use a passkey that asks for a PIN, fingerprint or face.',
+    passkeyUnavailable:
+      'This passkey cannot unlock BlindVault: its authenticator lacks the PRF extension. Nothing was set up.',
+    passkeyUnsupported: 'This browser does not support passkey unlock.',
   },
   templates: {
     login: 'Login',
@@ -292,6 +321,13 @@ const ptBR: Messages = {
     submit: 'Desbloquear',
     working: 'Desbloqueando…',
     wrong: 'Senha incorreta.',
+    passkey: 'Desbloquear com passkey',
+    passkeyCancelled: 'O pedido de passkey foi fechado. Tente de novo ou use a senha.',
+    passkeyRejected: 'Esta passkey não desbloqueia este cofre. Use a senha.',
+    passkeyNoVerification:
+      'O autenticador não verificou você com PIN, digital ou rosto, então a passkey não desbloqueia. Use a senha.',
+    passkeyUnavailable:
+      'O autenticador não forneceu o que o BlindVault precisa para desbloquear. Use a senha.',
   },
   vault: {
     folders: 'Pastas',
@@ -448,6 +484,28 @@ const ptBR: Messages = {
     saved: 'Salvo.',
     outOfRange: 'Um valor está fora do intervalo.',
     language: 'Idioma',
+    passkey: 'Desbloqueio com passkey',
+    passkeyIntro:
+      'Desbloqueie neste dispositivo com uma passkey em vez de digitar a senha local. A senha continua funcionando.',
+    passkeyLostDevice:
+      'Com uma passkey, quem estiver com este dispositivo precisa apenas do bloqueio de tela, da digital ou do rosto, ou do PIN da chave de segurança, não da senha local. Use um PIN forte no dispositivo.',
+    passkeyPassword: 'Senha local',
+    passkeySetUp: 'Configurar passkey',
+    passkeySettingUp: 'Configurando a passkey…',
+    passkeyOn: 'O desbloqueio com passkey está configurado neste dispositivo.',
+    passkeyDone: 'Passkey configurada.',
+    passkeySynced:
+      'Esta passkey é sincronizada por uma conta de plataforma, como o Porta-chaves do iCloud ou o Gerenciador de Senhas do Google. Quem controlar essa conta e obtiver uma cópia do armazenamento deste dispositivo pode desbloquear o cofre sem este dispositivo: o cofre agora também depende da segurança dessa conta.',
+    passkeyRemove: 'Remover passkey',
+    passkeyRemoved: 'Passkey removida. O seu gerenciador de passkeys foi solicitado a apagá-la.',
+    passkeyRemovedByHand:
+      'Passkey removida. Ela não desbloqueia mais nada: apague a passkey "BlindVault" no seu gerenciador de passkeys.',
+    passkeyCancelled: 'O pedido de passkey foi fechado, ou o cofre bloqueou. Nada foi configurado.',
+    passkeyNoVerification:
+      'O autenticador não verificou você, então nada foi configurado. Use uma passkey que peça PIN, digital ou rosto.',
+    passkeyUnavailable:
+      'Esta passkey não desbloqueia o BlindVault: o autenticador dela não tem a extensão PRF. Nada foi configurado.',
+    passkeyUnsupported: 'Este navegador não oferece desbloqueio com passkey.',
   },
   templates: {
     login: 'Login',

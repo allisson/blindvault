@@ -128,6 +128,21 @@ every project through the references in the root `tsconfig.json`.
   bound is copied. The history view lists the Item Versions newest first, secrets masked, each
   restorable as a new edit, and says that old values stay until the original is trashed and
   purged, and how to remove them; neither Duplicate nor History is offered in the trash.
+- **Passkey unlock (§5.5, D75, D84, D120, D172, `apps/web/src/app/passkey.ts`).** The only
+  WebAuthn calls: `create` and `get` with `userVerification: "required"` and the PRF evaluated at
+  the PRF input, a random challenge (no server checks it), a random user ID and no attestation.
+  Support is detected from `getClientCapabilities()` where the browser has it, otherwise by the
+  ceremony. Each ceremony runs first in the click, while its user activation lasts; then the
+  controller reads the UV flag and derives the PRF KEK in `@blindvault/crypto` and, at setup,
+  checks the local password, and `VaultSession.setPasskey` wraps the Master Key with
+  `purpose ‖ vaultId ‖ localConfigId`. A PRF output only at a later get is fetched with a second
+  prompt. The setup says what then protects a lost device, and for a backup-eligible credential
+  that the vault depends on its platform account. A credential that ends up wrapping nothing, after
+  a wrong password, a lock or a failure, and a removed one are signalled with
+  `signalUnknownCredential` where the browser has it; otherwise the UI says to delete it by hand.
+  Playwright drives it with Chromium's virtual authenticator, which never returns an assertion
+  without UV when UV is required, so the test clears the UV flag of a real assertion to stand for a
+  client that does not honor it.
 - **Search (D132, `apps/web/src/app/search.ts`).** An in-memory index built from the derived tree
   while a query runs: titles, tags, the folder names on the item's path, notes and the values of
   every field type but `secret`, `totp` and `seed-phrase`. Text and query are NFKD, without marks,

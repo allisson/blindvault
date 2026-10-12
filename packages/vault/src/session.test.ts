@@ -1489,3 +1489,132 @@ describe('local settings (D151, D168)', () => {
     });
   });
 });
+
+describe('passkey unlock (§5.5, D75, D172)', () => {
+  const CREDENTIAL = new Uint8Array([9, 8, 7, 6]);
+  const PRF_INPUT = new Uint8Array(32).fill(4);
+
+  function setup(keyring: Keyring, current = 1, prf = 3) {
+    return {
+      current: kek(keyring, current),
+      prfKek: kek(keyring, prf),
+      credentialId: CREDENTIAL,
+      prfInput: PRF_INPUT,
+    };
+  }
+
+  it('sets up a passkey with the current password, writing only the Local Config', async () => {
+    const { session, store, keyring } = await create();
+    const itemId = await session.createItem(login());
+    const before = parseLocalConfig(store.localConfig);
+    const records = new Map(store.held);
+    const commits = store.commits.length;
+    expect(session.passkeyCredentialId).toBeUndefined();
+    await session.setPasskey(setup(keyring));
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)?.put).toEqual([]);
+    expect(store.commits.at(-1)?.delete).toEqual([]);
+    expect(store.held).toEqual(records);
+    const after = parseLocalConfig(store.localConfig);
+    expect(after.kek).toEqual(before.kek);
+    expect(after.prf?.credentialId).toEqual(CREDENTIAL);
+    expect(after.prf?.prfInput).toEqual(PRF_INPUT);
+    expect(session.passkeyCredentialId).toEqual(CREDENTIAL);
+    // The session keeps working, and a later write keeps the PRF wrap.
+    await session.updateItem(itemId, login('Renamed'));
+    expect(parseLocalConfig(store.localConfig).prf).toEqual(after.prf);
+    session.lock();
+    expect((await unlock(store, new Clock(), 3, 'passkey')).item(itemId)?.item?.title).toBe(
+      'Renamed',
+    );
+    expect((await unlock(store, new Clock(), 1, 'password')).locked).toBe(false);
+    await expect(unlock(store, new Clock(), 1, 'passkey')).rejects.toThrow(UnlockRejectedError);
+  });
+
+  it('binds the PRF wrap to its purpose, vault and Local Config (D121)', async () => {
+    const { session, store, keyring } = await create();
+    await session.setPasskey(setup(keyring));
+    const config = parseLocalConfig(store.localConfig);
+    const wrap = must(config.prf).mkWrap;
+    const opens = (purpose: LocalPurpose, localConfigId = config.localConfigId) => {
+      const k = new Keyring();
+      try {
+        unwrapKey(k, kek(k, 3), localAad(purpose, config.vaultId, localConfigId), wrap);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        k.wipeAll();
+      }
+    };
+    expect(opens(LocalPurpose.mkWrapPrfKek)).toBe(true);
+    expect(opens(LocalPurpose.mkWrapDeviceKek)).toBe(false);
+    expect(opens(LocalPurpose.mkWrapPrfKek, randomId())).toBe(false);
+  });
+
+  it('refuses another current password, writing nothing (D172)', async () => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    const bytes = store.localConfig;
+    await expect(session.setPasskey(setup(keyring, 2))).rejects.toThrow(UnlockRejectedError);
+    expect(store.commits).toHaveLength(commits);
+    expect(store.localConfig).toBe(bytes);
+    expect(session.passkeyCredentialId).toBeUndefined();
+  });
+
+  it.each([
+    ['an empty credential ID', { credentialId: new Uint8Array(0) }],
+    ['a short PRF input', { prfInput: new Uint8Array(31) }],
+    ['a long PRF input', { prfInput: new Uint8Array(33) }],
+  ])('refuses %s, writing nothing', async (_name, change) => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    await expect(session.setPasskey({ ...setup(keyring), ...change })).rejects.toThrow(RangeError);
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('replaces the passkey set up before', async () => {
+    const { session, store, keyring } = await create();
+    await session.setPasskey(setup(keyring));
+    const other = new Uint8Array([1]);
+    await session.setPasskey({ ...setup(keyring, 1, 4), credentialId: other });
+    expect(session.passkeyCredentialId).toEqual(other);
+    session.lock();
+    await expect(unlock(store, new Clock(), 3, 'passkey')).rejects.toThrow(UnlockRejectedError);
+    expect((await unlock(store, new Clock(), 4, 'passkey')).locked).toBe(false);
+  });
+
+  it('removes the passkey, after which only the password unlocks', async () => {
+    const { session, store, keyring } = await create();
+    await session.setPasskey(setup(keyring));
+    await session.removePasskey();
+    expect(session.passkeyCredentialId).toBeUndefined();
+    expect(parseLocalConfig(store.localConfig).prf).toBeUndefined();
+    const commits = store.commits.length;
+    await session.removePasskey();
+    expect(store.commits).toHaveLength(commits);
+    session.lock();
+    await expect(unlock(store, new Clock(), 3, 'passkey')).rejects.toThrow(UnlockRejectedError);
+    expect((await unlock(store)).locked).toBe(false);
+  });
+
+  it('keeps the old Local Config when the commit fails', async () => {
+    const { session, store, keyring } = await create();
+    const bytes = store.localConfig;
+    store.failNext = true;
+    await expect(session.setPasskey(setup(keyring))).rejects.toThrow('storage failure');
+    expect(store.localConfig).toBe(bytes);
+    expect(session.passkeyCredentialId).toBeUndefined();
+    await session.createItem(login());
+    expect(parseLocalConfig(store.localConfig).prf).toBeUndefined();
+  });
+
+  it('refuses setup and removal once locked', async () => {
+    const { session, keyring } = await create();
+    const options = setup(keyring);
+    session.lock();
+    await expect(session.setPasskey(options)).rejects.toThrow(VaultLockedError);
+    await expect(session.removePasskey()).rejects.toThrow(VaultLockedError);
+    expect(() => session.passkeyCredentialId).toThrow(VaultLockedError);
+  });
+});

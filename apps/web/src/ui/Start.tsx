@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { type Status, type VaultController } from '../app/controller';
+import { type PasskeyOutcome, type Status, type VaultController } from '../app/controller';
 import { deviceName } from '../app/device-name';
 import { useMessages } from '../i18n/context';
 import { Button, Card, Field } from './components';
@@ -95,8 +95,46 @@ function Unlock({
   const m = useMessages();
   const [password, setPassword] = useState('');
   const [wrong, setWrong] = useState(false);
+  const [passkey, setPasskey] = useState<PasskeyOutcome>('ok');
+  const [supported, setSupported] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void controller.passkeysSupported().then((s) => {
+      if (live) setSupported(s);
+    });
+    return () => {
+      live = false;
+    };
+  }, [controller]);
+  const passkeyError = {
+    ok: undefined,
+    cancelled: m.unlock.passkeyCancelled,
+    rejected: m.unlock.passkeyRejected,
+    'no-user-verification': m.unlock.passkeyNoVerification,
+    unavailable: m.unlock.passkeyUnavailable,
+  }[passkey];
   return (
     <Card title={m.unlock.title}>
+      {supported && controller.hasPasskey ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            disabled={working}
+            onClick={() => {
+              setWrong(false);
+              setPasskey('ok');
+              // Called in the click itself: WebAuthn needs the user activation.
+              void controller.unlockWithPasskey().then(setPasskey);
+            }}
+          >
+            {m.unlock.passkey}
+          </Button>
+          {passkeyError ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {passkeyError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {
@@ -116,6 +154,7 @@ function Unlock({
           onChange={(e) => {
             setPassword(e.target.value);
             setWrong(false);
+            setPasskey('ok');
           }}
           error={wrong ? m.unlock.wrong : undefined}
           data-testid="unlock-password"

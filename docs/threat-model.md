@@ -37,7 +37,7 @@ encrypted backups and synchronized records (§3).
 | Clones the storage into a second running installation | Limited, accepted | Undetectable; documented: replace the clone by pairing (D87, D153) | overview §3 |
 | Reads metadata | Accepted | Header, counts, HLCs (editing times and `deviceId`), size buckets, cleartext Local Config fields (§3, D92, D96, D121) | overview §3 |
 | Unlocks with a synced passkey's platform account | Partially protected | Shown at setup when the credential is backup-eligible (D84) | overview §5.5 |
-| Holds the device while unlocked | Out of scope | OS and device security; auto-lock and hidden-app lock (D88, D54, D151) | overview §7 |
+| Holds the device while unlocked | Out of scope | OS and device security; auto-lock and hidden-app lock (D88, D54, D151); changing the local password or setting up a passkey needs the current password (D168, D172) | overview §5.5, §7 |
 
 ### A2. Network attacker (passive or active), STUN provider
 
