@@ -211,3 +211,11 @@ tagged with the restore step of section 8 that rejects it:
   truncated before `TAG_FINAL`; bytes after `TAG_FINAL`; `TAG_FINAL` on an earlier chunk;
   `recordCount` too high and too low; trailing payload byte; header `phraseId` different from the
   Recovery Envelope's; Recovery Envelope whose Master Key differs from `meta.masterKey`.
+
+Every file carries the fixed file key in `inputs.fileKey`, so the stream cases run without a keyslot.
+A rejected file is given whole, or as an `edit` of a valid one (`base`, then `flip` one byte at an
+offset, `keep` a prefix, `append` hex) so the large files are not repeated. Since the sealed box and
+the stream header are random, every run of the generator rewrites this file with new bytes; the
+generator checks every file against its own reference reader before writing it. The cases that need
+a keyslot opened or the restore checks of section 8 (parameters outside the range, the phrase and
+Master Key checks) are added with those steps.
