@@ -30,6 +30,7 @@ encrypted backups and synchronized records (§3).
 | --- | --- | --- | --- |
 | Reads vault content | Protected | Every record encrypted; keys wrapped under the Device KEK or PRF KEK | `crypto-spec.md` §8–§12 |
 | Guesses the local password offline | Partially protected | Argon2id calibrated to about 1 s, 64 MiB floor; zxcvbn score 4 required (D9, D71) | `crypto-spec.md` §6 |
+| Reads the local password saved by the browser | Partially protected | Depends on how the browser protects saved passwords; the UI warns against saving it wherever a local password is set (D175) | overview §5.3 |
 | Tampers with a record header (LWW, deletion, replay) | Protected | Whole header bound through AAD (D21) | `crypto-spec.md` §8, §9.5 |
 | Tampers with Local Config | Protected | Encrypted part under a Master Key subkey; local wraps bound to `localConfigId` (D58, D121) | `crypto-spec.md` §12 |
 | Tampers with Argon2id parameters to exhaust memory | Protected | Accepted range checked before deriving | `crypto-spec.md` §6 |
