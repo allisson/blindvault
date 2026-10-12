@@ -1,7 +1,7 @@
 import { type KdfPort, type KdfRequest, MEMLIMIT } from '@blindvault/crypto';
 import { VaultDatabase, acquireInstallationGuard, acquireVaultLock } from '@blindvault/storage';
 import { IDBFactory } from 'fake-indexeddb';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VaultController } from './controller';
 import { PasskeyCancelledError, type PasskeyPort, type PasskeyResult } from './passkey';
@@ -239,6 +239,43 @@ describe('vault controller', () => {
     await pending;
     expect(c.status.kind).toBe('no-vault');
     expect(await factory.databases()).toEqual([]);
+  });
+
+  it('fails a near miss and an unrelated password alike, storing and logging nothing (Gate A)', async () => {
+    const log: KdfRequest['op'][] = [];
+    const factory = new IDBFactory();
+    const c = controller(factory, log);
+    await c.start();
+    await c.create(PASSWORD, 'Test device');
+    const vaultId = session(c).vaultId;
+    c.lock();
+    const stored = async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      try {
+        return await db.localConfig();
+      } finally {
+        db.close();
+      }
+    };
+    const before = await stored();
+    const consoleCalls = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) =>
+      vi.spyOn(console, method),
+    );
+    log.length = 0;
+    // The stand-in KDF reads the first 32 bytes: each near miss differs within them.
+    const nearMiss = `${PASSWORD.slice(0, 20)}X${PASSWORD.slice(21)}`;
+    for (const attempt of [nearMiss, PASSWORD.slice(1), 'zz', PASSWORD.toUpperCase()]) {
+      expect(await c.unlock(attempt)).toBe('wrong-password');
+      expect(c.status).toEqual({ kind: 'locked' });
+    }
+    // Every attempt runs one full derivation at the stored parameters, near miss or not.
+    expect(log).toEqual(['derive', 'derive', 'derive', 'derive']);
+    for (const spy of consoleCalls) {
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    }
+    expect(await stored()).toEqual(before);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
   });
 
   it('aborts an unlock locked before it completes', async () => {
