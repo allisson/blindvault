@@ -60,7 +60,14 @@ import {
 } from './folder';
 import { HlcClock, compareHlc } from './hlc';
 import { idKey, sameBytes } from './ids';
-import { type Item, type ItemReading, type ReadOnlyRule, itemToCbor, readItem } from './item';
+import {
+  type Item,
+  type ItemReading,
+  type ReadOnlyRule,
+  TITLE_MAX,
+  itemToCbor,
+  readItem,
+} from './item';
 import {
   DEFAULT_PREFERENCES,
   type LocalConfigCleartext,
@@ -72,7 +79,7 @@ import {
   readLocalConfigState,
 } from './local-config';
 import { type RecordKey, type RecordStore, type StoredRecord } from './store';
-import { compareBytes, isId } from './text';
+import { codePointLength, compareBytes, isId } from './text';
 import { type TreeNode, buildTree, displayedParents, isWithin } from './tree';
 
 /** Item Versions kept per item: the 20 greatest `(hlc, versionId)` (D6). */
@@ -759,6 +766,35 @@ export class VaultSession {
       const id = randomId();
       const write = this.#seal(RecordType.item, id, this.#clock.issue(), false, content);
       return { writes: [write], deletes: [], result: id.slice() };
+    });
+  }
+
+  /**
+   * A new item with item `id`'s current content, a new ID and no history (D135), its title
+   * followed by `suffix`, the localized " (copy)" (D169). It goes in the folder where the original
+   * is displayed: the vault root when the orphan rule applies (D156). Blocked for content from a
+   * newer app version and for an item in the trash; allowed beyond the future-clock bound, since
+   * the copy takes a fresh HLC (D140). Refused when the suffix takes the title or the item past
+   * its cap.
+   */
+  duplicateItem(id: Uint8Array, suffix: string): Promise<Uint8Array> {
+    return this.#run(() => {
+      const held = this.#state.items.get(idKey(id));
+      if (!held) throw new RecordNotFoundError();
+      if (!held.content || !held.reading) throw new RecordBlockedError('purged');
+      if (held.reading.readOnly) throw new RecordBlockedError('newer-content');
+      if (held.header.deleted) throw new RecordBlockedError('in-trash');
+      const { item } = (held as LiveItem).reading;
+      const title = `${item.title}${suffix}`;
+      if (codePointLength(title) > TITLE_MAX) throw new ContentInvalidError('title');
+      // As the tree places it (overview §9.3): in its folder only while that folder is live here.
+      const parent = item.folderId ? this.#state.folders.get(idKey(item.folderId)) : undefined;
+      const folderId = parent?.folder && !parent.header.deleted ? item.folderId : undefined;
+      const content = itemToCbor(liveItem({ ...item, title }, folderId), false);
+      checkCap(content);
+      const copy = randomId();
+      const write = this.#seal(RecordType.item, copy, this.#clock.issue(), false, content);
+      return { writes: [write], deletes: [], result: copy.slice() };
     });
   }
 

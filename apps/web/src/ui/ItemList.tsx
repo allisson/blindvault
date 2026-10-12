@@ -92,7 +92,10 @@ export function ItemList({
     items = flatten(tree).map(named);
     items.sort((a, b) => collator.compare(a.name, b.name));
   }
-  const selected = screen.name === 'item' || screen.name === 'edit' ? hex(screen.id) : undefined;
+  const selected =
+    screen.name === 'item' || screen.name === 'edit' || screen.name === 'history'
+      ? hex(screen.id)
+      : undefined;
   const nothing = items.length + subfolders.length + trashedFolders.length === 0;
   return (
     <section aria-label={heading} className="flex min-w-0 flex-col gap-2 p-4">

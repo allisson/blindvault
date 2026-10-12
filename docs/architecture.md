@@ -120,6 +120,14 @@ every project through the references in the root `tsconfig.json`.
   shows its subfolders, then its items; a new item starts in the folder shown. Trashing or
   restoring a subtree that holds read-only records is refused as a whole, and the UI lists those
   records and why (overview §6). The trash lists folders with Restore only (D143).
+- **Duplicate and history (D135, D140, D156, D169).** `VaultSession.duplicateItem` writes the
+  current content under a new ID and a fresh HLC, with no history, its title followed by the
+  localized suffix the UI passes; it goes in the folder where the tree shows the original, the
+  vault root for an orphan. It refuses content from a newer app version, an item in the trash, and
+  a title or item the suffix takes past its cap, writing nothing; an item beyond the future-clock
+  bound is copied. The history view lists the Item Versions newest first, secrets masked, each
+  restorable as a new edit, and says that old values stay until the original is trashed and
+  purged, and how to remove them; neither Duplicate nor History is offered in the trash.
 - **Search (D132, `apps/web/src/app/search.ts`).** An in-memory index built from the derived tree
   while a query runs: titles, tags, the folder names on the item's path, notes and the values of
   every field type but `secret`, `totp` and `seed-phrase`. Text and query are NFKD, without marks,

@@ -2,6 +2,7 @@ import {
   type CborMap,
   type CborValue,
   type Hlc,
+  ITEM_CAP,
   KdfParamsRejectedError,
   KeyWipedError,
   Keyring,
@@ -19,6 +20,7 @@ import {
   encodeCbor,
   generateDeviceIdentity,
   initCrypto,
+  itemContentLength,
   localAad,
   randomId,
   sealLocalConfigPart,
@@ -41,7 +43,7 @@ import {
 } from './errors';
 import { FUTURE_CLOCK_BOUND_MS } from './hlc';
 import { idKey } from './ids';
-import { itemToCbor } from './item';
+import { TITLE_MAX, itemToCbor } from './item';
 import { localConfigToCbor, parseLocalConfig } from './local-config';
 import { MemoryStore } from './memory-store';
 import {
@@ -779,6 +781,127 @@ describe('read-only records (D52, D73, D74)', () => {
   });
 });
 
+describe('duplicate (D135, D140, D156, D169)', () => {
+  const COPY = ' (copy)';
+
+  it('writes the current content under a new ID, with the suffix and no history', async () => {
+    const { session, store, clock } = await create();
+    const folderId = await session.createFolder('Work');
+    const id = await session.createItem({ ...login(), folderId, tags: ['bank'], notes: 'n' });
+    clock.t += 1000;
+    await session.updateItem(id, { ...login('Current'), folderId, tags: ['bank'], notes: 'n' });
+    const original = session.item(id);
+    clock.t += 1000;
+    const copy = await session.duplicateItem(id, COPY);
+    expect(copy).not.toEqual(id);
+    const view = must(session.item(copy));
+    expect(view.item).toEqual({ ...login('Current (copy)'), folderId, tags: ['bank'], notes: 'n' });
+    expect(view.hlc.physicalMs).toBe(T0 + 2000);
+    expect(session.versions(copy)).toEqual([]);
+    // The original is untouched: no new state, no new version.
+    expect(session.item(id)).toEqual(original);
+    expect(session.versions(id)).toHaveLength(1);
+    expect((await unlock(store, clock)).item(copy)?.item?.title).toBe('Current (copy)');
+  });
+
+  it('places the copy where the original is displayed: the root for an orphan (D156)', async () => {
+    const { store, session } = await create();
+    const keys = keysOf(store);
+    const trashed = await session.createFolder('Old');
+    await session.trashFolder(trashed);
+    const ids = [trashed, randomId()].map((folderId) => {
+      const id = randomId();
+      plant(
+        store,
+        keys,
+        RecordType.item,
+        id,
+        hlcAt(T0 - 1),
+        false,
+        itemToCbor({ ...login(), folderId }, false),
+      );
+      return id;
+    });
+    session.lock();
+    const again = await unlock(store);
+    for (const id of ids) {
+      const copy = await again.duplicateItem(id, COPY);
+      expect(again.item(copy)?.item?.folderId).toBeUndefined();
+      expect(again.tree().items.map((t) => t.id)).toContainEqual(copy);
+    }
+  });
+
+  it('is blocked for an item from a newer app version or in the trash, writing nothing (D140)', async () => {
+    const { store, session } = await create();
+    const keys = keysOf(store);
+    const newer = randomId();
+    const content = itemToCbor(login(), false);
+    content.set('color', 'red');
+    plant(store, keys, RecordType.item, newer, hlcAt(T0 - 1), false, content);
+    const trashed = await session.createItem(login());
+    await session.trashItem(trashed);
+    session.lock();
+    const again = await unlock(store);
+    const commits = store.commits.length;
+    await expect(again.duplicateItem(newer, COPY)).rejects.toThrow(
+      new RecordBlockedError('newer-content'),
+    );
+    await expect(again.duplicateItem(trashed, COPY)).rejects.toThrow(
+      new RecordBlockedError('in-trash'),
+    );
+    await expect(again.duplicateItem(randomId(), COPY)).rejects.toThrow(RecordNotFoundError);
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('copies an item beyond the future-clock bound with a fresh HLC (D140)', async () => {
+    const { store, clock } = await create();
+    const id = randomId();
+    const ahead = T0 + FUTURE_CLOCK_BOUND_MS + 1;
+    plant(
+      store,
+      keysOf(store),
+      RecordType.item,
+      id,
+      hlcAt(ahead),
+      false,
+      itemToCbor(login(), false),
+    );
+    const session = await unlock(store, clock);
+    expect(session.item(id)?.readOnly).toBe('future-clock');
+    const copy = await session.duplicateItem(id, COPY);
+    const view = session.item(copy);
+    expect(view?.readOnly).toBeUndefined();
+    expect(view?.hlc.physicalMs).toBe(T0);
+    expect(view?.item?.title).toBe('Example (copy)');
+  });
+
+  it('is refused when the suffix takes the title or the item past its cap (D169)', async () => {
+    const { session, store } = await create();
+    const fits = await session.createItem(login('t'.repeat(TITLE_MAX - COPY.length)));
+    expect(session.item(await session.duplicateItem(fits, COPY))?.item?.title).toHaveLength(
+      TITLE_MAX,
+    );
+    const long = await session.createItem(login('t'.repeat(TITLE_MAX - COPY.length + 1)));
+    // A notes string long enough to leave exactly the room the suffix needs, and one byte less.
+    const sized = (room: number) => {
+      const base = { ...login('Big'), notes: 'x'.repeat(1_000_000) };
+      const length = itemContentLength(itemToCbor(base, false));
+      return { ...base, notes: 'x'.repeat(1_000_000 + ITEM_CAP - length - room) };
+    };
+    const roomy = await session.createItem(sized(COPY.length));
+    await session.duplicateItem(roomy, COPY);
+    const full = await session.createItem(sized(COPY.length - 1));
+    const commits = store.commits.length;
+    await expect(session.duplicateItem(long, COPY)).rejects.toThrow(
+      new ContentInvalidError('title'),
+    );
+    await expect(session.duplicateItem(full, COPY)).rejects.toThrow(
+      new ContentInvalidError('item cap'),
+    );
+    expect(store.commits).toHaveLength(commits);
+  });
+});
+
 describe('folders (D14, D59, D112, D171)', () => {
   it('creates, renames and moves folders, keeping unknown keys through every write', async () => {
     const { session, store } = await create();
@@ -1080,6 +1203,7 @@ describe('automatic purge (D7, D27, D94)', () => {
     expect(after.ct.c).toHaveLength(16);
     expect(store.ofType(RecordType.itemVersion)).toEqual([]);
     await expect(s.restoreItem(id)).rejects.toThrow(new RecordBlockedError('purged'));
+    await expect(s.duplicateItem(id, ' (copy)')).rejects.toThrow(new RecordBlockedError('purged'));
     expect((await unlock(store, clock)).item(id)).toBeUndefined();
   });
 
