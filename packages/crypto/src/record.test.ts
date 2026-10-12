@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { type Sealed, seal, wrapKey } from './aead';
 import { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';
 import { EncodingError, KeyWipedError } from './errors';
-import { deviceId, vaultKeyRecordId, versionId } from './ids';
+import { deviceId, recoveryEnvelopeRecordId, vaultKeyRecordId, versionId } from './ids';
 import { Keyring, adoptKey, generateKey, keyBytes } from './keys';
 import { type RecordHeader, recordAad } from './layout';
 import { pad } from './pad';
@@ -457,5 +457,150 @@ describe('writing records', () => {
     expect(() => encodeEnvelope({ header: header({ recordType: 7 }), ct: sealed })).toThrow(
       EncodingError,
     );
+  });
+});
+
+describe('encrypt and decrypt every record type (Gate A)', () => {
+  const itemId = randomId();
+  const publicKey = new Uint8Array(32).fill(3);
+  const FOLDER = map([['name', 'Work']]);
+  const TRASHED = map([...ITEM, ['trashOperationId', randomId()]] as [string, CborValue][]);
+  const versionHeader = header({ recordType: RecordType.itemVersion });
+  const VERSION = map([
+    ['itemId', itemId],
+    ['item', ITEM],
+  ]);
+  const DEVICE = map([
+    ['publicKey', publicKey],
+    ['displayName', 'Phone'],
+  ]);
+
+  /** Each record type as the session writes it; a Recovery Envelope has no writer before Phase 2. */
+  const cases: [string, () => Uint8Array, CborMap | null][] = [
+    ['an item', () => sealRecord(header(), keys, vaultKey, ITEM), ITEM],
+    [
+      'an item in the trash',
+      () => sealRecord(header({ deleted: true }), keys, vaultKey, TRASHED),
+      TRASHED,
+    ],
+    [
+      'a purged item tombstone',
+      () => sealPurgedTombstone(header({ deleted: true }), VAULT_ID, vaultKey),
+      null,
+    ],
+    [
+      'a folder',
+      () => sealRecord(header({ recordType: RecordType.folder }), keys, vaultKey, FOLDER),
+      FOLDER,
+    ],
+    [
+      'a folder in the trash',
+      () =>
+        sealRecord(
+          header({ recordType: RecordType.folder, deleted: true }),
+          keys,
+          vaultKey,
+          FOLDER,
+        ),
+      FOLDER,
+    ],
+    [
+      'a purged folder tombstone',
+      () =>
+        sealPurgedTombstone(
+          header({ recordType: RecordType.folder, deleted: true }),
+          VAULT_ID,
+          vaultKey,
+        ),
+      null,
+    ],
+    [
+      'an Item Version',
+      () =>
+        sealRecord(
+          { ...versionHeader, recordId: versionId(keys.versionIdKey, itemId, versionHeader.hlc) },
+          keys,
+          vaultKey,
+          VERSION,
+        ),
+      VERSION,
+    ],
+    [
+      'a Device record',
+      () =>
+        sealRecord(
+          header({ recordType: RecordType.device, recordId: deviceId(publicKey) }),
+          keys,
+          vaultKey,
+          DEVICE,
+        ),
+      DEVICE,
+    ],
+  ];
+
+  it.each(cases)('%s opens to its content, header unchanged', (_name, sealed, content) => {
+    const bytes = sealed();
+    const verified = verifyRecord(new Keyring(), bytes, keys);
+    expect(verified.content).toEqual(content);
+    expect(verified.envelope).toEqual(decodeEnvelope(bytes));
+  });
+
+  it.each(cases)('%s opens under no other Vault Key or vault', (_name, sealed) => {
+    const bytes = sealed();
+    const other = generateKey(new Keyring());
+    const wrongKey = { ...keys, vaultKey: () => other };
+    expect(rejectedAt(() => verifyRecord(new Keyring(), bytes, wrongKey))).toBe(7);
+    expect(
+      rejectedAt(() => verifyRecord(new Keyring(), bytes, { ...keys, vaultId: randomId() })),
+    ).toBe(7);
+  });
+
+  it('a Vault Key record opens to its key, under no other wrap key or vault', () => {
+    const h = header({ recordType: RecordType.vaultKey, recordId: vaultKeyRecordId(1) });
+    const bytes = sealVaultKeyRecord(h, VAULT_ID, keys.vaultKeyWrapKey, vaultKey);
+    const into = new Keyring();
+    const verified = verifyRecord(into, bytes, keys);
+    expect(verified.vaultKey && keyBytes(verified.vaultKey)).toEqual(keyBytes(vaultKey));
+    expect(verified.envelope.header).toEqual(h);
+    const other = generateKey(new Keyring());
+    expect(
+      rejectedAt(() => verifyRecord(new Keyring(), bytes, { ...keys, vaultKeyWrapKey: other })),
+    ).toBe(7);
+    expect(
+      rejectedAt(() => verifyRecord(new Keyring(), bytes, { ...keys, vaultId: randomId() })),
+    ).toBe(7);
+  });
+
+  it('a Recovery Envelope opens to its metadata with mk left sealed, under no other key or vault', () => {
+    const h = header({
+      recordType: RecordType.recoveryEnvelope,
+      recordId: recoveryEnvelopeRecordId(VAULT_ID),
+    });
+    const metadata = map([
+      ['keyslotPublicKey', new Uint8Array(32).fill(1)],
+      ['phraseId', randomId()],
+      ['phraseCreatedAt', 1_760_000_000_000],
+    ]);
+    const aad = recordAad(h, VAULT_ID);
+    const temp = new Keyring();
+    const recordKey = generateKey(temp);
+    const mk = wrapKey(generateKey(temp), aad, generateKey(temp));
+    const bytes = encodeEnvelope({
+      header: h,
+      wk: wrapKey(vaultKey, aad, recordKey),
+      ct: seal(recordKey, aad, pad(encodeCbor(metadata))),
+      mk,
+    });
+    temp.wipeAll();
+    const verified = verifyRecord(new Keyring(), bytes, keys);
+    expect(verified.content).toEqual(metadata);
+    expect(verified.envelope.mk).toEqual(mk);
+    const other = generateKey(new Keyring());
+    expect(
+      rejectedAt(() => verifyRecord(new Keyring(), bytes, { ...keys, vaultKey: () => other })),
+    ).toBe(7);
+    expect(
+      rejectedAt(() => verifyRecord(new Keyring(), bytes, { ...keys, vaultId: randomId() })),
+    ).toBe(7);
   });
 });
