@@ -46,12 +46,14 @@ export function Field({
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      {/* Off by default: the browser's form history keeps typed values on disk in cleartext (D174). */}
+      {/* Off by default: the form history keeps typed values on disk in cleartext (D174), and a
+          spellchecker can send them to a remote service (D176). */}
       <input
         id={id}
         className={INPUT}
         aria-invalid={error ? true : undefined}
         autoComplete="off"
+        spellCheck={false}
         {...props}
       />
       <Message error={error} hint={hint} />
@@ -98,6 +100,7 @@ export function TextArea({
         className={`${INPUT} py-2`}
         aria-invalid={error ? true : undefined}
         autoComplete="off"
+        spellCheck={false}
         {...props}
       />
       <Message error={error} hint={hint} />

@@ -12,15 +12,20 @@ function button(page: Page, name: string) {
 }
 
 /**
- * Every text control on the page that the browser may keep in its form history: those without
- * `autocomplete="off"`. Only the local password fields name their purpose instead (D174).
+ * Every text control on the page that the browser may keep in its form history (without
+ * `autocomplete="off"`; only the local password fields name their purpose instead, D174), and
+ * every one it may spellcheck, which can send the text to a remote service (D176).
  */
-async function kept(page: Page): Promise<{ readonly count: number; readonly kept: string[] }> {
+async function kept(
+  page: Page,
+): Promise<{ readonly count: number; readonly kept: string[]; readonly spelled: string[] }> {
   return page.evaluate(() => {
     const passwords = new Set(['current-password', 'new-password']);
     const controls = [...document.querySelectorAll('input, textarea')].filter(
       (e) => !(e instanceof HTMLInputElement) || !['checkbox', 'radio', 'hidden'].includes(e.type),
     );
+    const name = (e: Element) =>
+      e.getAttribute('data-testid') ?? e.getAttribute('aria-label') ?? e.id;
     const out = controls.filter((e) => {
       const value = e.getAttribute('autocomplete');
       if (value === 'off') return false;
@@ -32,7 +37,8 @@ async function kept(page: Page): Promise<{ readonly count: number; readonly kept
     });
     return {
       count: controls.length,
-      kept: out.map((e) => e.getAttribute('data-testid') ?? e.getAttribute('aria-label') ?? e.id),
+      kept: out.map(name),
+      spelled: controls.filter((e) => e.getAttribute('spellcheck') !== 'false').map(name),
     };
   });
 }
@@ -41,9 +47,10 @@ async function expectNoneKept(page: Page) {
   const result = await kept(page);
   expect(result.count).toBeGreaterThan(0);
   expect(result.kept).toEqual([]);
+  expect(result.spelled).toEqual([]);
 }
 
-test('keeps vault content out of the browser form history (D174, CRYPTO-INV-001), and warns against saving the password (D175)', async ({
+test('keeps vault content out of the form history and the spellchecker (D174, D176, CRYPTO-INV-001), and warns against saving the password (D175)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -108,12 +115,22 @@ test('keeps vault content out of the browser form history (D174, CRYPTO-INV-001)
   await expect(page.getByText(BROWSER_SAVE)).toBeVisible();
 });
 
-test('finds a text control the form history may keep', async ({ page }) => {
+test('finds a text control the form history may keep, or the browser may spellcheck', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.evaluate(() => {
-    const input = document.createElement('input');
-    input.dataset.testid = 'planted';
-    document.body.append(input);
+    const kept = document.createElement('input');
+    kept.dataset.testid = 'kept';
+    kept.spellcheck = false;
+    const spelled = document.createElement('textarea');
+    spelled.dataset.testid = 'spelled';
+    spelled.autocomplete = 'off';
+    document.body.append(kept, spelled);
   });
-  expect((await kept(page)).kept).toEqual(['planted']);
+  const result = await kept(page);
+  expect(result.kept).toContain('kept');
+  expect(result.kept).not.toContain('spelled');
+  expect(result.spelled).toContain('spelled');
+  expect(result.spelled).not.toContain('kept');
 });
