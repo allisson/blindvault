@@ -44,17 +44,35 @@ export class RecordNotFoundError extends VaultError {
 }
 
 /**
- * Why an action is refused on a record (overview §6, D39, D52, D74, D143): content from a newer app
- * version, an HLC beyond the future-clock bound, a record in the trash, a record not in the trash,
- * or a purged tombstone.
+ * Why an action is refused on a record (overview §6, D39, D52, D74, D143, D171): content from a
+ * newer app version, an HLC beyond the future-clock bound, a record in the trash, a record not in
+ * the trash, a purged tombstone, or a folder moved into its own subtree.
  */
 export type BlockedReason =
-  'newer-content' | 'future-clock' | 'in-trash' | 'not-in-trash' | 'purged';
+  'newer-content' | 'future-clock' | 'in-trash' | 'not-in-trash' | 'purged' | 'cycle';
 
 /** The action would write a record it may not write; nothing was written. */
 export class RecordBlockedError extends VaultError {
   override name = 'RecordBlockedError';
   constructor(readonly reason: BlockedReason) {
     super(`action blocked: ${reason}`);
+  }
+}
+
+/** A record a folder action would write but may not, and why. */
+export interface BlockedRecord {
+  readonly recordType: number;
+  readonly recordId: Uint8Array;
+  readonly reason: BlockedReason;
+}
+
+/**
+ * Trashing or restoring a folder would write read-only records (overview §6, D52): the action is
+ * refused as a whole, and `records` lists them for the UI.
+ */
+export class SubtreeBlockedError extends VaultError {
+  override name = 'SubtreeBlockedError';
+  constructor(readonly records: readonly BlockedRecord[]) {
+    super(`action blocked: ${String(records.length)} read-only records`);
   }
 }

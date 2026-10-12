@@ -133,11 +133,11 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Automatic purge 30 days after the tombstone's HLC, at unlock and periodically while unlocked, with an injectable clock (D7, D27, D94)
 - [x] Item model with typed fields (list in overview, section 6 "Data model")
 - [x] Factory templates as versioned code definitions; items store `templateId` and `templateVersion` (D20)
-- [ ] Folder record with encrypted name and `parentId` (D14)
-- [ ] Item `folderId` (optional; absent = vault root); tags inside the encrypted content
-- [ ] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
-- [ ] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore from the trash brings back exactly those records (D14)
-- [ ] Record header (`recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18, D32)
+- [x] Folder record with encrypted name and `parentId` (D14)
+- [x] Item `folderId` (optional; absent = vault root); tags inside the encrypted content
+- [x] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
+- [x] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore from the trash brings back exactly those records (D14)
+- [x] Record header (`recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18, D32)
 - [x] Tombstone and version representation; deterministic keyed `versionId` (D6)
 
 ### `packages/storage`
@@ -181,8 +181,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Logs contain no keys or secrets (CRYPTO-INV-005)
 - [ ] Changing the local password re-wraps the master key without changing records
 - [ ] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
-- [ ] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
-- [ ] Folder names and `parentId` never appear in cleartext metadata
+- [x] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
+- [x] Folder names and `parentId` never appear in cleartext metadata
 - [ ] Content tests: each rule of `record-content.md` §2 makes an item read-only; a Folder or Device record keeps unknown keys through rename, move and trash
 - [ ] PRF unlock rejects an assertion without user verification, in Playwright with Chromium's virtual authenticator (CRYPTO-INV-021)
 - [ ] Load test: unlock with 2,000 items × 20 versions; time recorded in `architecture.md`
