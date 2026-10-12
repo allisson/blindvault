@@ -36,3 +36,48 @@ describe('in-memory navigation (D167)', () => {
     expect(changes).toBe(4);
   });
 });
+
+describe('item screens', () => {
+  const a = new Uint8Array(16).fill(1);
+  const b = new Uint8Array(16).fill(2);
+
+  it('selects a detail under the current list, replacing the previous detail', () => {
+    const nav = new Navigation();
+    nav.select({ name: 'item', id: a });
+    nav.open({ name: 'edit', id: a });
+    nav.select({ name: 'item', id: b });
+    expect(nav.current()).toEqual({ name: 'item', id: b });
+    nav.back();
+    expect(nav.current()).toEqual({ name: 'vault' });
+  });
+
+  it('keeps the trash as the list a detail was selected from', () => {
+    const nav = new Navigation();
+    nav.showList('trash');
+    expect(nav.list()).toBe('trash');
+    nav.select({ name: 'item', id: a });
+    expect(nav.list()).toBe('trash');
+    nav.back();
+    expect(nav.current()).toEqual({ name: 'trash' });
+    nav.showList('vault');
+    expect(nav.current()).toEqual({ name: 'vault' });
+    expect(nav.list()).toBe('vault');
+  });
+
+  it('replaces the top screen, as a saved editor becomes the item', () => {
+    const nav = new Navigation();
+    nav.select({ name: 'new' });
+    nav.replace({ name: 'item', id: a });
+    expect(nav.current()).toEqual({ name: 'item', id: a });
+    nav.back();
+    expect(nav.current()).toEqual({ name: 'vault' });
+  });
+
+  it('drops the screens of an item that is gone', () => {
+    const nav = new Navigation();
+    nav.select({ name: 'item', id: a });
+    nav.open({ name: 'edit', id: a });
+    nav.close(a);
+    expect(nav.current()).toEqual({ name: 'vault' });
+  });
+});

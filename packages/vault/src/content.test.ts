@@ -4,7 +4,16 @@ import { type CborMap, type CborValue, encodeCbor, initCrypto } from '@blindvaul
 
 import { ContentInvalidError } from './errors';
 import { deviceToCbor, folderToCbor, readDevice } from './folder';
-import { type Item, isValidDate, itemToCbor, normalizeTags, readItem } from './item';
+import {
+  type Item,
+  isValidDate,
+  isValidSeedPhrase,
+  itemToCbor,
+  normalizeSeedPhrase,
+  normalizeTags,
+  readItem,
+  seedPhraseChecksumValid,
+} from './item';
 import { readLocalConfig, readLocalConfigEncrypted } from './local-config';
 import { TEMPLATES, roleOf, template } from './templates';
 import { codePointLength } from './text';
@@ -101,6 +110,25 @@ describe('item writes', () => {
         false,
       ),
     ).toEqual({ readOnly: true, rule: 6 });
+  });
+
+  it('normalizes seed-phrase input: NFKD, lowercase, one space between words (§4)', () => {
+    const typed =
+      '  Abandon\tabandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon ABOUT ';
+    const value = normalizeSeedPhrase(typed);
+    expect(value).toBe(`${'abandon '.repeat(11)}about`);
+    expect(isValidSeedPhrase(value)).toBe(true);
+    // A word outside the list stays invalid: normalizing never repairs a typo.
+    expect(isValidSeedPhrase(normalizeSeedPhrase(`${'abandon '.repeat(11)}abuot`))).toBe(false);
+    expect(normalizeSeedPhrase('   ')).toBe('');
+  });
+
+  it('reports a bad BIP39 checksum without refusing the value (§4)', () => {
+    const bad = 'abandon '.repeat(11) + 'abandon';
+    expect(isValidSeedPhrase(bad)).toBe(true);
+    expect(seedPhraseChecksumValid(bad)).toBe(false);
+    expect(seedPhraseChecksumValid(`${'abandon '.repeat(11)}about`)).toBe(true);
+    expect(seedPhraseChecksumValid('not a phrase')).toBe(false);
   });
 
   it('counts code points', () => {

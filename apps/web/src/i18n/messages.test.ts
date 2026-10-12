@@ -1,7 +1,7 @@
-import { TEMPLATES } from '@blindvault/vault';
+import { FIELD_TYPES, TEMPLATES } from '@blindvault/vault';
 import { describe, expect, it } from 'vitest';
 
-import { LANGUAGES, MESSAGES, pickLanguage, roleName } from './messages';
+import { LANGUAGES, MESSAGES, format, pickLanguage, roleName } from './messages';
 
 /** Every leaf as `[path, value]`; paths join with `/`, since role keys contain dots. */
 function leaves(value: unknown, prefix = ''): [string, unknown][] {
@@ -43,5 +43,15 @@ describe('UI copy (D165)', () => {
     expect(pickLanguage(['fr-FR', 'en-GB', 'pt-BR'])).toBe('en');
     expect(pickLanguage(['fr-FR'])).toBe('en');
     expect(pickLanguage([])).toBe('en');
+  });
+
+  it('names every field type, in every language', () => {
+    for (const language of LANGUAGES) {
+      expect(Object.keys(MESSAGES[language].fieldTypes).sort()).toEqual([...FIELD_TYPES].sort());
+    }
+  });
+
+  it('fills placeholders, leaving unknown ones as they are', () => {
+    expect(format('{bits} bits, {x}', { bits: '66' })).toBe('66 bits, {x}');
   });
 });

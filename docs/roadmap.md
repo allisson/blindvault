@@ -159,11 +159,11 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock; Phase 1 banner (no Recovery Phrase)
 - [x] Change the local password, requiring the current one (D168)
 - [ ] WebAuthn PRF unlock: setup in settings with the synced-passkey notice (D84), unlock, assertion without user verification rejected (D75)
-- [ ] Item CRUD with templates
+- [x] Item CRUD with templates
 - [ ] Duplicate item: new item in the same folder with the current content, a localized " (copy)" title suffix (D169), a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
-- [ ] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
+- [x] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
-- [ ] Secret fields masked by default
+- [x] Secret fields masked by default
 - [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
 - [ ] TOTP field: TOTP secret masked, current code shown, copy with clipboard clear (D127)
 - [x] Configurable auto-lock that clears state and keys on lock
@@ -180,7 +180,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] After locking, no cryptographic operation works without a new unlock (CRYPTO-INV-010)
 - [ ] Logs contain no keys or secrets (CRYPTO-INV-005)
 - [x] Changing the local password re-wraps the master key without changing records
-- [ ] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
+- [x] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
 - [x] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
 - [x] Folder names and `parentId` never appear in cleartext metadata
 - [ ] Content tests: each rule of `record-content.md` §2 makes an item read-only; a Folder or Device record keeps unknown keys through rename, move and trash
