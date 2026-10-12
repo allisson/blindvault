@@ -68,6 +68,21 @@ export interface Envelope {
   readonly mk?: Sealed;
 }
 
+declare const envelopeBrand: unique symbol;
+
+/**
+ * Envelope bytes as `encodeEnvelope` wrote them: a sealed record, never plaintext. Storage accepts
+ * a record only as this type (D82); nothing else produces it.
+ */
+export type RecordEnvelope = Uint8Array & { readonly [envelopeBrand]: true };
+
+/** A sealed record with its storage identity (`recordType`, `recordId`, D158). */
+export interface EncryptedRecord {
+  readonly recordType: RecordType;
+  readonly recordId: Uint8Array;
+  readonly envelope: RecordEnvelope;
+}
+
 /** The step of crypto-spec.md §9.5 a record failed. */
 export type VerificationStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
@@ -96,7 +111,7 @@ function sealedMap(sealed: Sealed): CborMap {
 }
 
 /** Encodes an envelope as the deterministic CBOR map of crypto-spec.md §9.2. */
-export function encodeEnvelope(envelope: Envelope): Uint8Array {
+export function encodeEnvelope(envelope: Envelope): RecordEnvelope {
   const { header } = envelope;
   if (!isRecordType(header.recordType)) throw new EncodingError('unknown record type');
   const map: CborMap = new Map<CborValue, CborValue>([
@@ -113,7 +128,7 @@ export function encodeEnvelope(envelope: Envelope): Uint8Array {
     if ((sealed !== undefined) !== expected) throw new EncodingError(`envelope part ${part}`);
     if (sealed) map.set(part, sealedMap(sealed));
   }
-  return encodeCbor(map);
+  return encodeCbor(map) as RecordEnvelope;
 }
 
 // --- verification steps 1 to 5 -------------------------------------------------------------------
@@ -399,7 +414,7 @@ export function sealRecord(
   keys: IdKeys,
   vaultKey: SymmetricKey,
   content: CborMap,
-): Uint8Array {
+): RecordEnvelope {
   checkWriteHeader(header, [
     RecordType.item,
     RecordType.folder,
@@ -429,7 +444,7 @@ export function sealPurgedTombstone(
   header: RecordHeader,
   vaultId: Uint8Array,
   vaultKey: SymmetricKey,
-): Uint8Array {
+): RecordEnvelope {
   checkWriteHeader(header, [RecordType.item, RecordType.folder]);
   if (!header.deleted) throw new EncodingError('a purged tombstone has deleted = true');
   return sealParts(header, vaultId, vaultKey, new Uint8Array(0));
@@ -440,7 +455,7 @@ function sealParts(
   vaultId: Uint8Array,
   vaultKey: SymmetricKey,
   plaintext: Uint8Array,
-): Uint8Array {
+): RecordEnvelope {
   const aad = recordAad(header, vaultId);
   const recordKeys = new Keyring();
   try {
@@ -461,7 +476,7 @@ export function sealVaultKeyRecord(
   vaultId: Uint8Array,
   vaultKeyWrapKey: SymmetricKey,
   vaultKey: SymmetricKey,
-): Uint8Array {
+): RecordEnvelope {
   checkWriteHeader(header, [RecordType.vaultKey]);
   if (!sameBytes(header.recordId, vaultKeyRecordId(header.keyEpoch))) {
     throw new EncodingError('recordId does not match its derivation');

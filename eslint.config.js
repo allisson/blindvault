@@ -52,4 +52,25 @@ export default defineConfig(
       ],
     },
   },
+  {
+    // packages/storage persists sealed records and Local Config: crypto types only, no domain, no UI.
+    files: ['packages/storage/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@blindvault/*', '!@blindvault/crypto'],
+              message: 'packages/storage imports no workspace package but @blindvault/crypto.',
+            },
+            {
+              group: ['react', 'react/*', 'react-dom', 'react-dom/*'],
+              message: 'packages/storage must not contain UI code.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
