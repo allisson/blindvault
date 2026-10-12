@@ -141,7 +141,11 @@ describe('sealBackup', () => {
     const parsed = parseBackup(file);
     expect(parsed.header).toEqual({ ...header, stream: parsed.header.stream });
     const opened = openBackup(keyring, key, parsed);
-    expect(opened).toMatchObject({ vaultId, exportedAt: 5, records });
+    expect(opened).toMatchObject({ vaultId, exportedAt: 5 });
+    // Byte comparison: `toEqual` on 80 KB walks it element by element, slow under coverage.
+    expect(opened.records.map((r, i) => Buffer.compare(r, records[i] ?? new Uint8Array()))).toEqual(
+      [0, 0],
+    );
   });
 
   it('uses a new stream header for every file', () => {

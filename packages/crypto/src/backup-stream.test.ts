@@ -21,7 +21,20 @@ const VAULT_ID = new Uint8Array(16).fill(0xa0);
 const MAX_RECORD = 1_049_130;
 
 function filler(n: number, seed = 7): Uint8Array {
-  return Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 0xff);
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = (i * 31 + seed) & 0xff;
+  return out;
+}
+
+/** Byte equality: `toEqual` walks a 1 MiB array element by element, too slow under coverage. */
+function sameBytes(a: readonly Uint8Array[], b: readonly Uint8Array[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((x, i) => {
+      const y = b[i];
+      return y !== undefined && Buffer.compare(x, y) === 0;
+    })
+  );
 }
 
 function sealed(
@@ -129,7 +142,7 @@ describe('backup stream (backup-format.md §5, §6)', () => {
   ])('round-trips %s', (_, records) => {
     const { keyring, fileKey, header, body, masterKey } = sealed(records);
     const opened = openBackupStream(keyring, fileKey, header, FILE_HEADER, body);
-    expect(opened.records).toEqual(records);
+    expect(sameBytes(opened.records, records)).toBe(true);
     expect(opened.vaultId).toEqual(VAULT_ID);
     expect(opened.exportedAt).toBe(1_760_000_100_000);
     expect(keyBytes(opened.masterKey)).toEqual(keyBytes(masterKey));
@@ -142,7 +155,9 @@ describe('backup stream (backup-format.md §5, §6)', () => {
     const record = filler(CHUNK_LENGTH - 4 - metaLength - 4);
     const { keyring, fileKey, header, body } = sealed([record]);
     expect(body.length).toBe(CHUNK_LENGTH + 17 + 17);
-    expect(openBackupStream(keyring, fileKey, header, FILE_HEADER, body).records).toEqual([record]);
+    expect(
+      sameBytes(openBackupStream(keyring, fileKey, header, FILE_HEADER, body).records, [record]),
+    ).toBe(true);
   });
 
   it('round-trips a backup with no record', () => {
