@@ -17,7 +17,9 @@ The follow-ups planned for 2026-10-14, 10-18 and 10-25 are cancelled.
   `dc13261`: iPhone 14, Safari 26.6.1).
 - **`persist()`:** refused to the tab and granted to the installed app with no prompt, on the
   iPhone, the Mac and the A54.
-- **D110 stands** (below). D105 is recorded per browser here and in `prf.md`.
+- **D110 stands** (below).
+- **D105 stands:** no file picker, camera prompt or WebAuthn prompt reported the page as hidden,
+  in any browser of the matrix, tab or installed app (below and `prf.md`).
 
 ## Devices and contexts
 
@@ -96,8 +98,13 @@ the tester to finish. No connection state was recorded on either side.
 | MacBook Air M1, Safari tab (2026-10-12) | visible | visible | visible |
 | iPhone, installed app (2026-10-12) | visible | visible | visible |
 | Samsung A54, Chrome installed app (2026-10-12) | visible | visible | visible |
+| Samsung A54, Chrome tab (2026-10-12) | visible | visible | visible (`prf.md`) |
+| MacBook Air M1, Chrome tab (2026-10-12) | visible | visible | visible (`prf.md`) |
+| MacBook Air M1, Firefox tab (2026-10-12) | visible | visible | visible (`prf.md`) |
+| Windows laptop, Chrome tab (2026-10-12) | visible | visible | visible (`prf.md`) |
+| Windows laptop, Firefox tab (2026-10-12) | visible | visible | visible (`prf.md`) |
 
 Each prompt was opened and cancelled; none reported the page as hidden. The PRF spike adds the
 WebAuthn prompt in Chrome on Android and in Chrome and Firefox on Windows and macOS: none reported
-the page as hidden (`prf.md`). Still to measure: the file picker and camera prompt in the A54's
-Chrome tab and in Chrome and Firefox on desktop.
+the page as hidden (`prf.md`). The matrix is complete: no system UI reported the page as hidden
+in any context, so D105 stands unchanged (its rule does not depend on the result).
