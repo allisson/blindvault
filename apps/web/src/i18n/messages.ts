@@ -17,6 +17,10 @@ const en = {
     banner:
       'Preview build: there is no Recovery Phrase yet. If you forget the local password or this browser loses its storage, the vault cannot be recovered.',
   },
+  origin: {
+    shared:
+      'This copy of BlindVault runs under a sub-path of a github.io address, which other sites share: they can read and delete its storage. Do not keep anything here; use a copy served from its own address.',
+  },
   start: {
     starting: 'Opening…',
     busy: 'BlindVault is busy in another window. Finish there, then try again.',
@@ -293,6 +297,10 @@ const ptBR: Messages = {
   phase1: {
     banner:
       'Versão de prévia: ainda não há Frase de Recuperação. Se você esquecer a senha local ou este navegador perder os dados, o cofre não pode ser recuperado.',
+  },
+  origin: {
+    shared:
+      'Esta cópia do BlindVault roda num subcaminho de um endereço github.io, que outros sites compartilham: eles podem ler e apagar os dados dela. Não guarde nada aqui; use uma cópia servida no próprio endereço.',
   },
   start: {
     starting: 'Abrindo…',

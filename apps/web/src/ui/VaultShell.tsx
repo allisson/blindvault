@@ -13,7 +13,7 @@ import { type VaultController } from '../app/controller';
 import { type Navigation, isDetail } from '../app/nav';
 import { SearchIndex } from '../app/search';
 import { useMessages } from '../i18n/context';
-import { Button, LockState, Notice, Phase1Banner } from './components';
+import { Button, LockState, Notice, Phase1Banner, SharedOriginWarning } from './components';
 import { useLayout } from './hooks';
 import { hex } from '../app/ids';
 import { ItemDetail } from './ItemDetail';
@@ -215,6 +215,7 @@ export function VaultShell({
       data-layout={layout}
       className="flex min-h-dvh flex-col bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100"
     >
+      <SharedOriginWarning />
       <Phase1Banner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
       {session.writable ? null : <Notice>{m.vault.readOnlyVault}</Notice>}
