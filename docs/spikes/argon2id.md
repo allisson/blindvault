@@ -1,8 +1,9 @@
 # Spike result — Argon2id in the browser (D9, D126)
 
-Status: **Gate 0 answered, spike still open**. Samsung A54 (Chrome), Windows laptop (Chrome,
-Firefox), MacBook Air M1 (Chrome, Firefox) and iPhone 14 (Safari) measured, 1 GiB included; Mac
-Safari pending. The 64 MiB floor is viable on iOS and D9 stands (see Conclusion).
+Status: **done, except the optional 1 GiB ops 4 run**. Samsung A54 (Chrome), Windows laptop
+(Chrome, Firefox), MacBook Air M1 (Chrome, Firefox, Safari) and iPhone 14 (Safari) measured, 1 GiB
+included. The 64 MiB floor is viable on iOS and D9 stands; 1 GiB runs on every browser and D126
+stands (see Conclusion).
 
 Setup: `libsodium-wrappers-sumo` 0.8.4 `crypto_pwhash` (Argon2id 1.3, parallelism 1), in a fresh
 Web Worker per run. Times exclude worker start and libsodium load (`loadMs`, under 50 ms everywhere).
@@ -118,6 +119,21 @@ the Safari version is the reliable one. Reports 4 cores (Safari caps `hardwareCo
 - **1 GiB (D126):** runs in a Safari tab on iOS. The live build ran ops 2 and 3; one pass costs about
   0.7 s, so ops 4 would land near 2.9 s by extrapolation, not measured.
 
+## MacBook Air M1, Safari 26.6 (2026-10-12)
+
+Same Mac. Safari reports 8 cores and no `deviceMemory`. All runs succeeded.
+
+| Memory | ops 2 | ops 3 |
+| --- | --- | --- |
+| 64 MiB | 81 ms | 118 ms |
+| 128 MiB | 163 ms | 237 ms |
+| 256 MiB | 323 ms | 484 ms |
+| 1 GiB | 1,338 ms | 1,993 ms |
+
+- **Calibration at 64 MiB:** ops 27 is the first to reach 1 s (1,020 ms).
+- Within a few percent of Chrome on the same Mac, cell by cell, and of Safari on the iPhone: WebKit's
+  WASM runs libsodium as fast as V8 here, unlike Firefox.
+
 ## Conclusion (D9)
 
 The 64 MiB floor is viable on every device measured, iOS Safari included: 64 MiB reaches about 1 s
@@ -125,7 +141,12 @@ at ops 12 (A54, the slowest) to 29 (M1 Chrome), always inside the accepted range
 D9 stands unchanged. The iPhone is one of the fastest devices measured, so the A54 remains the
 binding case for the fixed export parameters (D78).
 
+**D126:** 1 GiB ran in a worker on every browser of the matrix (A54 Chrome, Windows Chrome and
+Firefox, Mac Chrome, Firefox and Safari, iPhone Safari) with no failure, so a `.blindpass` import
+at libsodium's `SENSITIVE` memory limit is feasible everywhere. D126 stands. The slowest 1 GiB pass
+was the A54's, about 1.3 s, so ops 4 lands near 6 s there by extrapolation.
+
 ## Pending
 
-- The 1 GiB button now runs ops 4 (D126's limits) from the next deploy; the A54 can rerun it.
-- MacBook Air M1 (Safari): 64 MiB matrix and 1 GiB, which closes the D126 sub-item.
+- Optional: the 1 GiB button runs ops 4 (D126's limits) from the next deploy; the A54, the slowest
+  device, can rerun it.

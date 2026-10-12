@@ -93,6 +93,7 @@ the tester to finish. No connection state was recorded on either side.
 | Context | File picker | Camera prompt | WebAuthn prompt |
 | --- | --- | --- | --- |
 | iPhone, Safari tab | visible | visible | visible |
+| MacBook Air M1, Safari tab (2026-10-12) | visible | visible | visible |
 
 Each prompt was opened and cancelled; none reported the page as hidden. The PRF spike adds Chrome
 and Firefox on Android, Windows and macOS: no WebAuthn prompt reported the page as hidden
