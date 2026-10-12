@@ -2,15 +2,18 @@
 # requires-python = ">=3.12"
 # dependencies = ["pynacl==1.6.2", "mnemonic==0.21"]
 # ///
-"""Independent generator for docs/crypto-spec.md and docs/record-content.md test vectors (v1).
+"""Independent generator for docs/crypto-spec.md, docs/record-content.md and docs/backup-format.md
+test vectors (v1).
 
-Uses hashlib (BLAKE2b, crypto_kdf) and PyNaCl (AEAD, Argon2id, seed key pair, padding), never the
+Uses hashlib (BLAKE2b, crypto_kdf) and PyNaCl (AEAD, Argon2id, seed key pair, padding, sealed box,
+secretstream), never the
 TypeScript code, so the TypeScript implementation is checked against a second implementation.
 Inputs are fixed bytes, so the output is deterministic.
 
 Run from the repository root: uv run tests/vectors/generate.py
 """
 
+import base64
 import hashlib
 import json
 import math
@@ -24,6 +27,7 @@ from nacl import bindings, pwhash
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "packages/crypto/test-vectors/crypto-v1.json"
 OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
+OUT_BACKUP = ROOT / "packages/backup/test-vectors/backup-v1.json"
 
 RECORD_FORMAT_VERSION = 1
 RT_ITEM, RT_FOLDER, RT_ITEM_VERSION, RT_VAULT_KEY, RT_RECOVERY_ENVELOPE, RT_DEVICE = 1, 2, 3, 4, 5, 6
@@ -941,6 +945,390 @@ def content_vectors() -> dict:
     }
 
 
+# --- backup-format.md vectors ------------------------------------------------------------------
+
+BV_MAGIC = bytes.fromhex("89425641554c540a")  # \x89BVAULT\n
+BV_VERSION = 1
+BV_CHUNK = 65536
+BV_ABYTES = 17
+BV_MAX_HEADER = 4096
+BV_MAX_META = 256
+BV_EXPORT_OPS = 12
+BV_EXPORT_MEM = 64 * 1024 * 1024
+BV_FILE_KEY = seq(0x10, 32)
+BV_EXPORT_PASSWORD = "correct horse battery staple export"
+BV_EXPORT_SALT = seq(0xF0, 16)
+BV_EXPORTED_AT = 1_760_000_100_000
+BV_SAFE = 2**53 - 1
+T_MESSAGE = bindings.crypto_secretstream_xchacha20poly1305_TAG_MESSAGE
+T_PUSH = bindings.crypto_secretstream_xchacha20poly1305_TAG_PUSH
+T_REKEY = bindings.crypto_secretstream_xchacha20poly1305_TAG_REKEY
+T_FINAL = bindings.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+
+
+def b64(b: bytes) -> str:
+    return base64.b64encode(b).decode("ascii")
+
+
+def bv_hash(b: bytes) -> str:
+    return hashlib.blake2b(b, digest_size=64).hexdigest()
+
+
+def bv_header(hmap=None, *, version=BV_VERSION, magic=BV_MAGIC, length=None, raw=None) -> bytes:
+    body = cbor(hmap) if raw is None else raw
+    return magic + u16(version) + u32(len(body) if length is None else length) + body
+
+
+def bv_chunks(payload: bytes) -> list:
+    full = len(payload) // BV_CHUNK
+    return [payload[i * BV_CHUNK:(i + 1) * BV_CHUNK] for i in range(full)] + [payload[full * BV_CHUNK:]]
+
+
+def bv_meta(records, **over) -> bytes:
+    m = {"exportedAt": BV_EXPORTED_AT, "masterKey": MASTER_KEY, "recordCount": len(records), "vaultId": VAULT_ID}
+    m.update(over)
+    return cbor({k: x for k, x in m.items() if x is not None})
+
+
+def bv_payload(meta: bytes, records) -> bytes:
+    return u32(len(meta)) + meta + b"".join(u32(len(e)) + e for e in records)
+
+
+def bv_filler(n: int) -> bytes:
+    return bytes((i * 31 + 7) & 0xFF for i in range(n))
+
+
+class BvReject(Exception):
+    def __init__(self, reason: str, why: str):
+        super().__init__(f"{reason}: {why}")
+        self.reason = reason
+
+
+def _bv_uint(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= BV_SAFE
+
+
+def _bv_bytes(x, n: int) -> bool:
+    return isinstance(x, bytes) and len(x) == n
+
+
+def bv_parse_header(f: bytes):
+    """Reference for backup-format.md sections 2, 3 and 7; raises BvReject."""
+    if len(f) < 8 or f[:8] != BV_MAGIC:
+        raise BvReject("not-a-backup", "magic")
+    if len(f) < 14:
+        raise BvReject("malformed", "short prefix")
+    version = struct.unpack(">H", f[8:10])[0]
+    if version == 0:
+        raise BvReject("not-a-backup", "version 0")
+    if version > BV_VERSION:
+        raise BvReject("newer-version", "version")
+    n = struct.unpack(">I", f[10:14])[0]
+    if not 1 <= n <= BV_MAX_HEADER or 14 + n > len(f):
+        raise BvReject("malformed", "header length")
+    try:
+        m = strict_decode(f[14:14 + n])
+    except Exception as e:
+        raise BvReject("malformed", f"header CBOR: {e}")
+    if not isinstance(m, dict) or set(m) != {"keyslots", "phraseCreatedAt", "phraseId", "stream"}:
+        raise BvReject("malformed", "header keys")
+    if not (_bv_uint(m["phraseCreatedAt"]) and _bv_bytes(m["phraseId"], 16) and _bv_bytes(m["stream"], 24)):
+        raise BvReject("malformed", "header values")
+    slots = m["keyslots"]
+    if not isinstance(slots, list) or not 1 <= len(slots) <= 2:
+        raise BvReject("malformed", "keyslot count")
+    rec = slots[0]
+    if not (isinstance(rec, dict) and set(rec) == {"t", "c"} and rec["t"] == 1 and not isinstance(rec["t"], bool)
+            and _bv_bytes(rec["c"], 80)):
+        raise BvReject("malformed", "recovery keyslot")
+    if len(slots) == 2:
+        pw = slots[1]
+        if not (isinstance(pw, dict) and set(pw) == {"t", "salt", "ops", "mem", "n", "c"} and pw["t"] == 2
+                and not isinstance(pw["t"], bool) and _bv_bytes(pw["salt"], 16) and _bv_uint(pw["ops"])
+                and _bv_uint(pw["mem"]) and _bv_bytes(pw["n"], 24) and _bv_bytes(pw["c"], 48)):
+            raise BvReject("malformed", "password keyslot")
+    return m, f[:14 + n]
+
+
+def bv_read_stream(f: bytes, header: bytes, stream_header: bytes, key: bytes) -> bytes:
+    """Reference for backup-format.md section 5; raises BvReject('corrupt')."""
+    st = bindings.crypto_secretstream_xchacha20poly1305_state()
+    bindings.crypto_secretstream_xchacha20poly1305_init_pull(st, stream_header, key)
+    i, out, first = len(header), [], True
+    while True:
+        r = len(f) - i
+        if r > BV_CHUNK + BV_ABYTES - 1:
+            c, expect = f[i:i + BV_CHUNK + BV_ABYTES], T_MESSAGE
+        elif r < BV_ABYTES:
+            raise BvReject("corrupt", "missing chunk")
+        else:
+            c, expect = f[i:], T_FINAL
+        try:
+            m, tag = bindings.crypto_secretstream_xchacha20poly1305_pull(st, c, header if first else None)
+        except Exception:
+            raise BvReject("corrupt", "chunk does not authenticate")
+        if tag != expect:
+            raise BvReject("corrupt", f"tag {tag}, expected {expect}")
+        out.append(m)
+        i, first = i + len(c), False
+        if expect == T_FINAL:
+            return b"".join(out)
+
+
+def bv_parse_payload(p: bytes):
+    """Reference for backup-format.md section 6; raises BvReject('malformed')."""
+    pos = 0
+
+    def take(lo: int, hi: int) -> bytes:
+        nonlocal pos
+        if pos + 4 > len(p):
+            raise BvReject("malformed", "length prefix past the payload")
+        n = struct.unpack(">I", p[pos:pos + 4])[0]
+        if not lo <= n <= hi or pos + 4 + n > len(p):
+            raise BvReject("malformed", "length out of range")
+        x = p[pos + 4:pos + 4 + n]
+        pos += 4 + n
+        return x
+
+    try:
+        meta = strict_decode(take(1, BV_MAX_META))
+    except BvReject:
+        raise
+    except Exception as e:
+        raise BvReject("malformed", f"meta CBOR: {e}")
+    if not (isinstance(meta, dict) and set(meta) == {"exportedAt", "masterKey", "recordCount", "vaultId"}
+            and _bv_uint(meta["exportedAt"]) and _bv_bytes(meta["masterKey"], 32)
+            and _bv_uint(meta["recordCount"]) and _bv_bytes(meta["vaultId"], 16)):
+        raise BvReject("malformed", "meta")
+    records = [take(1, MAX_ENVELOPE) for _ in range(meta["recordCount"])]
+    if pos != len(p):
+        raise BvReject("malformed", "bytes after the last record")
+    return meta, records
+
+
+def bv_read(f: bytes, key: bytes = BV_FILE_KEY):
+    m, header = bv_parse_header(f)
+    return m, header, bv_parse_payload(bv_read_stream(f, header, m["stream"], key))
+
+
+def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int) -> dict:
+    kek = pwhash.argon2id.kdf(32, normalize_password(BV_EXPORT_PASSWORD), BV_EXPORT_SALT,
+                              opslimit=BV_EXPORT_OPS, memlimit=BV_EXPORT_MEM)
+    pw_aad = layout(label("bv.bvault.v1.keyslot.password"))
+    recovery_slot = {"t": 1, "c": bindings.crypto_box_seal(BV_FILE_KEY, keyslot_pk)}
+    password_slot = {"t": 2, "salt": BV_EXPORT_SALT, "ops": BV_EXPORT_OPS, "mem": BV_EXPORT_MEM,
+                     **seal(kek, pw_aad, BV_FILE_KEY, nonce(0x30))}
+    assert bindings.crypto_box_seal_open(recovery_slot["c"], keyslot_pk, bindings.crypto_box_seed_keypair(
+        kdf(kdf(PHRASE_ENTROPY, 1, "bvrphras"), 2, "bvrckek_"))[1]) == BV_FILE_KEY
+    both = [recovery_slot, password_slot]
+
+    def hmap(slots, stream_header, **over):
+        m = {"keyslots": slots, "phraseCreatedAt": phrase_created_at, "phraseId": PHRASE_ID, "stream": stream_header}
+        m.update(over)
+        return m
+
+    def seal_file(payload: bytes, slots=both, *, tags=None, ad_first=True, ad_later=False, hmap_over=None):
+        st = bindings.crypto_secretstream_xchacha20poly1305_state()
+        sh = bindings.crypto_secretstream_xchacha20poly1305_init_push(st, BV_FILE_KEY)
+        header = bv_header(hmap(slots, sh, **(hmap_over or {})))
+        parts = bv_chunks(payload)
+        tags = tags or [T_MESSAGE] * (len(parts) - 1) + [T_FINAL]
+        body = b""
+        for i, (part, tag) in enumerate(zip(parts, tags)):
+            ad = header if (i == 0 and ad_first) or (i > 0 and ad_later) else None
+            body += bindings.crypto_secretstream_xchacha20poly1305_push(st, part, ad, tag)
+        return header, body
+
+    small_payload = bv_payload(bv_meta(real_records), real_records)
+    two = real_records + [bv_filler(70_000)]
+    two_payload = bv_payload(bv_meta(two), two)
+    base_len = len(bv_payload(bv_meta(real_records + [b"x"]), real_records + [b"x"]))
+    exact = real_records + [bv_filler(BV_CHUNK - base_len + 1)]
+    exact_payload = bv_payload(bv_meta(exact), exact)
+    assert len(exact_payload) == BV_CHUNK and len(two_payload) > BV_CHUNK
+
+    valid_specs = [
+        ("bothKeyslots", "recovery and password keyslots, one final chunk", small_payload, both, real_records),
+        ("recoveryOnly", "recovery keyslot only", small_payload, [recovery_slot], real_records),
+        ("twoChunks", "a payload longer than one chunk", two_payload, both, two),
+        ("exactMultiple", "a payload of exactly 65,536 bytes: an empty final chunk", exact_payload, both, exact),
+    ]
+    files, valid = {}, []
+    for name, case, payload, slots, records in valid_specs:
+        header, body = seal_file(payload, slots)
+        f = header + body
+        files[name] = (header, body)
+        m, hb, (meta, got) = bv_read(f)
+        assert got == records and meta["masterKey"] == MASTER_KEY
+        valid.append({
+            "name": name, "case": case, "file": b64(f), "headerLength": len(hb),
+            "header": {"phraseId": h(PHRASE_ID), "phraseCreatedAt": phrase_created_at, "stream": h(m["stream"]),
+                       "keyslots": [{k: (h(x) if isinstance(x, bytes) else x) for k, x in s.items()} for s in slots]},
+            "meta": {"vaultId": h(VAULT_ID), "masterKey": h(MASTER_KEY), "recordCount": len(records),
+                     "exportedAt": BV_EXPORTED_AT},
+            "records": [{"length": len(e), "blake2b512": bv_hash(e)} for e in records],
+            "payloadLength": len(payload), "chunks": len(bv_chunks(payload)),
+        })
+
+    # --- rejected before any key: sections 2, 3 and 7 ---
+    sh0 = bytes(24)
+    good = hmap(both, sh0)
+    tail = bytes(40)
+
+    def with_slots(*slots):
+        return bv_header(hmap(list(slots), sh0)) + tail
+
+    def slot(base, **over):
+        s = {**base, **over}
+        return {k: x for k, x in s.items() if x is not None}
+
+    reject_header = [
+        ("not-a-backup", "empty file", b""),
+        ("not-a-backup", "magic with one byte changed", b"\x89BVAULT\r" + bv_header(good)[8:] + tail),
+        ("not-a-backup", "a plaintext JSON export", b'{"version":1,"items":[]}'),
+        ("not-a-backup", "formatVersion 0", bv_header(good, version=0) + tail),
+        ("not-a-backup", "wrong magic with formatVersion 2", b"BVAULT\x00\x00" + u16(2) + tail),
+        ("newer-version", "formatVersion 2", bv_header(good, version=2) + tail),
+        ("newer-version", "formatVersion 2 with an unreadable header", BV_MAGIC + u16(2) + b"\xff" * 20),
+        ("malformed", "file ends inside formatVersion", BV_MAGIC + b"\x00"),
+        ("malformed", "file ends inside headerLength", BV_MAGIC + u16(1) + b"\x00\x00"),
+        ("malformed", "headerLength 0", bv_header(raw=b"") + tail),
+        ("malformed", "headerLength 4,097", bv_header(raw=cbor({"x": bytes(4091)})) + tail),
+        ("malformed", "headerLength past the end of the file", bv_header(good, length=len(cbor(good)) + 1000) + tail),
+        ("malformed", "header is not a map", bv_header(raw=cbor([1, 2])) + tail),
+        ("malformed", "header CBOR with a non-shortest length",
+         bv_header(raw=cbor(good).replace(cbor("phraseId") + cbor(PHRASE_ID),
+                                          cbor("phraseId") + b"\x58\x10" + PHRASE_ID)) + tail),
+        ("malformed", "unknown header key", bv_header({**good, "note": "x"}) + tail),
+        ("malformed", "header without phraseId", bv_header({k: x for k, x in good.items() if k != "phraseId"}) + tail),
+        ("malformed", "phraseId of 15 bytes", bv_header({**good, "phraseId": PHRASE_ID[:15]}) + tail),
+        ("malformed", "stream header of 23 bytes", bv_header({**good, "stream": bytes(23)}) + tail),
+        ("malformed", "phraseCreatedAt as text", bv_header({**good, "phraseCreatedAt": "2025"}) + tail),
+        ("malformed", "phraseCreatedAt above 2^53 - 1", bv_header({**good, "phraseCreatedAt": 2**53}) + tail),
+        ("malformed", "no keyslot", with_slots()),
+        ("malformed", "three keyslots", with_slots(recovery_slot, password_slot, password_slot)),
+        ("malformed", "password keyslot first", with_slots(password_slot, recovery_slot)),
+        ("malformed", "password keyslot alone", with_slots(password_slot)),
+        ("malformed", "two recovery keyslots", with_slots(recovery_slot, recovery_slot)),
+        ("malformed", "keyslot type 3", with_slots(recovery_slot, slot(password_slot, t=3))),
+        ("malformed", "recovery keyslot of 79 bytes", with_slots(slot(recovery_slot, c=recovery_slot["c"][:79]))),
+        ("malformed", "recovery keyslot with an extra key", with_slots(slot(recovery_slot, n=bytes(24)))),
+        ("malformed", "password keyslot salt of 15 bytes", with_slots(recovery_slot, slot(password_slot, salt=bytes(15)))),
+        ("malformed", "password keyslot nonce of 23 bytes", with_slots(recovery_slot, slot(password_slot, n=bytes(23)))),
+        ("malformed", "password keyslot wrap of 47 bytes",
+         with_slots(recovery_slot, slot(password_slot, c=password_slot["c"][:47]))),
+        ("malformed", "password keyslot without ops", with_slots(recovery_slot, slot(password_slot, ops=None))),
+        ("malformed", "password keyslot mem as text", with_slots(recovery_slot, slot(password_slot, mem="64"))),
+        ("malformed", "keyslot type true", with_slots(slot(recovery_slot, t=True))),
+    ]
+    rh = []
+    for reason, case, f in reject_header:
+        try:
+            bv_parse_header(f)
+            raise AssertionError(f"accepted: {case}")
+        except BvReject as r:
+            assert r.reason == reason, f"{case}: {r}"
+        rh.append({"case": case, "reason": reason, "file": b64(f)})
+
+    # --- rejected once the file key is known: sections 5 and 6 ---
+    small_h, small_b = files["bothKeyslots"]
+    two_h, two_b = files["twoChunks"]
+    small = small_h + small_b
+    changed_date = bv_header(strict_decode(small_h[14:]) | {"phraseCreatedAt": phrase_created_at + 1})
+    assert len(changed_date) == len(small_h)
+    slot_byte = small_h.index(recovery_slot["c"]) + 10
+
+    def edit(base: str, *, keep=None, append=b"", flip=None) -> dict:
+        """A rejected file given as an edit of a valid one, so large files are not repeated."""
+        e = {"base": base}
+        if keep is not None:
+            e["keep"] = keep
+        if append:
+            e["append"] = h(append)
+        if flip is not None:
+            e["flip"] = flip
+        return e
+
+    def apply(e: dict) -> bytes:
+        f = bytearray(b"".join(files[e["base"]]))
+        if "flip" in e:
+            f[e["flip"]] ^= 1
+        if "keep" in e:
+            f = f[:e["keep"]]
+        return bytes(f) + bytes.fromhex(e.get("append", ""))
+
+    def payload_file(payload: bytes, **kw) -> bytes:
+        header, body = seal_file(payload, **kw)
+        return header + body
+
+    meta = bv_meta(real_records)
+    rr = real_records
+    reject_stream = [
+        ("corrupt", "phraseCreatedAt changed after sealing", changed_date + small_b),
+        ("corrupt", "one byte of the recovery keyslot changed", edit("bothKeyslots", flip=slot_byte)),
+        ("corrupt", "no chunk after the header", edit("bothKeyslots", keep=len(small_h))),
+        ("corrupt", "16 bytes after the header", edit("bothKeyslots", keep=len(small_h) + 16)),
+        ("corrupt", "final chunk missing its last byte", edit("bothKeyslots", keep=len(small) - 1)),
+        ("corrupt", "a byte after the final chunk", edit("bothKeyslots", append=b"\x00")),
+        ("corrupt", "17 bytes after the final chunk", edit("twoChunks", append=bytes(17))),
+        ("corrupt", "final chunk dropped: ends after a full chunk",
+         edit("twoChunks", keep=len(two_h) + BV_CHUNK + BV_ABYTES)),
+        ("corrupt", "first chunk tagged final, then another chunk",
+         payload_file(two_payload, tags=[T_FINAL, T_FINAL])),
+        ("corrupt", "last chunk tagged message", payload_file(small_payload, tags=[T_MESSAGE])),
+        ("corrupt", "only chunk tagged push", payload_file(small_payload, tags=[T_PUSH])),
+        ("corrupt", "only chunk tagged rekey", payload_file(small_payload, tags=[T_REKEY])),
+        ("corrupt", "first chunk tagged push", payload_file(two_payload, tags=[T_PUSH, T_FINAL])),
+        ("corrupt", "first chunk without the header as additional data", payload_file(small_payload, ad_first=False)),
+        ("corrupt", "header as additional data of the second chunk too", payload_file(two_payload, ad_later=True)),
+        ("malformed", "meta with an unknown key", payload_file(bv_payload(bv_meta(rr, note="x"), rr))),
+        ("malformed", "meta without exportedAt", payload_file(bv_payload(bv_meta(rr, exportedAt=None), rr))),
+        ("malformed", "meta masterKey of 31 bytes", payload_file(bv_payload(bv_meta(rr, masterKey=MASTER_KEY[:31]), rr))),
+        ("malformed", "meta vaultId of 15 bytes", payload_file(bv_payload(bv_meta(rr, vaultId=VAULT_ID[:15]), rr))),
+        ("malformed", "meta recordCount negative", payload_file(bv_payload(bv_meta(rr, recordCount=-1), rr))),
+        ("malformed", "meta exportedAt above 2^53 - 1", payload_file(bv_payload(bv_meta(rr, exportedAt=2**53), rr))),
+        ("malformed", "meta is an array", payload_file(bv_payload(cbor([1]), rr))),
+        ("malformed", "meta CBOR with trailing bytes", payload_file(bv_payload(meta + b"\x00", rr))),
+        ("malformed", "meta length 0", payload_file(u32(0) + b"".join(u32(len(e)) + e for e in rr))),
+        ("malformed", "meta length 257", payload_file(u32(257) + bytes(257) + b"".join(u32(len(e)) + e for e in rr))),
+        ("malformed", "payload of 2 bytes", payload_file(b"\x00\x01")),
+        ("malformed", "recordCount one too high", payload_file(bv_payload(bv_meta(rr, recordCount=len(rr) + 1), rr))),
+        ("malformed", "recordCount one too low", payload_file(bv_payload(bv_meta(rr, recordCount=len(rr) - 1), rr))),
+        ("malformed", "a byte after the last record", payload_file(small_payload + b"\x00")),
+        ("malformed", "record of length 0", payload_file(bv_payload(bv_meta(rr + [b""]), rr + [b""]))),
+        ("malformed", "record length past the payload", payload_file(small_payload[:-1])),
+        ("malformed", "record length prefix above the largest envelope",
+         payload_file(bv_payload(bv_meta(rr), rr[:2]) + u32(MAX_ENVELOPE + 1) + rr[2])),
+    ]
+    rs = []
+    for reason, case, f in reject_stream:
+        try:
+            bv_read(apply(f) if isinstance(f, dict) else f)
+            raise AssertionError(f"accepted: {case}")
+        except BvReject as r:
+            assert r.reason == reason, f"{case}: {r}"
+        rs.append({"case": case, "reason": reason, **({"edit": f} if isinstance(f, dict) else {"file": b64(f)})})
+    # the largest record is accepted
+    largest = [bv_filler(MAX_ENVELOPE)]
+    bv_read(payload_file(bv_payload(bv_meta(largest), largest)))
+
+    return {
+        "constants": {
+            "magic": h(BV_MAGIC), "formatVersion": BV_VERSION, "maxHeaderLength": BV_MAX_HEADER,
+            "chunkLength": BV_CHUNK, "maxMetaLength": BV_MAX_META, "maxRecordLength": MAX_ENVELOPE,
+            "export": {"memlimit": BV_EXPORT_MEM, "opslimit": BV_EXPORT_OPS},
+            "passwordKeyslotAad": h(pw_aad),
+        },
+        "inputs": {
+            "fileKey": h(BV_FILE_KEY), "exportPassword": BV_EXPORT_PASSWORD, "passwordKek": h(kek),
+            "keyslotPublicKey": h(keyslot_pk), "phraseEntropy": h(PHRASE_ENTROPY),
+        },
+        "valid": valid,
+        "rejectHeader": rh,
+        "rejectStream": rs,
+    }
+
+
 def main() -> None:
     v: dict = {"recordFormatVersion": RECORD_FORMAT_VERSION, "generator": "tests/vectors/generate.py"}
 
@@ -1304,7 +1692,10 @@ def main() -> None:
         ],
     }
 
-    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors())):
+    backup = backup_vectors(
+        [cbor(vk_env), cbor(rec_env), cbor(item_env)], keyslot_pk, metadata["phraseCreatedAt"]
+    )
+    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup)):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {path}")

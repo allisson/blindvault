@@ -197,7 +197,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Tasks
 
 - [x] `docs/backup-format.md`: magic, version, parameters (fixed export `opslimit` and accepted Argon2id range, D78), keyslots and payload (D3)
-- [ ] `packages/backup`: `.bvault` serialization with secretstream
+- [x] `packages/backup`: `.bvault` serialization with secretstream
 - [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at an estimated 10^14 guesses, with a generated 6-word passphrase offered (D134) and warning that it yields the Master Key (D36)
 - [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)

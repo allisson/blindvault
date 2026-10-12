@@ -56,6 +56,15 @@ export { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';
 export { PAD_BLOCK, pad, unpad } from './pad';
 export { openLocalConfigPart, sealLocalConfigPart } from './local-config';
 export {
+  type BackupMeta,
+  BackupStreamWriter,
+  CHUNK_LENGTH,
+  MAX_META_LENGTH,
+  type OpenedBackupPayload,
+  STREAM_HEADER_LENGTH,
+  openBackupStream,
+} from './backup-stream';
+export {
   PUBLIC_KEY_LENGTH,
   deviceId,
   recoveryEnvelopeRecordId,

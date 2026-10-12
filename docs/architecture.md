@@ -43,6 +43,12 @@ every project through the references in the root `tsconfig.json`.
   `packages/vault` never reads the private key as bytes, and the opened plaintext is wiped.
 - **Envelopes in `crypto`.** The record envelope codec and the verification steps of
   `crypto-spec.md` §9.5 live in `packages/crypto`, since its tests reproduce the vectors.
+- **Backup payload in `crypto` (Phase 2).** The `.bvault` payload holds the Master Key's bytes, so
+  `packages/crypto` builds and reads the stream and payload of `backup-format.md` §5 and §6
+  (`BackupStreamWriter`, `openBackupStream`), as it does the Local Config encrypted part. The file
+  format around it, header and keyslots (§2, §3, §7), lives in `packages/backup`, which depends on
+  `crypto` only. A payload is parsed only once its final chunk authenticates, and the plaintext is
+  wiped either way.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
