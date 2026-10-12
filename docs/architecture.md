@@ -56,6 +56,33 @@ every project through the references in the root `tsconfig.json`.
 - **Load at unlock.** Unlock decrypts every record into memory. An Item Version's `itemId` is
   encrypted, so versions cannot be found per item without decrypting, and search (D132) needs the
   whole state anyway. A load test (2,000 items × 20 versions) checks the cost in Phase 1.
+  - **Load test** (`apps/web/e2e/load.spec.ts`, opt-in: `BV_LOAD_TEST=1 pnpm exec playwright
+    test e2e/load.spec.ts --workers=1`). `e2e/load-fixture.ts` builds the vault in Node through
+    `VaultSession` (2,000 login items, each edited 20 times: 42,002 records with the Vault Key and
+    Device records), the Device KEK coming from the Argon2id worker entry run in-process. The
+    spec writes it into the browser's IndexedDB and times the Unlock click to the unlocked vault,
+    against an empty vault at the same Argon2id parameters (`opslimit` 3, 64 MiB).
+  - **Measured** on 2026-10-12, Apple M1, 16 GB, Playwright 1.63.0 browsers, one browser at a
+    time, two runs each:
+
+    | Run | Empty vault | 42,002 records, first | After the fixes below |
+    | --- | --- | --- | --- |
+    | Chromium | 211–232 ms | 9.2–10.3 s | 8.0 s |
+    | Firefox | 316–446 ms | 14.4–15.3 s | 11.7–12.5 s |
+    | WebKit | 217–233 ms | 61.1–64.5 s | 6.0–6.5 s |
+    | Node, records in memory, `VaultSession.unlock` only | | 11.8 s | 5.8–6.2 s |
+
+    Reading the 42,002 records with `getAll` takes 130–210 ms in every browser; libsodium is about
+    3% of the time, and the tree and the search index under 15 ms. Two fixes came out of it:
+    - `VaultDatabase.records()` read `IDBRequest.result` once per record, which is quadratic in
+      WebKit: with 4,202 records it took 535 ms there, and 15 ms once each `result` is read once
+      (`database.test.ts` › reads each request’s result once).
+    - `encodeCbor` passes `chunkSize: 256` to cbor2, which allocated a 4 KiB writer for each map
+      key it sorts. The encoded bytes do not change (the CBOR and record vectors pass).
+
+    What remains is mostly CBOR: the re-encode check of `crypto-spec.md` §14 on the envelope and
+    the content, and `itemContentLength` encoding the item again for the cap (§9.5 step 9). No
+    unlock target is set.
 - **IndexedDB layout.** Database `blindvault-<vaultId>` (D79) with two object stores: `records`,
   keyed by `[recordType, recordId]` (D158) with no other index, and `localConfig`, holding the one
   Local Config value (`record-content.md` §9). Both are written in one transaction (D82).
