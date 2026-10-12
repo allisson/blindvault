@@ -106,13 +106,13 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### `packages/crypto`
 
-- [ ] Async libsodium initialization and RNG
-- [ ] Opaque key handles registered in a keyring that lock wipes; any use after the wipe throws (CRYPTO-INV-010)
-- [ ] Binary AAD serialization with test vectors (D10)
-- [ ] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
+- [x] Async libsodium initialization and RNG
+- [x] Opaque key handles registered in a keyring that lock wipes; any use after the wipe throws (CRYPTO-INV-010)
+- [x] Binary AAD serialization with test vectors (D10)
+- [x] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
 - [ ] Record envelope codec (strict CBOR, re-encode check) and the `crypto-spec.md` §9.5 verification, reproducing every vector and rejecting every negative one at its `expectedStep`
 - [ ] Generation of master key, vault key (with `keyEpoch`) and record keys (D18)
-- [ ] Key wrap and unwrap with AAD (D8)
+- [x] Key wrap and unwrap with AAD (D8)
 - [ ] Device KEK derivation with Argon2id in a Web Worker and local calibration (D9, D166)
 - [ ] Recovery KEK generation and derivation with `crypto_kdf`, used only through subkeys (D2); recovery keyslot keypair from a subkey (D16)
 - [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
