@@ -127,10 +127,10 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 - [x] `docs/record-content.md` vectors: item, folder, device and Local Config content added to `tests/vectors/generate.py` (D165)
 - [x] HLC: issue, compare, receive rule and HLC state (D19, D62, D109, D163); CRYPTO-INV-020
-- [ ] Vault session over a `RecordStore` interface: keys, HLC, decrypted state loaded at unlock, domain operations (D163)
+- [x] Vault session over a `RecordStore` interface: keys, HLC, decrypted state loaded at unlock, domain operations (D163)
 - [x] Content validators: unknown or invalid content makes an Item or Item Version read-only; Folder and Device keep unknown keys and fail verification on an invalid known value (D52, D59, D165)
-- [ ] Item Version on every edit, move, trash and restore; 20 kept per item; saving unchanged content writes nothing (D6, D165)
-- [ ] Automatic purge 30 days after the tombstone's HLC, at unlock and periodically while unlocked, with an injectable clock (D7, D27, D94)
+- [x] Item Version on every edit, move, trash and restore; 20 kept per item; saving unchanged content writes nothing (D6, D165)
+- [x] Automatic purge 30 days after the tombstone's HLC, at unlock and periodically while unlocked, with an injectable clock (D7, D27, D94)
 - [x] Item model with typed fields (list in overview, section 6 "Data model")
 - [x] Factory templates as versioned code definitions; items store `templateId` and `templateVersion` (D20)
 - [ ] Folder record with encrypted name and `parentId` (D14)
@@ -138,7 +138,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
 - [ ] Folder deletion sends the subtree and its items to the trash with one `trashOperationId`; restore from the trash brings back exactly those records (D14)
 - [ ] Record header (`recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch`) for every record type (D18, D32)
-- [ ] Tombstone and version representation; deterministic keyed `versionId` (D6)
+- [x] Tombstone and version representation; deterministic keyed `versionId` (D6)
 
 ### `packages/storage`
 

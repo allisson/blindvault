@@ -1,6 +1,16 @@
-// @blindvault/vault: Domain model: items, fields, templates, folders, versions, tombstones.
+// @blindvault/vault: Domain model: items, fields, templates, folders, versions, tombstones, and the
+// unlocked vault session (D163).
 
-export { ContentInvalidError, HlcReadOnlyError, VaultError } from './errors';
+export {
+  type BlockedReason,
+  ContentInvalidError,
+  HlcReadOnlyError,
+  RecordBlockedError,
+  RecordNotFoundError,
+  UnlockRejectedError,
+  VaultError,
+  VaultLockedError,
+} from './errors';
 export { FUTURE_CLOCK_BOUND_MS, HlcClock, checkHlc, compareHlc } from './hlc';
 export {
   FIELD_TYPES,
@@ -42,11 +52,31 @@ export {
   LOCAL_CONFIG_FORMAT_VERSION,
   type LocalConfigCleartext,
   type LocalConfigEncrypted,
+  type LocalConfigState,
   PREFERENCE_RANGES,
   type Preferences,
   UnsupportedLocalConfigError,
+  localConfigStateToCbor,
+  localConfigToCbor,
+  parseLocalConfig,
   preferencesValid,
   readLocalConfig,
   readLocalConfigEncrypted,
+  readLocalConfigState,
 } from './local-config';
+export { type Commit, type RecordKey, type RecordStore, type StoredRecord } from './store';
+export {
+  type CreateOptions,
+  type DeviceView,
+  HISTORY_LIMIT,
+  type ItemInput,
+  type ItemView,
+  MAINTENANCE_INTERVAL_MS,
+  PURGE_DELAY_MS,
+  type ReadOnlyReason,
+  type UnlockMethod,
+  type UnlockOptions,
+  VaultSession,
+  type VersionView,
+} from './session';
 export { codePointLength } from './text';

@@ -1,7 +1,13 @@
 // Local Config content (record-content.md §9, D58, D121, D151, D164, D170). An invalid value makes
 // unlock refuse the Local Config as corrupt; an unknown format version asks for an app update.
 
-import { type CborMap, type CborValue, type Hlc, type Sealed } from '@blindvault/crypto';
+import {
+  type CborMap,
+  type CborValue,
+  type Hlc,
+  type Sealed,
+  decodeCbor,
+} from '@blindvault/crypto';
 
 import { ContentInvalidError } from './errors';
 import { checkHlc } from './hlc';
@@ -53,8 +59,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   clipboardClearSeconds: 30,
 };
 
-export interface LocalConfigEncrypted {
-  readonly deviceIdentity: { readonly publicKey: Uint8Array; readonly privateKey: Uint8Array };
+/** The encrypted part without its device identity, which only `packages/crypto` reads as bytes. */
+export interface LocalConfigState {
   readonly preferences: Preferences;
   readonly hlc: Hlc;
   readonly lastBackupAt?: number | bigint;
@@ -63,6 +69,10 @@ export interface LocalConfigEncrypted {
   readonly seenDevices?: readonly Uint8Array[];
   readonly seenRetiredDevices?: readonly Uint8Array[];
   readonly rejectedPeers?: readonly Uint8Array[];
+}
+
+export interface LocalConfigEncrypted extends LocalConfigState {
+  readonly deviceIdentity: { readonly publicKey: Uint8Array; readonly privateKey: Uint8Array };
 }
 
 function check(condition: boolean, what: string): asserts condition {
@@ -152,8 +162,7 @@ function idList(value: CborValue | undefined, what: string): Uint8Array[] {
   return value;
 }
 
-const ENCRYPTED_KEYS = [
-  'deviceIdentity',
+const STATE_KEYS = [
   'preferences',
   'hlc',
   'lastBackupAt',
@@ -163,6 +172,7 @@ const ENCRYPTED_KEYS = [
   'seenRetiredDevices',
   'rejectedPeers',
 ] as const;
+const ENCRYPTED_KEYS = ['deviceIdentity', ...STATE_KEYS] as const;
 
 /** Whether every preference is an integer within its range (D151). */
 export function preferencesValid(p: Preferences): boolean {
@@ -182,7 +192,14 @@ export function readLocalConfigEncrypted(value: CborValue): LocalConfigEncrypted
   const publicKey = identity.get('publicKey');
   const privateKey = identity.get('privateKey');
   check(isBytes(publicKey, 32) && isBytes(privateKey, 32), 'deviceIdentity');
+  const state = new Map(value);
+  state.delete('deviceIdentity');
+  return { deviceIdentity: { publicKey, privateKey }, ...readLocalConfigState(state) };
+}
 
+/** The encrypted part as `openLocalConfigPart` returns it: everything but the device identity. */
+export function readLocalConfigState(value: CborValue): LocalConfigState {
+  check(isTextKeyed(value) && onlyKeys(value, STATE_KEYS), 'encrypted part');
   const prefs = value.get('preferences');
   check(isTextKeyed(prefs) && exactKeys(prefs, Object.keys(PREFERENCE_RANGES)), 'preferences');
   const preferences = Object.fromEntries(prefs) as unknown as Preferences;
@@ -195,8 +212,7 @@ export function readLocalConfigEncrypted(value: CborValue): LocalConfigEncrypted
   const hlc = { physicalMs, counter, deviceId };
   checkHlc(hlc);
 
-  const out: { -readonly [K in keyof LocalConfigEncrypted]: LocalConfigEncrypted[K] } = {
-    deviceIdentity: { publicKey, privateKey },
+  const out: { -readonly [K in keyof LocalConfigState]: LocalConfigState[K] } = {
     preferences,
     hlc,
   };
@@ -227,4 +243,83 @@ export function readLocalConfigEncrypted(value: CborValue): LocalConfigEncrypted
     if (value.has(key)) out[key] = idList(value.get(key), key);
   }
   return out;
+}
+
+function sealedToCbor(sealed: Sealed): CborMap {
+  return new Map<CborValue, CborValue>([
+    ['n', sealed.n],
+    ['c', sealed.c],
+  ]);
+}
+
+/** The cleartext Local Config map, refused unless it reads back as valid. */
+export function localConfigToCbor(config: LocalConfigCleartext): CborMap {
+  const map: CborMap = new Map<CborValue, CborValue>([
+    ['localConfigFormatVersion', LOCAL_CONFIG_FORMAT_VERSION],
+    ['vaultId', config.vaultId],
+    ['localConfigId', config.localConfigId],
+    [
+      'kek',
+      new Map<CborValue, CborValue>([
+        ['salt', config.kek.salt],
+        ['opslimit', config.kek.opslimit],
+        ['memlimit', config.kek.memlimit],
+        ['mkWrap', sealedToCbor(config.kek.mkWrap)],
+      ]),
+    ],
+    ['encrypted', sealedToCbor(config.encrypted)],
+  ]);
+  if (config.prf) {
+    map.set(
+      'prf',
+      new Map<CborValue, CborValue>([
+        ['credentialId', config.prf.credentialId],
+        ['prfInput', config.prf.prfInput],
+        ['mkWrap', sealedToCbor(config.prf.mkWrap)],
+      ]),
+    );
+  }
+  if (config.replacesVaultId) map.set('replacesVaultId', config.replacesVaultId);
+  readLocalConfig(map);
+  return map;
+}
+
+/** The encrypted part's map without the device identity, refused unless it reads back as valid. */
+export function localConfigStateToCbor(state: LocalConfigState): CborMap {
+  const map: CborMap = new Map<CborValue, CborValue>([
+    [
+      'preferences',
+      new Map<CborValue, CborValue>([
+        ['autoLockMinutes', state.preferences.autoLockMinutes],
+        ['hiddenLockSeconds', state.preferences.hiddenLockSeconds],
+        ['clipboardClearSeconds', state.preferences.clipboardClearSeconds],
+      ]),
+    ],
+    ['hlc', [state.hlc.physicalMs, state.hlc.counter, state.hlc.deviceId]],
+  ]);
+  if (state.lastBackupAt !== undefined) map.set('lastBackupAt', state.lastBackupAt);
+  if (state.lastPhraseId) map.set('lastPhraseId', state.lastPhraseId);
+  if (state.lastSyncByPeer) {
+    map.set(
+      'lastSyncByPeer',
+      state.lastSyncByPeer.map(([id, at]) => [id, at]),
+    );
+  }
+  for (const key of ['seenDevices', 'seenRetiredDevices', 'rejectedPeers'] as const) {
+    const ids = state[key];
+    if (ids) map.set(key, [...ids]);
+  }
+  readLocalConfigState(map);
+  return map;
+}
+
+/** Decodes and reads stored Local Config bytes; any failure is a corrupt Local Config. */
+export function parseLocalConfig(bytes: Uint8Array): LocalConfigCleartext {
+  let value: CborValue;
+  try {
+    value = decodeCbor(bytes);
+  } catch {
+    throw new ContentInvalidError('local config');
+  }
+  return readLocalConfig(value);
 }
