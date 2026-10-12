@@ -66,7 +66,10 @@ function equal(a: Uint8Array, b: Uint8Array): boolean {
 export function encodeCbor(value: CborValue): Uint8Array {
   check(value);
   try {
-    return encode(value, { cde: true });
+    // cbor2 starts a new writer for each map key it sorts, each allocating `chunkSize` bytes
+    // (4096 by default): 256 halves the cost of unlock (architecture.md, load test). The bytes
+    // are the same; `chunkSize` is only the writer's buffer size.
+    return encode(value, { cde: true, chunkSize: 256 });
   } catch {
     throw new EncodingError('value cannot be encoded as CBOR');
   }

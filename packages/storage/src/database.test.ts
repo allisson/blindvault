@@ -10,8 +10,8 @@ import {
   randomId,
   sealRecord,
 } from '@blindvault/crypto';
-import { IDBFactory } from 'fake-indexeddb';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { IDBFactory, IDBRequest } from 'fake-indexeddb';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DATABASE_PREFIX,
@@ -118,6 +118,23 @@ describe('vault database (D79, D82, D158)', () => {
     const { keys } = await raw(databaseName(vaultId));
     expect(keys).toContainEqual([RecordType.folder, a.recordId.slice().buffer]);
     db.close();
+  });
+
+  it('reads each request’s result once, however many records it holds', async () => {
+    // Reading `result` per record made unlock quadratic in the number of records in WebKit
+    // (architecture.md, load test).
+    const db = await VaultDatabase.open(vaultId, factory);
+    const records = Array.from({ length: 50 }, (_, i) => folder(`f${String(i)}`));
+    await db.commit({ put: records, delete: [], localConfig: LOCAL_CONFIG });
+    const result = vi.spyOn(IDBRequest.prototype, 'result', 'get');
+    try {
+      expect(await db.records()).toHaveLength(50);
+      // getAllKeys and getAll: one read each.
+      expect(result).toHaveBeenCalledTimes(2);
+    } finally {
+      result.mockRestore();
+      db.close();
+    }
   });
 
   it('deletes and replaces in the same commit as the new Local Config', async () => {

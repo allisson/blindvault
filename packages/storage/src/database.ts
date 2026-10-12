@@ -205,12 +205,15 @@ export class VaultDatabase {
     const keys = store.getAllKeys();
     const values = store.getAll();
     await settled(tx);
+    // Read each `result` once: reading it per record made unlock quadratic in WebKit.
+    const allKeys = keys.result;
+    const allValues: unknown[] = values.result;
     const out: EncryptedRecord[] = [];
-    keys.result.forEach((key, i) => {
+    allKeys.forEach((key, i) => {
       if (!Array.isArray(key) || key.length !== 2) return;
       const [recordType, recordId] = key;
       if (typeof recordType !== 'number' || !(recordId instanceof ArrayBuffer)) return;
-      const value: unknown = values.result[i];
+      const value = allValues[i];
       out.push({
         recordType: recordType as RecordType,
         recordId: new Uint8Array(recordId),
