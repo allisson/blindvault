@@ -2,7 +2,8 @@
 
 Status: **go for D4** (see Conclusion). Desktop engines measured locally; Windows Firefox ↔ A54
 by QR on the same Wi-Fi; Mac Chrome ↔ A54 across networks with STUN; iPhone ↔ A54 by QR on the
-same Wi-Fi (LAN-only) and across networks (STUN). The installed apps and the D136 revision pending.
+same Wi-Fi (LAN-only) and across networks (STUN); both installed apps by QR. D136 revised by D161;
+the mDNS-only case moves to Phase 4.
 
 ## Local desktop run (2026-10-09)
 
@@ -140,6 +141,23 @@ Round 4 of 4. Different networks: the A54 had Wi-Fi off. STUN on (Google and Clo
 - Same shape as Mac Chrome ↔ A54: the A54 on mobile data again hit the 10 s gathering cap, and its
   answer is again the largest payload, 125 bytes (QR version 8), which the iPhone read in 0.63 s
   with the WASM decoder.
+
+## iPhone 14 installed app (A) ↔ Samsung A54 installed app (B), QR, LAN-only (2026-10-12)
+
+Both sides in the installed app (`standalone: true`). Same Wi-Fi, LAN-only, camera not granted on
+the iPhone before gathering.
+
+| | iPhone 14, installed app (A, offer) | A54, Chrome installed app (B, answer) |
+| --- | --- | --- |
+| Camera granted before gathering | no | yes (scanned first) |
+| Candidates sent | 1 mDNS host | 1 IPv4 host, 1 IPv6 host (2 lines dropped) |
+| Payload | 92 bytes, 138 chars, QR version 6 | 99 bytes, 149 chars, QR version 6 |
+| Scan time | 1.4 s, zxing-wasm | 0.67 s, native `BarcodeDetector` |
+| Selected pair (local → remote) | host → host | IPv4 host → peer-reflexive |
+
+- **Connected**; data-channel round trips of 6–18 ms.
+- Camera QR scanning works in the installed app on iOS and Android, with the same decoders and the
+  same candidate behavior as the browser tabs (round 1). No prompt reported the app as hidden.
 
 ## Conclusion (D4)
 

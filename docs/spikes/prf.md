@@ -1,8 +1,7 @@
 # Spike result — WebAuthn PRF (§5.5, D75, D84, D120)
 
-Status: **in progress**. Samsung A54 (Chrome tab) measured; Windows Chrome (Google Password
-Manager), Windows Firefox (Windows Hello), Mac Chrome and Firefox (iCloud
-Keychain), iPhone 14 Safari and Mac Safari (iCloud Keychain) measured; the installed apps pending.
+Status: **done**. Measured on every browser of the matrix and in the installed apps on iOS and
+Android; Bitwarden in Chrome on Windows is optional.
 
 Setup: a throwaway passkey on the spike origin, `userVerification: required`, PRF evaluated with a
 fixed 32-byte input at create and at get.
@@ -108,7 +107,39 @@ Safari tab, passkey saved to iCloud Keychain.
 - PRF works in Safari on macOS, the same as on iOS, and `getClientCapabilities()` reports the same
   set as the iPhone (`extension:prf`, the signal API, `conditionalCreate`; no `largeBlob`).
 
+## iPhone 14, installed app (Safari 26.6), iCloud Keychain (2026-10-12)
+
+The installed app (`standalone: true`), passkey saved to iCloud Keychain.
+
+| Step | Attachment | UV | BE | BS | PRF | Page hidden |
+| --- | --- | --- | --- | --- | --- | --- |
+| create | platform | yes | yes | yes | enabled, 32-byte output at create | no |
+| get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
+
+- PRF works in the installed app as in the Safari tab, with the same capabilities, and no prompt
+  reported the app as hidden.
+
+## Samsung A54, installed app (Chrome 155) (2026-10-12)
+
+The installed app (`standalone: true`), passkey in Google Password Manager as in the tab.
+
+| Step | Attachment | UV | BE | BS | PRF | Page hidden |
+| --- | --- | --- | --- | --- | --- | --- |
+| create | platform | yes | yes | yes | enabled, 32-byte output at create | no |
+| get, twice | — | yes | yes | yes | 32-byte output, the same both times | no |
+
+- PRF works in the installed app as in the Chrome tab. `getClientCapabilities()` reports
+  `extension:prf` and the signal API, and, unlike Safari, `extension:largeBlob`.
+
+## Conclusion
+
+PRF works on every browser of the matrix (Chromium desktop and Android, Firefox desktop, Safari on
+macOS and iOS) and in the installed apps on iOS and Android, with a 32-byte output at create and a
+stable output across assertions. Every passkey was synced (BE and BS set) except Windows Hello in
+Firefox, which is device-bound. A third-party provider (Bitwarden) can take the prompt first, on
+Windows and on iOS, so the product cannot assume which authenticator answers.
+
 ## Pending
 
-- A54 installed app; iPhone 14 installed app; Windows laptop (Chrome with Bitwarden, optional).
+- Optional: Windows laptop, Chrome with Bitwarden.
 - Why the Bitwarden save failed on iOS (error not captured), optional.
