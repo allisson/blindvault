@@ -16,3 +16,9 @@ export {
   parseBackup,
   sealBackup,
 } from './format';
+export {
+  createPasswordKeyslot,
+  createRecoveryKeyslot,
+  openPasswordKeyslot,
+  openRecoveryKeyslot,
+} from './keyslots';

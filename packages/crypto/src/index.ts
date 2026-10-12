@@ -33,6 +33,7 @@ export {
   type KdfResponse,
   calibrateDeviceKek,
   deriveDeviceKek,
+  derivePasswordKek,
 } from './kdf-worker';
 export {
   PHRASE_WORDS,
@@ -55,6 +56,7 @@ export { NONCE_LENGTH, type Sealed, TAG_LENGTH, open, seal, unwrapKey, wrapKey }
 export { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';
 export { PAD_BLOCK, pad, unpad } from './pad';
 export { openLocalConfigPart, sealLocalConfigPart } from './local-config';
+export { PASSWORD_KEYSLOT_AAD, SEALED_KEY_LENGTH, openSealedKey, sealKeyTo } from './keyslot';
 export {
   type BackupMeta,
   BackupStreamWriter,

@@ -216,6 +216,9 @@ Every file carries the fixed file key in `inputs.fileKey`, so the stream cases r
 A rejected file is given whole, or as an `edit` of a valid one (`base`, then `flip` one byte at an
 offset, `keep` a prefix, `append` hex) so the large files are not repeated. Since the sealed box and
 the stream header are random, every run of the generator rewrites this file with new bytes; the
-generator checks every file against its own reference reader before writing it. The cases that need
-a keyslot opened or the restore checks of section 8 (parameters outside the range, the phrase and
-Master Key checks) are added with those steps.
+generator checks every file against its own reference reader before writing it.
+`inputs.phraseEntropy` and `inputs.exportPassword` open the recovery and password keyslots of every
+valid file, and `inputs.passwordKek` is the KEK PyNaCl derived at the export parameters.
+`rejectPasswordKeyslot` holds password keyslots whose parameters are outside the accepted range,
+refused before Argon2id runs while the recovery keyslot of the same file still opens. The restore
+checks of section 8 (the phrase and Master Key checks) are added with that step.
