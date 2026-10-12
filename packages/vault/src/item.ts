@@ -2,6 +2,7 @@
 // when valid.
 
 import { type CborMap, type CborValue, type TotpValue, checkTotpValue } from '@blindvault/crypto';
+import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
 import { ContentInvalidError } from './errors';
@@ -104,6 +105,24 @@ export function isValidSeedPhrase(value: string): boolean {
     value.normalize('NFKD') === value &&
     words.every((w) => WORDS.has(w))
   );
+}
+
+/**
+ * Seed-phrase input as stored: NFKD, lowercase, words separated by one U+0020. It never repairs a
+ * word: `isValidSeedPhrase` still refuses one outside the list (§4).
+ */
+export function normalizeSeedPhrase(input: string): string {
+  return input
+    .normalize('NFKD')
+    .toLowerCase()
+    .split(/\p{White_Space}+/u)
+    .filter((w) => w !== '')
+    .join(' ');
+}
+
+/** Whether a valid seed phrase also has a valid BIP39 checksum; a bad one is shown, not refused. */
+export function seedPhraseChecksumValid(value: string): boolean {
+  return isValidSeedPhrase(value) && validateMnemonic(value, wordlist);
 }
 
 function readTotp(value: CborValue | undefined): TotpValue {
