@@ -35,8 +35,10 @@ export {
   isValidDate,
   isValidSeedPhrase,
   itemToCbor,
+  normalizeSeedPhrase,
   normalizeTags,
   readItem,
+  seedPhraseChecksumValid,
 } from './item';
 export {
   DISPLAY_NAME_MAX,
