@@ -7,6 +7,7 @@ import {
   type Hlc,
   type Sealed,
   decodeCbor,
+  encodeCbor,
 } from '@blindvault/crypto';
 
 import { ContentInvalidError } from './errors';
@@ -322,4 +323,15 @@ export function parseLocalConfig(bytes: Uint8Array): LocalConfigCleartext {
     throw new ContentInvalidError('local config');
   }
   return readLocalConfig(value);
+}
+
+/**
+ * The same stored Local Config without `replacesVaultId`, once the replaced database is deleted
+ * (D96). Only the cleartext part changes: no wrap is bound to that key. Throws as `parseLocalConfig`.
+ */
+export function localConfigWithoutReplaces(bytes: Uint8Array): Uint8Array {
+  const { vaultId, localConfigId, kek, prf, encrypted } = parseLocalConfig(bytes);
+  return encodeCbor(
+    localConfigToCbor({ vaultId, localConfigId, kek, ...(prf ? { prf } : {}), encrypted }),
+  );
 }

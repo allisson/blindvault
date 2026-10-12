@@ -1228,3 +1228,140 @@ describe('lock (CRYPTO-INV-010)', () => {
     await expect(pending).rejects.toThrow(VaultLockedError);
   });
 });
+
+describe('local settings (D151, D168)', () => {
+  const NEW_SALT = new Uint8Array(16).fill(9);
+  const NEW_PARAMS = { opslimit: 3, memlimit: MEMLIMIT };
+
+  it('changes the password with the current one, re-wrapping only the Master Key', async () => {
+    const { session, store, keyring } = await create();
+    const itemId = await session.createItem(login());
+    const before = parseLocalConfig(store.localConfig);
+    const records = new Map(store.held);
+    const commits = store.commits.length;
+    await session.changePassword({
+      current: kek(keyring),
+      next: kek(keyring, 2),
+      salt: NEW_SALT,
+      kdfParams: NEW_PARAMS,
+    });
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)?.put).toEqual([]);
+    expect(store.commits.at(-1)?.delete).toEqual([]);
+    expect(store.held).toEqual(records);
+    const after = parseLocalConfig(store.localConfig);
+    expect(after.localConfigId).toEqual(before.localConfigId);
+    expect(after.kek.salt).toEqual(NEW_SALT);
+    expect(after.kek.opslimit).toBe(3);
+    expect(after.kek.mkWrap.c).not.toEqual(before.kek.mkWrap.c);
+    // The session keeps working, and a later write keeps the new wrap.
+    await session.updateItem(itemId, login('Renamed'));
+    expect(parseLocalConfig(store.localConfig).kek).toEqual(after.kek);
+    session.lock();
+    await expect(unlock(store, new Clock(), 1)).rejects.toThrow(UnlockRejectedError);
+    expect((await unlock(store, new Clock(), 2)).item(itemId)?.item?.title).toBe('Renamed');
+  });
+
+  it('refuses another current password, writing nothing', async () => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    const bytes = store.localConfig;
+    await expect(
+      session.changePassword({
+        current: kek(keyring, 3),
+        next: kek(keyring, 2),
+        salt: NEW_SALT,
+        kdfParams: NEW_PARAMS,
+      }),
+    ).rejects.toThrow(UnlockRejectedError);
+    expect(store.commits).toHaveLength(commits);
+    expect(store.localConfig).toBe(bytes);
+    session.lock();
+    expect((await unlock(store, new Clock(), 1)).locked).toBe(false);
+  });
+
+  it('refuses parameters outside the accepted range and a short salt', async () => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    const base = { current: kek(keyring), next: kek(keyring, 2) };
+    await expect(
+      session.changePassword({
+        ...base,
+        salt: NEW_SALT,
+        kdfParams: { opslimit: 1, memlimit: MEMLIMIT },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      session.changePassword({ ...base, salt: new Uint8Array(15), kdfParams: NEW_PARAMS }),
+    ).rejects.toThrow(RangeError);
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('keeps the old wrap when the commit fails', async () => {
+    const { session, store, keyring } = await create();
+    const bytes = store.localConfig;
+    store.failNext = true;
+    await expect(
+      session.changePassword({
+        current: kek(keyring),
+        next: kek(keyring, 2),
+        salt: NEW_SALT,
+        kdfParams: NEW_PARAMS,
+      }),
+    ).rejects.toThrow('storage failure');
+    expect(store.localConfig).toBe(bytes);
+    // The next commit still carries the old wrap: the in-memory cleartext did not change.
+    await session.createItem(login());
+    expect(parseLocalConfig(store.localConfig).kek).toEqual(parseLocalConfig(bytes).kek);
+  });
+
+  it('refuses a password change and preferences once locked', async () => {
+    const { session, keyring } = await create();
+    const current = kek(keyring);
+    const next = kek(keyring, 2);
+    session.lock();
+    await expect(
+      session.changePassword({ current, next, salt: NEW_SALT, kdfParams: NEW_PARAMS }),
+    ).rejects.toThrow(VaultLockedError);
+    await expect(
+      session.setPreferences({
+        autoLockMinutes: 2,
+        hiddenLockSeconds: 0,
+        clipboardClearSeconds: 10,
+      }),
+    ).rejects.toThrow(VaultLockedError);
+  });
+
+  it('sets preferences within their ranges and keeps them across unlocks', async () => {
+    const { session, store } = await create();
+    const next = { autoLockMinutes: 60, hiddenLockSeconds: 0, clipboardClearSeconds: 120 };
+    await session.setPreferences({ ...next, extra: 1 } as typeof next);
+    expect(session.preferences).toEqual(next);
+    expect(store.commits.at(-1)?.put).toEqual([]);
+    const commits = store.commits.length;
+    await session.setPreferences(next);
+    expect(store.commits).toHaveLength(commits);
+    session.lock();
+    expect((await unlock(store)).preferences).toEqual(next);
+  });
+
+  it.each([
+    { autoLockMinutes: 0, hiddenLockSeconds: 60, clipboardClearSeconds: 30 },
+    { autoLockMinutes: 61, hiddenLockSeconds: 60, clipboardClearSeconds: 30 },
+    { autoLockMinutes: 5, hiddenLockSeconds: 901, clipboardClearSeconds: 30 },
+    { autoLockMinutes: 5, hiddenLockSeconds: -1, clipboardClearSeconds: 30 },
+    { autoLockMinutes: 5, hiddenLockSeconds: 60, clipboardClearSeconds: 9 },
+    { autoLockMinutes: 5, hiddenLockSeconds: 60, clipboardClearSeconds: 121 },
+    { autoLockMinutes: 1.5, hiddenLockSeconds: 60, clipboardClearSeconds: 30 },
+  ])('refuses preferences outside their ranges (%o)', async (preferences) => {
+    const { session, store } = await create();
+    const commits = store.commits.length;
+    await expect(session.setPreferences(preferences)).rejects.toThrow(RangeError);
+    expect(store.commits).toHaveLength(commits);
+    expect(session.preferences).toEqual({
+      autoLockMinutes: 5,
+      hiddenLockSeconds: 60,
+      clipboardClearSeconds: 30,
+    });
+  });
+});

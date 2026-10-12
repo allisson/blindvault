@@ -48,8 +48,8 @@ every project through the references in the root `tsconfig.json`.
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
   CRYPTO-INV-010).
 - **Argon2id worker.** The worker entry lives in `packages/crypto` and loads its own libsodium;
-  `apps/web` starts it with `new Worker(new URL('@blindvault/crypto/kdf.worker', import.meta.url),
-  { type: 'module' })` and hands it to `deriveDeviceKek` or `calibrateDeviceKek`, which take any
+  `apps/web` starts it through Vite's worker import (`import KdfWorker from
+  '@blindvault/crypto/kdf.worker?worker'`, bundled as its own module worker) and hands it to `deriveDeviceKek` or `calibrateDeviceKek`, which take any
   `KdfPort` (tests run the handler in-process). One worker serves one request: the password is
   transferred to it and wiped on both sides, it returns the Device KEK, and the client terminates it.
   Parameters outside the accepted range are refused before the worker starts.
@@ -85,6 +85,24 @@ every project through the references in the root `tsconfig.json`.
     `apps/web` passes the reader of `replacesVaultId` from `packages/vault`.
   - **Persistence.** `requestPersistence()` and `storageStatus()` wrap `persist()`,
     `persisted()` and `estimate()`, reporting `null` where the browser gives nothing.
+- **App window lifecycle (`apps/web/src/app/controller.ts`).** One `VaultController` per app
+  window wires `packages/vault` to `packages/storage` and implements no cryptography. At start it
+  runs the cleanup under the installation guard, then holds the vault's Web Lock or shows the
+  take-over screen (D51); a lost lock locks the vault. Creation holds the installation guard until
+  its one commit; every lock bumps an epoch, and a creation or unlock started before it is aborted
+  with nothing persisted (D104). The Device record name is "<browser> on <system>" from the user
+  agent, which never chooses the layout (D15).
+- **Locks while unlocked.** `LockTimers` runs the inactivity lock (user input restarts it) and the
+  hidden-app lock (`visibilitychange`, 0 locks at once) independently, from the vault's
+  preferences (D54, D151). Ctrl/⌘ + Shift + L locks. Navigation resets to the vault root on lock.
+- **Navigation (D167).** An in-memory screen stack; no router. ESLint forbids `history.pushState`,
+  `history.replaceState` and writing `location.hash`, `search`, `assign` and `replace` in
+  `apps/web/src` (covered by `tests/boundaries.test.ts`); Playwright checks the URL and history
+  length after the flows.
+- **Layouts (D15).** `useLayout` reads two width media queries (640 and 1024 px); the three shells
+  place the same panes and hold no vault or security logic.
+- **Password strength (D71).** zxcvbn-ts with the common, English and Portuguese dictionaries,
+  loaded on first use; feedback in the UI language; score 4 required before create or change.
 - **i18n.** UI copy in `en` and `pt-BR` from Phase 1; template role names are localized, so a
   field without a label reads in the viewer's language (D165).
 
@@ -102,12 +120,12 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `eslint`, `@eslint/js`, `typescript-eslint`, `globals` | root | Linting with type information (`strictTypeChecked`) and the package-boundary rule. |
 | `prettier` | root | Formatting. Markdown is excluded so the normative docs keep their hand formatting. |
 | `@types/node` 24 | root, `apps/web` | Types for config files and tests running in Node. Matches the pinned Node major. |
-| `vitest`, `@vitest/coverage-v8` | each package, `tests` | Unit tests (stack) and the 95% coverage gate on `packages/*`. |
+| `vitest`, `@vitest/coverage-v8` | each package, `tests`, `apps/web` (`vitest` only) | Unit tests (stack) and the 95% coverage gate on `packages/*`. |
 | `@playwright/test` | `apps/web` | End-to-end tests on Chromium, Firefox and WebKit (stack). |
 | `vite`, `@vitejs/plugin-react` | `apps/web` | Build and dev server (stack). |
 | `tailwindcss`, `@tailwindcss/vite` | `apps/web` | Styling (stack). |
 | `@types/react`, `@types/react-dom` | `apps/web` | Types for React. |
-| `fake-indexeddb` 6.2.5 | `packages/storage`, `tests` | An in-memory IndexedDB for Vitest in Node, which has none; the storage tests and the vault-over-IndexedDB test run on it, and Playwright covers real browsers. No runtime dependencies, no install scripts. Test only, never bundled. Phase 1. |
+| `fake-indexeddb` 6.2.5 | `packages/storage`, `tests`, `apps/web` | An in-memory IndexedDB for Vitest in Node, which has none; the storage tests and the vault-over-IndexedDB test run on it, and Playwright covers real browsers. No runtime dependencies, no install scripts. Test only, never bundled. Phase 1. |
 
 ### Runtime
 
@@ -117,7 +135,7 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `libsodium-wrappers-sumo` 0.8.4 | `packages/crypto` | Every primitive of `crypto-spec.md` §2 (stack, §5.1). The sumo build is needed for `crypto_pwhash` and `crypto_kdf`. Same line as BlindPass. Phase 1. |
 | `cbor2` 2.3.0 | `packages/crypto` | Deterministic CBOR with a strict decoder (D10), chosen at Gate 0 (below). Phase 1. |
 | `@scure/bip39` 2.4.0 | `packages/crypto`, `packages/vault` | BIP39 encoding of the Recovery Phrase (D2), the passphrase word list (D128) and seed-phrase word checks (stack). Encoding only: its PBKDF2 seed is never used, and its entropy comes from libsodium's RNG, never from its own generator. Its one dependency, `@noble/hashes` 2.4.0, supplies the SHA-256 of the checksum. Same line as BlindPass. Phase 1. |
-| `@zxcvbn-ts/core` 3.x, `@zxcvbn-ts/language-common`, `-language-en`, `-language-pt-br` | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
+| `@zxcvbn-ts/core` 3.0.4, `@zxcvbn-ts/language-common` 3.0.4, `-language-en` 3.0.2, `-language-pt-br` 3.0.2 | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
 | `@base-ui/react` 1.x | `apps/web` | Headless, accessible dialog, menu and popover primitives, already used by BlindPass; no styling of its own, so Tailwind stays the only styling layer. Phase 1. |
 
 Each is pinned to an exact version at least 14 days old when its phase adds it. Runtime

@@ -17,6 +17,8 @@ import {
   type RecordEnvelope,
   type RecordHeader,
   RecordType,
+  SALT_LENGTH,
+  type Sealed,
   type SymmetricKey,
   checkKdfParams,
   deriveMasterSubkeys,
@@ -66,6 +68,7 @@ import {
   type Preferences,
   localConfigStateToCbor,
   localConfigToCbor,
+  preferencesValid,
   readLocalConfigState,
 } from './local-config';
 import { type RecordKey, type RecordStore, type StoredRecord } from './store';
@@ -204,10 +207,15 @@ interface Write {
   readonly envelope: RecordEnvelope;
 }
 
+type Cleartext = Omit<LocalConfigCleartext, 'encrypted'>;
+
 interface Plan<T> {
   readonly writes: readonly Write[];
   readonly deletes: readonly RecordKey[];
   readonly result: T;
+  /** A new cleartext part or new preferences: commits the Local Config even with no record. */
+  readonly cleartext?: Cleartext;
+  readonly preferences?: Preferences;
 }
 
 /** The records held, decrypted at unlock. */
@@ -385,7 +393,7 @@ export class VaultSession {
   readonly #keyring: Keyring;
   readonly #subkeys: MasterSubkeys;
   readonly #identity: DeviceIdentity;
-  readonly #cleartext: Omit<LocalConfigCleartext, 'encrypted'>;
+  #cleartext: Cleartext;
   #localState: LocalConfigState;
   readonly #clock: HlcClock;
   #state: State;
@@ -517,6 +525,62 @@ export class VaultSession {
       keyring.wipeAll();
       throw error;
     }
+  }
+
+  // --- local settings ----------------------------------------------------------------------------
+
+  /**
+   * Changes the local password (D168). `current` must open the Master Key wrap, so a holder of the
+   * unlocked device cannot set a password of their own (`UnlockRejectedError` otherwise); the
+   * Master Key is then re-wrapped under `next`, with its new salt and calibrated parameters. Only
+   * Local Config is written: no record changes, no HLC is issued. The caller wipes both KEKs.
+   */
+  async changePassword(options: {
+    readonly current: SymmetricKey;
+    readonly next: SymmetricKey;
+    readonly salt: Uint8Array;
+    readonly kdfParams: KdfParams;
+  }): Promise<void> {
+    const { current, next, salt, kdfParams } = options;
+    checkKdfParams(kdfParams);
+    if (salt.length !== SALT_LENGTH) throw new RangeError('salt is 16 bytes');
+    await this.#run(() => {
+      const { vaultId, localConfigId } = this.#cleartext;
+      const aad = localAad(LocalPurpose.mkWrapDeviceKek, vaultId, localConfigId);
+      let masterKey: SymmetricKey;
+      try {
+        masterKey = unwrapKey(this.#keyring, current, aad, this.#cleartext.kek.mkWrap);
+      } catch (error) {
+        if (error instanceof DecryptionError) throw new UnlockRejectedError();
+        throw error;
+      }
+      let mkWrap: Sealed;
+      try {
+        mkWrap = wrapKey(next, aad, masterKey);
+      } finally {
+        this.#keyring.release(masterKey);
+      }
+      const kek = { salt: salt.slice(), ...kdfParams, mkWrap };
+      return { writes: [], deletes: [], result: undefined, cleartext: { ...this.#cleartext, kek } };
+    });
+  }
+
+  /**
+   * Sets the security preferences (D151). A value outside its range is refused with
+   * `RangeError`, never clamped; unchanged preferences write nothing.
+   */
+  async setPreferences(preferences: Preferences): Promise<void> {
+    const next: Preferences = {
+      autoLockMinutes: preferences.autoLockMinutes,
+      hiddenLockSeconds: preferences.hiddenLockSeconds,
+      clipboardClearSeconds: preferences.clipboardClearSeconds,
+    };
+    if (!preferencesValid(next)) throw new RangeError('preference outside its range');
+    await this.#run(() => {
+      const held = this.#localState.preferences;
+      const same = (Object.keys(next) as (keyof Preferences)[]).every((k) => next[k] === held[k]);
+      return { writes: [], deletes: [], result: undefined, ...(same ? {} : { preferences: next }) };
+    });
   }
 
   // --- lock ------------------------------------------------------------------------------------
@@ -1124,16 +1188,19 @@ export class VaultSession {
   }
 
   /** The whole Local Config with the encrypted part re-sealed around the current HLC state. */
-  #localConfig(): { bytes: Uint8Array; localState: LocalConfigState } {
-    const localState = { ...this.#localState, hlc: this.#clock.state };
-    const { vaultId, localConfigId } = this.#cleartext;
+  #localConfig(
+    cleartext: Cleartext = this.#cleartext,
+    preferences: Preferences = this.#localState.preferences,
+  ): { bytes: Uint8Array; localState: LocalConfigState } {
+    const localState = { ...this.#localState, preferences, hlc: this.#clock.state };
+    const { vaultId, localConfigId } = cleartext;
     const encrypted = sealLocalConfigPart(
       this.#subkeys.localConfig,
       localAad(LocalPurpose.localConfig, vaultId, localConfigId),
       localConfigStateToCbor(localState),
       this.#identity,
     );
-    const bytes = encodeCbor(localConfigToCbor({ ...this.#cleartext, encrypted }));
+    const bytes = encodeCbor(localConfigToCbor({ ...cleartext, encrypted }));
     return { bytes, localState };
   }
 
@@ -1146,8 +1213,9 @@ export class VaultSession {
     const task = this.#queue.then(async () => {
       this.#unlocked();
       const plan = build();
-      if (plan.writes.length === 0 && plan.deletes.length === 0) return plan.result;
-      const localConfig = this.#localConfig();
+      const local = plan.cleartext !== undefined || plan.preferences !== undefined;
+      if (plan.writes.length === 0 && plan.deletes.length === 0 && !local) return plan.result;
+      const localConfig = this.#localConfig(plan.cleartext, plan.preferences);
       await this.#store.commit({
         put: plan.writes.map((w) => ({
           recordType: w.header.recordType as RecordType,
@@ -1159,6 +1227,7 @@ export class VaultSession {
       });
       this.#unlocked();
       this.#localState = localConfig.localState;
+      if (plan.cleartext) this.#cleartext = plan.cleartext;
       for (const d of plan.deletes) this.#forget(d);
       for (const w of plan.writes) this.#apply(w);
       return plan.result;
