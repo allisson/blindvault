@@ -1,5 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { createVault } from './create';
+
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
 
@@ -37,10 +39,7 @@ for (const [layout, width] of WIDTHS) {
   test(`creates, renames, moves, trashes and restores folders on ${layout}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
-    await page.getByTestId('new-password').fill(PASSWORD);
-    await page.getByTestId('confirm-password').fill(PASSWORD);
-    await button(page, 'Create vault').click();
-    await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+    await createVault(page, PASSWORD);
     const list = page.getByRole('region').filter({ has: page.getByRole('heading', { level: 2 }) });
 
     await folders(page, layout);

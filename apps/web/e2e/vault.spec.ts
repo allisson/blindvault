@@ -1,5 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { confirmPhrase, createVault } from './create';
+
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(90_000);
 
@@ -8,10 +10,7 @@ const NEXT = 'meadow-copper-signal-ferry-5830';
 
 async function create(page: Page, password = PASSWORD) {
   await page.goto('/');
-  await page.getByTestId('new-password').fill(password);
-  await page.getByTestId('confirm-password').fill(password);
-  await page.getByRole('button', { name: 'Create vault' }).click();
-  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await createVault(page, password);
 }
 
 async function unlock(page: Page, password: string) {
@@ -21,6 +20,7 @@ async function unlock(page: Page, password: string) {
 
 test('refuses a weak or mismatched password before creating (D71)', async ({ page }) => {
   await page.goto('/');
+  await confirmPhrase(page);
   const submit = page.getByRole('button', { name: 'Create vault' });
   await page.getByTestId('new-password').fill('password123');
   await page.getByTestId('confirm-password').fill('password123');

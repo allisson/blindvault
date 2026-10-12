@@ -53,7 +53,7 @@ test('blocks an inline script, and a connection and an image to another origin (
     });
   });
   await page.goto('/');
-  await expect(page.getByTestId('new-password')).toBeVisible();
+  await expect(page.getByTestId('recovery-phrase')).toBeVisible();
   const result = await page.evaluate(async () => {
     const violations: string[] = [];
     document.addEventListener('securitypolicyviolation', (e) => {
@@ -91,7 +91,7 @@ test('blocks an inline script, and a connection and an image to another origin (
 
 test('requires Trusted Types where the browser supports them (D83)', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByTestId('new-password')).toBeVisible();
+  await expect(page.getByTestId('recovery-phrase')).toBeVisible();
   const result = await page.evaluate(() => {
     if (!('trustedTypes' in window)) return 'unsupported';
     try {
@@ -107,7 +107,7 @@ test('requires Trusted Types where the browser supports them (D83)', async ({ pa
 
 test('sends no Referer header, even to its own origin (D147)', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByTestId('new-password')).toBeVisible();
+  await expect(page.getByTestId('recovery-phrase')).toBeVisible();
   const request = page.waitForRequest((r) => r.url().endsWith('/referrer-probe'));
   await page.evaluate(() => {
     void fetch('/referrer-probe').catch(() => undefined);

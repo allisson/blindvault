@@ -1,5 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { answerConfirmation, readPhrase } from './create';
+
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(180_000);
 
@@ -55,6 +57,12 @@ test('keeps vault content out of the form history and the spellchecker (D174, D1
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
+  // Creation: the phrase confirmation fields, then the password step (D179).
+  const words = await readPhrase(page);
+  await button(page, 'I wrote them down').click();
+  await expect(page.locator('[data-testid^="confirm-word-"]')).toHaveCount(3);
+  await expectNoneKept(page);
+  await answerConfirmation(page, words);
   await expect(page.getByTestId('new-password')).toBeVisible();
   await expectNoneKept(page);
   await expect(page.getByText(BROWSER_SAVE)).toBeVisible();

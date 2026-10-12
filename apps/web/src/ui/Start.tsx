@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { type PasskeyOutcome, type Status, type VaultController } from '../app/controller';
-import { deviceName } from '../app/device-name';
 import { useMessages } from '../i18n/context';
 import { Button, Card, Field } from './components';
-import { NewPassword } from './NewPassword';
+import { CreateVault } from './CreateVault';
 
 /** Every screen before unlock, by controller status. */
 export function Start({
@@ -48,41 +47,6 @@ export function Start({
     case 'unlocked':
       return null;
   }
-}
-
-function CreateVault({
-  controller,
-  working,
-}: {
-  readonly controller: VaultController;
-  readonly working: boolean;
-}) {
-  const m = useMessages();
-  const [password, setPassword] = useState<string | null>(null);
-  const onChange = useCallback((p: string | null) => {
-    setPassword(p);
-  }, []);
-  return (
-    <Card title={m.create.title}>
-      <p className="text-sm">{m.create.intro}</p>
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (password) void controller.create(password, deviceName(navigator.userAgent));
-        }}
-      >
-        <NewPassword
-          label={m.create.password}
-          confirmLabel={m.create.confirm}
-          onChange={onChange}
-        />
-        <Button type="submit" disabled={!password || working}>
-          {working ? m.create.working : m.create.submit}
-        </Button>
-      </form>
-    </Card>
-  );
 }
 
 function Unlock({

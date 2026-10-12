@@ -15,7 +15,7 @@ const en = {
   },
   phase1: {
     banner:
-      'Preview build: there is no Recovery Phrase yet. If you forget the local password or this browser loses its storage, the vault cannot be recovered.',
+      'Preview build: there are no backups yet. If you forget the local password or this browser loses its storage, the vault cannot be recovered.',
   },
   origin: {
     shared:
@@ -45,6 +45,21 @@ const en = {
     strong: 'Strong enough.',
     browserSave:
       'Do not let the browser save this password: depending on the browser, a copy of its data could then be enough to open the vault.',
+    phraseTitle: 'Your Recovery Phrase',
+    phraseIntro:
+      'These 24 words, with a backup, recover the vault if you forget the local password or lose this device. BlindVault has no server, so nobody else can recover it for you. Write them on paper, in order, and keep them somewhere safe.',
+    phraseOnce:
+      'They are shown only now: BlindVault does not keep them and cannot show them again.',
+    phraseNoPhoto:
+      'Do not take a screenshot or a photo: it lands in the gallery and in its cloud backup.',
+    phraseWritten: 'I wrote them down',
+    word: 'Word {n}',
+    confirmTitle: 'Confirm the Recovery Phrase',
+    confirmIntro: 'From what you wrote down, type the words at these positions.',
+    confirmSubmit: 'Confirm',
+    confirmWrong:
+      'Those words do not match. Check what you wrote down against the phrase, then confirm again.',
+    passwordIntro: 'Last, set the local password that unlocks the vault on this device.',
   },
   unlock: {
     title: 'Unlock the vault',
@@ -296,7 +311,7 @@ const ptBR: Messages = {
   },
   phase1: {
     banner:
-      'Versão de prévia: ainda não há Frase de Recuperação. Se você esquecer a senha local ou este navegador perder os dados, o cofre não pode ser recuperado.',
+      'Versão de prévia: ainda não há backups. Se você esquecer a senha local ou este navegador perder os dados, o cofre não pode ser recuperado.',
   },
   origin: {
     shared:
@@ -326,6 +341,20 @@ const ptBR: Messages = {
     strong: 'Forte o bastante.',
     browserSave:
       'Não deixe o navegador salvar esta senha: dependendo do navegador, uma cópia dos dados dele poderia bastar para abrir o cofre.',
+    phraseTitle: 'Sua Frase de Recuperação',
+    phraseIntro:
+      'Estas 24 palavras, junto com um backup, recuperam o cofre se você esquecer a senha local ou perder este dispositivo. O BlindVault não tem servidor, então ninguém mais pode recuperá-lo por você. Anote-as em papel, na ordem, e guarde em um lugar seguro.',
+    phraseOnce: 'Elas aparecem só agora: o BlindVault não as guarda e não pode mostrá-las de novo.',
+    phraseNoPhoto:
+      'Não tire captura de tela nem foto: elas vão para a galeria e para o backup dela na nuvem.',
+    phraseWritten: 'Já anotei',
+    word: 'Palavra {n}',
+    confirmTitle: 'Confirme a Frase de Recuperação',
+    confirmIntro: 'Pelo que você anotou, digite as palavras nestas posições.',
+    confirmSubmit: 'Confirmar',
+    confirmWrong:
+      'Essas palavras não conferem. Compare o que você anotou com a frase e confirme de novo.',
+    passwordIntro: 'Por último, defina a senha local que desbloqueia o cofre neste dispositivo.',
   },
   unlock: {
     title: 'Desbloquear o cofre',

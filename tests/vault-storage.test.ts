@@ -13,11 +13,14 @@ import {
   decodeEnvelope,
   deriveMasterSubkeys,
   derivePrfKek,
+  deriveRecoveryKeys,
   generateKey,
   generatePrfInput,
+  generateRecoveryPhrase,
   initCrypto,
   localAad,
   open,
+  parseRecoveryPhrase,
   recordAad,
   unpad,
   unwrapKey,
@@ -68,6 +71,20 @@ function login(): ItemInput {
     tags: ['finance'],
     notes: 'PIN is in the drawer',
   };
+}
+
+/**
+ * What a stored phrase would contain: the whole phrase and every pair of neighbouring words, with
+ * or without a space. Single words are not enough: BIP39 words such as "salt" or "local" also
+ * appear in Local Config's own keys.
+ */
+function phraseTraces(words: string): string[] {
+  const list = words.split(' ');
+  const out = [words];
+  for (let i = 0; i + 1 < list.length; i++) {
+    out.push(`${list[i] ?? ''} ${list[i + 1] ?? ''}`, `${list[i] ?? ''}${list[i + 1] ?? ''}`);
+  }
+  return out;
 }
 
 function contains(haystack: Uint8Array, needle: Uint8Array): boolean {
@@ -131,10 +148,12 @@ async function created(factory: IDBFactory) {
     },
   };
   const keyring = new Keyring();
+  const phrase = generateRecoveryPhrase(keyring);
   const session = await VaultSession.create({
     store,
     keyring,
     kek: kek(keyring),
+    recoveryEntropy: phrase.entropy,
     salt: new Uint8Array(16).fill(7),
     kdfParams: { opslimit: 2, memlimit: MEMLIMIT },
     displayName: 'Chrome on macOS',
@@ -142,7 +161,7 @@ async function created(factory: IDBFactory) {
   });
   sessions.push(session);
   if (!vaultId) throw new Error('nothing committed');
-  return { session, vaultId };
+  return { session, vaultId, words: phrase.words };
 }
 
 /**
@@ -269,9 +288,9 @@ describe('vault session over IndexedDB (D82, D163)', () => {
     expect((await unlocked(factory, vaultId)).folder(folderId)?.name).toBe('Taxes 2027');
   });
 
-  it('holds no key and no plaintext after a full use, PRF wrap and password change included (CRYPTO-INV-001, 003)', async () => {
+  it('holds no key, no recovery secret and no plaintext after a full use, PRF wrap and password change included (CRYPTO-INV-001, 003, 006)', async () => {
     const factory = new IDBFactory();
-    const { session, vaultId } = await created(factory);
+    const { session, vaultId, words } = await created(factory);
     const folderId = await session.createFolder('Taxes 2026');
     const itemId = await session.createItem({ ...login(), folderId });
     // The old password stays in an Item Version, sealed.
@@ -299,22 +318,30 @@ describe('vault session over IndexedDB (D82, D163)', () => {
       kdfParams: { opslimit: 2, memlimit: MEMLIMIT },
     });
     const kekBytes = [1, 2, 3].map((seed) => bytesOf(keyring, kek(keyring, seed)));
+    // The Recovery Phrase, its entropy and the envelope key it derives (§5.4).
+    const entropy = parseRecoveryPhrase(keyring, words);
+    const recovery = deriveRecoveryKeys(keyring, entropy);
+    const recoveryBytes = [bytesOf(keyring, entropy), bytesOf(keyring, recovery.envelopeKey)];
     keyring.wipeAll();
     session.lock();
 
     const keys = await vaultKeys(factory, vaultId, 2);
     const recordKeys = [...keys.keys()].filter((name) => name.startsWith('record key'));
-    // Vault Key, Device record, folder, two items and the Item Version, each under its own key.
-    expect(recordKeys.length).toBeGreaterThanOrEqual(5);
+    // Recovery Envelope, Device record, folder, two items and the Item Version, each under its own
+    // record key.
+    expect(recordKeys.length).toBeGreaterThanOrEqual(6);
     const needles = [
       ...keys.values(),
       ...kekBytes,
-      ...[...SECRETS, 'correct-horse-rotated', 'Old forum account'].map((t) =>
-        new TextEncoder().encode(t),
+      ...recoveryBytes,
+      // Encrypted in the envelope's metadata, never in the clear.
+      recovery.keyslotPublicKey,
+      ...[...SECRETS, 'correct-horse-rotated', 'Old forum account', ...phraseTraces(words)].map(
+        (t) => new TextEncoder().encode(t),
       ),
     ];
     for (const needle of needles) expect(needle.length).toBeGreaterThan(0);
-    for (const k of [...keys.values(), ...kekBytes]) expect(k.length).toBe(32);
+    for (const k of [...keys.values(), ...kekBytes, ...recoveryBytes]) expect(k.length).toBe(32);
 
     const values = await dump(factory, databaseName(vaultId));
     // The dump reads what unlock reads: the Master Key wrap is in it.

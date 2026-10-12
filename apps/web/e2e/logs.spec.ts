@@ -1,5 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { createVault } from './create';
+
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
 
@@ -25,16 +27,13 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('logs nothing, and no secret, through a full use (CRYPTO-INV-005)', async ({ page }) => {
+test('logs nothing, and no secret, through a full use (CRYPTO-INV-005, 006)', async ({ page }) => {
   const logged: string[] = [];
   page.on('console', (message) => logged.push(`${message.type()}: ${message.text()}`));
   page.on('pageerror', (error) => logged.push(`pageerror: ${String(error.stack ?? error)}`));
 
   await page.goto('/');
-  await page.getByTestId('new-password').fill(PASSWORD);
-  await page.getByTestId('confirm-password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Create vault', exact: true }).click();
-  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  const words = await createVault(page, PASSWORD);
 
   // An item with a secret, a TOTP secret and a note; a rejected TOTP value first.
   await page.getByRole('button', { name: 'New item', exact: true }).click();
@@ -82,7 +81,8 @@ test('logs nothing, and no secret, through a full use (CRYPTO-INV-005)', async (
   await unlock(page, NEXT);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
 
-  expect(SECRETS.filter((s) => logged.some((line) => line.includes(s)))).toEqual([]);
+  const secrets = [...SECRETS, words.join(' ')];
+  expect(secrets.filter((s) => logged.some((line) => line.includes(s)))).toEqual([]);
   // The app writes no log at all: nothing to leak, and no page error either.
   expect(logged).toEqual([]);
 });

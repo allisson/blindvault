@@ -11,10 +11,12 @@ import {
   deriveDeviceKek,
   derivePrfKek,
   generatePrfInput,
+  generateRecoveryPhrase,
   generateSalt,
   initCrypto,
   isBackupEligible,
   normalizePassword,
+  type SymmetricKey,
 } from '@blindvault/crypto';
 import {
   type HeldLock,
@@ -112,6 +114,11 @@ export class VaultController {
   #passkey: { readonly credentialId: Uint8Array; readonly prfInput: Uint8Array } | undefined;
   /** Bumped by every lock: an operation started before it is aborted (D104). */
   #epoch = 0;
+  /**
+   * The Recovery Phrase shown for the vault being created, as its entropy only (§5.4, D179). Its
+   * keyring becomes the new session's; a lock or a new phrase wipes it.
+   */
+  #phrase: { readonly keyring: Keyring; readonly entropy: SymmetricKey } | undefined;
 
   constructor(deps: ControllerDeps) {
     this.#deps = deps;
@@ -235,26 +242,45 @@ export class VaultController {
   // --- create ------------------------------------------------------------------------------------
 
   /**
-   * Creates the vault with `password`, already checked for strength by the caller (D71). Holds the
+   * A new Recovery Phrase for the vault about to be created: its 24 words, to show once (D179).
+   * Replaces any phrase handed out before. The words are a string, which cannot be wiped: the UI
+   * keeps them only until the phrase is confirmed. `undefined` unless there is no vault yet.
+   */
+  newRecoveryPhrase(): string | undefined {
+    if (this.#status.kind !== 'no-vault') return undefined;
+    this.#phrase?.keyring.wipeAll();
+    const keyring = new Keyring();
+    const { words, entropy } = generateRecoveryPhrase(keyring);
+    this.#phrase = { keyring, entropy };
+    return words;
+  }
+
+  /**
+   * Creates the vault with `password`, already checked for strength by the caller (D71), and the
+   * Recovery Phrase last handed out by `newRecoveryPhrase`, which the user has confirmed. Holds the
    * installation guard until the commit; a lock before the commit aborts it with nothing persisted
-   * (D104).
+   * (D104). Without a phrase, nothing happens.
    */
   async create(password: string, displayName: string): Promise<void> {
-    if (this.#status.kind !== 'no-vault') return;
+    const phrase = this.#phrase;
+    if (this.#status.kind !== 'no-vault' || !phrase) return;
+    this.#phrase = undefined;
     // Captured before the first await: a lock from here on aborts the creation.
     const epoch = this.#epoch;
     this.#set({ kind: 'creating' });
     const { factory, locks } = this.#deps;
     const guard = await acquireInstallationGuard(locks);
     if (!guard) {
+      phrase.keyring.wipeAll();
       this.#set({ kind: 'busy' });
       return;
     }
     if (epoch !== this.#epoch) {
+      phrase.keyring.wipeAll();
       await guard.release();
       return;
     }
-    const keyring = new Keyring();
+    const keyring = phrase.keyring;
     let db: VaultDatabase | undefined;
     let lock: HeldLock | undefined;
     try {
@@ -283,6 +309,7 @@ export class VaultController {
         store,
         keyring,
         kek,
+        recoveryEntropy: phrase.entropy,
         salt,
         kdfParams: params,
         displayName,
@@ -434,6 +461,8 @@ export class VaultController {
   /** Locks: wipes the session's keys and state and aborts what is in progress (overview §7). */
   lock(): void {
     this.#epoch += 1;
+    this.#phrase?.keyring.wipeAll();
+    this.#phrase = undefined;
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });

@@ -1,5 +1,7 @@
 import { type CDPSession, type Page, expect, test } from '@playwright/test';
 
+import { createVault } from './create';
+
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
 
@@ -37,10 +39,7 @@ async function credentials(cdp: CDPSession, authenticatorId: string) {
 
 async function create(page: Page) {
   await page.goto('/');
-  await page.getByTestId('new-password').fill(PASSWORD);
-  await page.getByTestId('confirm-password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Create vault', exact: true }).click();
-  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await createVault(page, PASSWORD);
 }
 
 async function setUp(page: Page, password = PASSWORD) {

@@ -199,8 +199,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `docs/backup-format.md`: magic, version, parameters (fixed export `opslimit` and accepted Argon2id range, D78), keyslots and payload (D3)
 - [x] `packages/backup`: `.bvault` serialization with secretstream
 - [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at an estimated 10^14 guesses, with a generated 6-word passphrase offered (D134) and warning that it yields the Master Key (D36)
-- [ ] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
-- [ ] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
+- [x] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
+- [x] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [ ] "Check Recovery Phrase" while unlocked
 - [ ] Export and restore with version and integrity validation
 - [ ] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
@@ -218,7 +218,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Restore with the recovery phrase and also with the export password
 - [ ] Truncated (no final tag, or data after it), tampered or unknown-version `.bvault` is rejected with a clear error (D95); header values shown before a keyslot opens are marked unverified
 - [ ] Wrong recovery phrase fails without leaking information
-- [ ] The phrase never appears in IndexedDB, `localStorage` or logs (CRYPTO-INV-006)
+- [x] The phrase never appears in IndexedDB, `localStorage` or logs (CRYPTO-INV-006)
 - [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
 - [ ] Backup merge preserves the losing version in history
 - [ ] Merging a backup with a different `vaultId` is rejected (D13)

@@ -1,4 +1,11 @@
-import { type KdfPort, type KdfRequest, MEMLIMIT } from '@blindvault/crypto';
+import {
+  type KdfPort,
+  type KdfRequest,
+  Keyring,
+  MEMLIMIT,
+  deriveRecoveryKeys,
+  parseRecoveryPhrase,
+} from '@blindvault/crypto';
 import { VaultDatabase, acquireInstallationGuard, acquireVaultLock } from '@blindvault/storage';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +14,11 @@ import { VaultController } from './controller';
 import { PasskeyCancelledError, type PasskeyPort, type PasskeyResult } from './passkey';
 
 const PASSWORD = 'correct horse battery staple orbit';
+
+function must<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('missing');
+  return value;
+}
 
 /**
  * A stand-in for the Argon2id worker: the key is the password's bytes padded to 32, so another
@@ -107,10 +119,16 @@ function controller(factory = new IDBFactory(), log?: KdfRequest['op'][], passke
   return c;
 }
 
+/** Creates the vault as the UI does: a Recovery Phrase first, then the password (D179). */
+function createIn(c: VaultController): Promise<void> {
+  c.newRecoveryPhrase();
+  return c.create(PASSWORD, 'Test device');
+}
+
 async function created(factory = new IDBFactory()) {
   const c = controller(factory);
   await c.start();
-  await c.create(PASSWORD, 'Test device');
+  await createIn(c);
   return c;
 }
 
@@ -119,6 +137,46 @@ function session(c: VaultController) {
   if (s.kind !== 'unlocked') throw new Error(`not unlocked: ${s.kind}`);
   return s.session;
 }
+
+describe('Recovery Phrase at creation (§5.4, D179)', () => {
+  it('hands out 24 words, a new phrase each time, and creates the vault for the last one', async () => {
+    const c = controller();
+    await c.start();
+    const first = must(c.newRecoveryPhrase());
+    const words = must(c.newRecoveryPhrase());
+    expect(words.split(' ')).toHaveLength(24);
+    expect(words).not.toBe(first);
+    await c.create(PASSWORD, 'Test device');
+    const keyring = new Keyring();
+    const keys = deriveRecoveryKeys(keyring, parseRecoveryPhrase(keyring, words));
+    expect(must(session(c).recovery).keyslotPublicKey).toEqual(keys.keyslotPublicKey);
+  });
+
+  it('creates nothing without a phrase', async () => {
+    const factory = new IDBFactory();
+    const c = controller(factory);
+    await c.start();
+    await c.create(PASSWORD, 'Test device');
+    expect(c.status.kind).toBe('no-vault');
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it('drops the phrase on lock, so a creation needs a new one', async () => {
+    const factory = new IDBFactory();
+    const c = controller(factory);
+    await c.start();
+    c.newRecoveryPhrase();
+    c.lock();
+    await c.create(PASSWORD, 'Test device');
+    expect(c.status.kind).toBe('no-vault');
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it('hands out no phrase once a vault exists', async () => {
+    const c = await created();
+    expect(c.newRecoveryPhrase()).toBeUndefined();
+  });
+});
 
 describe('vault controller', () => {
   it('starts with no vault, creates one and requests persistence', async () => {
@@ -133,7 +191,7 @@ describe('vault controller', () => {
     controllers.push(c);
     await c.start();
     expect(c.status.kind).toBe('no-vault');
-    await c.create(PASSWORD, 'Test device');
+    await createIn(c);
     expect(session(c).devices()).toHaveLength(1);
     expect(persist).toEqual([true]);
     expect((await factory.databases()).map((d) => d.name)).toEqual([
@@ -202,7 +260,7 @@ describe('vault controller', () => {
     const factory = new IDBFactory();
     const c = controller(factory);
     await c.start();
-    const pending = c.create(PASSWORD, 'Test device');
+    const pending = createIn(c);
     c.lock();
     await pending;
     expect(c.status.kind).toBe('no-vault');
@@ -231,7 +289,7 @@ describe('vault controller', () => {
     const c = new VaultController({ factory, locks: navigator.locks, kdf: slow });
     controllers.push(c);
     await c.start();
-    const pending = c.create(PASSWORD, 'Test device');
+    const pending = createIn(c);
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(c.status.kind).toBe('creating');
     c.lock();
@@ -246,7 +304,7 @@ describe('vault controller', () => {
     const factory = new IDBFactory();
     const c = controller(factory, log);
     await c.start();
-    await c.create(PASSWORD, 'Test device');
+    await createIn(c);
     const vaultId = session(c).vaultId;
     c.lock();
     const stored = async () => {
@@ -284,7 +342,7 @@ describe('vault controller', () => {
     const authenticator = new FakeAuthenticator();
     const c = controller(factory, log, authenticator);
     await c.start();
-    await c.create(PASSWORD, 'Test device');
+    await createIn(c);
     expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'ok', backupEligible: false });
     const old = session(c);
     const vaultId = old.vaultId;
@@ -333,7 +391,7 @@ describe('vault controller', () => {
     const factory = new IDBFactory();
     const c = controller(factory, log);
     await c.start();
-    await c.create(PASSWORD, 'Test device');
+    await createIn(c);
     // Locked while the KEKs are derived: the session refuses the re-wrap.
     const pending = c.changePassword(PASSWORD, 'a new long passphrase here');
     c.lock();
@@ -348,7 +406,7 @@ describe('vault controller', () => {
     const factory = new IDBFactory();
     const c = controller(factory, log);
     await c.start();
-    await c.create(PASSWORD, 'Test device');
+    await createIn(c);
     expect(await c.changePassword('not the password', 'a new long passphrase here')).toBe(
       'wrong-password',
     );
@@ -390,7 +448,7 @@ describe('passkey unlock (§5.5, D75, D84, D172)', () => {
   async function withPasskey(authenticator = new FakeAuthenticator(), factory = new IDBFactory()) {
     const c = controller(factory, undefined, authenticator);
     await c.start();
-    await c.create(PASSWORD, 'Test device');
+    await createIn(c);
     return { c, authenticator, factory };
   }
 
