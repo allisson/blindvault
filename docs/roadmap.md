@@ -177,7 +177,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Test that substituting one item's ciphertext for another's fails
 - [x] Wrong password fails without leaking information
 - [x] Inspecting IndexedDB after use finds no plaintext content or keys (CRYPTO-INV-001, 003)
-- [ ] After locking, no cryptographic operation works without a new unlock (CRYPTO-INV-010)
+- [x] After locking, no cryptographic operation works without a new unlock (CRYPTO-INV-010)
 - [ ] Logs contain no keys or secrets (CRYPTO-INV-005)
 - [x] Changing the local password re-wraps the master key without changing records
 - [x] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
