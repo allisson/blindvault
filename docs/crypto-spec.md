@@ -322,9 +322,11 @@ fails (`expectedStep`).
    metadata MUST hold `keyslotPublicKey` (bstr 32), `phraseId` (bstr 16) and `phraseCreatedAt`
    (uint), since D44 compares them.
 9. **Item cap:** for an Item or Item Version, the item content without `trashOperationId` is at
-   most 1,048,510 bytes.
+   most 1,048,510 bytes. An Item Version whose `item` is not a map fails here, since its cap cannot
+   be counted.
 10. **Derived `recordId`:** recompute it (`versionId`, Vault Key, Recovery Envelope, `deviceId`) and
-    compare.
+    compare. An Item Version without a 16-byte `itemId`, or a Device record without a 32-byte
+    `publicKey`, fails here, since its `recordId` cannot be derived.
 
 The HLC bound, merge rules and type-specific immutability (D42, D44) are in `sync-protocol.md`.
 
