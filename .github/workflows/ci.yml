@@ -1,7 +1,9 @@
 name: CI
 
+# Pushes to main, and pull requests: a push to a PR branch runs once, as the pull request.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
