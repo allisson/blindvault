@@ -1,9 +1,16 @@
-import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, useId } from 'react';
+import {
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+  useId,
+} from 'react';
 
 import { useMessages } from '../i18n/context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
-const TARGET = 'min-h-10 pointer-coarse:min-h-11';
+export const TARGET = 'min-h-10 pointer-coarse:min-h-11';
+export const INPUT = `${TARGET} rounded-md border border-zinc-300 bg-white px-3 text-base dark:border-zinc-700 dark:bg-zinc-900`;
 
 export function Button({
   variant = 'primary',
@@ -39,20 +46,66 @@ export function Field({
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      <input
+      <input id={id} className={INPUT} aria-invalid={error ? true : undefined} {...props} />
+      <Message error={error} hint={hint} />
+    </div>
+  );
+}
+
+function Message({
+  error,
+  hint,
+}: {
+  readonly error?: string | undefined;
+  readonly hint?: ReactNode;
+}) {
+  if (error) {
+    return (
+      <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        {error}
+      </p>
+    );
+  }
+  return hint ? <p className="text-sm text-zinc-500">{hint}</p> : null;
+}
+
+export function TextArea({
+  label,
+  hint,
+  error,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  readonly label: string;
+  readonly hint?: ReactNode;
+  readonly error?: string | undefined;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <textarea
         id={id}
-        className={`${TARGET} rounded-md border border-zinc-300 bg-white px-3 text-base dark:border-zinc-700 dark:bg-zinc-900`}
+        rows={4}
+        className={`${INPUT} py-2`}
         aria-invalid={error ? true : undefined}
         {...props}
       />
-      {error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
-          {error}
-        </p>
-      ) : hint ? (
-        <p className="text-sm text-zinc-500">{hint}</p>
-      ) : null}
+      <Message error={error} hint={hint} />
     </div>
+  );
+}
+
+/** A notice in the item views: why something cannot be done, or a warning. */
+export function Notice({ children }: { readonly children: ReactNode }) {
+  return (
+    <p
+      role="note"
+      className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+    >
+      {children}
+    </p>
   );
 }
 

@@ -95,7 +95,8 @@ every project through the references in the root `tsconfig.json`.
 - **Locks while unlocked.** `LockTimers` runs the inactivity lock (user input restarts it) and the
   hidden-app lock (`visibilitychange`, 0 locks at once) independently, from the vault's
   preferences (D54, D151). Ctrl/⌘ + Shift + L locks. Navigation resets to the vault root on lock.
-- **Navigation (D167).** An in-memory screen stack; no router. ESLint forbids `history.pushState`,
+- **Navigation (D167).** An in-memory screen stack: a list (the vault or the trash), then at most
+  one detail (an item, its editor, a new item) or Settings; no router. ESLint forbids `history.pushState`,
   `history.replaceState` and writing `location.hash`, `search`, `assign` and `replace` in
   `apps/web/src` (covered by `tests/boundaries.test.ts`); Playwright checks the URL and history
   length after the flows.
@@ -103,6 +104,23 @@ every project through the references in the root `tsconfig.json`.
   place the same panes and hold no vault or security logic.
 - **Password strength (D71).** zxcvbn-ts with the common, English and Portuguese dictionaries,
   loaded on first use; feedback in the UI language; score 4 required before create or change.
+- **Item editor (`apps/web/src/app/item-draft.ts`).** The editor holds a draft of text as typed
+  and converts it to the session's `ItemInput` with the rules of `record-content.md` §3–§4,
+  reported per field; the session checks the content again when it writes. Empty fields are not
+  written, title and labels are trimmed, single-line values other than secrets are trimmed, a seed
+  phrase is normalized (`normalizeSeedPhrase`) and a bad BIP39 checksum is shown, not refused.
+  Editing loads the item's fields in order, then the template roles it lacks, empty, so saving
+  untouched content writes nothing (D165). TOTP fields are kept as stored until the TOTP field
+  lands. Panes read the session again after each write; the session is the only state.
+- **Secrets in the UI (overview §13.2).** Secret, seed-phrase and TOTP-secret values show a
+  fixed-length mask until the user reveals them, in every layout; the detail pane is keyed by
+  item, so a reveal never carries to another item. In the editor a masked secret is a password
+  input, which cannot hold line breaks: a multi-line secret shows the mask until revealed, so
+  masking never alters it. Only `http` and `https` URLs get an open link (D83).
+- **Password generator (D128).** The editor's generator calls `generatePassword` or
+  `generatePassphrase` from `packages/crypto` and puts the value straight into the field; its
+  settings (mode, length, sets, words) are the only thing kept, in `localStorage` under
+  `blindvault.generator`, read back with every invalid value replaced by its default.
 - **i18n.** UI copy in `en` and `pt-BR` from Phase 1; template role names are localized, so a
   field without a label reads in the viewer's language (D165).
 
