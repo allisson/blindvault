@@ -303,7 +303,7 @@ describe('vault controller', () => {
     log.length = 0;
     authenticator.calls.length = 0;
 
-    await c.changePassword(PASSWORD, 'a new password nobody will guess');
+    expect(await c.changePassword(PASSWORD, 'a new password nobody will guess')).toBe('locked');
     expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'unavailable' });
     expect(await c.removePasskey()).toBe('by-hand');
     await c.setPreferences({ ...preferences, clipboardClearSeconds: 45 });
@@ -326,6 +326,21 @@ describe('vault controller', () => {
     c.lock();
     expect(await pending).toBe('ok');
     expect(c.status.kind).toBe('locked');
+  });
+
+  it('reports a password change locked before or during it, changing nothing', async () => {
+    const log: KdfRequest['op'][] = [];
+    const factory = new IDBFactory();
+    const c = controller(factory, log);
+    await c.start();
+    await c.create(PASSWORD, 'Test device');
+    // Locked while the KEKs are derived: the session refuses the re-wrap.
+    const pending = c.changePassword(PASSWORD, 'a new long passphrase here');
+    c.lock();
+    expect(await pending).toBe('locked');
+    expect(await c.changePassword(PASSWORD, 'a new long passphrase here')).toBe('locked');
+    expect(await c.unlock('a new long passphrase here')).toBe('wrong-password');
+    expect(await c.unlock(PASSWORD)).toBe('ok');
   });
 
   it('changes the password only with the current one (D168)', async () => {

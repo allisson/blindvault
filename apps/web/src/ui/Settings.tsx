@@ -60,8 +60,11 @@ function ChangePassword({ controller }: { readonly controller: VaultController }
           if (outcome === 'ok') {
             setState('done');
             setForm((f) => f + 1);
-          } else {
+          } else if (outcome === 'wrong-password') {
             setState('wrong');
+          } else {
+            // Locked meanwhile: this screen is gone, and nothing changed.
+            setState('idle');
           }
         });
       }}
