@@ -21,13 +21,13 @@ negative cases for some rows; they are inputs for the tests, not tests.
 | CRYPTO-INV-009 | Every sync message authenticated and bound to the session | 5 (Gate D) | — | pending |
 | CRYPTO-INV-010 | Secrets removed from memory on lock, as far as JS permits | 1 (Gate A) | — | partial: `packages/crypto/src/keys.test.ts` › blocks every operation with a key after wipeAll; app lock pending |
 | CRYPTO-INV-011 | No Master Key or recovery secret before SAS on both devices | 4 (Gate C) | — | pending |
-| CRYPTO-INV-012 | Unknown formats, versions and record types rejected | 1 (Gate A), then 2, 4, 5 | `negative.envelopes` | pending |
+| CRYPTO-INV-012 | Unknown formats, versions and record types rejected | 1 (Gate A), then 2, 4, 5 | `negative.envelopes` | 1: `packages/crypto/src/record.test.ts` › negative vectors, header tampering (unknown `recordFormatVersion`); later phases pending |
 | CRYPTO-INV-013 | Tombstones never removed; older writes never resurrect | 5 (Gate D) | — | pending |
 | CRYPTO-INV-014 | Re-admission proves the same Master Key before any Device record | 4 (Gate C) | `transcripts.readmissionMac` | pending |
 | CRYPTO-INV-015 | Nothing exchanged with a retired peer but its retired record; retirement irreversible | 5 (Gate D) | — | pending |
-| CRYPTO-INV-016 | Vault Key, Envelope, Device, Item Version never `deleted`; immutability rules | 1 (Gate A), then 5 | `negative.envelopes` (Vault Key with `del`), `records.identityCollision` (D158) | pending |
+| CRYPTO-INV-016 | Vault Key, Envelope, Device, Item Version never `deleted`; immutability rules | 1 (Gate A), then 5 | `negative.envelopes` (Vault Key with `del`), `records.identityCollision` (D158) | 1: `packages/crypto/src/record.test.ts` › negative vectors (step 4), identity collision; immutability rules (Phase 5) pending |
 | CRYPTO-INV-017 | One app window opens the vault; one changes vault databases | 1 (Gate A) | — | pending |
-| CRYPTO-INV-018 | Records verified (key, content, derived ID) before merge or persist | 2 (Gate B), 5 (Gate D) | `negative`, `ids` | pending |
+| CRYPTO-INV-018 | Records verified (key, content, derived ID) before merge or persist | 2 (Gate B), 5 (Gate D) | `negative`, `ids` | partial: `packages/crypto/src/record.test.ts` › negative vectors, derived recordId; restore and sync paths pending |
 | CRYPTO-INV-019 | Local Config cleartext limited to the allowed fields | 1 (Gate A) | `local` | pending |
 | CRYPTO-INV-020 | HLC strictly monotonic; no HLC beyond the cap except retirement | 1 (Gate A), then 5 | — | pending |
 | CRYPTO-INV-021 | PRF KEK only from an assertion with user verification | 1 (Gate A) | — | pending |

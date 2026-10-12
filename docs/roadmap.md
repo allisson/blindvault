@@ -110,7 +110,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Opaque key handles registered in a keyring that lock wipes; any use after the wipe throws (CRYPTO-INV-010)
 - [x] Binary AAD serialization with test vectors (D10)
 - [x] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
-- [ ] Record envelope codec (strict CBOR, re-encode check) and the `crypto-spec.md` §9.5 verification, reproducing every vector and rejecting every negative one at its `expectedStep`
+- [x] Record envelope codec (strict CBOR, re-encode check) and the `crypto-spec.md` §9.5 verification, reproducing every vector and rejecting every negative one at its `expectedStep`
 - [ ] Generation of master key, vault key (with `keyEpoch`) and record keys (D18)
 - [x] Key wrap and unwrap with AAD (D8)
 - [ ] Device KEK derivation with Argon2id in a Web Worker and local calibration (D9, D166)
@@ -118,8 +118,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
 - [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
-- [ ] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
-- [ ] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129); item cap leaving room for an Item Version of a trashed state (D139, D143); a received Item or Item Version above the item cap rejected after decryption (D144)
+- [x] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
+- [x] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129); item cap leaving room for an Item Version of a trashed state (D139, D143); a received Item or Item Version above the item cap rejected after decryption (D144)
 - [ ] TOTP codes with WebCrypto HMAC (SHA1, SHA256, SHA512), `otpauth://` parser copied from BlindPass, RFC 6238 test vectors (D127)
 - [ ] Password generator: random characters or BIP39-English passphrase via `randombytes_uniform`, entropy shown, nothing persisted, defaults 20 characters or 6 words and minimums 12 or 4 (D128), characters drawn from the union of the selected sets (D138)
 
@@ -171,10 +171,10 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Gate A
 
 - [ ] Encrypt/decrypt tests for every record type
-- [ ] Tampered ciphertext, invalid tag, swapped AAD and wrong `keyEpoch` are rejected
-- [ ] A record with an unknown or edited `recordFormatVersion` is rejected (D32)
-- [ ] An edited header (`hlc`, `deleted`), a forged tombstone and older ciphertext replayed under a newer `hlc` are rejected (D21)
-- [ ] Test that substituting one item's ciphertext for another's fails
+- [x] Tampered ciphertext, invalid tag, swapped AAD and wrong `keyEpoch` are rejected
+- [x] A record with an unknown or edited `recordFormatVersion` is rejected (D32)
+- [x] An edited header (`hlc`, `deleted`), a forged tombstone and older ciphertext replayed under a newer `hlc` are rejected (D21)
+- [x] Test that substituting one item's ciphertext for another's fails
 - [ ] Wrong password fails without leaking information
 - [ ] Inspecting IndexedDB after use finds no plaintext content or keys (CRYPTO-INV-001, 003)
 - [ ] After locking, no cryptographic operation works without a new unlock (CRYPTO-INV-010)

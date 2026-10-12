@@ -66,8 +66,8 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | Dependency | Where | Justification |
 | --- | --- | --- |
 | `react`, `react-dom` | `apps/web` | UI (stack). |
-| `libsodium-wrappers-sumo` 0.8.x | `packages/crypto` | Every primitive of `crypto-spec.md` §2 (stack, §5.1). The sumo build is needed for `crypto_pwhash` and `crypto_kdf`. Same line as BlindPass. Phase 1. |
-| `cbor2` 2.x | `packages/crypto` | Deterministic CBOR with a strict decoder (D10), chosen at Gate 0 (below). Phase 1. |
+| `libsodium-wrappers-sumo` 0.8.4 | `packages/crypto` | Every primitive of `crypto-spec.md` §2 (stack, §5.1). The sumo build is needed for `crypto_pwhash` and `crypto_kdf`. Same line as BlindPass. Phase 1. |
+| `cbor2` 2.3.0 | `packages/crypto` | Deterministic CBOR with a strict decoder (D10), chosen at Gate 0 (below). Phase 1. |
 | `@scure/bip39` 2.x | `packages/crypto`, `packages/vault` | BIP39 encoding of the Recovery Phrase (D2), the passphrase word list (D128) and seed-phrase word checks (stack). Encoding only: its PBKDF2 seed is never used. Same line as BlindPass. Phase 1. |
 | `@zxcvbn-ts/core` 3.x, `@zxcvbn-ts/language-common`, `-language-en`, `-language-pt-br` | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
 | `@base-ui/react` 1.x | `apps/web` | Headless, accessible dialog, menu and popover primitives, already used by BlindPass; no styling of its own, so Tailwind stays the only styling layer. Phase 1. |
