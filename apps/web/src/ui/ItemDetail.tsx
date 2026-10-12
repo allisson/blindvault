@@ -12,6 +12,7 @@ import { type Messages, format, roleName } from '../i18n/messages';
 import { Button, Notice } from './components';
 import { writeError } from './errors';
 import { SecretView } from './Secret';
+import { TotpView } from './Totp';
 
 /** A field's name: the user's label, else its role's localized name (D165). */
 export function fieldName(m: Messages, item: Pick<Item, 'templateId'>, field: Field): string {
@@ -33,17 +34,27 @@ function openable(value: string): boolean {
   }
 }
 
-function FieldValue({ field, name }: { readonly field: Field; readonly name: string }) {
+function FieldValue({
+  field,
+  name,
+  clearSeconds,
+}: {
+  readonly field: Field;
+  readonly name: string;
+  readonly clearSeconds: number;
+}) {
   const m = useLanguage().messages;
   const { value } = field;
-  if (typeof value !== 'string') return <SecretView value={value.secret} label={name} />;
+  if (typeof value !== 'string') {
+    return <TotpView value={value} name={name} clearSeconds={clearSeconds} />;
+  }
   switch (field.type) {
     case 'secret':
-      return <SecretView value={value} label={name} />;
+      return <SecretView value={value} label={name} clearSeconds={clearSeconds} />;
     case 'seed-phrase':
       return (
         <div className="flex flex-col gap-1">
-          <SecretView value={value} label={name} />
+          <SecretView value={value} label={name} clearSeconds={clearSeconds} />
           {seedPhraseChecksumValid(value) ? null : (
             <p className="text-sm text-amber-800 dark:text-amber-200">{m.items.checksum}</p>
           )}
@@ -133,7 +144,11 @@ export function ItemDetail({
               <div key={i} className="flex flex-col gap-0.5">
                 <dt className="text-xs font-medium text-zinc-500">{name}</dt>
                 <dd>
-                  <FieldValue field={field} name={name} />
+                  <FieldValue
+                    field={field}
+                    name={name}
+                    clearSeconds={session.preferences.clipboardClearSeconds}
+                  />
                 </dd>
               </div>
             );

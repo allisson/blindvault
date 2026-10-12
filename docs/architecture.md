@@ -110,8 +110,10 @@ every project through the references in the root `tsconfig.json`.
   written, title and labels are trimmed, single-line values other than secrets are trimmed, a seed
   phrase is normalized (`normalizeSeedPhrase`) and a bad BIP39 checksum is shown, not refused.
   Editing loads the item's fields in order, then the template roles it lacks, empty, so saving
-  untouched content writes nothing (D165). TOTP fields are kept as stored until the TOTP field
-  lands. Panes read the session again after each write; the session is the only state.
+  untouched content writes nothing (D165). A TOTP field takes an `otpauth://` URI or a bare TOTP
+  secret in a masked input, parsed by `parseOtpauthUri` or `parseTotpSecret` into the stored map;
+  the URI is not kept, and an empty input keeps the stored value. Panes read the session again
+  after each write; the session is the only state.
 - **Folders (D14, D171).** The folder pane and the move targets come from the tree the session
   derives, so orphans and cycles show as on every device. A folder's move targets leave out its
   displayed subtree; the session still refuses a cycle or a target in the trash. A folder list
@@ -128,7 +130,16 @@ every project through the references in the root `tsconfig.json`.
   fixed-length mask until the user reveals them, in every layout; the detail pane is keyed by
   item, so a reveal never carries to another item. In the editor a masked secret is a password
   input, which cannot hold line breaks: a multi-line secret shows the mask until revealed, so
-  masking never alters it. Only `http` and `https` URLs get an open link (D83).
+  masking never alters it. Only `http` and `https` URLs get an open link (D83). A TOTP field
+  shows its current code unmasked, recomputed with `totpCode` at each time step, and its TOTP
+  secret masked (D127).
+- **Clipboard (D54, D127, D151, `apps/web/src/app/clipboard.ts`).** A secret, seed phrase, TOTP
+  secret or TOTP code is copied only from its Copy button, without being revealed. One guard per
+  app window schedules the clear after `clipboardClearSeconds`, refusing a value outside 10–120;
+  a newer copy restarts it. Browsers refuse a clipboard write from a page in the background, so a
+  timeout that passes without focus clears on the next focus, and a lock clears at once or on the
+  next focus the same way. The clear writes an empty string, and a refused clear is dropped: the
+  UI says clearing is not guaranteed.
 - **Password generator (D128).** The editor's generator calls `generatePassword` or
   `generatePassphrase` from `packages/crypto` and puts the value straight into the field; its
   settings (mode, length, sets, words) are the only thing kept, in `localStorage` under
