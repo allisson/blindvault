@@ -1,4 +1,5 @@
 import {
+  ContentInvalidError,
   type Field,
   type Item,
   type VaultSession,
@@ -34,7 +35,7 @@ function openable(value: string): boolean {
   }
 }
 
-function FieldValue({
+export function FieldValue({
   field,
   name,
   clearSeconds,
@@ -100,6 +101,9 @@ export function ItemDetail({
   if (!view) return null;
   const { item } = view;
   const editable = item !== undefined && view.readOnly === undefined && session.writable;
+  // Not for content from a newer app version, nor in the trash; beyond the future-clock bound
+  // it is, since the copy takes a fresh HLC (D140).
+  const duplicable = item !== undefined && !view.inTrash && session.writable;
 
   const act = (write: () => Promise<unknown>) => {
     setWorking(true);
@@ -112,6 +116,24 @@ export function ItemDetail({
       (e: unknown) => {
         setWorking(false);
         setError(writeError(e, m));
+      },
+    );
+  };
+  const duplicate = () => {
+    setWorking(true);
+    setError(undefined);
+    session.duplicateItem(id, m.items.copySuffix).then(
+      (copy) => {
+        onChange();
+        nav.select({ name: 'item', id: copy });
+      },
+      (e: unknown) => {
+        setWorking(false);
+        setError(
+          e instanceof ContentInvalidError && e.what === 'title'
+            ? m.items.copyTitleTooLong
+            : writeError(e, m),
+        );
       },
     );
   };
@@ -182,9 +204,9 @@ export function ItemDetail({
           ) : null}
         </dl>
       ) : null}
-      {editable ? (
+      {editable || duplicable ? (
         <div className="flex flex-wrap gap-2">
-          {view.inTrash ? (
+          {!editable ? null : view.inTrash ? (
             // An item in the trash allows only restore from the trash (D143).
             <Button
               disabled={working}
@@ -215,6 +237,21 @@ export function ItemDetail({
               </Button>
             </>
           )}
+          {duplicable ? (
+            <Button variant="quiet" disabled={working} onClick={duplicate}>
+              {m.items.duplicate}
+            </Button>
+          ) : null}
+          {!view.inTrash ? (
+            <Button
+              variant="quiet"
+              onClick={() => {
+                nav.open({ name: 'history', id });
+              }}
+            >
+              {m.items.history}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {error ? (

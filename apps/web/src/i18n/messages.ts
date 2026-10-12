@@ -86,12 +86,26 @@ const en = {
     open: 'Open',
     newerTitle: 'Item from a newer version',
     readOnlyNewer:
-      'This item was saved by a newer version of BlindVault. Update the app to edit it.',
+      'This item was saved by a newer version of BlindVault. Update the app to edit or duplicate it.',
     readOnlyClock:
       "This item is dated ahead of this device's clock. It can be changed once the clock reaches that date.",
     inTrash: 'In the trash. It can only be restored; it is deleted for good on {date}.',
     multiLine: 'Show the value to enter several lines.',
     checksum: 'The checksum of this seed phrase does not match. Check the words.',
+    duplicate: 'Duplicate',
+    copySuffix: ' (copy)',
+    copyTitleTooLong:
+      "The copy's title would be longer than 512 characters. Shorten the title first.",
+    history: 'History',
+    historyTitle: 'History of {title}',
+    historyNote:
+      'Earlier values stay in this history, on every device and in later backups, in up to 20 versions. To remove them, duplicate the item and move the original to the trash: its history is deleted when it is purged from the trash.',
+    noHistory: 'No earlier versions.',
+    backToItem: 'Back to the item',
+    restoreVersion: 'Restore this version',
+    versionNewer: 'Saved by a newer version of BlindVault: it cannot be restored here.',
+    versionClock:
+      "Dated ahead of this device's clock: it can be restored once the clock reaches that date.",
     copy: 'Copy',
     copyCode: 'Copy code',
     copied:
@@ -318,12 +332,25 @@ const ptBR: Messages = {
     open: 'Abrir',
     newerTitle: 'Item de uma versão mais nova',
     readOnlyNewer:
-      'Este item foi salvo por uma versão mais nova do BlindVault. Atualize o app para editá-lo.',
+      'Este item foi salvo por uma versão mais nova do BlindVault. Atualize o app para editá-lo ou duplicá-lo.',
     readOnlyClock:
       'Este item tem data à frente do relógio deste dispositivo. Ele pode ser alterado quando o relógio chegar a essa data.',
     inTrash: 'Na lixeira. Ele só pode ser restaurado; será apagado de vez em {date}.',
     multiLine: 'Mostre o valor para digitar várias linhas.',
     checksum: 'O checksum desta frase-semente não confere. Confira as palavras.',
+    duplicate: 'Duplicar',
+    copySuffix: ' (cópia)',
+    copyTitleTooLong: 'O título da cópia passaria de 512 caracteres. Encurte o título antes.',
+    history: 'Histórico',
+    historyTitle: 'Histórico de {title}',
+    historyNote:
+      'Valores antigos ficam neste histórico, em todos os dispositivos e nos backups seguintes, em até 20 versões. Para removê-los, duplique o item e mova o original para a lixeira: o histórico dele é apagado quando ele é apagado de vez da lixeira.',
+    noHistory: 'Nenhuma versão anterior.',
+    backToItem: 'Voltar ao item',
+    restoreVersion: 'Restaurar esta versão',
+    versionNewer: 'Salva por uma versão mais nova do BlindVault: não pode ser restaurada aqui.',
+    versionClock:
+      'Com data à frente do relógio deste dispositivo: pode ser restaurada quando o relógio chegar a essa data.',
     copy: 'Copiar',
     copyCode: 'Copiar código',
     copied:

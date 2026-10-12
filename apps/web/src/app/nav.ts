@@ -1,6 +1,6 @@
 // In-memory navigation (D167): no router, nothing in the URL or the history. Screens are plain
 // values; `back()` pops the stack. The stack is a list (all items, a folder or the trash), then at
-// most a detail of that list (an item, its editor, a new item) or Settings.
+// most a detail of that list (an item, its editor or history, a new item) or Settings.
 
 export type ListScreen =
   | { readonly name: 'vault' }
@@ -12,12 +12,18 @@ export type Screen =
   | { readonly name: 'settings' }
   | { readonly name: 'item'; readonly id: Uint8Array }
   | { readonly name: 'edit'; readonly id: Uint8Array }
+  | { readonly name: 'history'; readonly id: Uint8Array }
   | { readonly name: 'new' };
 
-export type DetailScreen = Extract<Screen, { name: 'item' | 'edit' | 'new' }>;
+export type DetailScreen = Extract<Screen, { name: 'item' | 'edit' | 'history' | 'new' }>;
 
 export function isDetail(screen: Screen): screen is DetailScreen {
-  return screen.name === 'item' || screen.name === 'edit' || screen.name === 'new';
+  return (
+    screen.name === 'item' ||
+    screen.name === 'edit' ||
+    screen.name === 'history' ||
+    screen.name === 'new'
+  );
 }
 
 export function isList(screen: Screen): screen is ListScreen {
@@ -70,7 +76,7 @@ export class Navigation {
   /** Leaves every screen of item `id`, after it was trashed or restored. */
   close(id: Uint8Array): void {
     const open = this.#stack.some(
-      (s) => (s.name === 'item' || s.name === 'edit') && same(s.id, id),
+      (s) => (s.name === 'item' || s.name === 'edit' || s.name === 'history') && same(s.id, id),
     );
     if (open) this.#set(this.#listStack());
   }

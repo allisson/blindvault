@@ -18,6 +18,7 @@ import { useLayout } from './hooks';
 import { hex } from '../app/ids';
 import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
+import { ItemHistory } from './ItemHistory';
 import { FolderPane } from './Folders';
 import { ItemList } from './ItemList';
 import { Settings } from './Settings';
@@ -49,6 +50,8 @@ function DetailPane({
     <section aria-label={m.vault.detail} className="flex flex-1 justify-center overflow-y-auto">
       {screen.name === 'item' ? (
         <ItemDetail key={key} session={session} id={screen.id} nav={nav} onChange={onChange} />
+      ) : screen.name === 'history' ? (
+        <ItemHistory key={key} session={session} id={screen.id} nav={nav} onChange={onChange} />
       ) : (
         <ItemEditor
           key={key}
