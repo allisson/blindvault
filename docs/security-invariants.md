@@ -29,7 +29,7 @@ negative cases for some rows; they are inputs for the tests, not tests.
 | CRYPTO-INV-017 | One app window opens the vault; one changes vault databases | 1 (Gate A) | — | pending |
 | CRYPTO-INV-018 | Records verified (key, content, derived ID) before merge or persist | 2 (Gate B), 5 (Gate D) | `negative`, `ids` | partial: `packages/crypto/src/record.test.ts` › negative vectors, derived recordId; restore and sync paths pending |
 | CRYPTO-INV-019 | Local Config cleartext limited to the allowed fields | 1 (Gate A) | `local` | pending |
-| CRYPTO-INV-020 | HLC strictly monotonic; no HLC beyond the cap except retirement | 1 (Gate A), then 5 | — | pending |
+| CRYPTO-INV-020 | HLC strictly monotonic; no HLC beyond the cap except retirement | 1 (Gate A), then 5 | — | partial: `packages/vault/src/hlc.test.ts` › is strictly monotonic, also when the physical clock stalls or goes back a little; becomes read-only, issuing nothing, while the state is beyond the cap; refuses to issue above a replaced record beyond the cap; issues a retirement even beyond the cap, still monotonic; persistence with each write (vault session) and sync (Phase 5) pending |
 | CRYPTO-INV-021 | PRF KEK only from an assertion with user verification | 1 (Gate A) | `kdf.subkeys` (`bvprfkek`) | partial: `packages/crypto/src/prf.test.ts` › rejects an assertion without the UV flag, with no flags, with truncated authenticator data; Playwright with the virtual authenticator pending |
 | CRYPTO-INV-022 | No record beyond the future-clock bound merged; read-only after restore | 2 (Gate B), 5 (Gate D) | — | pending |
 | CRYPTO-INV-023 | Local wraps bound to purpose, `vaultId` and `localConfigId` | 1 (Gate A) | `local.mustNotOpen` | `packages/crypto/src/aead.test.ts` › must not open (local wraps) |

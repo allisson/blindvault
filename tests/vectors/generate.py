@@ -747,6 +747,7 @@ VALID_ITEMS = [
         _user_field("totp", {**TOTP, "issuer": "GitHub", "accountName": "alice@example.com"}),
         _user_field("seed-phrase", SEED_12)]), False),
     ("title of 512 astral code points", _login(title="\U0001F600" * 512), False),
+    ("title starting with U+FEFF, which is not White_Space", _login(title="\ufeffExample"), False),
     ("32 tags of 64 code points", _login(tags=sorted(f"{i:02d}" + "x" * 62 for i in range(32))), False),
     ("empty fields and tags", _login(fields=[]), False),
 ]

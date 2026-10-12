@@ -126,13 +126,13 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### `packages/vault`
 
 - [x] `docs/record-content.md` vectors: item, folder, device and Local Config content added to `tests/vectors/generate.py` (D165)
-- [ ] HLC: issue, compare, receive rule and HLC state (D19, D62, D109, D163); CRYPTO-INV-020
+- [x] HLC: issue, compare, receive rule and HLC state (D19, D62, D109, D163); CRYPTO-INV-020
 - [ ] Vault session over a `RecordStore` interface: keys, HLC, decrypted state loaded at unlock, domain operations (D163)
-- [ ] Content validators: unknown or invalid content makes an Item or Item Version read-only; Folder and Device keep unknown keys and fail verification on an invalid known value (D52, D59, D165)
+- [x] Content validators: unknown or invalid content makes an Item or Item Version read-only; Folder and Device keep unknown keys and fail verification on an invalid known value (D52, D59, D165)
 - [ ] Item Version on every edit, move, trash and restore; 20 kept per item; saving unchanged content writes nothing (D6, D165)
 - [ ] Automatic purge 30 days after the tombstone's HLC, at unlock and periodically while unlocked, with an injectable clock (D7, D27, D94)
-- [ ] Item model with typed fields (list in overview, section 6 "Data model")
-- [ ] Factory templates as versioned code definitions; items store `templateId` and `templateVersion` (D20)
+- [x] Item model with typed fields (list in overview, section 6 "Data model")
+- [x] Factory templates as versioned code definitions; items store `templateId` and `templateVersion` (D20)
 - [ ] Folder record with encrypted name and `parentId` (D14)
 - [ ] Item `folderId` (optional; absent = vault root); tags inside the encrypted content
 - [ ] Tree derivation at read time: cycle rule, orphan rule, alphabetical order (D14)
