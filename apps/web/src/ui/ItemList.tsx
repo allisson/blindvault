@@ -1,11 +1,12 @@
 import { type FolderTree, type TreeItem, type VaultSession } from '@blindvault/vault';
-import { useSyncExternalStore } from 'react';
+import { type RefObject, useSyncExternalStore } from 'react';
 
 import { findNode } from '../app/folders';
 import { hex } from '../app/ids';
 import { type Navigation } from '../app/nav';
+import { type SearchIndex } from '../app/search';
 import { useLanguage } from '../i18n/context';
-import { Button, TARGET } from './components';
+import { Button, INPUT, TARGET } from './components';
 import { FolderActions, TrashedFolder } from './Folders';
 
 interface Row {
@@ -24,10 +25,18 @@ export function ItemList({
   session,
   nav,
   onChange,
+  index,
+  query,
+  onQuery,
+  searchRef,
 }: {
   readonly session: VaultSession;
   readonly nav: Navigation;
   readonly onChange: () => void;
+  readonly index: SearchIndex;
+  readonly query: string;
+  readonly onQuery: (query: string) => void;
+  readonly searchRef: RefObject<HTMLInputElement | null>;
 }) {
   const { messages: m, language } = useLanguage();
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
@@ -44,7 +53,20 @@ export function ItemList({
   let items: Row[];
   let subfolders: Row[] = [];
   let trashedFolders: Row[] = [];
-  if (list.name === 'trash') {
+  const searching = list.name !== 'trash' && query.trim() !== '';
+  // Nothing stays indexed while no search runs.
+  if (!searching) index.clear();
+  if (searching) {
+    // Across every item, whatever folder is shown (D132).
+    heading = m.vault.results;
+    empty = m.vault.noResults;
+    index.build(tree);
+    const found = new Set(index.search(query).map(hex));
+    items = flatten(tree)
+      .filter((t) => found.has(hex(t.id)))
+      .map(named);
+    items.sort((a, b) => collator.compare(a.name, b.name));
+  } else if (list.name === 'trash') {
     heading = m.vault.trash;
     empty = m.vault.trashEmpty;
     items = session
@@ -86,7 +108,24 @@ export function ItemList({
           </Button>
         ) : null}
       </div>
-      {list.name === 'folder' ? (
+      {list.name !== 'trash' ? (
+        <input
+          ref={searchRef}
+          type="search"
+          aria-label={m.vault.search}
+          title={m.vault.searchHint}
+          placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
+          autoComplete="off"
+          spellCheck={false}
+          className={INPUT}
+          value={query}
+          onChange={(e) => {
+            onQuery(e.target.value);
+          }}
+          data-testid="search"
+        />
+      ) : null}
+      {list.name === 'folder' && !searching ? (
         <FolderActions
           // Keyed by folder: an open form never carries to another folder.
           key={hex(list.id)}

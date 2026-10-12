@@ -56,6 +56,10 @@ const en = {
     nothingSelected: 'Select an item.',
     trash: 'Trash',
     trashEmpty: 'The trash is empty.',
+    search: 'Search',
+    searchHint: 'Searches titles, tags, folders, notes and fields that are not secret.',
+    results: 'Results',
+    noResults: 'No items match.',
     readOnlyVault:
       "The vault is read-only: a record is dated ahead of this device's clock. Check the clock.",
   },
@@ -274,6 +278,10 @@ const ptBR: Messages = {
     nothingSelected: 'Selecione um item.',
     trash: 'Lixeira',
     trashEmpty: 'A lixeira está vazia.',
+    search: 'Buscar',
+    searchHint: 'Busca em títulos, tags, pastas, notas e campos que não são secretos.',
+    results: 'Resultados',
+    noResults: 'Nenhum item corresponde.',
     readOnlyVault:
       'O cofre está somente leitura: um registro tem data à frente do relógio deste dispositivo. Confira o relógio.',
   },

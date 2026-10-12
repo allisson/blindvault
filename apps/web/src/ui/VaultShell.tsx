@@ -1,8 +1,17 @@
 import { type VaultSession } from '@blindvault/vault';
-import { type ReactNode, useReducer, useState, useSyncExternalStore } from 'react';
+import {
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import { type VaultController } from '../app/controller';
 import { type Navigation, isDetail } from '../app/nav';
+import { SearchIndex } from '../app/search';
 import { useMessages } from '../i18n/context';
 import { Button, LockState, Notice, Phase1Banner } from './components';
 import { useLayout } from './hooks';
@@ -119,7 +128,40 @@ export function VaultShell({
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const m = useMessages();
   const detail = <DetailPane session={session} nav={nav} onChange={refresh} />;
-  const list = <ItemList session={session} nav={nav} onChange={refresh} />;
+  // The search index and query live in memory only, and go with the shell on lock (D132).
+  const index = useMemo(() => new SearchIndex(), []);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(
+    () => () => {
+      index.clear();
+    },
+    [index],
+  );
+  useEffect(() => {
+    // Ctrl/⌘ + K focuses search (overview §13.1).
+    const focus = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', focus);
+    return () => {
+      window.removeEventListener('keydown', focus);
+    };
+  }, []);
+  const list = (
+    <ItemList
+      session={session}
+      nav={nav}
+      onChange={refresh}
+      index={index}
+      query={query}
+      onQuery={setQuery}
+      searchRef={searchRef}
+    />
+  );
   const folders = <FolderPane session={session} nav={nav} onChange={refresh} />;
 
   let body: ReactNode;

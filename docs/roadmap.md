@@ -164,7 +164,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
 - [x] Folder tree: create, rename, move, delete; move items between folders and the root
 - [x] Secret fields masked by default
-- [ ] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
+- [x] Search over decrypted state in memory only, never over `secret`, TOTP or seed-phrase values, index cleared on lock (D132)
 - [ ] TOTP field: TOTP secret masked, current code shown, copy with clipboard clear (D127)
 - [x] Configurable auto-lock that clears state and keys on lock
 
