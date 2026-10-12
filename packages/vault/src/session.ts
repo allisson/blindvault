@@ -38,9 +38,11 @@ import {
 } from '@blindvault/crypto';
 
 import {
+  type BlockedRecord,
   ContentInvalidError,
   RecordBlockedError,
   RecordNotFoundError,
+  SubtreeBlockedError,
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
@@ -49,6 +51,7 @@ import {
   type Folder,
   type Kept,
   deviceToCbor,
+  folderToCbor,
   readDevice,
   readFolder,
 } from './folder';
@@ -65,7 +68,8 @@ import {
   readLocalConfigState,
 } from './local-config';
 import { type RecordKey, type RecordStore, type StoredRecord } from './store';
-import { compareBytes } from './text';
+import { compareBytes, isId } from './text';
+import { type TreeNode, buildTree, displayedParents, isWithin } from './tree';
 
 /** Item Versions kept per item: the 20 greatest `(hlc, versionId)` (D6). */
 export const HISTORY_LIMIT = 20;
@@ -105,6 +109,27 @@ export interface VersionView {
   readonly readOnly?: ReadOnlyReason;
   readonly readOnlyRule?: ReadOnlyRule;
 }
+
+export interface FolderView {
+  readonly id: Uint8Array;
+  readonly hlc: Hlc;
+  readonly name: string;
+  /** The stored parent; the tree may show the folder elsewhere (orphan and cycle rules, D14). */
+  readonly parentId?: Uint8Array;
+  readonly inTrash: boolean;
+  readonly trashOperationId?: Uint8Array;
+  /** For a folder in the trash: when the automatic purge removes its content (Unix ms). */
+  readonly purgeAt?: number;
+  /** Content keys from a newer app version, kept on every write (D59). */
+  readonly unknownKeys: readonly string[];
+  /** A folder is never read-only for its content (D59), only for its HLC (D74). */
+  readonly readOnly?: 'future-clock';
+}
+
+/** An item in the tree, with the title and folder it is placed by. */
+export type TreeItem = ItemView & { readonly name: string; readonly folderId?: Uint8Array };
+
+export type FolderTree = TreeNode<FolderView, TreeItem>;
 
 export interface DeviceView {
   readonly deviceId: Uint8Array;
@@ -160,6 +185,10 @@ interface HeldVersion {
 interface HeldFolder {
   readonly header: RecordHeader;
   readonly folder: Kept<Folder> | null;
+}
+
+interface LiveFolder extends HeldFolder {
+  readonly folder: Kept<Folder>;
 }
 
 interface HeldDevice {
@@ -582,6 +611,60 @@ export class VaultSession {
     }));
   }
 
+  /** Every folder but purged tombstones, in the trash or not. */
+  folders(): FolderView[] {
+    this.#unlocked();
+    const out: FolderView[] = [];
+    for (const held of this.#state.folders.values()) {
+      if (held.folder) out.push(this.#folderView(held as LiveFolder));
+    }
+    return out;
+  }
+
+  folder(id: Uint8Array): FolderView | undefined {
+    this.#unlocked();
+    const held = this.#state.folders.get(idKey(id));
+    return held?.folder ? this.#folderView(held as LiveFolder) : undefined;
+  }
+
+  /**
+   * The tree of folders and items not in the trash, derived at read time (D14). Siblings sort by
+   * `compare` on the name, the UI's collation, then by ID.
+   */
+  tree(compare: (a: string, b: string) => number = new Intl.Collator().compare): FolderTree {
+    this.#unlocked();
+    const folders = this.folders().filter((f) => !f.inTrash);
+    const items: TreeItem[] = [];
+    for (const held of this.#state.items.values()) {
+      const view = this.#itemView(held);
+      if (!view || view.inTrash || !held.content) continue;
+      const title = held.content.get('title');
+      const folderId = held.content.get('folderId');
+      items.push({
+        ...view,
+        name: typeof title === 'string' ? title : '',
+        ...(isId(folderId) ? { folderId: folderId.slice() } : {}),
+      });
+    }
+    return buildTree(folders, items, compare);
+  }
+
+  #folderView(held: LiveFolder): FolderView {
+    const { header } = held;
+    const { value, unknownKeys } = held.folder;
+    return {
+      id: header.recordId.slice(),
+      hlc: copyHlc(header.hlc),
+      name: value.name,
+      ...(value.parentId ? { parentId: value.parentId.slice() } : {}),
+      inTrash: header.deleted,
+      ...(value.trashOperationId ? { trashOperationId: value.trashOperationId.slice() } : {}),
+      ...(header.deleted ? { purgeAt: header.hlc.physicalMs + PURGE_DELAY_MS } : {}),
+      unknownKeys,
+      ...(this.#clock.beyondBound(header.hlc) ? { readOnly: 'future-clock' as const } : {}),
+    };
+  }
+
   /** Records that failed verification at unlock: shown as corrupt, never written. */
   corrupt(): RecordKey[] {
     this.#unlocked();
@@ -605,6 +688,7 @@ export class VaultSession {
   /** A new item at the given folder or the vault root; returns its ID. No history. */
   createItem(input: ItemInput): Promise<Uint8Array> {
     return this.#run(() => {
+      if (input.folderId) this.#target(input.folderId);
       const content = itemToCbor(liveItem(input, input.folderId), false);
       checkCap(content);
       const id = randomId();
@@ -620,6 +704,10 @@ export class VaultSession {
   updateItem(id: Uint8Array, input: ItemInput): Promise<boolean> {
     return this.#run(() => {
       const held = this.#editable(id, false);
+      const current = held.reading.item.folderId;
+      if (input.folderId && !(current && sameBytes(current, input.folderId))) {
+        this.#target(input.folderId);
+      }
       const content = itemToCbor(liveItem(input, input.folderId), false);
       if (sameContent(content, held.content)) return { writes: [], deletes: [], result: false };
       return { ...this.#replace(held, content, false), result: true };
@@ -716,6 +804,208 @@ export class VaultSession {
         .filter((h) => h !== write.header)
         .map((h) => ({ recordType: RecordType.itemVersion, recordId: h.recordId })),
     };
+  }
+
+  // --- folder operations -----------------------------------------------------------------------
+
+  /** A new folder under `parentId`, a folder not in the trash, or at the vault root. */
+  createFolder(name: string, parentId?: Uint8Array): Promise<Uint8Array> {
+    return this.#run(() => {
+      if (parentId) this.#target(parentId);
+      const content = folderToCbor({ name, ...(parentId ? { parentId } : {}) }, false);
+      const id = randomId();
+      const write = this.#seal(RecordType.folder, id, this.#clock.issue(), false, content);
+      return { writes: [write], deletes: [], result: id.slice() };
+    });
+  }
+
+  /** Renames a folder, keeping its unknown keys (D59). An unchanged name writes nothing. */
+  renameFolder(id: Uint8Array, name: string): Promise<boolean> {
+    return this.#run(() => {
+      const held = this.#editableFolder(id, false);
+      if (held.folder.value.name === name) return { writes: [], deletes: [], result: false };
+      const write = this.#folderWrite(held, { ...held.folder.value, name }, false);
+      return { writes: [write], deletes: [], result: true };
+    });
+  }
+
+  /**
+   * Moves a folder under `parentId` or to the vault root. Refused into a folder in the trash or
+   * into its own subtree as shown (D171). An unchanged parent writes nothing.
+   */
+  moveFolder(id: Uint8Array, parentId?: Uint8Array): Promise<boolean> {
+    return this.#run(() => {
+      const held = this.#editableFolder(id, false);
+      const { parentId: current, ...rest } = held.folder.value;
+      if (parentId && current ? sameBytes(parentId, current) : parentId === current) {
+        return { writes: [], deletes: [], result: false };
+      }
+      if (parentId) {
+        this.#target(parentId);
+        if (isWithin(this.#parents(), idKey(parentId), idKey(id))) {
+          throw new RecordBlockedError('cycle');
+        }
+      }
+      const write = this.#folderWrite(held, { ...rest, ...(parentId ? { parentId } : {}) }, false);
+      return { writes: [write], deletes: [], result: true };
+    });
+  }
+
+  /**
+   * Sends a folder, its subfolders and their items, as the tree shows them, to the trash under one
+   * new `trashOperationId`, each with its own tombstone (D14). Records already in the trash keep
+   * their own. Refused as a whole if any of them is read-only (D52, D74).
+   */
+  trashFolder(id: Uint8Array): Promise<void> {
+    return this.#run(() => {
+      const top = this.#editableFolder(id, false);
+      const parents = this.#parents();
+      const topKey = idKey(top.header.recordId);
+      const folders = [...this.#state.folders.entries()].filter(
+        ([key, f]) => !f.header.deleted && f.folder && isWithin(parents, key, topKey),
+      );
+      const inside = new Set(folders.map(([key]) => key));
+      const items = [...this.#state.items.values()].filter((held) => {
+        if (held.header.deleted || !held.content) return false;
+        const folderId = held.content.get('folderId');
+        return isId(folderId) && inside.has(idKey(folderId));
+      });
+      this.#refuseBlocked(
+        folders.map(([, f]) => f),
+        items,
+      );
+      const op = randomId();
+      const writes: Write[] = [];
+      const deletes: RecordKey[] = [];
+      for (const [, f] of folders) {
+        const live = f as LiveFolder;
+        writes.push(this.#folderWrite(live, { ...live.folder.value, trashOperationId: op }, true));
+      }
+      for (const held of items) {
+        const live = held as LiveItem;
+        const trashed = itemToCbor({ ...live.reading.item, trashOperationId: op }, true);
+        const plan = this.#replace(live, trashed, true);
+        writes.push(...plan.writes);
+        deletes.push(...plan.deletes);
+      }
+      return { writes, deletes, result: undefined };
+    });
+  }
+
+  /**
+   * Restores a folder from the trash with the records of its trash operation inside it: for the
+   * folder that operation trashed first, exactly that operation (D14, D171). A restored record
+   * whose parent stays in the trash moves to the vault root (D112). Refused as a whole if any of
+   * them is read-only.
+   */
+  restoreFolder(id: Uint8Array): Promise<void> {
+    return this.#run(() => {
+      const top = this.#editableFolder(id, true);
+      // A folder in the trash always holds its trashOperationId (record-content.md §6).
+      const op = top.folder.value.trashOperationId ?? new Uint8Array(0);
+      const ofOp = (tid: CborValue | undefined) => isId(tid) && sameBytes(tid, op);
+      const inside = new Set([idKey(top.header.recordId)]);
+      const folders: HeldFolder[] = [top];
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const [key, f] of this.#state.folders) {
+          const value = f.folder?.value;
+          if (inside.has(key) || !f.header.deleted || !value?.parentId) continue;
+          if (ofOp(value.trashOperationId) && inside.has(idKey(value.parentId))) {
+            inside.add(key);
+            folders.push(f);
+            grew = true;
+          }
+        }
+      }
+      const items = [...this.#state.items.values()].filter((held) => {
+        if (!held.header.deleted || !held.content) return false;
+        const folderId = held.content.get('folderId');
+        return (
+          ofOp(held.content.get('trashOperationId')) &&
+          isId(folderId) &&
+          inside.has(idKey(folderId))
+        );
+      });
+      this.#refuseBlocked(folders, items);
+      // A parent outside what this restores, still in the trash, sends the record to the root.
+      const keep = (parentId: Uint8Array | undefined) => {
+        if (!parentId || inside.has(idKey(parentId))) return parentId;
+        return this.#state.folders.get(idKey(parentId))?.header.deleted ? undefined : parentId;
+      };
+      const writes: Write[] = [];
+      const deletes: RecordKey[] = [];
+      for (const f of folders) {
+        const live = f as LiveFolder;
+        const { name } = live.folder.value;
+        const parentId = keep(live.folder.value.parentId);
+        writes.push(this.#folderWrite(live, { name, ...(parentId ? { parentId } : {}) }, false));
+      }
+      for (const held of items) {
+        const live = held as LiveItem;
+        const { item } = live.reading;
+        const content = itemToCbor(liveItem(item, keep(item.folderId)), false);
+        const plan = this.#replace(live, content, false);
+        writes.push(...plan.writes);
+        deletes.push(...plan.deletes);
+      }
+      return { writes, deletes, result: undefined };
+    });
+  }
+
+  /** The displayed parent of every folder not in the trash (D14). */
+  #parents(): Map<string, string | null> {
+    const live: { id: Uint8Array; parentId?: Uint8Array; hlc: Hlc }[] = [];
+    for (const f of this.#state.folders.values()) {
+      if (f.header.deleted || !f.folder) continue;
+      const { parentId } = f.folder.value;
+      live.push({ id: f.header.recordId, ...(parentId ? { parentId } : {}), hlc: f.header.hlc });
+    }
+    return displayedParents(live);
+  }
+
+  /** A folder something may be placed in: held, and not in the trash. */
+  #target(folderId: Uint8Array): void {
+    const held = this.#state.folders.get(idKey(folderId));
+    if (!held?.folder) throw new RecordNotFoundError();
+    if (held.header.deleted) throw new RecordBlockedError('in-trash');
+  }
+
+  /** The held folder, if it may be written: not purged, within the bound, in the trash or not. */
+  #editableFolder(id: Uint8Array, inTrash: boolean): LiveFolder {
+    const held = this.#state.folders.get(idKey(id));
+    if (!held) throw new RecordNotFoundError();
+    if (!held.folder) throw new RecordBlockedError('purged');
+    if (this.#clock.beyondBound(held.header.hlc)) throw new RecordBlockedError('future-clock');
+    if (held.header.deleted !== inTrash) {
+      throw new RecordBlockedError(inTrash ? 'not-in-trash' : 'in-trash');
+    }
+    return held as LiveFolder;
+  }
+
+  /** Throws `SubtreeBlockedError` listing every read-only record of a folder action. */
+  #refuseBlocked(folders: readonly HeldFolder[], items: readonly HeldItem[]): void {
+    const blocked: BlockedRecord[] = [];
+    const add = (recordType: number, h: RecordHeader, reason: BlockedRecord['reason']) => {
+      blocked.push({ recordType, recordId: h.recordId.slice(), reason });
+    };
+    for (const f of folders) {
+      if (this.#clock.beyondBound(f.header.hlc)) add(RecordType.folder, f.header, 'future-clock');
+    }
+    for (const held of items) {
+      if (held.reading?.readOnly) add(RecordType.item, held.header, 'newer-content');
+      else if (this.#clock.beyondBound(held.header.hlc)) {
+        add(RecordType.item, held.header, 'future-clock');
+      }
+    }
+    if (blocked.length > 0) throw new SubtreeBlockedError(blocked);
+  }
+
+  /** A Folder write over `held`, keeping its unknown keys (D59), with a new HLC above it. */
+  #folderWrite(held: LiveFolder, folder: Folder, deleted: boolean): Write {
+    const content = folderToCbor(folder, deleted, held.folder.content);
+    const hlc = this.#clock.issue(held.header.hlc);
+    return this.#seal(RecordType.folder, held.header.recordId, hlc, deleted, content);
   }
 
   // --- creation --------------------------------------------------------------------------------

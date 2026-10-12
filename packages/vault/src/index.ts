@@ -7,6 +7,8 @@ export {
   HlcReadOnlyError,
   RecordBlockedError,
   RecordNotFoundError,
+  SubtreeBlockedError,
+  type BlockedRecord,
   UnlockRejectedError,
   VaultError,
   VaultLockedError,
@@ -68,15 +70,26 @@ export { type Commit, type RecordKey, type RecordStore, type StoredRecord } from
 export {
   type CreateOptions,
   type DeviceView,
+  type FolderTree,
+  type FolderView,
   HISTORY_LIMIT,
   type ItemInput,
   type ItemView,
   MAINTENANCE_INTERVAL_MS,
   PURGE_DELAY_MS,
   type ReadOnlyReason,
+  type TreeItem,
   type UnlockMethod,
   type UnlockOptions,
   VaultSession,
   type VersionView,
 } from './session';
+export {
+  type TreeEntry,
+  type TreeFolder,
+  type TreeNode,
+  buildTree,
+  displayedParents,
+  isWithin,
+} from './tree';
 export { codePointLength } from './text';

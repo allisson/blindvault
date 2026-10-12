@@ -34,6 +34,7 @@ import {
   HlcReadOnlyError,
   RecordBlockedError,
   RecordNotFoundError,
+  SubtreeBlockedError,
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
@@ -428,7 +429,7 @@ describe('items and history (D6, D165)', () => {
   it('treats a move as an edit that stores a version', async () => {
     const { session } = await create();
     const id = await session.createItem(login());
-    const folderId = randomId();
+    const folderId = await session.createFolder('Work');
     expect(await session.updateItem(id, { ...login(), folderId })).toBe(true);
     expect(session.item(id)?.item?.folderId).toEqual(folderId);
     expect(session.versions(id)[0]?.item?.folderId).toBeUndefined();
@@ -483,22 +484,16 @@ describe('items and history (D6, D165)', () => {
   });
 
   it('restores an item under a parent folder in the trash to the vault root (D112)', async () => {
-    const { session, store } = await create();
-    const keys = keysOf(store);
-    const trashedFolder = randomId();
-    const liveFolder = randomId();
-    plant(store, keys, RecordType.folder, trashedFolder, hlcAt(T0), true, folder('Old', true));
-    plant(store, keys, RecordType.folder, liveFolder, hlcAt(T0), false, folder('Work', false));
-    session.lock();
-    const s = await unlock(store);
-    const a = await s.createItem({ ...login('a'), folderId: trashedFolder });
-    const b = await s.createItem({ ...login('b'), folderId: liveFolder });
-    for (const id of [a, b]) {
-      await s.trashItem(id);
-      await s.restoreItem(id);
-    }
-    expect(s.item(a)?.item?.folderId).toBeUndefined();
-    expect(s.item(b)?.item?.folderId).toEqual(liveFolder);
+    const { session } = await create();
+    const old = await session.createFolder('Old');
+    const work = await session.createFolder('Work');
+    const a = await session.createItem({ ...login('a'), folderId: old });
+    const b = await session.createItem({ ...login('b'), folderId: work });
+    for (const id of [a, b]) await session.trashItem(id);
+    await session.trashFolder(old);
+    for (const id of [a, b]) await session.restoreItem(id);
+    expect(session.item(a)?.item?.folderId).toBeUndefined();
+    expect(session.item(b)?.item?.folderId).toEqual(work);
   });
 
   it('restores a version as a new state, dropping a trashed state’s trashOperationId', async () => {
@@ -781,6 +776,284 @@ describe('read-only records (D52, D73, D74)', () => {
     ).toEqual([RecordType.item, RecordType.item, RecordType.folder, RecordType.vaultKey]);
   });
 });
+
+describe('folders (D14, D59, D112, D171)', () => {
+  it('creates, renames and moves folders, keeping unknown keys through every write', async () => {
+    const { session, store } = await create();
+    const keys = keysOf(store);
+    const id = randomId();
+    const content = folder('Work', false);
+    content.set('color', 'red');
+    plant(store, keys, RecordType.folder, id, hlcAt(T0 - 1), false, content);
+    session.lock();
+    const s = await unlock(store);
+    const parent = await s.createFolder('Projects');
+    expect(await s.renameFolder(id, 'Office')).toBe(true);
+    expect(await s.renameFolder(id, 'Office')).toBe(false);
+    expect(await s.moveFolder(id, parent)).toBe(true);
+    expect(await s.moveFolder(id, parent)).toBe(false);
+    await s.trashFolder(id);
+    await s.restoreFolder(id);
+    const again = await unlock(store);
+    expect(again.folder(id)).toMatchObject({
+      name: 'Office',
+      parentId: parent,
+      inTrash: false,
+      unknownKeys: ['color'],
+    });
+    expect(again.folder(id)?.trashOperationId).toBeUndefined();
+    expect(await again.moveFolder(id)).toBe(true);
+    expect(again.folder(id)?.parentId).toBeUndefined();
+    expect(await again.moveFolder(id)).toBe(false);
+    await expect(again.renameFolder(id, '')).rejects.toThrow(ContentInvalidError);
+  });
+
+  it('refuses a place in the trash, an unknown folder, or the folder’s own subtree', async () => {
+    const { session } = await create();
+    const a = await session.createFolder('A');
+    const b = await session.createFolder('B', a);
+    const c = await session.createFolder('C', b);
+    const gone = await session.createFolder('Gone');
+    await session.trashFolder(gone);
+    await expect(session.createFolder('X', gone)).rejects.toThrow(
+      new RecordBlockedError('in-trash'),
+    );
+    await expect(session.createFolder('X', randomId())).rejects.toThrow(RecordNotFoundError);
+    await expect(session.createItem({ ...login(), folderId: gone })).rejects.toThrow(
+      new RecordBlockedError('in-trash'),
+    );
+    const item = await session.createItem(login());
+    await expect(session.updateItem(item, { ...login(), folderId: randomId() })).rejects.toThrow(
+      RecordNotFoundError,
+    );
+    for (const target of [a, c]) {
+      await expect(session.moveFolder(a, target)).rejects.toThrow(new RecordBlockedError('cycle'));
+    }
+    await expect(session.moveFolder(a, gone)).rejects.toThrow(new RecordBlockedError('in-trash'));
+    await expect(session.renameFolder(gone, 'Back')).rejects.toThrow(
+      new RecordBlockedError('in-trash'),
+    );
+    await expect(session.restoreFolder(a)).rejects.toThrow(new RecordBlockedError('not-in-trash'));
+    await expect(session.renameFolder(randomId(), 'X')).rejects.toThrow(RecordNotFoundError);
+    expect(await session.moveFolder(c, a)).toBe(true);
+  });
+
+  it('keeps an item whose folder is not held where it is, and shows it at the root', async () => {
+    const { session, store } = await create();
+    const keys = keysOf(store);
+    const missing = randomId();
+    const id = randomId();
+    plant(
+      store,
+      keys,
+      RecordType.item,
+      id,
+      hlcAt(T0 - 1),
+      false,
+      itemToCbor({ ...login('Orphan'), folderId: missing }, false),
+    );
+    session.lock();
+    const s = await unlock(store);
+    expect(await s.updateItem(id, { ...login('Renamed'), folderId: missing })).toBe(true);
+    expect(s.tree().items.map((i) => i.name)).toEqual(['Renamed']);
+  });
+
+  it('derives the tree: folders and items in place, the trash left out, siblings in order', async () => {
+    const { session, store } = await create();
+    const work = await session.createFolder('work');
+    const archive = await session.createFolder('Archive');
+    const sub = await session.createFolder('Sub', work);
+    await session.createItem({ ...login('b'), folderId: sub });
+    await session.createItem({ ...login('a'), folderId: sub });
+    await session.createItem(login('Root item'));
+    const trashed = await session.createItem(login('Trashed'));
+    await session.trashItem(trashed);
+    const keys = keysOf(store);
+    const newer = itemToCbor({ ...login('Newer'), folderId: work }, false);
+    newer.set('color', 'red');
+    plant(store, keys, RecordType.item, randomId(), hlcAt(T0 - 1), false, newer);
+    session.lock();
+    const s = await unlock(store);
+    const tree = s.tree();
+    expect(tree.folder).toBeNull();
+    expect(tree.folders.map((n) => n.folder?.name)).toEqual(['Archive', 'work']);
+    expect(tree.items.map((i) => i.name)).toEqual(['Root item']);
+    const workNode = tree.folders[1];
+    expect(workNode?.items.map((i) => [i.name, i.readOnly])).toEqual([['Newer', 'newer-content']]);
+    expect(workNode?.folders[0]?.items.map((i) => i.name)).toEqual(['a', 'b']);
+    expect(s.tree(compareBytesOfNames).folders.map((n) => n.folder?.name)).toEqual([
+      'Archive',
+      'work',
+    ]);
+    expect(archive).toHaveLength(16);
+  });
+
+  it('trashes a subtree under one trashOperationId and restores exactly those records', async () => {
+    const { session } = await create();
+    const top = await session.createFolder('Top');
+    const sub = await session.createFolder('Sub', top);
+    const inTop = await session.createItem({ ...login('in top'), folderId: top });
+    const inSub = await session.createItem({ ...login('in sub'), folderId: sub });
+    const earlier = await session.createItem({ ...login('earlier'), folderId: sub });
+    const elsewhere = await session.createItem(login('elsewhere'));
+    const separate = await session.createFolder('Separate', top);
+    await session.trashFolder(separate);
+    await session.trashItem(earlier);
+    const earlierOp = session.item(earlier)?.item?.trashOperationId;
+
+    await session.trashFolder(top);
+    const op = session.folder(top)?.trashOperationId;
+    expect(op).toHaveLength(16);
+    expect(session.folder(sub)?.trashOperationId).toEqual(op);
+    for (const id of [inTop, inSub]) {
+      expect(session.item(id)).toMatchObject({ inTrash: true, item: { trashOperationId: op } });
+      expect(session.versions(id)).toHaveLength(1);
+    }
+    expect(session.item(earlier)?.item?.trashOperationId).toEqual(earlierOp);
+    expect(session.item(elsewhere)?.inTrash).toBe(false);
+    expect(session.tree().folders).toEqual([]);
+
+    await session.restoreFolder(top);
+    expect(session.folder(top)).toMatchObject({ inTrash: false });
+    expect(session.folder(sub)).toMatchObject({ inTrash: false, parentId: top });
+    expect(session.item(inSub)?.item).toMatchObject({ folderId: sub });
+    expect(session.item(inSub)?.item?.trashOperationId).toBeUndefined();
+    expect(session.item(inTop)?.inTrash).toBe(false);
+    expect(session.item(earlier)?.inTrash).toBe(true);
+    expect(session.folder(separate)?.inTrash).toBe(true);
+  });
+
+  it('restores a subfolder alone with its part of the operation, at the root (D171)', async () => {
+    const { session } = await create();
+    const top = await session.createFolder('Top');
+    const sub = await session.createFolder('Sub', top);
+    const inTop = await session.createItem({ ...login('in top'), folderId: top });
+    const inSub = await session.createItem({ ...login('in sub'), folderId: sub });
+    await session.trashFolder(top);
+    await session.restoreFolder(sub);
+    expect(session.folder(sub)?.inTrash).toBe(false);
+    expect(session.folder(sub)?.parentId).toBeUndefined();
+    expect(session.item(inSub)).toMatchObject({ inTrash: false, item: { folderId: sub } });
+    expect(session.folder(top)?.inTrash).toBe(true);
+    expect(session.item(inTop)?.inTrash).toBe(true);
+
+    // An item restored on its own leaves its trashed folder behind (D106, D112).
+    await session.restoreItem(inTop);
+    expect(session.item(inTop)?.item?.folderId).toBeUndefined();
+    await session.restoreFolder(top);
+    expect(session.item(inTop)?.item?.folderId).toBeUndefined();
+  });
+
+  it('refuses to trash or restore a subtree holding a read-only record, writing nothing', async () => {
+    const { session, store } = await create();
+    const top = await session.createFolder('Top');
+    const sub = await session.createFolder('Sub', top);
+    const keys = keysOf(store);
+    const newer = randomId();
+    const content = itemToCbor({ ...login('Newer'), folderId: sub }, false);
+    content.set('color', 'red');
+    plant(store, keys, RecordType.item, newer, hlcAt(T0 - 1), false, content);
+    const ahead = randomId();
+    plant(
+      store,
+      keys,
+      RecordType.folder,
+      ahead,
+      hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + 1),
+      false,
+      (() => {
+        const f = folder('Ahead', false);
+        f.set('parentId', top);
+        return f;
+      })(),
+    );
+    const aheadItem = randomId();
+    plant(
+      store,
+      keys,
+      RecordType.item,
+      aheadItem,
+      hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + 1),
+      false,
+      itemToCbor({ ...login('Ahead'), folderId: top }, false),
+    );
+    session.lock();
+    const s = await unlock(store);
+    expect(s.folder(ahead)?.readOnly).toBe('future-clock');
+    await expect(s.renameFolder(ahead, 'x')).rejects.toThrow(
+      new RecordBlockedError('future-clock'),
+    );
+    const commits = store.commits.length;
+    const error = await s.trashFolder(top).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SubtreeBlockedError);
+    expect(
+      (error as SubtreeBlockedError).records.map((r) => [
+        r.recordType,
+        idKey(r.recordId),
+        r.reason,
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        [RecordType.folder, idKey(ahead), 'future-clock'],
+        [RecordType.item, idKey(newer), 'newer-content'],
+        [RecordType.item, idKey(aheadItem), 'future-clock'],
+      ]),
+    );
+    expect(store.commits).toHaveLength(commits);
+    expect(s.folder(top)?.inTrash).toBe(false);
+  });
+
+  it('refuses to restore an operation holding a record that became read-only', async () => {
+    const { session, store } = await create();
+    const top = await session.createFolder('Top');
+    await session.trashFolder(top);
+    const op = must(session.folder(top)?.trashOperationId);
+    const keys = keysOf(store);
+    const newer = randomId();
+    const content = itemToCbor({ ...login('Newer'), folderId: top, trashOperationId: op }, true);
+    content.set('color', 'red');
+    plant(store, keys, RecordType.item, newer, hlcAt(T0 - 1), true, content);
+    session.lock();
+    const s = await unlock(store);
+    await expect(s.restoreFolder(top)).rejects.toThrow(SubtreeBlockedError);
+    expect(s.folder(top)?.inTrash).toBe(true);
+  });
+
+  it('purges a folder in the trash and blocks it afterwards', async () => {
+    const { session, store, clock } = await create();
+    const id = await session.createFolder('Old');
+    await session.trashFolder(id);
+    expect(session.folder(id)?.purgeAt).toBe(
+      must(session.folder(id)).hlc.physicalMs + PURGE_DELAY_MS,
+    );
+    clock.t += PURGE_DELAY_MS;
+    const s = await unlock(store, clock);
+    expect(s.folder(id)).toBeUndefined();
+    expect(s.folders()).toEqual([]);
+    await expect(s.restoreFolder(id)).rejects.toThrow(new RecordBlockedError('purged'));
+    await expect(s.createFolder('New', id)).rejects.toThrow(RecordNotFoundError);
+  });
+
+  it('keeps folder names and parentId out of every stored byte', async () => {
+    const { session, store } = await create();
+    const parent = await session.createFolder('Tax returns 2026');
+    const child = await session.createFolder('Receipts of the clinic', parent);
+    await session.moveFolder(child);
+    await session.moveFolder(child, parent);
+    const persisted = [store.localConfig, ...[...store.held.values()].map((r) => r.envelope)];
+    for (const needle of [utf8('Tax returns 2026'), utf8('Receipts of the clinic')]) {
+      expect(persisted.some((bytes) => contains(bytes, needle))).toBe(false);
+    }
+    // A folder ID shows only in its own record's cleartext header, never as a parentId.
+    for (const id of [parent, child]) {
+      expect(persisted.filter((bytes) => contains(bytes, id))).toHaveLength(1);
+    }
+  });
+});
+
+function compareBytesOfNames(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 describe('automatic purge (D7, D27, D94)', () => {
   it('purges a tombstone 30 days after its HLC, at unlock, keeping its header', async () => {
