@@ -149,10 +149,16 @@ authenticator data does not have the UV flag set is rejected before any derivati
   The full PRECIS `FreeformClass` restrictions are not applied.
 - **Device KEK** = `crypto_pwhash(32, password, salt, opslimit, memlimit, ARGON2ID13)`, salt 16
   random bytes, new each time a local password is set.
-- **Calibration** whenever a local password is set (§5.3): `memlimit` = 64 MiB (67,108,864 bytes);
-  `opslimit` starts at 2 and increases until one derivation takes at least 1 s, up to 64. The
-  derivation runs in a Web Worker. The memory value is provisional until the Phase 0 Argon2id spike
-  (D9).
+- **Calibration** whenever a local password is set (§5.3, D166): `memlimit` = 64 MiB (67,108,864
+  bytes), confirmed by the Phase 0 Argon2id spike (D9). `opslimit` is found in these steps, each
+  timing one derivation of the password being set:
+  1. Derive at `opslimit` 2, taking `t` ms. If `t` ≥ 1000, the result is 2.
+  2. Otherwise derive at `o = min(64, ceil(2 × 1000 / t))`.
+  3. While that derivation took less than 1000 ms and `o` < 64, set `o = o + 1` and derive again.
+  4. The result is the last `o`. The derivation at the result is the one whose output is the Device
+     KEK.
+
+  Every derivation runs in a Web Worker.
 - **Accepted range at unlock.** The cleartext Local Config can be tampered with, so before deriving,
   the stored parameters MUST be within `memlimit` ∈ [64 MiB, 256 MiB] and `opslimit` ∈ [2, 64];
   anything else is rejected without running Argon2id.
@@ -258,8 +264,8 @@ ct = seal(recordKey,   AAD_record, sodium_pad(CBOR(content), 256))
 ```
 
 - **Content** is a deterministic CBOR map with text keys. Unknown keys from a newer app version are
-  kept as received (D52, D59, D98); the schema per record type is defined in Phase 1, except the
-  parts fixed below.
+  kept as received (D52, D59, D98); the schema per record type is in `record-content.md` (D165),
+  except the parts fixed below.
 - **Padding (D92).** Every content is padded to a multiple of 256 bytes. The Vault Key wrap and the
   Master Key wrap are not padded.
 - **Purged tombstone (D27).** `del = true` and `ct = seal(recordKey, AAD_record, "")`: empty
@@ -358,10 +364,10 @@ encryptedPart    = seal(K_localConfig, AAD_local("bv.v1.local-config"),       so
 The encrypted part is padded like record content (D159):
 `encryptedPart = seal(K_localConfig, AAD_local("bv.v1.local-config"), sodium_pad(CBOR(encrypted part), 256))`.
 
-The cleartext part holds only what CRYPTO-INV-019 allows: `vaultId`, `localConfigId`, Argon2id salt
-and parameters, `mkWrap.deviceKek`, the PRF KEK state (credential ID, PRF input, `mkWrap.prfKek`),
-and the replaced `vaultId` while it exists (D96). The schema of the encrypted part is defined in
-Phase 1.
+The cleartext part holds only what CRYPTO-INV-019 allows: `localConfigFormatVersion` (D164),
+`vaultId`, `localConfigId`, Argon2id salt and parameters, `mkWrap.deviceKek`, the PRF KEK state
+(credential ID, PRF input, `mkWrap.prfKek`), and the replaced `vaultId` while it exists (D96). Both
+parts, as CBOR maps, are in `record-content.md` §9.
 
 ## 13. Transcripts and MACs (§8, §9.1, D1, D17, D29)
 

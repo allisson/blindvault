@@ -24,6 +24,14 @@ _Avoid_: item size limit, max item size
 One typed value inside an item, such as a URL, a secret or a TOTP.
 _Avoid_: attribute, property
 
+**Field type**:
+The kind of value a field holds, from a closed list such as text, secret, URL, date, TOTP or seed phrase; it sets how the value is checked, shown and masked.
+_Avoid_: field kind, data type
+
+**Field role**:
+The meaning a field has in its item's template, such as username or password, kept with the field so every device labels and uses it alike; a field the user added has none.
+_Avoid_: field key, field kind, template field
+
 **Seed phrase**:
 A cryptocurrency wallet's BIP39 phrase stored as a field of an item; unrelated to the Recovery Phrase.
 _Avoid_: seed, BIP39 seed, wallet seed
