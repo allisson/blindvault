@@ -63,6 +63,9 @@ export type Status =
 
 export type Outcome = 'ok' | 'wrong-password';
 
+/** A password change: `locked` when the vault locked before or during it, so nothing changed. */
+export type PasswordChange = Outcome | 'locked';
+
 /** A passkey unlock: `rejected` when the passkey does not open this vault's PRF wrap. */
 export type PasskeyOutcome =
   'ok' | 'cancelled' | 'rejected' | 'no-user-verification' | 'unavailable';
@@ -450,9 +453,9 @@ export class VaultController {
   // --- local settings ----------------------------------------------------------------------------
 
   /** Changes the local password; the current one is checked by opening the wrap (D168). */
-  async changePassword(current: string, next: string): Promise<Outcome> {
+  async changePassword(current: string, next: string): Promise<PasswordChange> {
     const status = this.#status;
-    if (status.kind !== 'unlocked' || !this.#db) return 'ok';
+    if (status.kind !== 'unlocked' || !this.#db) return 'locked';
     const config = await this.#readConfig(this.#db);
     if (!config) return 'ok';
     const keyring = new Keyring();
@@ -481,6 +484,7 @@ export class VaultController {
       return 'ok';
     } catch (error) {
       if (error instanceof UnlockRejectedError) return 'wrong-password';
+      if (error instanceof VaultLockedError) return 'locked';
       throw error;
     } finally {
       keyring.wipeAll();
