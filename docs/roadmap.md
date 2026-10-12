@@ -178,7 +178,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Wrong password fails without leaking information
 - [x] Inspecting IndexedDB after use finds no plaintext content or keys (CRYPTO-INV-001, 003)
 - [x] After locking, no cryptographic operation works without a new unlock (CRYPTO-INV-010)
-- [ ] Logs contain no keys or secrets (CRYPTO-INV-005)
+- [x] Logs contain no keys or secrets (CRYPTO-INV-005)
 - [x] Changing the local password re-wraps the master key without changing records
 - [x] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
 - [x] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
