@@ -18,6 +18,29 @@ every project through the references in the root `tsconfig.json`.
   references unless it declares a dependency, so `tsc -b` rejects a relative import that leaves the
   package (TS6059/TS6307).
 
+## Phase 1 structure
+
+- **Vault session (D163).** `packages/vault` holds the unlocked session: key handles, the HLC, the
+  in-memory decrypted state and every domain operation. It writes through a `RecordStore` interface
+  it defines; `packages/storage` implements it, and `apps/web` only wires them together. `vault`
+  depends on `crypto`; `storage` depends on the encrypted record types from `crypto`.
+- **Envelopes in `crypto`.** The record envelope codec and the verification steps of
+  `crypto-spec.md` §9.5 live in `packages/crypto`, since its tests reproduce the vectors.
+- **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
+  bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
+  keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
+  CRYPTO-INV-010).
+- **Argon2id worker.** The worker entry lives in `packages/crypto` and loads its own libsodium;
+  `apps/web` starts it. It returns the Device KEK and terminates.
+- **Load at unlock.** Unlock decrypts every record into memory. An Item Version's `itemId` is
+  encrypted, so versions cannot be found per item without decrypting, and search (D132) needs the
+  whole state anyway. A load test (2,000 items × 20 versions) checks the cost in Phase 1.
+- **IndexedDB layout.** Database `blindvault-<vaultId>` (D79) with two object stores: `records`,
+  keyed by `[recordType, recordId]` (D158) with no other index, and `localConfig`, holding the one
+  Local Config value (`record-content.md` §9). Both are written in one transaction (D82).
+- **i18n.** UI copy in `en` and `pt-BR` from Phase 1; template role names are localized, so a
+  field without a label reads in the viewer's language (D165).
+
 ## Dependencies
 
 Every dependency is listed here with its justification. Versions are pinned exactly in
@@ -43,9 +66,15 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | Dependency | Where | Justification |
 | --- | --- | --- |
 | `react`, `react-dom` | `apps/web` | UI (stack). |
+| `libsodium-wrappers-sumo` 0.8.x | `packages/crypto` | Every primitive of `crypto-spec.md` §2 (stack, §5.1). The sumo build is needed for `crypto_pwhash` and `crypto_kdf`. Same line as BlindPass. Phase 1. |
+| `cbor2` 2.x | `packages/crypto` | Deterministic CBOR with a strict decoder (D10), chosen at Gate 0 (below). Phase 1. |
+| `@scure/bip39` 2.x | `packages/crypto`, `packages/vault` | BIP39 encoding of the Recovery Phrase (D2), the passphrase word list (D128) and seed-phrase word checks (stack). Encoding only: its PBKDF2 seed is never used. Same line as BlindPass. Phase 1. |
+| `@zxcvbn-ts/core` 3.x, `@zxcvbn-ts/language-common`, `-language-en`, `-language-pt-br` | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
+| `@base-ui/react` 1.x | `apps/web` | Headless, accessible dialog, menu and popover primitives, already used by BlindPass; no styling of its own, so Tailwind stays the only styling layer. Phase 1. |
 
-Runtime cryptographic, serialization and protocol dependencies are added with their phase. The
-ones already chosen are below.
+Each is pinned to an exact version at least 14 days old when its phase adds it. Runtime
+cryptographic, serialization and protocol dependencies of later phases are added with their phase.
+The ones already chosen are below.
 
 ### Phase 0 spikes (`spikes/`, throwaway, deleted)
 
@@ -106,14 +135,16 @@ is copied, adapted to the overview, and gets the same tests and review as new co
 | `packages/crypto/src/keys/recovery.ts` | Reuse BIP39 generation only | BlindPass uses the raw entropy as the wrapping key; BlindVault derives the Recovery KEK with `crypto_kdf` and subkeys (D2). |
 | `packages/crypto/src/lib/verification.ts` (BIP39 fingerprint) | Do not reuse | The SAS comes from the Noise handshake hash (D1). |
 | `packages/crypto/src/lib/totp.ts` (`otpauth`) | Do not reuse | Own RFC 6238 implementation over WebCrypto HMAC (D127), tested with the RFC 6238 vectors; `otpauth` only as a dev-time cross-check. |
-| `packages/vault` item schemas (Zod) | Reuse with changes, Phase 1 | Templates and field types differ (overview §6, D20). Zod is justified here when it is added. |
+| `packages/vault` item schemas (Zod) | Do not reuse | BlindPass has fixed keys per item type; BlindVault has typed fields with roles (D165, `record-content.md`). Content is checked by hand-written validators, not Zod, because unknown keys must be detected and kept byte for byte (D52, D59), which is the central rule. The BlindPass schemas are a reference for field lists only. |
+| `packages/vault/src/item/cryptoWallet/bip39.ts` | Reuse with changes, Phase 1 | Word-list and checksum helpers for the seed-phrase field; a bad checksum warns instead of refusing (`record-content.md` §4). |
+| `apps/web/src/lib/totp.ts` (`parseOtpauthUri`) | Reuse with changes, Phase 1 | The `otpauth://` parser (D127), moved to `packages/crypto`, writing defaults explicitly. The lenient import parser (`apps/web/src/lib/import/totp.ts`) is copied in Phase 6. |
 | `packages/vault/src/export` (`.json`, `.blindpass`) | Reuse decoding only, Phase 6 | BlindPass input format (D123); documented in `docs/blindpass-format.md` when first needed. |
 | `apps/web/src/lib/import/parsers/*` (Chrome, LastPass, Bitwarden, Apple Keychain, KeePassXC, Proton Pass, 1Password, Dashlane) | Reuse with changes, Phase 6 | D124, D125. |
 | `apps/web/src/lib/biometric/*` (WebAuthn PRF) | Reuse with changes | Add the UV flag check (D75), the BE flag notice (D84) and AAD on the local wrap (D121). |
 | `apps/web/src/lib/vaultCache.ts` (raw IndexedDB) | Do not reuse | Different schema (D79, D82). The raw IndexedDB API without a wrapper library is kept as the approach. |
 | `@zxcvbn-ts/core` and language packs | Reuse | D71 and D134 need the guess estimate, which it exposes. |
 | PWA setup (`vite-plugin-pwa` generateSW, autoUpdate, `skipWaiting`, `clientsClaim`) | Do not reuse | Contradicts D63 and D142. |
-| UI stack (TanStack Router and Query, shadcn/Base UI) | Decide in Phase 1 | TanStack Query manages server state, which BlindVault does not have. |
+| UI stack (TanStack Router and Query, shadcn/Base UI) | Base UI only | No router: navigation state lives in memory, so no vault identifier reaches the URL or history (D167). No TanStack Query, which manages server state BlindVault does not have. State is read with `useSyncExternalStore` over the vault session, with no state library. |
 | Server, API schema, PostgreSQL, Redis, Docker, Terraform | Do not reuse | Excluded by `AGENTS.md`. |
 
 ### Differences between BlindPass crypto and the overview (the overview wins)

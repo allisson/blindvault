@@ -93,14 +93,27 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 **Goal:** a vault that can be created, encrypted, persisted, locked and unlocked on a single device.
 
+**Throwaway vaults.** A Phase 1 vault has no Recovery Envelope: creating one writes the Vault Key,
+the creator's Device record (D30) and Local Config, and the Recovery Phrase flow arrives in Phase 2.
+Nothing is published before Phase 3, so Phase 2 owes no migration for these vaults. Until Phase 2,
+the app shows a permanent banner saying the vault has no Recovery Phrase and cannot be recovered.
+
+**Order of work.** `packages/crypto` lands in four changes: (1) initialization, layout and AAD,
+AEAD and their vectors; (2) the envelope codec, the section 9.5 verification and the negative
+vectors; (3) KEKs, the Argon2id worker, the Recovery Phrase, the device identity and PRF; (4) TOTP
+and the password generator. Then `docs/record-content.md` vectors, `packages/vault`,
+`packages/storage` and `apps/web`.
+
 ### `packages/crypto`
 
-- [ ] Async libsodium initialization and RNG
-- [ ] Binary AAD serialization with test vectors (D10)
-- [ ] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
+- [x] Async libsodium initialization and RNG
+- [x] Opaque key handles registered in a keyring that lock wipes; any use after the wipe throws (CRYPTO-INV-010)
+- [x] Binary AAD serialization with test vectors (D10)
+- [x] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
+- [ ] Record envelope codec (strict CBOR, re-encode check) and the `crypto-spec.md` §9.5 verification, reproducing every vector and rejecting every negative one at its `expectedStep`
 - [ ] Generation of master key, vault key (with `keyEpoch`) and record keys (D18)
-- [ ] Key wrap and unwrap with AAD (D8)
-- [ ] Device KEK derivation with Argon2id and local calibration (D9)
+- [x] Key wrap and unwrap with AAD (D8)
+- [ ] Device KEK derivation with Argon2id in a Web Worker and local calibration (D9, D166)
 - [ ] Recovery KEK generation and derivation with `crypto_kdf`, used only through subkeys (D2); recovery keyslot keypair from a subkey (D16)
 - [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
 - [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
@@ -112,6 +125,12 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### `packages/vault`
 
+- [ ] `docs/record-content.md` vectors: item, folder, device and Local Config content added to `tests/vectors/generate.py` (D165)
+- [ ] HLC: issue, compare, receive rule and HLC state (D19, D62, D109, D163); CRYPTO-INV-020
+- [ ] Vault session over a `RecordStore` interface: keys, HLC, decrypted state loaded at unlock, domain operations (D163)
+- [ ] Content validators: unknown or invalid content makes an Item or Item Version read-only; Folder and Device keep unknown keys and fail verification on an invalid known value (D52, D59, D165)
+- [ ] Item Version on every edit, move, trash and restore; 20 kept per item; saving unchanged content writes nothing (D6, D165)
+- [ ] Automatic purge 30 days after the tombstone's HLC, at unlock and periodically while unlocked, with an injectable clock (D7, D27, D94)
 - [ ] Item model with typed fields (list in overview, section 6 "Data model")
 - [ ] Factory templates as versioned code definitions; items store `templateId` and `templateVersion` (D20)
 - [ ] Folder record with encrypted name and `parentId` (D14)
@@ -123,7 +142,8 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 
 ### `packages/storage`
 
-- [ ] Versioned IndexedDB schema with migrations
+- [ ] Versioned IndexedDB schema with migrations: `records` keyed by `[recordType, recordId]` and `localConfig` (D158, `architecture.md`)
+- [ ] Local Config format version; an unknown version refuses unlock (D164)
 - [ ] API that only accepts encrypted records (distinct TypeScript type)
 - [ ] Local Config persistence (KEK salt, parameters, wrapped master key); everything not needed for unlock encrypted under the Local Config subkey (D58, CRYPTO-INV-019); every local wrap bound to `vaultId` and `localConfigId` (D121, CRYPTO-INV-023)
 - [ ] `navigator.storage.persist()` and `estimate()`
@@ -134,9 +154,13 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 ### `apps/web` (minimal)
 
 - [ ] Layout system: mobile, tablet and desktop shells selected by viewport width, sharing one domain layer (D15)
-- [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock
+- [ ] In-memory navigation with no router and no vault identifier in the URL or history (D167)
+- [ ] UI copy in `en` and `pt-BR`; template role names localized (D165)
+- [ ] Create vault, local password with zxcvbn at score 4 (D71), unlock, lock; Phase 1 banner (no Recovery Phrase)
+- [ ] Change the local password, requiring the current one (D168)
+- [ ] WebAuthn PRF unlock: setup in settings with the synced-passkey notice (D84), unlock, assertion without user verification rejected (D75)
 - [ ] Item CRUD with templates
-- [ ] Duplicate item: new item in the same folder with the current content, a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
+- [ ] Duplicate item: new item in the same folder with the current content, a localized " (copy)" title suffix (D169), a new ID and no history; the item-history view states that old values stay until the original is trashed and purged (D135); blocked for an item from a newer app version, not offered in the trash (D140)
 - [ ] Records in the trash allow only restore from the trash and purge; restoring a version of a trashed state drops `trashOperationId` (D143)
 - [ ] Folder tree: create, rename, move, delete; move items between folders and the root
 - [ ] Secret fields masked by default
@@ -159,6 +183,9 @@ Phase 6 Import and final review ──► Security Gate ──► v1.0
 - [ ] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
 - [ ] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
 - [ ] Folder names and `parentId` never appear in cleartext metadata
+- [ ] Content tests: each rule of `record-content.md` §2 makes an item read-only; a Folder or Device record keeps unknown keys through rename, move and trash
+- [ ] PRF unlock rejects an assertion without user verification, in Playwright with Chromium's virtual authenticator (CRYPTO-INV-021)
+- [ ] Load test: unlock with 2,000 items × 20 versions; time recorded in `architecture.md`
 
 ---
 
