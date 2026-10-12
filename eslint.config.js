@@ -72,6 +72,12 @@ export default defineConfig(
     },
   },
   {
+    // CRYPTO-INV-005: the app and the packages write no log, so no key or secret can reach one.
+    files: ['apps/web/src/**', 'packages/*/src/**'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx', '**/test-helpers.ts'],
+    rules: { 'no-console': 'error' },
+  },
+  {
     // packages/storage persists sealed records and Local Config: crypto types only, no domain, no UI.
     files: ['packages/storage/**'],
     rules: {
