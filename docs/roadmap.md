@@ -183,7 +183,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Playwright runs the core flows (unlock, CRUD, lock) at mobile, tablet and desktop widths
 - [x] Tree tests: an item is never shown in two places; cycles and orphans are resolved by the D14 rules (property tests over random trees)
 - [x] Folder names and `parentId` never appear in cleartext metadata
-- [ ] Content tests: each rule of `record-content.md` §2 makes an item read-only; a Folder or Device record keeps unknown keys through rename, move and trash
+- [x] Content tests: each rule of `record-content.md` §2 makes an item read-only; a Folder or Device record keeps unknown keys through rename, move and trash
 - [x] PRF unlock rejects an assertion without user verification, in Playwright with Chromium's virtual authenticator (CRYPTO-INV-021)
 - [ ] Load test: unlock with 2,000 items × 20 versions; time recorded in `architecture.md`
 
