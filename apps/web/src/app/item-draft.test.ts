@@ -205,6 +205,107 @@ describe('item drafts (record-content.md §3, §4)', () => {
     expect(ok({ ...draft, folderId: undefined })).not.toHaveProperty('folderId');
   });
 
+  describe('TOTP fields (D127, record-content.md §4)', () => {
+    function withTotp(value: string, label = '2FA'): { draft: Draft; key: number } {
+      const draft = addField({ ...login(), title: 'x' }, 'totp');
+      const added = last(draft);
+      return {
+        key: added.key,
+        draft: {
+          ...draft,
+          fields: draft.fields.map((f) => (f.key === added.key ? { ...f, label, value } : f)),
+        },
+      };
+    }
+
+    it('parses an otpauth:// URI into the stored map, without the URI', () => {
+      const { draft } = withTotp(
+        ' otpauth://totp/ACME:ana@acme.example?secret=jbsw y3dp&issuer=ACME&digits=8&period=60 ',
+      );
+      expect(ok(draft).fields).toEqual([
+        {
+          type: 'totp',
+          label: '2FA',
+          value: {
+            secret: 'JBSWY3DP',
+            algorithm: 'SHA1',
+            digits: 8,
+            period: 60,
+            issuer: 'ACME',
+            accountName: 'ana@acme.example',
+          },
+        },
+      ]);
+    });
+
+    it('parses a bare secret, normalized, with the defaults written', () => {
+      const { draft } = withTotp('jbsw y3dp ehpk 3pxp');
+      expect(ok(draft).fields).toEqual([
+        {
+          type: 'totp',
+          label: '2FA',
+          value: { secret: 'JBSWY3DPEHPK3PXP', algorithm: 'SHA1', digits: 6, period: 30 },
+        },
+      ]);
+    });
+
+    it.each([
+      ['a secret outside base32', 'JBSW1Y3DP'],
+      ['an unknown algorithm', 'otpauth://totp/x?secret=JBSWY3DP&algorithm=MD5'],
+      ['too few digits', 'otpauth://totp/x?secret=JBSWY3DP&digits=4'],
+      ['a period out of range', 'otpauth://totp/x?secret=JBSWY3DP&period=5'],
+      ['an HOTP URI', 'otpauth://hotp/x?secret=JBSWY3DP&counter=1'],
+      ['a URI with no secret', 'otpauth://totp/x?issuer=ACME'],
+    ])('refuses %s', (_name, value) => {
+      const { draft, key } = withTotp(value);
+      expect(errors(draft).fields.get(key)).toBe('totp');
+    });
+
+    it('refuses a TOTP field with no label, like any custom field', () => {
+      const { draft, key } = withTotp('JBSWY3DP', '');
+      expect(errors(draft).fields.get(key)).toBe('label-required');
+    });
+
+    it('drops an empty new TOTP field', () => {
+      expect(ok(withTotp('').draft).fields).toEqual([]);
+    });
+
+    it('keeps the stored value when nothing is typed, and replaces it when something is', () => {
+      const stored = {
+        secret: 'JBSWY3DPEHPK3PXP',
+        algorithm: 'SHA256',
+        digits: 7,
+        period: 45,
+      } as const;
+      const item: Item = {
+        templateId: 'login',
+        templateVersion: 1,
+        title: 'x',
+        fields: [{ type: 'totp', label: '2FA', value: stored }],
+        tags: [],
+      };
+      const draft = draftOf(item);
+      expect(ok(draft).fields).toEqual(item.fields);
+      const replaced = {
+        ...draft,
+        fields: draft.fields.map((f) => (f.type === 'totp' ? { ...f, value: 'MFRGGZDF' } : f)),
+      };
+      expect(ok(replaced).fields).toEqual([
+        {
+          type: 'totp',
+          label: '2FA',
+          value: { secret: 'MFRGGZDF', algorithm: 'SHA1', digits: 6, period: 30 },
+        },
+      ]);
+      // A refused replacement never falls back to the stored value silently.
+      const bad = {
+        ...draft,
+        fields: draft.fields.map((f) => (f.type === 'totp' ? { ...f, value: '0189' } : f)),
+      };
+      expect(inputOf(bad).ok).toBe(false);
+    });
+  });
+
   it('gives every field its own key', () => {
     const draft = addField(addField(login(), 'text'), 'secret');
     expect(new Set(draft.fields.map((f) => f.key)).size).toBe(draft.fields.length);

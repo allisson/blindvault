@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
+import { clipboard } from './app/clipboard';
 import { VaultController } from './app/controller';
 import { kdfWorker } from './app/kdf';
 import { LockTimers } from './app/lock-timers';
@@ -45,6 +46,8 @@ function Root() {
     if (!preferences) {
       timers.stop();
       nav.reset();
+      // A copied secret does not outlive the unlocked vault, as far as the browser allows (D54).
+      clipboard.lock();
       return;
     }
     timers.start(preferences, document.visibilityState === 'hidden');

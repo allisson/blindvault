@@ -2,6 +2,12 @@
 // `record-content.md` §3–§4 reported per field. The session checks the content again on write.
 
 import {
+  TotpRejectedError,
+  type TotpValue,
+  parseOtpauthUri,
+  parseTotpSecret,
+} from '@blindvault/crypto';
+import {
   type FieldType,
   type Item,
   type ItemInput,
@@ -28,9 +34,12 @@ export interface DraftField {
   readonly role?: string;
   /** The user's label; empty means none. */
   readonly label: string;
-  /** Text as typed; a TOTP field keeps its stored value in `totp`, not edited here. */
+  /**
+   * Text as typed. For a TOTP field, an `otpauth://` URI or a bare secret that replaces the stored
+   * value in `totp`; empty keeps it.
+   */
   readonly value: string;
-  readonly totp?: Exclude<Field['value'], string>;
+  readonly totp?: TotpValue;
 }
 
 export interface Draft {
@@ -46,7 +55,14 @@ export interface Draft {
 }
 
 export type FieldError =
-  'single-line' | 'date' | 'month' | 'number' | 'seed-phrase' | 'label-required' | 'label-too-long';
+  | 'single-line'
+  | 'date'
+  | 'month'
+  | 'number'
+  | 'seed-phrase'
+  | 'totp'
+  | 'label-required'
+  | 'label-too-long';
 
 export interface DraftErrors {
   readonly title?: 'required' | 'too-long';
@@ -122,10 +138,25 @@ const TRIMMED: ReadonlySet<FieldType> = new Set([
   'number',
 ]);
 
-type Checked = { readonly value: string } | { readonly error: FieldError } | null;
+type Checked = { readonly value: Field['value'] } | { readonly error: FieldError } | null;
+
+/** An `otpauth://` URI or a bare secret, parsed into the stored map (record-content.md §4). */
+function parseTotp(typed: string): Checked {
+  try {
+    return { value: /^otpauth:/i.test(typed) ? parseOtpauthUri(typed) : parseTotpSecret(typed) };
+  } catch (e) {
+    if (e instanceof TotpRejectedError) return { error: 'totp' };
+    throw e;
+  }
+}
 
 /** The stored value of `f`, `null` when empty (never written), or why it is refused. */
 function check(f: DraftField, monthOnly: boolean): Checked {
+  if (f.type === 'totp') {
+    const typed = trim(f.value);
+    if (typed !== '') return parseTotp(typed);
+    return f.totp ? { value: f.totp } : null;
+  }
   if (f.type === 'seed-phrase') {
     const v = normalizeSeedPhrase(f.value);
     if (v === '') return null;
@@ -158,10 +189,6 @@ export function inputOf(draft: Draft): DraftResult {
   const fields: Field[] = [];
   for (const f of draft.fields) {
     const label = trim(f.label);
-    if (f.totp) {
-      fields.push({ type: f.type, value: f.totp, ...named(f.role, label) });
-      continue;
-    }
     const monthOnly = (f.role && t ? roleOf(t, f.role)?.monthPrecision : undefined) === true;
     const checked = check(f, monthOnly);
     if (checked === null) continue;

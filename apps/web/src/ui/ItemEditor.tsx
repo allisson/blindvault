@@ -23,13 +23,10 @@ import {
 import { type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, roleName } from '../i18n/messages';
-import { Button, Field, INPUT, Notice, TextArea } from './components';
+import { Button, Field, INPUT, TextArea } from './components';
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { SecretInput } from './Secret';
-
-// TOTP input (otpauth:// parsing, D127) comes with the TOTP field.
-const ADDABLE = FIELD_TYPES.filter((t) => t !== 'totp');
 
 const INPUT_TYPES: Partial<Record<FieldType, string>> = {
   url: 'url',
@@ -67,12 +64,18 @@ function FieldEditor({
   };
 
   let input;
-  if (field.totp) {
+  if (field.type === 'totp') {
+    // Masked like a secret: an otpauth:// URI holds the TOTP secret (D127).
     input = (
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium">{name}</span>
-        <Notice>{m.items.totpLater}</Notice>
-      </div>
+      <SecretInput
+        label={name}
+        value={field.value}
+        onChange={set}
+        error={error}
+        hint={field.totp ? m.items.totpKeep : m.items.totpHint}
+        shown={shown}
+        onShownChange={setShown}
+      />
     );
   } else if (field.type === 'secret' || field.type === 'seed-phrase') {
     input = (
@@ -135,7 +138,7 @@ function FieldEditor({
         </div>
       ) : null}
       {input}
-      {field.type === 'secret' && !field.totp ? (
+      {field.type === 'secret' ? (
         <div className="flex flex-col gap-2">
           <Button
             variant="quiet"
@@ -301,12 +304,12 @@ export function ItemEditor({
             className={INPUT}
             value={adding}
             onChange={(e) => {
-              const type = ADDABLE.find((t) => t === e.target.value);
+              const type = FIELD_TYPES.find((t) => t === e.target.value);
               if (type) setAdding(type);
             }}
             data-testid="add-field-type"
           >
-            {ADDABLE.map((t) => (
+            {FIELD_TYPES.map((t) => (
               <option key={t} value={t}>
                 {m.fieldTypes[t]}
               </option>

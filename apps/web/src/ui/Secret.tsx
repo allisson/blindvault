@@ -1,6 +1,8 @@
 import { useId, useState } from 'react';
 
+import { clipboard } from '../app/clipboard';
 import { useMessages } from '../i18n/context';
+import { format } from '../i18n/messages';
 import { Button, INPUT } from './components';
 
 // Secrets are masked by default in every layout; revealing takes an explicit action, and the
@@ -16,23 +18,91 @@ function Toggle({ shown, onToggle }: { readonly shown: boolean; readonly onToggl
   );
 }
 
-/** A stored secret, masked until shown. */
-export function SecretView({ value, label }: { readonly value: string; readonly label: string }) {
-  const [shown, setShown] = useState(false);
+/**
+ * Copies on explicit action, then tries to clear the clipboard after `clearSeconds` (D54, D127);
+ * `status` says so, and that clearing is not guaranteed.
+ */
+export function useCopy(clearSeconds: number | undefined) {
+  const m = useMessages();
+  const [state, setState] = useState<'copied' | 'failed'>();
+  const copy = (text: string) => {
+    if (clearSeconds === undefined) return;
+    clipboard.copy(text, clearSeconds).then(
+      () => {
+        setState('copied');
+      },
+      () => {
+        setState('failed');
+      },
+    );
+  };
+  const status =
+    state && clearSeconds !== undefined ? (
+      <p role="status" className="text-xs text-zinc-500">
+        {state === 'copied'
+          ? format(m.items.copied, { seconds: String(clearSeconds) })
+          : m.items.copyFailed}
+      </p>
+    ) : null;
+  return { copy, status };
+}
+
+/** `label` shown; the field's `name` completes the accessible name. */
+export function CopyButton({
+  label,
+  name,
+  onCopy,
+}: {
+  readonly label: string;
+  readonly name: string;
+  readonly onCopy: () => void;
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <span
-        data-testid={`secret-${label}`}
-        className="min-w-0 flex-1 font-mono text-sm break-all whitespace-pre-wrap"
-      >
-        {shown ? value : MASK}
-      </span>
-      <Toggle
-        shown={shown}
-        onToggle={() => {
-          setShown(!shown);
-        }}
-      />
+    <Button variant="quiet" aria-label={`${label}: ${name}`} onClick={onCopy}>
+      {label}
+    </Button>
+  );
+}
+
+/** A stored secret, masked until shown; copied without being shown when `clearSeconds` is set. */
+export function SecretView({
+  value,
+  label,
+  clearSeconds,
+}: {
+  readonly value: string;
+  readonly label: string;
+  readonly clearSeconds?: number | undefined;
+}) {
+  const m = useMessages();
+  const [shown, setShown] = useState(false);
+  const { copy, status } = useCopy(clearSeconds);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <span
+          data-testid={`secret-${label}`}
+          className="min-w-0 flex-1 font-mono text-sm break-all whitespace-pre-wrap"
+        >
+          {shown ? value : MASK}
+        </span>
+        <Toggle
+          shown={shown}
+          onToggle={() => {
+            setShown(!shown);
+          }}
+        />
+        {clearSeconds !== undefined ? (
+          <CopyButton
+            label={m.items.copy}
+            name={label}
+            onCopy={() => {
+              copy(value);
+            }}
+          />
+        ) : null}
+      </div>
+      {status}
     </div>
   );
 }
