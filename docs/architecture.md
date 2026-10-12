@@ -118,6 +118,12 @@ every project through the references in the root `tsconfig.json`.
   shows its subfolders, then its items; a new item starts in the folder shown. Trashing or
   restoring a subtree that holds read-only records is refused as a whole, and the UI lists those
   records and why (overview §6). The trash lists folders with Restore only (D143).
+- **Search (D132, `apps/web/src/app/search.ts`).** An in-memory index built from the derived tree
+  while a query runs: titles, tags, the folder names on the item's path, notes and the values of
+  every field type but `secret`, `totp` and `seed-phrase`. Text and query are NFKD, without marks,
+  lowercase; every term must match. It covers items not in the trash, across folders. The index
+  is cleared whenever no search runs and when the shell unmounts on lock; the query is React state
+  only, never in `localStorage`, the URL or the history. Ctrl/⌘ + K focuses it.
 - **Secrets in the UI (overview §13.2).** Secret, seed-phrase and TOTP-secret values show a
   fixed-length mask until the user reveals them, in every layout; the detail pane is keyed by
   item, so a reveal never carries to another item. In the editor a masked secret is a password
