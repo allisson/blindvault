@@ -111,13 +111,13 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Binary AAD serialization with test vectors (D10)
 - [x] AEAD envelope (XChaCha20-Poly1305) with mandatory AAD
 - [x] Record envelope codec (strict CBOR, re-encode check) and the `crypto-spec.md` §9.5 verification, reproducing every vector and rejecting every negative one at its `expectedStep`
-- [ ] Generation of master key, vault key (with `keyEpoch`) and record keys (D18)
+- [x] Generation of master key, vault key (with `keyEpoch`) and record keys (D18)
 - [x] Key wrap and unwrap with AAD (D8)
-- [ ] Device KEK derivation with Argon2id in a Web Worker and local calibration (D9, D166)
-- [ ] Recovery KEK generation and derivation with `crypto_kdf`, used only through subkeys (D2); recovery keyslot keypair from a subkey (D16)
-- [ ] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
-- [ ] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
-- [ ] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75)
+- [x] Device KEK derivation with Argon2id in a Web Worker and local calibration (D9, D166)
+- [x] Recovery KEK generation and derivation with `crypto_kdf`, used only through subkeys (D2); recovery keyslot keypair from a subkey (D16)
+- [x] Recovery phrase generation with `@scure/bip39` (encoding only, not wallet usage)
+- [x] Device X25519 identity generation; `deviceId` = BLAKE2b-128 of the public key (D19)
+- [x] WebAuthn PRF wrapping (optional, detected at runtime), with user verification required and assertions without it rejected (D75); the browser calls and the runtime detection are the `apps/web` PRF unlock task
 - [x] Record content padded with `sodium_pad` to 256-byte blocks before encryption; invalid padding rejected after authentication (D92)
 - [x] Record size cap of 1 MiB of plaintext content: larger writes refused, oversized ciphertext rejected before decryption (D129); item cap leaving room for an Item Version of a trashed state (D139, D143); a received Item or Item Version above the item cap rejected after decryption (D144)
 - [ ] TOTP codes with WebCrypto HMAC (SHA1, SHA256, SHA512), `otpauth://` parser copied from BlindPass, RFC 6238 test vectors (D127)

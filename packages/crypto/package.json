@@ -5,7 +5,8 @@
   "description": "Cryptographic primitives, key hierarchy, AEAD and AAD serialization.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./kdf.worker": "./src/kdf.worker.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -16,6 +17,7 @@
     "vitest": "5.0.2"
   },
   "dependencies": {
+    "@scure/bip39": "2.4.0",
     "cbor2": "2.3.0",
     "libsodium-wrappers-sumo": "0.8.4"
   }

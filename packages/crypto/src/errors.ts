@@ -32,3 +32,43 @@ export class DecryptionError extends CryptoError {
 export class EncodingError extends CryptoError {
   override name = 'EncodingError';
 }
+
+/** A password fails normalization (crypto-spec.md §6): empty, whitespace only or a control character. */
+export class PasswordRejectedError extends CryptoError {
+  override name = 'PasswordRejectedError';
+  constructor(readonly reason: 'empty' | 'control-character') {
+    super(`password rejected: ${reason}`);
+  }
+}
+
+/** Stored Argon2id parameters outside the accepted range, rejected before deriving (§6). */
+export class KdfParamsRejectedError extends CryptoError {
+  override name = 'KdfParamsRejectedError';
+  constructor() {
+    super('Argon2id parameters outside the accepted range');
+  }
+}
+
+/** The Argon2id worker failed or answered something other than a 32-byte key. */
+export class KdfWorkerError extends CryptoError {
+  override name = 'KdfWorkerError';
+  constructor() {
+    super('Argon2id worker failed');
+  }
+}
+
+/** A typed Recovery Phrase is not 24 words of the English list with a valid checksum (§5.1). */
+export class PhraseRejectedError extends CryptoError {
+  override name = 'PhraseRejectedError';
+  constructor(readonly reason: 'word-count' | 'unknown-word' | 'checksum') {
+    super(`recovery phrase rejected: ${reason}`);
+  }
+}
+
+/** A WebAuthn assertion without user verification, or malformed, refused for the PRF KEK (D75). */
+export class UserVerificationError extends CryptoError {
+  override name = 'UserVerificationError';
+  constructor() {
+    super('assertion without user verification');
+  }
+}

@@ -6,10 +6,48 @@ export {
   CryptoNotReadyError,
   DecryptionError,
   EncodingError,
+  KdfParamsRejectedError,
+  KdfWorkerError,
   KeyWipedError,
+  PasswordRejectedError,
+  PhraseRejectedError,
+  UserVerificationError,
 } from './errors';
 export { ID_LENGTH, initCrypto, randomBytes, randomId } from './sodium';
-export { KEY_LENGTH, Keyring, SymmetricKey, generateKey } from './keys';
+export { KEY_LENGTH, Keyring, PrivateKey, SymmetricKey, generateKey } from './keys';
+export { type MasterSubkeys, deriveMasterSubkeys } from './kdf';
+export {
+  ACCEPTED_KDF_RANGE,
+  type KdfParams,
+  MEMLIMIT,
+  SALT_LENGTH,
+  checkKdfParams,
+  generateSalt,
+  normalizePassword,
+} from './password';
+export {
+  type KdfPort,
+  type KdfRequest,
+  type KdfResponse,
+  calibrateDeviceKek,
+  deriveDeviceKek,
+} from './kdf-worker';
+export {
+  PHRASE_WORDS,
+  type RecoveryKeys,
+  type RecoveryPhrase,
+  deriveRecoveryKeys,
+  generateRecoveryPhrase,
+  parseRecoveryPhrase,
+} from './recovery';
+export { type DeviceIdentity, generateDeviceIdentity, loadDeviceIdentity } from './identity';
+export {
+  PRF_INPUT_LENGTH,
+  type PrfAssertion,
+  derivePrfKek,
+  generatePrfInput,
+  isBackupEligible,
+} from './prf';
 export { type Hlc, LocalPurpose, type RecordHeader, localAad, recordAad } from './layout';
 export { NONCE_LENGTH, type Sealed, TAG_LENGTH, open, seal, unwrapKey, wrapKey } from './aead';
 export { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';

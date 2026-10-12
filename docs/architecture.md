@@ -31,7 +31,11 @@ every project through the references in the root `tsconfig.json`.
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
   CRYPTO-INV-010).
 - **Argon2id worker.** The worker entry lives in `packages/crypto` and loads its own libsodium;
-  `apps/web` starts it. It returns the Device KEK and terminates.
+  `apps/web` starts it with `new Worker(new URL('@blindvault/crypto/kdf.worker', import.meta.url),
+  { type: 'module' })` and hands it to `deriveDeviceKek` or `calibrateDeviceKek`, which take any
+  `KdfPort` (tests run the handler in-process). One worker serves one request: the password is
+  transferred to it and wiped on both sides, it returns the Device KEK, and the client terminates it.
+  Parameters outside the accepted range are refused before the worker starts.
 - **Load at unlock.** Unlock decrypts every record into memory. An Item Version's `itemId` is
   encrypted, so versions cannot be found per item without decrypting, and search (D132) needs the
   whole state anyway. A load test (2,000 items × 20 versions) checks the cost in Phase 1.
@@ -68,7 +72,7 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `react`, `react-dom` | `apps/web` | UI (stack). |
 | `libsodium-wrappers-sumo` 0.8.4 | `packages/crypto` | Every primitive of `crypto-spec.md` §2 (stack, §5.1). The sumo build is needed for `crypto_pwhash` and `crypto_kdf`. Same line as BlindPass. Phase 1. |
 | `cbor2` 2.3.0 | `packages/crypto` | Deterministic CBOR with a strict decoder (D10), chosen at Gate 0 (below). Phase 1. |
-| `@scure/bip39` 2.x | `packages/crypto`, `packages/vault` | BIP39 encoding of the Recovery Phrase (D2), the passphrase word list (D128) and seed-phrase word checks (stack). Encoding only: its PBKDF2 seed is never used. Same line as BlindPass. Phase 1. |
+| `@scure/bip39` 2.4.0 | `packages/crypto`, `packages/vault` | BIP39 encoding of the Recovery Phrase (D2), the passphrase word list (D128) and seed-phrase word checks (stack). Encoding only: its PBKDF2 seed is never used, and its entropy comes from libsodium's RNG, never from its own generator. Its one dependency, `@noble/hashes` 2.4.0, supplies the SHA-256 of the checksum. Same line as BlindPass. Phase 1. |
 | `@zxcvbn-ts/core` 3.x, `@zxcvbn-ts/language-common`, `-language-en`, `-language-pt-br` | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
 | `@base-ui/react` 1.x | `apps/web` | Headless, accessible dialog, menu and popover primitives, already used by BlindPass; no styling of its own, so Tailwind stays the only styling layer. Phase 1. |
 
