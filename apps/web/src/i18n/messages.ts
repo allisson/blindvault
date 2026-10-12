@@ -39,6 +39,8 @@ const en = {
     mismatch: 'The passwords do not match.',
     weak: 'This password is too easy to guess. Use a longer passphrase.',
     strong: 'Strong enough.',
+    browserSave:
+      'Do not let the browser save this password: depending on the browser, a copy of its data could then be enough to open the vault.',
   },
   unlock: {
     title: 'Unlock the vault',
@@ -314,6 +316,8 @@ const ptBR: Messages = {
     mismatch: 'As senhas não coincidem.',
     weak: 'Esta senha é fácil de adivinhar. Use uma frase-senha mais longa.',
     strong: 'Forte o bastante.',
+    browserSave:
+      'Não deixe o navegador salvar esta senha: dependendo do navegador, uma cópia dos dados dele poderia bastar para abrir o cofre.',
   },
   unlock: {
     title: 'Desbloquear o cofre',

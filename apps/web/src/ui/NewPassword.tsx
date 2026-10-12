@@ -78,6 +78,8 @@ export function NewPassword({
         error={confirm !== '' && !matches ? m.create.mismatch : undefined}
         data-testid="confirm-password"
       />
+      {/* A browser can keep the password next to the locked storage (D175). */}
+      <p className="text-sm text-zinc-500">{m.create.browserSave}</p>
     </>
   );
 }

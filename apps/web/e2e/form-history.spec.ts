@@ -4,6 +4,8 @@ import { type Page, expect, test } from '@playwright/test';
 test.setTimeout(180_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
+// Shown wherever a local password is set, since a browser can save it next to the vault (D175).
+const BROWSER_SAVE = /Do not let the browser save this password/;
 
 function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
@@ -41,13 +43,14 @@ async function expectNoneKept(page: Page) {
   expect(result.kept).toEqual([]);
 }
 
-test('keeps vault content out of the browser form history (D174, CRYPTO-INV-001)', async ({
+test('keeps vault content out of the browser form history (D174, CRYPTO-INV-001), and warns against saving the password (D175)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await expect(page.getByTestId('new-password')).toBeVisible();
   await expectNoneKept(page);
+  await expect(page.getByText(BROWSER_SAVE)).toBeVisible();
   await page.getByTestId('new-password').fill(PASSWORD);
   await page.getByTestId('confirm-password').fill(PASSWORD);
   await button(page, 'Create vault').click();
@@ -102,6 +105,7 @@ test('keeps vault content out of the browser form history (D174, CRYPTO-INV-001)
   await page.getByTestId('search').fill('');
   await button(page, 'Settings').click();
   await expectNoneKept(page);
+  await expect(page.getByText(BROWSER_SAVE)).toBeVisible();
 });
 
 test('finds a text control the form history may keep', async ({ page }) => {
