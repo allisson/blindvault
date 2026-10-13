@@ -18,13 +18,18 @@ import {
   decodeCbor,
   deriveMasterSubkeys,
   derivePrfKek,
+  deriveRecoveryKeys,
   deviceId,
   encodeCbor,
   generateDeviceIdentity,
+  generateRecoveryPhrase,
   initCrypto,
   itemContentLength,
   localAad,
+  openRecoveryEnvelope,
+  parseRecoveryPhrase,
   randomId,
+  recoveryEnvelopeRecordId,
   sealLocalConfigPart,
   sealRecord,
   unwrapKey,
@@ -92,17 +97,40 @@ afterEach(() => {
 
 async function create(clock = new Clock(), store = new MemoryStore()) {
   const keyring = new Keyring();
+  const phrase = generateRecoveryPhrase(keyring);
   const session = await VaultSession.create({
     store,
     keyring,
     kek: kek(keyring),
+    recoveryEntropy: phrase.entropy,
     salt: SALT,
     kdfParams: PARAMS,
     displayName: 'Chrome on macOS',
     now: clock.now,
   });
   open.push(session);
-  return { session, store, clock, keyring };
+  // The session releases the entropy: the words are the only way back to it, as for a user.
+  return { session, store, clock, keyring, words: phrase.words, entropy: phrase.entropy };
+}
+
+/**
+ * What a stored phrase would contain: the whole phrase and every pair of neighbouring words, with
+ * or without a space. Single words are not enough: BIP39 words such as "salt" or "local" also
+ * appear in Local Config's own keys.
+ */
+function phraseTraces(words: string): string[] {
+  const list = words.split(' ');
+  const out = [words];
+  for (let i = 0; i + 1 < list.length; i++) {
+    out.push(`${list[i] ?? ''} ${list[i + 1] ?? ''}`, `${list[i] ?? ''}${list[i + 1] ?? ''}`);
+  }
+  return out;
+}
+
+/** The recovery keys of a typed phrase, in a keyring of their own. */
+function typed(words: string) {
+  const keyring = new Keyring();
+  return { keyring, ...deriveRecoveryKeys(keyring, parseRecoveryPhrase(keyring, words)) };
 }
 
 async function unlock(
@@ -213,11 +241,15 @@ function contains(haystack: Uint8Array, needle: Uint8Array): boolean {
 }
 
 describe('vault creation and unlock (D163)', () => {
-  it('creates a vault in one commit: Vault Key record, Device record and Local Config', async () => {
+  it('creates a vault in one commit: Vault Key, Recovery Envelope, Device record and Local Config', async () => {
     const { session, store } = await create();
     expect(store.commits).toHaveLength(1);
     const [commit] = store.commits;
-    expect(commit?.put.map((p) => p.recordType)).toEqual([RecordType.vaultKey, RecordType.device]);
+    expect(commit?.put.map((p) => p.recordType)).toEqual([
+      RecordType.vaultKey,
+      RecordType.recoveryEnvelope,
+      RecordType.device,
+    ]);
     expect(commit?.delete).toEqual([]);
     const config = parseLocalConfig(store.localConfig);
     expect(config.vaultId).toEqual(session.vaultId);
@@ -435,6 +467,7 @@ describe('vault creation and unlock (D163)', () => {
           store,
           keyring,
           kek: kek(keyring),
+          recoveryEntropy: generateRecoveryPhrase(keyring).entropy,
           salt: SALT,
           kdfParams,
           displayName,
@@ -443,6 +476,99 @@ describe('vault creation and unlock (D163)', () => {
       expect(keyring.wiped).toBe(true);
       expect(store.commits).toEqual([]);
     }
+  });
+});
+
+describe('Recovery Envelope (§5.4, D2, D16, D24, D179)', () => {
+  function envelopeOf(store: MemoryStore): RecordEnvelope {
+    const held = [...store.held.values()].find((r) => r.recordType === RecordType.recoveryEnvelope);
+    return must(held).envelope;
+  }
+
+  it('writes an envelope that the phrase opens to the vault Master Key', async () => {
+    const { session, store, words } = await create();
+    const phrase = typed(words);
+    const envelope = envelopeOf(store);
+    expect(decodeEnvelope(envelope).header.recordId).toEqual(
+      recoveryEnvelopeRecordId(session.vaultId),
+    );
+    const masterKey = openRecoveryEnvelope(
+      phrase.keyring,
+      envelope,
+      session.vaultId,
+      phrase.envelopeKey,
+    );
+    // The Master Key it holds opens this vault's Vault Key record.
+    const subkeys = deriveMasterSubkeys(phrase.keyring, masterKey);
+    const vaultKeyRecord = must(
+      [...store.held.values()].find((r) => r.recordType === RecordType.vaultKey),
+    );
+    const verified = verifyRecord(phrase.keyring, vaultKeyRecord.envelope, {
+      vaultId: session.vaultId,
+      vaultKey: () => undefined,
+      vaultKeyWrapKey: subkeys.vaultKeyWrap,
+      versionIdKey: subkeys.versionId,
+    });
+    expect(verified.vaultKey).toBeDefined();
+  });
+
+  it('carries the keyslot public key derived from the phrase, a phraseId and its date', async () => {
+    const { session, store, words, clock } = await create();
+    const recovery = must(session.recovery);
+    expect(recovery.keyslotPublicKey).toEqual(typed(words).keyslotPublicKey);
+    expect(recovery.phraseId).toHaveLength(16);
+    expect(recovery.phraseCreatedAt).toBe(clock.t);
+    const again = await unlock(store);
+    expect(again.recovery).toEqual(recovery);
+    expect(again.corrupt()).toEqual([]);
+  });
+
+  it('gives every vault its own phrase and phraseId', async () => {
+    const a = await create();
+    const b = await create();
+    expect(a.words).not.toBe(b.words);
+    expect(must(a.session.recovery).phraseId).not.toEqual(must(b.session.recovery).phraseId);
+  });
+
+  it('releases the phrase entropy, keeping no recovery secret (CRYPTO-INV-006)', async () => {
+    const { store, words, entropy } = await create();
+    expect(() => deriveRecoveryKeys(new Keyring(), entropy)).toThrow(KeyWipedError);
+    const persisted = [store.localConfig, ...[...store.held.values()].map((r) => r.envelope)];
+    for (const text of phraseTraces(words)) {
+      expect(persisted.some((bytes) => contains(bytes, utf8(text)))).toBe(false);
+    }
+    const { keyslotPublicKey } = typed(words);
+    // The public key is in the metadata, encrypted: never in the clear.
+    expect(persisted.some((bytes) => contains(bytes, keyslotPublicKey))).toBe(false);
+  });
+
+  it('records the phraseId as the last one seen (D43, D48)', async () => {
+    const { session, store } = await create();
+    const again = await unlock(store);
+    expect(again.lastPhraseId).toEqual(must(session.recovery).phraseId);
+  });
+
+  it('unlocks a vault created without an envelope, with no Recovery Phrase (D177, D179)', async () => {
+    const { store } = await create();
+    for (const [key, r] of store.held) {
+      if (r.recordType === RecordType.recoveryEnvelope) store.held.delete(key);
+    }
+    const again = await unlock(store);
+    expect(again.recovery).toBeUndefined();
+    expect(again.corrupt()).toEqual([]);
+  });
+
+  it('keeps an envelope that fails verification aside as corrupt', async () => {
+    const { store } = await create();
+    for (const [key, r] of store.held) {
+      if (r.recordType !== RecordType.recoveryEnvelope) continue;
+      const bytes = r.envelope.slice();
+      bytes[bytes.length - 1] = must(bytes[bytes.length - 1]) ^ 1;
+      store.held.set(key, { ...r, envelope: bytes as RecordEnvelope });
+    }
+    const again = await unlock(store);
+    expect(again.recovery).toBeUndefined();
+    expect(again.corrupt().map((k) => k.recordType)).toEqual([RecordType.recoveryEnvelope]);
   });
 });
 
@@ -1429,6 +1555,8 @@ describe('lock (CRYPTO-INV-010)', () => {
       deviceId: () => session.deviceId,
       preferences: () => session.preferences,
       passkeyCredentialId: () => session.passkeyCredentialId,
+      recovery: () => session.recovery,
+      lastPhraseId: () => session.lastPhraseId,
       writable: () => session.writable,
       writableAt: () => session.writableAt,
       items: () => session.items(),

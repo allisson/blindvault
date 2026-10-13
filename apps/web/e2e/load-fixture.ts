@@ -9,6 +9,7 @@ import {
   type KdfResponse,
   Keyring,
   deriveDeviceKek,
+  generateRecoveryPhrase,
   generateSalt,
   initCrypto,
   normalizePassword,
@@ -116,6 +117,8 @@ export async function buildVault(
     store,
     keyring,
     kek,
+    // Nobody reads this phrase: the load test never recovers the vault.
+    recoveryEntropy: generateRecoveryPhrase(keyring).entropy,
     salt,
     kdfParams: params,
     displayName: 'Load test',

@@ -90,8 +90,10 @@ export {
   decodeEnvelope,
   encodeEnvelope,
   itemContentLength,
+  openRecoveryEnvelope,
   sealPurgedTombstone,
   sealRecord,
+  sealRecoveryEnvelope,
   sealVaultKeyRecord,
   verifyRecord,
 } from './record';

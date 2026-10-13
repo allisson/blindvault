@@ -23,6 +23,7 @@ import {
   type SymmetricKey,
   checkKdfParams,
   deriveMasterSubkeys,
+  deriveRecoveryKeys,
   encodeCbor,
   generateDeviceIdentity,
   generateKey,
@@ -30,9 +31,11 @@ import {
   localAad,
   openLocalConfigPart,
   randomId,
+  recoveryEnvelopeRecordId,
   sealLocalConfigPart,
   sealPurgedTombstone,
   sealRecord,
+  sealRecoveryEnvelope,
   sealVaultKeyRecord,
   unwrapKey,
   vaultKeyRecordId,
@@ -151,12 +154,23 @@ export interface DeviceView {
   readonly unknownKeys: readonly string[];
 }
 
+/** The current Recovery Phrase, as the held Recovery Envelope's metadata says (§5.4). */
+export interface RecoveryView {
+  /** Seals a backup's recovery keyslot without the phrase (D16). */
+  readonly keyslotPublicKey: Uint8Array;
+  readonly phraseId: Uint8Array;
+  /** Unix ms. */
+  readonly phraseCreatedAt: number;
+}
+
 export interface CreateOptions {
   readonly store: RecordStore;
-  /** A new keyring holding only `kek`; the session owns it from now on. */
+  /** A new keyring holding only `kek` and `recoveryEntropy`; the session owns it from now on. */
   readonly keyring: Keyring;
   /** The Device KEK of the new local password; released once the Master Key is wrapped. */
   readonly kek: SymmetricKey;
+  /** The entropy of the Recovery Phrase just confirmed; released once the envelope is sealed. */
+  readonly recoveryEntropy: SymmetricKey;
   readonly salt: Uint8Array;
   readonly kdfParams: KdfParams;
   /** This device's Device record name (D30). */
@@ -208,6 +222,12 @@ interface HeldDevice {
   readonly device: Kept<Device>;
 }
 
+interface HeldRecovery {
+  readonly header: RecordHeader;
+  /** The metadata, verified to hold its three fields (crypto-spec.md §9.5 step 8). */
+  readonly content: CborMap;
+}
+
 interface Write {
   readonly header: RecordHeader;
   /** The content written; `null` for a purged tombstone and for a Vault Key record. */
@@ -234,6 +254,8 @@ interface State {
   readonly versions: Map<string, Map<string, HeldVersion>>;
   readonly folders: Map<string, HeldFolder>;
   readonly devices: Map<string, HeldDevice>;
+  /** `null` for a vault created before the Recovery Envelope existed (D177, D179). */
+  recovery: HeldRecovery | null;
   readonly corrupt: RecordKey[];
 }
 
@@ -244,6 +266,7 @@ function emptyState(): State {
     versions: new Map(),
     folders: new Map(),
     devices: new Map(),
+    recovery: null,
     corrupt: [],
   };
 }
@@ -371,8 +394,12 @@ function load(
         case RecordType.device:
           state.devices.set(key, { header, device: readDevice(content) });
           break;
+        case RecordType.recoveryEnvelope:
+          // Verification fixed its recordId (one per vault) and checked its metadata.
+          if (!content) throw new ContentInvalidError('recovery envelope');
+          state.recovery = { header, content };
+          break;
         default:
-          // The Recovery Envelope arrives in Phase 2; it is kept in storage as received.
           break;
       }
     } catch (error) {
@@ -423,11 +450,12 @@ export class VaultSession {
   }
 
   /**
-   * Creates a vault (Phase 1: no Recovery Envelope). One commit writes the Vault Key record, this
-   * device's Device record (D30) and the Local Config.
+   * Creates a vault. One commit writes the Vault Key record, the Recovery Envelope of the confirmed
+   * phrase (§5.4, D2, D16), this device's Device record (D30) and the Local Config, which records
+   * the new `phraseId` as the last one seen (D43).
    */
   static async create(options: CreateOptions): Promise<VaultSession> {
-    const { store, keyring, kek, salt, kdfParams, displayName } = options;
+    const { store, keyring, kek, recoveryEntropy, salt, kdfParams, displayName } = options;
     const now = options.now ?? Date.now;
     try {
       checkKdfParams(kdfParams);
@@ -440,6 +468,9 @@ export class VaultSession {
         masterKey,
       );
       keyring.release(kek);
+      const recovery = deriveRecoveryKeys(keyring, recoveryEntropy);
+      keyring.release(recoveryEntropy);
+      const phrase = { phraseId: randomId(), phraseCreatedAt: Math.floor(now()) };
       const subkeys = deriveMasterSubkeys(keyring, masterKey);
       const identity = generateDeviceIdentity(keyring);
       const clock = HlcClock.create(identity.deviceId, now);
@@ -455,12 +486,32 @@ export class VaultSession {
           localConfigId,
           kek: { salt, opslimit: kdfParams.opslimit, memlimit: kdfParams.memlimit, mkWrap },
         },
-        localState: { preferences: DEFAULT_PREFERENCES, hlc: clock.state },
+        localState: {
+          preferences: DEFAULT_PREFERENCES,
+          hlc: clock.state,
+          lastPhraseId: phrase.phraseId,
+        },
         clock,
         state,
         now,
       });
-      await session.#run(() => session.#founding(displayName));
+      try {
+        await session.#run(() =>
+          session.#founding(displayName, {
+            masterKey,
+            envelopeKey: recovery.envelopeKey,
+            metadata: new Map<CborValue, CborValue>([
+              ['keyslotPublicKey', recovery.keyslotPublicKey],
+              ['phraseCreatedAt', phrase.phraseCreatedAt],
+              ['phraseId', phrase.phraseId],
+            ]),
+          }),
+        );
+      } finally {
+        // Only the public key outlives creation: the phrase-derived secrets go now (§5.4).
+        keyring.release(recovery.envelopeKey);
+        keyring.release(recovery.keyslotPrivateKey);
+      }
       session.#startMaintenance();
       return session;
     } catch (error) {
@@ -683,6 +734,25 @@ export class VaultSession {
   get preferences(): Preferences {
     this.#unlocked();
     return this.#localState.preferences;
+  }
+
+  /** The current Recovery Phrase, or `undefined` for a vault without a Recovery Envelope (D179). */
+  get recovery(): RecoveryView | undefined {
+    this.#unlocked();
+    const held = this.#state.recovery;
+    if (!held) return undefined;
+    const { content } = held;
+    return {
+      keyslotPublicKey: (content.get('keyslotPublicKey') as Uint8Array).slice(),
+      phraseId: (content.get('phraseId') as Uint8Array).slice(),
+      phraseCreatedAt: content.get('phraseCreatedAt') as number,
+    };
+  }
+
+  /** The `phraseId` of the last Recovery Envelope this device has seen (D43, D48). */
+  get lastPhraseId(): Uint8Array | undefined {
+    this.#unlocked();
+    return this.#localState.lastPhraseId?.slice();
   }
 
   /** The credential ID of the passkey set up on this device, if any (§5.5). */
@@ -1171,7 +1241,14 @@ export class VaultSession {
 
   // --- creation --------------------------------------------------------------------------------
 
-  #founding(displayName: string): Plan<undefined> {
+  #founding(
+    displayName: string,
+    recovery: {
+      readonly masterKey: SymmetricKey;
+      readonly envelopeKey: SymmetricKey;
+      readonly metadata: CborMap;
+    },
+  ): Plan<undefined> {
     const vaultKey = this.#vaultKey(FIRST_EPOCH);
     const vaultKeyHeader = header(
       RecordType.vaultKey,
@@ -1189,6 +1266,24 @@ export class VaultSession {
         vaultKey,
       ),
     };
+    const envelopeHeader = header(
+      RecordType.recoveryEnvelope,
+      recoveryEnvelopeRecordId(this.#cleartext.vaultId),
+      this.#clock.issue(),
+      false,
+    );
+    const envelopeWrite: Write = {
+      header: envelopeHeader,
+      content: recovery.metadata,
+      envelope: sealRecoveryEnvelope(
+        envelopeHeader,
+        this.#cleartext.vaultId,
+        vaultKey,
+        recovery.envelopeKey,
+        recovery.masterKey,
+        recovery.metadata,
+      ),
+    };
     const device = deviceToCbor({
       publicKey: this.#identity.publicKey,
       displayName,
@@ -1202,7 +1297,11 @@ export class VaultSession {
       false,
       device,
     );
-    return { writes: [vaultKeyWrite, deviceWrite], deletes: [], result: undefined };
+    return {
+      writes: [vaultKeyWrite, envelopeWrite, deviceWrite],
+      deletes: [],
+      result: undefined,
+    };
   }
 
   // --- purge and the history cut ---------------------------------------------------------------
@@ -1354,6 +1453,9 @@ export class VaultSession {
         break;
       case RecordType.device:
         this.#state.devices.set(key, { header: h, device: readDevice(content) });
+        break;
+      case RecordType.recoveryEnvelope:
+        if (content) this.#state.recovery = { header: h, content };
         break;
       default:
         // The Vault Key is already held: it was generated before its record was written.

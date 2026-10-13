@@ -486,3 +486,67 @@ export function sealVaultKeyRecord(
     ct: wrapKey(vaultKeyWrapKey, recordAad(header, vaultId), vaultKey),
   });
 }
+
+/**
+ * Seals the Recovery Envelope (crypto-spec.md §11): `mk`, the Master Key under `K_envelope`, and
+ * the metadata under a record key wrapped by the Vault Key, so any unlocked device reads the
+ * keyslot public key without the phrase (D16, D24). The metadata MUST hold `keyslotPublicKey`,
+ * `phraseId` and `phraseCreatedAt`; unknown keys are kept (D98).
+ */
+export function sealRecoveryEnvelope(
+  header: RecordHeader,
+  vaultId: Uint8Array,
+  vaultKey: SymmetricKey,
+  envelopeKey: SymmetricKey,
+  masterKey: SymmetricKey,
+  metadata: CborMap,
+): RecordEnvelope {
+  checkWriteHeader(header, [RecordType.recoveryEnvelope]);
+  if (!sameBytes(header.recordId, recoveryEnvelopeRecordId(vaultId))) {
+    throw new EncodingError('recordId does not match its derivation');
+  }
+  if (
+    !isBytes(metadata.get('keyslotPublicKey'), KEY_LENGTH) ||
+    !isBytes(metadata.get('phraseId'), ID_LENGTH) ||
+    !isUint(metadata.get('phraseCreatedAt'), Number.MAX_SAFE_INTEGER)
+  ) {
+    throw new EncodingError('invalid Recovery Envelope metadata');
+  }
+  const encoded = encodeCbor(metadata);
+  if (encoded.length > RECORD_CAP) throw new EncodingError('content above the record cap');
+  const aad = recordAad(header, vaultId);
+  const recordKeys = new Keyring();
+  try {
+    const recordKey = generateKey(recordKeys);
+    return encodeEnvelope({
+      header,
+      wk: wrapKey(vaultKey, aad, recordKey),
+      ct: seal(recordKey, aad, pad(encoded)),
+      mk: wrapKey(envelopeKey, aad, masterKey),
+    });
+  } finally {
+    recordKeys.wipeAll();
+  }
+}
+
+/**
+ * Opens a Recovery Envelope's `mk` with `K_envelope` from a typed phrase (§5.4): the Master Key, in
+ * a new handle of `keyring`. Anything but a Recovery Envelope whose `mk` opens under its AAD is the
+ * same `DecryptionError`. The envelope's other parts are verified on receipt, not here.
+ */
+export function openRecoveryEnvelope(
+  keyring: Keyring,
+  bytes: Uint8Array,
+  vaultId: Uint8Array,
+  envelopeKey: SymmetricKey,
+): SymmetricKey {
+  let envelope: Envelope;
+  try {
+    envelope = decodeEnvelope(bytes);
+  } catch {
+    throw new DecryptionError();
+  }
+  const { header, mk } = envelope;
+  if (header.recordType !== RecordType.recoveryEnvelope || !mk) throw new DecryptionError();
+  return unwrapKey(keyring, envelopeKey, recordAad(header, vaultId), mk);
+}

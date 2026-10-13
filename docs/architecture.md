@@ -43,6 +43,13 @@ every project through the references in the root `tsconfig.json`.
   `packages/vault` never reads the private key as bytes, and the opened plaintext is wiped.
 - **Envelopes in `crypto`.** The record envelope codec and the verification steps of
   `crypto-spec.md` §9.5 live in `packages/crypto`, since its tests reproduce the vectors.
+- **Recovery Phrase at creation (Phase 2, D179).** `VaultController.newRecoveryPhrase` generates
+  the phrase into a keyring of its own and hands the UI the words once; the controller keeps only
+  the entropy handle, which a lock or a new phrase wipes. `create` makes that keyring the new
+  session's, and `VaultSession.create` derives the recovery keys, seals the Recovery Envelope in
+  the founding commit and releases the entropy, `K_envelope` and the keyslot private key at once,
+  keeping only the public key in the envelope's metadata. The words are a string, which cannot be
+  wiped: the creation screen drops them from its state once they are confirmed.
 - **Backup payload in `crypto` (Phase 2).** The `.bvault` payload holds the Master Key's bytes, so
   `packages/crypto` builds and reads the stream and payload of `backup-format.md` §5 and §6
   (`BackupStreamWriter`, `openBackupStream`), as it does the Local Config encrypted part. The file

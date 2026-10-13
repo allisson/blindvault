@@ -1,5 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { createVault } from './create';
+
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
 
@@ -15,10 +17,7 @@ test('searches in memory, never over secrets, and forgets the query on lock (D13
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
-  await page.getByTestId('new-password').fill(PASSWORD);
-  await page.getByTestId('confirm-password').fill(PASSWORD);
-  await button(page, 'Create vault').click();
-  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await createVault(page, PASSWORD);
 
   await button(page, '+ New folder').click();
   await page.getByTestId('folder-name').fill('Finance');
