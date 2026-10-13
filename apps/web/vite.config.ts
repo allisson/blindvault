@@ -3,6 +3,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Plugin, defineConfig } from 'vite';
 
+import { assetManifest } from './build/asset-manifest';
+
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version: string;
 };
@@ -38,7 +40,7 @@ function csp(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), csp()],
+  plugins: [react(), tailwindcss(), csp(), assetManifest(new URL('../../.nvmrc', import.meta.url))],
   // The Argon2id worker is built as a module, as the dev server serves it (app/kdf.ts).
   worker: { format: 'es' },
   define: {

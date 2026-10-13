@@ -12,7 +12,7 @@ Read these before making non-trivial changes:
   Don't record the decision range or any counter here or in the overview header: the log in
   section 21 is the only place that knows the last `Dn`.
 - `docs/roadmap.md`: phases, tasks and gates. Work on the current phase only.
-- `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
+- `docs/security-invariants.md`, `docs/crypto-spec.md`, `docs/pairing-protocol.md`, `docs/sync-protocol.md`, `docs/backup-format.md`, `docs/build.md`, `docs/threat-model.md`: detailed specs, created as the roadmap progresses.
 - `GLOSSARY.md`: canonical domain terms. Use them in code, docs and UI copy.
 
 If a task would contradict `docs/overview.md`, stop and explain the conflict instead of implementing it. Design changes are made by updating the overview and recording a new `Dn` decision first.
@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 2 — Backup and recovery. Update this line when a gate passes.
+Phase 3 — PWA and application integrity. Update this line when a gate passes.
 
 ## Repository layout
 

@@ -237,8 +237,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] PWA manifest and installation
 - [ ] Cache-first service worker with a versioned cache (D5)
 - [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned, locking the vault synchronously in the `updatefound` handler, with `registration.update()` whenever the app becomes visible (D63, D142, D162); all code and WebAssembly loaded before the first unlock, none afterwards (D142)
-- [ ] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile
-- [ ] CI job that builds twice and compares the asset manifest hash
+- [x] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile (D189, `docs/build.md`)
+- [x] CI job that builds twice and compares the asset manifest hash (D189)
 - [ ] Choose and configure the dedicated custom domain for the official build (D90)
 - [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages under the dedicated custom domain only (D90)
 - [x] Startup warning when served under a sub-path of a `github.io` host (D90)
@@ -252,7 +252,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### PWA Gate
 
-- [ ] Two builds of the same commit produce the same hash in CI
+- [x] Two builds of the same commit produce the same hash in CI
 - [ ] App works offline after installation
 - [ ] A new deploy does not replace the code without user confirmation (Playwright test)
 - [ ] The hash shown in the app matches the one published in the release

@@ -32,6 +32,50 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test:coverage
 
+  reproducible:
+    # Two builds of the same commit, from checkouts at different paths and the second under another
+    # time zone, locale, umask and SOURCE_DATE_EPOCH, must give the same asset manifest (D189).
+    name: Reproducible build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: first
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: second/elsewhere
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: first/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: first/.nvmrc
+      - name: First build
+        working-directory: first
+        run: |
+          pnpm install --frozen-lockfile
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/web build
+      - name: Second build, in another environment
+        working-directory: second/elsewhere
+        run: |
+          umask 0077
+          pnpm install --frozen-lockfile
+          SOURCE_DATE_EPOCH=1 TZ=Pacific/Kiritimati LANG=C LC_ALL=C pnpm --filter @blindvault/web build
+      - name: Compare the asset manifests
+        run: |
+          diff first/apps/web/dist/asset-manifest.txt second/elsewhere/apps/web/dist/asset-manifest.txt
+          (cd first/apps/web/dist && sha256sum -c --quiet asset-manifest.txt)
+          hash=$(sha256sum first/apps/web/dist/asset-manifest.txt | cut -d' ' -f1)
+          {
+            echo "Asset manifest sha256: \`$hash\`"
+            echo
+            echo '```'
+            cat first/apps/web/dist/asset-manifest.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   e2e:
     name: Playwright (Chromium, Firefox, WebKit)
     runs-on: ubuntu-latest

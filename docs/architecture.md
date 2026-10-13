@@ -168,6 +168,13 @@ every project through the references in the root `tsconfig.json`.
   it while unlocked; `dismissBackupReminder` hides it for that session until the next lock, so a
   vault that replaces it shows it again, and nothing new is stored. VaultShell shows it with "Make
   a backup", which opens Settings with `focus: 'backup'` on the navigation screen.
+- **Asset manifest and reproducible build (Phase 3, D189).** `apps/web/build/asset-manifest.ts` is
+  a Vite plugin, applied to `vite build` only: at `buildStart` it refuses a Node other than
+  `.nvmrc`'s, and at `closeBundle` it walks `dist/`, writes `asset-manifest.txt` (`manifestOf`, the
+  `shasum -a 256` format in byte order, leaving out itself and `sw.js`) and prints the manifest hash.
+  It lives in `apps/web/build/`, outside `src/`, since it runs in Node at build time; the Vitest and
+  `tsconfig.node.json` includes cover it. The `reproducible` CI job compares two builds made at
+  different paths and in different environments. `docs/build.md` is the spec.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
