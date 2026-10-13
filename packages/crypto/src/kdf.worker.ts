@@ -1,6 +1,6 @@
-// Argon2id worker entry (architecture.md). apps/web starts it with
-// `new Worker(new URL('@blindvault/crypto/kdf.worker', import.meta.url), { type: 'module' })`,
-// uses it for one request, and the client terminates it.
+// Argon2id worker entry (architecture.md). apps/web starts one with
+// `new Worker(new URL('@blindvault/crypto/kdf.worker', import.meta.url), { type: 'module' })` at
+// startup and sends it one request at a time for the window's lifetime (D142, D191).
 
 import { handleKdfRequest } from './kdf-worker';
 import { initCrypto } from './sodium';

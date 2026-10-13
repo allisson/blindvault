@@ -184,16 +184,31 @@ every project through the references in the root `tsconfig.json`.
   it from `main.tsx` in the production build, through a second Trusted Types policy that vouches for
   `/sw.js` only. `public/manifest.webmanifest` and the icons, drawn by `build/icons.py` (standard
   library only, deterministic), are listed in the asset manifest like any other file.
+- **Update flow (Phase 3, D191).** `sw.js` answers two messages, each on a reply port and one at a
+  time: `check` stages the bundle the host serves under `blindvault-<hash>`, checked as at install,
+  with the `staged` state entry, and answers its version (`version.txt`, written by
+  `build/version.ts`) and manifest hash; `apply` with that hash makes it the active and installed
+  cache, and reloads the other windows. `src/app/updates.ts` (`UpdateMonitor`) holds the page side:
+  it asks for `check` at startup and on every return to visible, with `registration.update()`,
+  applies only when the controller's `updateAllowed` says no flow is in progress (D152), and locks in
+  the `updatefound` handler itself. `main.tsx` builds the controller and the monitor before the first
+  render and registers the service worker at once. `e2e/update.spec.ts` serves deployments derived
+  from `dist` from a host of its own, switched by the test.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
   CRYPTO-INV-010).
 - **Argon2id worker.** The worker entry lives in `packages/crypto` and loads its own libsodium;
   `apps/web` starts it through Vite's worker import (`import KdfWorker from
-  '@blindvault/crypto/kdf.worker?worker'`, bundled as its own module worker) and hands it to `deriveDeviceKek` or `calibrateDeviceKek`, which take any
-  `KdfPort` (tests run the handler in-process). One worker serves one request: the password is
-  transferred to it and wiped on both sides, it returns the Device KEK, and the client terminates it.
-  Parameters outside the accepted range are refused before the worker starts.
+  '@blindvault/crypto/kdf.worker?worker'`, bundled as its own module worker) and hands a port to
+  `deriveDeviceKek` or `calibrateDeviceKek`, which take any `KdfPort` (tests run the handler
+  in-process). One request per port: the password is transferred to the worker and wiped on both
+  sides, it returns the Device KEK, and the client terminates the port. Parameters outside the
+  accepted range are refused before the worker is asked. Since no code loads after the first unlock
+  (D142, D191), `apps/web` starts one worker per window at startup (`SharedKdf` in
+  `src/app/kdf.ts`): it serves one request at a time, a terminated port only releases its request,
+  and a key that comes back for a released request is zeroed. The strength dictionaries also load
+  at startup (`preloadStrength`), and the controller's `start` waits for both.
 - **Load at unlock.** Unlock decrypts every record into memory. An Item Version's `itemId` is
   encrypted, so versions cannot be found per item without decrypting, and search (D132) needs the
   whole state anyway. A load test (2,000 items × 20 versions) checks the cost in Phase 1.

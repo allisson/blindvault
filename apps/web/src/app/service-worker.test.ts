@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SERVICE_WORKER_URL, onlyServiceWorker, registerServiceWorker } from './service-worker';
 
-describe('service worker registration (D190)', () => {
-  it('registers /sw.js at the root, bypassing the HTTP cache for its updates', async () => {
-    const register = vi.fn(() => Promise.resolve({}));
-    await registerServiceWorker({ register });
+describe('service worker registration (D190, D191)', () => {
+  it('registers /sw.js at the root, bypassing the HTTP cache for its updates, and returns the registration', async () => {
+    const registration = { scope: '/' };
+    const register = vi.fn(() => Promise.resolve(registration));
+    expect(await registerServiceWorker({ register })).toBe(registration);
     expect(register).toHaveBeenCalledWith(SERVICE_WORKER_URL, {
       scope: '/',
       updateViaCache: 'none',

@@ -15,7 +15,14 @@ import { type Navigation, isDetail } from '../app/nav';
 import { SearchIndex } from '../app/search';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, LockState, Notice, PreviewBanner, SharedOriginWarning } from './components';
+import {
+  Button,
+  LockState,
+  Notice,
+  PreviewBanner,
+  SharedOriginWarning,
+  UpdateBanner,
+} from './components';
 import { useLayout } from './hooks';
 import { hex } from '../app/ids';
 import { ItemDetail } from './ItemDetail';
@@ -235,6 +242,7 @@ export function VaultShell({
     >
       <SharedOriginWarning />
       <PreviewBanner />
+      <UpdateBanner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
       {session.writable ? null : <Notice>{m.vault.readOnlyVault}</Notice>}
       {session.retired ? (
