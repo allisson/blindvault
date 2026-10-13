@@ -199,6 +199,13 @@ const en = {
     noResults: 'No items match.',
     readOnlyVault:
       "The vault is read-only: a record is dated ahead of this device's clock. Check the clock.",
+    reminderNever:
+      'No backup has been made on this device: make one, so you can restore the vault if you lose this device.',
+    reminderStale:
+      'The last backup made on this device is from {date}, more than 30 days ago: make a new one.',
+    reminderOldPhrase:
+      'No backup made on this device opens with the current Recovery Phrase: make a new one.',
+    reminderBackup: 'Make a backup',
   },
   items: {
     new: 'New item',
@@ -759,6 +766,13 @@ const ptBR: Messages = {
     noResults: 'Nenhum item corresponde.',
     readOnlyVault:
       'O cofre está somente leitura: um registro tem data à frente do relógio deste dispositivo. Confira o relógio.',
+    reminderNever:
+      'Nenhum backup foi feito neste dispositivo: faça um, para poder restaurar o cofre se perder este dispositivo.',
+    reminderStale:
+      'O último backup feito neste dispositivo é de {date}, há mais de 30 dias: faça um novo.',
+    reminderOldPhrase:
+      'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual: faça um novo.',
+    reminderBackup: 'Fazer um backup',
   },
   items: {
     new: 'Novo item',

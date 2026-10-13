@@ -9,10 +9,12 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import { type BackupReminder } from '../app/backup-reminder';
 import { type VaultController } from '../app/controller';
 import { type Navigation, isDetail } from '../app/nav';
 import { SearchIndex } from '../app/search';
-import { useMessages } from '../i18n/context';
+import { useLanguage, useMessages } from '../i18n/context';
+import { type Messages, format } from '../i18n/messages';
 import { Button, LockState, Notice, PreviewBanner, SharedOriginWarning } from './components';
 import { useLayout } from './hooks';
 import { hex } from '../app/ids';
@@ -21,6 +23,7 @@ import { ItemEditor } from './ItemEditor';
 import { ItemHistory } from './ItemHistory';
 import { FolderPane } from './Folders';
 import { ItemList } from './ItemList';
+import { focusBackup } from './RegeneratePhrase';
 import { Settings } from './Settings';
 
 // One set of panes, three shells (overview §13.1, D15): the shells place the panes and hold no
@@ -115,6 +118,20 @@ function Header({
   );
 }
 
+/** What the backup reminder says (§13.4, D188). */
+function reminderText(m: Messages, language: string, reminder: BackupReminder): string {
+  switch (reminder.kind) {
+    case 'never':
+      return m.vault.reminderNever;
+    case 'old-phrase':
+      return m.vault.reminderOldPhrase;
+    case 'stale':
+      return format(m.vault.reminderStale, {
+        date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(reminder.at),
+      });
+  }
+}
+
 export function VaultShell({
   controller,
   session,
@@ -129,7 +146,8 @@ export function VaultShell({
   const [drawer, setDrawer] = useState(false);
   // The session holds the state; a write only asks the panes to read it again.
   const [, refresh] = useReducer((n: number) => n + 1, 0);
-  const m = useMessages();
+  const { messages: m, language } = useLanguage();
+  const reminder = controller.backupReminder;
   const detail = <DetailPane session={session} nav={nav} onChange={refresh} />;
   // The search index and query live in memory only, and go with the shell on lock (D132).
   const index = useMemo(() => new SearchIndex(), []);
@@ -169,7 +187,7 @@ export function VaultShell({
 
   let body: ReactNode;
   if (screen.name === 'settings') {
-    body = <Settings controller={controller} session={session} nav={nav} />;
+    body = <Settings controller={controller} session={session} nav={nav} focus={screen.focus} />;
   } else if (layout === 'desktop') {
     body = (
       <div className="grid flex-1 grid-cols-[16rem_20rem_1fr] divide-x divide-zinc-200 dark:divide-zinc-800">
@@ -275,6 +293,28 @@ export function VaultShell({
             variant="quiet"
             onClick={() => {
               controller.dismissReadmission();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
+      {reminder ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="backup-reminder">
+          <Notice>{reminderText(m, language, reminder)}</Notice>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              if (screen.name === 'settings') focusBackup();
+              else nav.open({ name: 'settings', focus: 'backup' });
+            }}
+          >
+            {m.vault.reminderBackup}
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissBackupReminder();
             }}
           >
             {m.restore.dismiss}

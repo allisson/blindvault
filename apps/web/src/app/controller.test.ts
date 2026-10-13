@@ -1675,3 +1675,75 @@ describe('passkey unlock (§5.5, D75, D84, D172)', () => {
     expect(c.hasPasskey).toBe(false);
   });
 });
+
+describe('backup reminder (§13.4, D188)', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const T0 = new Date(2026, 2, 4, 12).getTime();
+
+  it('reminds a new vault, until dismissed or a backup is made; a lock brings it back while due', async () => {
+    const c = controller(new IDBFactory(), undefined, undefined, () => T0);
+    await c.start();
+    expect(c.backupReminder).toBeUndefined();
+    await createIn(c);
+    expect(c.backupReminder).toEqual({ kind: 'never' });
+    c.dismissBackupReminder();
+    expect(c.backupReminder).toBeUndefined();
+    c.lock();
+    expect(c.backupReminder).toBeUndefined();
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(c.backupReminder).toEqual({ kind: 'never' });
+    expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    expect(c.backupReminder).toBeUndefined();
+  });
+
+  it('reminds again 30 days after the last backup, read back from IndexedDB at a later start', async () => {
+    let now = T0;
+    const factory = new IDBFactory();
+    const c = controller(factory, undefined, undefined, () => now);
+    await c.start();
+    await createIn(c);
+    expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    await c.close();
+
+    now = T0 + 30 * DAY - 1;
+    const before = controller(factory, undefined, undefined, () => now);
+    await before.start();
+    expect(await before.unlock(PASSWORD)).toBe('ok');
+    expect(before.backupReminder).toBeUndefined();
+    await before.close();
+
+    now = T0 + 30 * DAY;
+    const after = controller(factory, undefined, undefined, () => now);
+    await after.start();
+    expect(await after.unlock(PASSWORD)).toBe('ok');
+    expect(after.backupReminder).toEqual({ kind: 'stale', at: T0 });
+  });
+
+  it('does not carry a dismissal over to the vault that re-founds this one (D187)', async () => {
+    const c = controller(new IDBFactory(), undefined, undefined, () => T0);
+    await c.start();
+    await createIn(c);
+    c.dismissBackupReminder();
+    expect(c.backupReminder).toBeUndefined();
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    must(c.newRefoundingPhrase());
+    expect(await c.refound('a new local password after re-founding', 'Test device')).toEqual({
+      kind: 'ok',
+    });
+    expect(c.backupReminder).toEqual({ kind: 'never' });
+  });
+
+  it('reminds when the last backup predates a regenerated Recovery Phrase (D185)', async () => {
+    let now = T0;
+    const c = controller(new IDBFactory(), undefined, undefined, () => now);
+    await c.start();
+    await createIn(c);
+    expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    now = T0 + DAY;
+    must(c.newRegenerationPhrase());
+    expect((await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).kind).toBe(
+      'ok',
+    );
+    expect(c.backupReminder).toEqual({ kind: 'old-phrase', at: T0 });
+  });
+});

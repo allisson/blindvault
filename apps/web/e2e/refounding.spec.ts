@@ -83,7 +83,9 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await expect(page.getByTestId('last-backup')).toHaveText(
     'No backup has been made on this device yet.',
   );
-  await button(page, 'Dismiss').click();
+  // The new vault also shows the backup reminder, with its own Dismiss (D188).
+  await expect(page.getByTestId('backup-reminder')).toBeVisible();
+  await page.getByTestId('refounded').getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('refounded')).toHaveCount(0);
   expect(await page.evaluate(async () => (await indexedDB.databases()).length)).toBe(1);
   await button(page, 'Back').click();

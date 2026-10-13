@@ -210,7 +210,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2, D185)
 - [x] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
 - [x] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, new vault committed to its own database before the old one is deleted (D28, D89); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
-- [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
+- [x] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days (D179, D188)
 
 ### Gate B
 

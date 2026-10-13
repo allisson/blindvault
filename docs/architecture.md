@@ -161,6 +161,13 @@ every project through the references in the root `tsconfig.json`.
   a creation under the installation guard; after the commit it locks the old session, deletes the
   old database and forgets the old passkey as a replacement does (D96, D120). `afterRefounding`
   shows the next steps. `RefoundVault.tsx` is the Settings flow.
+- **Backup reminder (Phase 2, §13.4, D185, D188).** `apps/web/src/app/backup-reminder.ts`
+  (`backupReminderOf`) computes from the session's `lastBackupAt` and current Recovery Phrase, and
+  the controller's clock, whether a backup is due: `never`, `old-phrase` or `stale` (30 days, fixed
+  in v1). A vault without a Recovery Envelope gets none. `VaultController.backupReminder` returns
+  it while unlocked; `dismissBackupReminder` hides it for that session until the next lock, so a
+  vault that replaces it shows it again, and nothing new is stored. VaultShell shows it with "Make
+  a backup", which opens Settings with `focus: 'backup'` on the navigation screen.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

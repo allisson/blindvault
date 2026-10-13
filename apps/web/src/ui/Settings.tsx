@@ -19,18 +19,24 @@ import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { RefoundVault } from './RefoundVault';
-import { RegeneratePhrase } from './RegeneratePhrase';
+import { RegeneratePhrase, focusBackup } from './RegeneratePhrase';
 
 export function Settings({
   controller,
   session,
   nav,
+  focus,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
   readonly nav: Navigation;
+  /** Opened from the backup reminder: the cursor goes to the export (D188). */
+  readonly focus?: 'backup' | undefined;
 }) {
   const { messages: m, language, setLanguage } = useLanguage();
+  useEffect(() => {
+    if (focus === 'backup') focusBackup();
+  }, [focus]);
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">
       <h1 className="text-xl font-semibold">{m.settings.title}</h1>
