@@ -1,5 +1,7 @@
 // Errors carry fixed messages only: never item content, a key or any other secret.
 
+import { type RecordKey } from './store';
+
 export class VaultError extends Error {
   override name = 'VaultError';
 }
@@ -89,5 +91,16 @@ export class ExportRejectedError extends VaultError {
     readonly record?: { readonly recordType: number; readonly recordId: Uint8Array },
   ) {
     super(`export refused: ${reason}`);
+  }
+}
+
+/**
+ * A fresh restore refused as a whole, writing nothing (overview §10, D61, D64): a record of the
+ * backup fails the content checks of unlock (D59). `record` names it; the message stays fixed.
+ */
+export class RestoreRejectedError extends VaultError {
+  override name = 'RestoreRejectedError';
+  constructor(readonly record: RecordKey) {
+    super('restore rejected: a record does not verify');
   }
 }

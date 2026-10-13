@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@blindvault/backup": "workspace:*",
     "@blindvault/crypto": "workspace:*",
     "@blindvault/storage": "workspace:*",
     "@blindvault/vault": "workspace:*",

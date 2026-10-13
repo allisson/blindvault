@@ -22,6 +22,14 @@ import {
   type SymmetricKey,
 } from '@blindvault/crypto';
 import {
+  BackupRejectedError,
+  type ParsedBackup,
+  type ValidatedBackup,
+  parseBackup,
+  restoreWithPassword,
+  restoreWithPhrase,
+} from '@blindvault/backup';
+import {
   type HeldLock,
   VaultDatabase,
   acquireInstallationGuard,
@@ -35,6 +43,7 @@ import {
   type LocalConfigCleartext,
   type Preferences,
   type RecordStore,
+  RestoreRejectedError,
   UnlockRejectedError,
   UnsupportedLocalConfigError,
   VaultLockedError,
@@ -59,6 +68,8 @@ export type Status =
   | { readonly kind: 'busy' }
   | { readonly kind: 'no-vault' }
   | { readonly kind: 'creating' }
+  /** A fresh restore committing (D33). */
+  | { readonly kind: 'restoring' }
   /** Another app window holds the vault's Web Lock (D51). */
   | { readonly kind: 'elsewhere' }
   | { readonly kind: 'locked' }
@@ -112,6 +123,61 @@ export type BackupExport =
   /** A record that fails verification, named by its type and the start of its `recordId`. */
   | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
 
+/** What a backup's header says before any keyslot opens: unverified until one does (D95). */
+export interface BackupHeaderInfo {
+  readonly phraseCreatedAt: number;
+  readonly hasExportPassword: boolean;
+}
+
+/** A `.bvault` file read for a restore: `unavailable` unless there is no vault yet. */
+export type BackupFileCheck =
+  | { readonly kind: 'ok'; readonly header: BackupHeaderInfo }
+  | { readonly kind: 'not-a-backup' | 'newer-version' | 'malformed' | 'unavailable' };
+
+/** The secret that opens one of a backup's keyslots (backup-format.md §8 step 3). */
+export type BackupSecret =
+  | { readonly kind: 'phrase'; readonly words: string }
+  | { readonly kind: 'password'; readonly password: string };
+
+/**
+ * A backup opened and validated (backup-format.md §8 steps 3 to 8). `wrong-secret`,
+ * `invalid-phrase` and `no-password-keyslot` keep the file for another try; any other failure
+ * drops it, and `no-file` says there is none.
+ */
+export type BackupOpening =
+  | { readonly kind: 'ok'; readonly openedWith: 'phrase' | 'password'; readonly exportedAt: number }
+  | {
+      readonly kind: 'invalid-phrase';
+      readonly reason: PhraseRejectedError['reason'];
+      readonly position?: number;
+    }
+  | {
+      readonly kind:
+        | 'wrong-secret'
+        | 'no-password-keyslot'
+        | 'not-a-backup'
+        | 'newer-version'
+        | 'malformed'
+        | 'corrupt'
+        | 'newer-record'
+        | 'envelope-mismatch'
+        | 'master-key-mismatch'
+        | 'public-key-mismatch'
+        | 'locked'
+        | 'no-file';
+    }
+  /** Named when the record decodes (D64). */
+  | {
+      readonly kind: 'corrupt-record';
+      readonly recordType?: number;
+      readonly recordId?: string;
+    };
+
+/** A fresh restore's commit: `no-backup` when none was opened, or a lock dropped it. */
+export type RestoreOutcome =
+  | { readonly kind: 'ok' | 'locked' | 'no-backup' }
+  | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
+
 export interface ControllerDeps {
   readonly factory: IDBFactory;
   readonly locks: LockManager;
@@ -154,6 +220,19 @@ export class VaultController {
    * keyring becomes the new session's; a lock or a new phrase wipes it.
    */
   #phrase: { readonly keyring: Keyring; readonly entropy: SymmetricKey } | undefined;
+  /**
+   * The backup being restored: the file as parsed, then, once a keyslot opened it, the validated
+   * backup and the keyring holding its Master Key, which becomes the new session's. A lock wipes it.
+   */
+  #restore:
+    | {
+        readonly parsed: ParsedBackup;
+        readonly keyring?: Keyring;
+        readonly backup?: ValidatedBackup;
+      }
+    | undefined;
+  /** After a restore opened with an export password: recommend Check Recovery Phrase (D43). */
+  #afterRestore: 'check-phrase' | undefined;
 
   constructor(deps: ControllerDeps) {
     this.#deps = deps;
@@ -368,6 +447,183 @@ export class VaultController {
     }
   }
 
+  // --- fresh restore -----------------------------------------------------------------------------
+
+  /** Reads a `.bvault` file for a restore (backup-format.md §8 steps 1 and 2). */
+  openBackupFile(bytes: Uint8Array): BackupFileCheck {
+    if (this.#status.kind !== 'no-vault') return { kind: 'unavailable' };
+    this.#dropRestore();
+    try {
+      const parsed = parseBackup(bytes.slice());
+      this.#restore = { parsed };
+      const { header } = parsed;
+      return {
+        kind: 'ok',
+        header: {
+          phraseCreatedAt: header.phraseCreatedAt,
+          hasExportPassword: header.keyslots.length === 2,
+        },
+      };
+    } catch (error) {
+      if (error instanceof BackupRejectedError) {
+        const { reason } = error;
+        return {
+          kind: reason === 'newer-version' || reason === 'malformed' ? reason : 'not-a-backup',
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Opens the file last read with the Recovery Phrase as typed or the export password, and
+   * validates it in full (backup-format.md §8 steps 3 to 8). Writes nothing.
+   */
+  async openBackup(secret: BackupSecret): Promise<BackupOpening> {
+    const held = this.#restore;
+    if (this.#status.kind !== 'no-vault' || !held) return { kind: 'no-file' };
+    held.keyring?.wipeAll();
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    // Held from now on, so a lock during the derivation wipes it.
+    this.#restore = { parsed: held.parsed, keyring };
+    try {
+      const backup =
+        secret.kind === 'phrase'
+          ? restoreWithPhrase(keyring, held.parsed, secret.words)
+          : await restoreWithPassword(
+              keyring,
+              this.#deps.kdf(),
+              held.parsed,
+              normalizePassword(secret.password),
+            );
+      if (epoch !== this.#epoch) throw new Aborted();
+      this.#restore = { parsed: held.parsed, keyring, backup };
+      return { kind: 'ok', openedWith: backup.openedWith, exportedAt: backup.exportedAt };
+    } catch (error) {
+      keyring.wipeAll();
+      if (epoch !== this.#epoch || error instanceof Aborted) return { kind: 'locked' };
+      if (error instanceof PhraseRejectedError) {
+        const { reason, position } = error;
+        return { kind: 'invalid-phrase', reason, ...(position !== undefined ? { position } : {}) };
+      }
+      if (!(error instanceof BackupRejectedError)) throw error;
+      const { reason, record } = error;
+      if (reason === 'wrong-secret' || reason === 'no-password-keyslot') return { kind: reason };
+      this.#restore = undefined;
+      if (reason !== 'corrupt-record') return { kind: reason };
+      return {
+        kind: 'corrupt-record',
+        ...(record
+          ? { recordType: record.recordType, recordId: recordIdPrefix(record.recordId) }
+          : {}),
+      };
+    }
+  }
+
+  /**
+   * Restores the backup last opened, with `password`, already checked for strength by the caller
+   * (D71), as this device's local password: one commit writes its records and the new Local Config
+   * (D33). Holds the installation guard until then; a lock before the commit aborts it with nothing
+   * persisted (D104). A record that fails the content checks rejects it as a whole (D59, D61).
+   */
+  async restore(password: string): Promise<RestoreOutcome> {
+    const held = this.#restore;
+    if (this.#status.kind !== 'no-vault' || !held?.keyring || !held.backup) {
+      return { kind: 'no-backup' };
+    }
+    const { keyring, backup } = held;
+    this.#restore = undefined;
+    const epoch = this.#epoch;
+    this.#set({ kind: 'restoring' });
+    const { factory, locks } = this.#deps;
+    const guard = await acquireInstallationGuard(locks);
+    if (!guard) {
+      keyring.wipeAll();
+      this.#set({ kind: 'busy' });
+      return { kind: 'locked' };
+    }
+    let db: VaultDatabase | undefined;
+    let lock: HeldLock | undefined;
+    try {
+      if (epoch !== this.#epoch) throw new Aborted();
+      const salt = generateSalt();
+      const { kek, params } = await calibrateDeviceKek(
+        keyring,
+        this.#deps.kdf(),
+        normalizePassword(password),
+        salt,
+      );
+      if (epoch !== this.#epoch) throw new Aborted();
+      const store: RecordStore = {
+        records: () => (db ? db.records() : Promise.resolve([])),
+        commit: async (commit) => {
+          if (epoch !== this.#epoch) throw new Aborted();
+          if (!db) {
+            lock = (await acquireVaultLock(backup.vaultId, {}, locks)) ?? undefined;
+            if (!lock) throw new Aborted();
+            db = await VaultDatabase.open(backup.vaultId, factory);
+          }
+          await db.commit(commit);
+        },
+      };
+      const session = await VaultSession.restore({
+        store,
+        keyring,
+        kek,
+        salt,
+        kdfParams: params,
+        backup,
+        now: this.#now,
+      });
+      if (!db || !lock) throw new Aborted();
+      this.#db = db;
+      this.#vaultId = session.vaultId;
+      this.#hold(lock);
+      this.#afterRestore = backup.openedWith === 'password' ? 'check-phrase' : undefined;
+      this.#set({ kind: 'unlocked', session });
+      void requestPersistence(this.#deps.storage);
+      return { kind: 'ok' };
+    } catch (error) {
+      keyring.wipeAll();
+      db?.close();
+      await lock?.release();
+      this.#set({ kind: 'no-vault' });
+      if (error instanceof Aborted || epoch !== this.#epoch) return { kind: 'locked' };
+      if (error instanceof RestoreRejectedError) {
+        const { record } = error;
+        return {
+          kind: 'corrupt-record',
+          recordType: record.recordType,
+          recordId: recordIdPrefix(record.recordId),
+        };
+      }
+      throw error;
+    } finally {
+      await guard.release();
+    }
+  }
+
+  /** Drops the backup being restored, wiping its Master Key. */
+  cancelRestore(): void {
+    this.#dropRestore();
+  }
+
+  #dropRestore(): void {
+    this.#restore?.keyring?.wipeAll();
+    this.#restore = undefined;
+  }
+
+  /** What the UI recommends right after a restore (D43), until dismissed. */
+  get afterRestore(): 'check-phrase' | undefined {
+    return this.#afterRestore;
+  }
+
+  dismissAfterRestore(): void {
+    this.#afterRestore = undefined;
+    this.#set({ ...this.#status });
+  }
+
   // --- unlock and lock ---------------------------------------------------------------------------
 
   /** Unlocks with the local password. A password that does not open the wrap is `'wrong-password'`. */
@@ -499,10 +755,12 @@ export class VaultController {
     this.#epoch += 1;
     this.#phrase?.keyring.wipeAll();
     this.#phrase = undefined;
+    this.#dropRestore();
+    this.#afterRestore = undefined;
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
-    if (status.kind === 'creating') this.#set({ kind: 'no-vault' });
+    if (status.kind === 'creating' || status.kind === 'restoring') this.#set({ kind: 'no-vault' });
   }
 
   /** Locks, releases the vault's Web Lock and closes the database (the app window is closing). */

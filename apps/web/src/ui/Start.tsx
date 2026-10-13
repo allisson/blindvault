@@ -4,6 +4,7 @@ import { type PasskeyOutcome, type Status, type VaultController } from '../app/c
 import { useMessages } from '../i18n/context';
 import { Button, Card, Field } from './components';
 import { CreateVault } from './CreateVault';
+import { RestoreVault } from './RestoreVault';
 
 /** Every screen before unlock, by controller status. */
 export function Start({
@@ -40,7 +41,8 @@ export function Start({
       return <Card title={m.app.name}>{m.start.corrupt}</Card>;
     case 'no-vault':
     case 'creating':
-      return <CreateVault controller={controller} working={status.kind === 'creating'} />;
+    case 'restoring':
+      return <NoVault controller={controller} status={status.kind} />;
     case 'locked':
     case 'unlocking':
       return <Unlock controller={controller} working={status.kind === 'unlocking'} />;
@@ -127,6 +129,53 @@ function Unlock({
           {working ? m.unlock.working : m.unlock.submit}
         </Button>
       </form>
+    </Card>
+  );
+}
+
+/** No vault yet: create one, or restore one from a backup (overview §10, §13.3). */
+function NoVault({
+  controller,
+  status,
+}: {
+  readonly controller: VaultController;
+  readonly status: 'no-vault' | 'creating' | 'restoring';
+}) {
+  const m = useMessages();
+  const [choice, setChoice] = useState<'create' | 'restore' | undefined>();
+  const shown = status === 'creating' ? 'create' : status === 'restoring' ? 'restore' : choice;
+  const back = () => {
+    setChoice(undefined);
+  };
+  if (shown === 'create') {
+    // No way back from here but a reload: the phrase screen has a single control (D179).
+    return <CreateVault controller={controller} working={status === 'creating'} />;
+  }
+  if (shown === 'restore') {
+    return (
+      <RestoreVault controller={controller} working={status === 'restoring'} onCancel={back} />
+    );
+  }
+  return (
+    <Card title={m.app.name}>
+      <p className="text-sm">{m.start.chooseIntro}</p>
+      <div className="flex flex-col gap-2">
+        <Button
+          onClick={() => {
+            setChoice('create');
+          }}
+        >
+          {m.start.create}
+        </Button>
+        <Button
+          variant="quiet"
+          onClick={() => {
+            setChoice('restore');
+          }}
+        >
+          {m.start.restore}
+        </Button>
+      </div>
     </Card>
   );
 }

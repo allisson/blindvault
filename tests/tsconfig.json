@@ -10,6 +10,9 @@
   "exclude": ["node_modules", ".tsbuild"],
   "references": [
     {
+      "path": "../packages/backup"
+    },
+    {
       "path": "../packages/crypto"
     },
     {

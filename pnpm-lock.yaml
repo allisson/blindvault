@@ -32,6 +32,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@blindvault/backup':
+        specifier: workspace:*
+        version: link:../../packages/backup
       '@blindvault/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
@@ -169,6 +172,9 @@ importers:
 
   tests:
     dependencies:
+      '@blindvault/backup':
+        specifier: workspace:*
+        version: link:../packages/backup
       '@blindvault/crypto':
         specifier: workspace:*
         version: link:../packages/crypto
