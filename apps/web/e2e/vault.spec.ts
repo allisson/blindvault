@@ -173,7 +173,7 @@ test.describe('in Portuguese', () => {
 
   test('shows the UI in pt-BR (D165)', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Criar um cofre' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Criar um cofre novo' })).toBeVisible();
     await expect(page.getByTestId('lock-state')).toHaveText('Bloqueado');
   });
 });

@@ -325,6 +325,192 @@ describe('backup export (§10, D36, D64, D181)', () => {
   });
 });
 
+describe('fresh restore (§10, D33, D43, D95, D104)', () => {
+  const EXPORT_PASSWORD = 'orbit-tulip-granite-ferry-cedar-pixel';
+  const NEW_PASSWORD = 'a new local password for this device';
+
+  /** A vault with one item, and its backup, with or without an export password. */
+  async function backup(exportPassword?: string) {
+    const c = controller();
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'Test device');
+    await session(c).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'ACME',
+      fields: [],
+      tags: [],
+    });
+    const made = await c.exportBackup({ kind: 'password', password: PASSWORD }, exportPassword);
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    const vaultId = session(c).vaultId;
+    // The source installation lets go of the vault's Web Lock, as another browser would hold none.
+    await c.close();
+    return { words, bytes: made.bytes, vaultId };
+  }
+
+  /** A new installation, with no vault yet. */
+  async function empty(factory = new IDBFactory(), log?: KdfRequest['op'][]) {
+    const c = controller(factory, log);
+    await c.start();
+    expect(c.status.kind).toBe('no-vault');
+    return c;
+  }
+
+  it('restores a backup by the Recovery Phrase into a new installation', async () => {
+    const source = await backup();
+    const factory = new IDBFactory();
+    const c = await empty(factory);
+    const opened = c.openBackupFile(source.bytes);
+    if (opened.kind !== 'ok') throw new Error(opened.kind);
+    // Unverified until a keyslot opens (D95): shown to choose one.
+    expect(opened.header.hasExportPassword).toBe(false);
+    expect(typeof opened.header.phraseCreatedAt).toBe('number');
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toMatchObject({
+      kind: 'ok',
+      openedWith: 'phrase',
+    });
+    // Nothing is written before the local password (D33).
+    expect(await factory.databases()).toEqual([]);
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
+    expect(session(c).vaultId).toEqual(source.vaultId);
+    expect(
+      session(c)
+        .items()
+        .map((i) => i.item?.title),
+    ).toEqual(['ACME']);
+    expect(c.afterRestore).toBeUndefined();
+
+    c.lock();
+    expect(await c.unlock(PASSWORD)).toBe('wrong-password');
+    expect(await c.unlock(NEW_PASSWORD)).toBe('ok');
+    await c.close();
+    const again = controller(factory);
+    await again.start();
+    expect(again.status.kind).toBe('locked');
+  });
+
+  it('restores by the export password and then recommends Check Recovery Phrase (D43)', async () => {
+    const source = await backup(EXPORT_PASSWORD);
+    const c = await empty();
+    const opened = c.openBackupFile(source.bytes);
+    expect(opened).toMatchObject({ kind: 'ok', header: { hasExportPassword: true } });
+    expect(await c.openBackup({ kind: 'password', password: 'not the export password' })).toEqual({
+      kind: 'wrong-secret',
+    });
+    // A wrong secret keeps the file: the user tries again.
+    expect(await c.openBackup({ kind: 'password', password: EXPORT_PASSWORD })).toMatchObject({
+      kind: 'ok',
+      openedWith: 'password',
+    });
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
+    expect(c.afterRestore).toBe('check-phrase');
+    c.dismissAfterRestore();
+    expect(c.afterRestore).toBeUndefined();
+  });
+
+  it('reports a file that is not a backup, a phrase that is not one, and a wrong phrase', async () => {
+    const source = await backup();
+    const c = await empty();
+    expect(c.openBackupFile(new TextEncoder().encode('{"items":[]}'))).toEqual({
+      kind: 'not-a-backup',
+    });
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
+      kind: 'no-file',
+    });
+    c.openBackupFile(source.bytes);
+    const words = source.words.split(' ');
+    words[2] = 'notaword';
+    expect(await c.openBackup({ kind: 'phrase', words: words.join(' ') })).toEqual({
+      kind: 'invalid-phrase',
+      reason: 'unknown-word',
+      position: 3,
+    });
+    const otherWords = (await backup()).words;
+    expect(await c.openBackup({ kind: 'phrase', words: otherWords })).toEqual({
+      kind: 'wrong-secret',
+    });
+    expect(await c.openBackup({ kind: 'password', password: EXPORT_PASSWORD })).toEqual({
+      kind: 'no-password-keyslot',
+    });
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toMatchObject({
+      kind: 'ok',
+    });
+  });
+
+  it('rejects an unknown format version before any keyslot, and a changed header once one opens (D95)', async () => {
+    const source = await backup();
+    const c = await empty();
+    const newer = source.bytes.slice();
+    newer[9] = 2;
+    expect(c.openBackupFile(newer)).toEqual({ kind: 'newer-version' });
+    const changed = source.bytes.slice();
+    // The last header byte, in the cleartext stream header: read unverified, refused once a
+    // keyslot opens and the first chunk does not authenticate.
+    const date = new DataView(changed.buffer).getUint32(10) + 14 - 1;
+    changed[date] = (changed[date] ?? 0) ^ 1;
+    expect(c.openBackupFile(changed).kind).toBe('ok');
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
+      kind: 'corrupt',
+    });
+  });
+
+  it('rejects a truncated file once a keyslot opens, and drops it', async () => {
+    const source = await backup();
+    const c = await empty();
+    expect(c.openBackupFile(source.bytes.subarray(0, source.bytes.length - 1)).kind).toBe('ok');
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
+      kind: 'corrupt',
+    });
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
+      kind: 'no-file',
+    });
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+  });
+
+  it('persists nothing when locked before the commit, and drops the opened backup (D104)', async () => {
+    const source = await backup();
+    const factory = new IDBFactory();
+    const c = await empty(factory);
+    c.openBackupFile(source.bytes);
+    await c.openBackup({ kind: 'phrase', words: source.words });
+    const pending = c.restore(NEW_PASSWORD);
+    expect(c.status.kind).toBe('restoring');
+    c.lock();
+    expect(await pending).toEqual({ kind: 'locked' });
+    expect(c.status.kind).toBe('no-vault');
+    expect(await factory.databases()).toEqual([]);
+    // The validated backup went with the lock: the file must be opened again.
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+
+    c.openBackupFile(source.bytes);
+    await c.openBackup({ kind: 'phrase', words: source.words });
+    c.lock();
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it('keeps nothing when locked during the export password derivation', async () => {
+    const source = await backup(EXPORT_PASSWORD);
+    const c = await empty();
+    c.openBackupFile(source.bytes);
+    const pending = c.openBackup({ kind: 'password', password: EXPORT_PASSWORD });
+    c.lock();
+    expect(await pending).toEqual({ kind: 'locked' });
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+  });
+
+  it('opens no backup while a vault exists', async () => {
+    const source = await backup();
+    const c = await created();
+    expect(c.openBackupFile(source.bytes)).toEqual({ kind: 'unavailable' });
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
+      kind: 'no-file',
+    });
+  });
+});
+
 describe('vault controller', () => {
   it('starts with no vault, creates one and requests persistence', async () => {
     const factory = new IDBFactory();

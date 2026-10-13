@@ -385,7 +385,7 @@ function RecoveryPhraseSettings({
 }
 
 /** The name of a record type for the UI, by its registry number (crypto-spec.md §9.1). */
-function recordTypeName(m: Messages, recordType: number): string {
+export function recordTypeName(m: Messages, recordType: number): string {
   const names = m.settings.recordTypes;
   const entry = Object.entries(RecordType).find(([, value]) => value === recordType);
   return entry ? names[entry[0] as keyof typeof names] : String(recordType);

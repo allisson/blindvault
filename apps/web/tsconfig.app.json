@@ -11,6 +11,9 @@
   "include": ["src"],
   "references": [
     {
+      "path": "../../packages/backup"
+    },
+    {
       "path": "../../packages/crypto"
     },
     {

@@ -60,6 +60,7 @@ import {
   ExportRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
+  RestoreRejectedError,
   SubtreeBlockedError,
   UnlockRejectedError,
   VaultLockedError,
@@ -213,6 +214,23 @@ export interface CreateOptions {
   readonly kdfParams: KdfParams;
   /** This device's Device record name (D30). */
   readonly displayName: string;
+  readonly now?: () => number;
+}
+
+export interface RestoreOptions {
+  readonly store: RecordStore;
+  /** A new keyring holding only `kek` and the backup's Master Key; the session owns it from now on. */
+  readonly keyring: Keyring;
+  /** The Device KEK of the new local password; released once the Master Key is wrapped. */
+  readonly kek: SymmetricKey;
+  readonly salt: Uint8Array;
+  readonly kdfParams: KdfParams;
+  /** A backup validated by `packages/backup` (backup-format.md §8 steps 1 to 8). */
+  readonly backup: {
+    readonly vaultId: Uint8Array;
+    readonly masterKey: SymmetricKey;
+    readonly records: readonly StoredRecord[];
+  };
   readonly now?: () => number;
 }
 
@@ -554,6 +572,68 @@ export class VaultSession {
         keyring.release(recovery.envelopeKey);
         keyring.release(recovery.keyslotPrivateKey);
       }
+      session.#startMaintenance();
+      return session;
+    } catch (error) {
+      keyring.wipeAll();
+      throw error;
+    }
+  }
+
+  /**
+   * A fresh restore (overview §10, D33): the backup's records, verified again and read as unlock
+   * reads them, then written as they came with a new Local Config in one commit. Any record kept
+   * aside as corrupt, the content checks of D59 included, rejects the whole restore with
+   * `RestoreRejectedError` and writes nothing (D61, D64). The device gets a new identity and writes
+   * no Device record (D30). A record beyond the future-clock bound does not advance the HLC, so the
+   * vault stays writable and only that record is read-only until within the bound (D39, D109).
+   */
+  static async restore(options: RestoreOptions): Promise<VaultSession> {
+    const { store, keyring, kek, salt, kdfParams, backup } = options;
+    const now = options.now ?? Date.now;
+    const { vaultId, masterKey, records } = backup;
+    try {
+      checkKdfParams(kdfParams);
+      const localConfigId = randomId();
+      const mkWrap = wrapKey(
+        kek,
+        localAad(LocalPurpose.mkWrapDeviceKek, vaultId, localConfigId),
+        masterKey,
+      );
+      keyring.release(kek);
+      const subkeys = deriveMasterSubkeys(keyring, masterKey);
+      const { state, held } = load(keyring, records, vaultId, subkeys);
+      const [corrupt] = state.corrupt;
+      if (corrupt) throw new RestoreRejectedError(corrupt);
+      const identity = generateDeviceIdentity(keyring);
+      const start = HlcClock.create(identity.deviceId, now).state;
+      const clock = HlcClock.resume(identity.deviceId, start, held, now);
+      const phraseId = state.recovery?.content.get('phraseId');
+      const session = new VaultSession({
+        store,
+        keyring,
+        subkeys,
+        identity,
+        cleartext: {
+          vaultId,
+          localConfigId,
+          kek: { salt, opslimit: kdfParams.opslimit, memlimit: kdfParams.memlimit, mkWrap },
+        },
+        localState: {
+          preferences: DEFAULT_PREFERENCES,
+          hlc: clock.state,
+          ...(phraseId instanceof Uint8Array ? { lastPhraseId: phraseId } : {}),
+        },
+        clock,
+        state,
+        now,
+      });
+      // Not through the operation queue: the session is not returned until this commit lands.
+      const localConfig = session.#localConfig();
+      await store.commit({ put: records, delete: [], localConfig: localConfig.bytes });
+      session.#localState = localConfig.localState;
+      // The restore has committed: a failed purge pass leaves it as it is, as on the timer.
+      await session.#run(() => session.#maintenance()).catch(() => undefined);
       session.#startMaintenance();
       return session;
     } catch (error) {

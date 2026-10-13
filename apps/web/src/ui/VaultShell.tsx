@@ -219,6 +219,19 @@ export function VaultShell({
       <Phase1Banner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
       {session.writable ? null : <Notice>{m.vault.readOnlyVault}</Notice>}
+      {controller.afterRestore === 'check-phrase' ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="after-restore">
+          <Notice>{m.restore.checkPhrase}</Notice>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissAfterRestore();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
       <main className="flex flex-1 flex-col">{body}</main>
       {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
         <footer className="flex justify-around border-t border-zinc-200 p-2 dark:border-zinc-800">

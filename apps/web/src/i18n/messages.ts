@@ -31,6 +31,48 @@ const en = {
       'This vault was written by a newer version of BlindVault. Update the app to open it.',
     corrupt: 'The local configuration of this vault cannot be read.',
     unsupported: 'This browser lacks IndexedDB or Web Locks, which BlindVault needs.',
+    chooseIntro:
+      'BlindVault has no server: your vault lives only on your devices and in your backups.',
+    create: 'Create a new vault',
+    restore: 'Restore from a backup',
+  },
+  restore: {
+    title: 'Restore from a backup',
+    intro:
+      'Choose a .bvault file. It opens with its Recovery Phrase, or with its export password if it has one.',
+    file: 'Backup file',
+    notBackup: 'This file is not a BlindVault backup.',
+    newerVersion:
+      'This backup was made by a newer version of BlindVault. Update the app to restore it.',
+    malformed: 'This backup is damaged: its header cannot be read.',
+    header: 'Its Recovery Phrase was created on {date}. Not verified until the backup opens.',
+    method: 'Open with',
+    byPhrase: 'Recovery Phrase',
+    byPassword: 'Export password',
+    phrase: 'Your 24 words',
+    password: 'Export password',
+    open: 'Open the backup',
+    opening: 'Opening the backup…',
+    wrongPhrase: 'The backup did not open with this Recovery Phrase.',
+    wrongPassword: 'The backup did not open with this export password.',
+    noPasswordKeyslot: 'This backup has no export password: use its Recovery Phrase.',
+    corrupt: 'This backup is damaged or incomplete. It cannot be restored.',
+    corruptRecord:
+      'This backup holds a record that does not verify: {type} {id}. It cannot be restored.',
+    corruptUnnamed: 'This backup holds a record that cannot be read. It cannot be restored.',
+    inconsistent: 'This backup does not match its own Recovery Phrase. It cannot be restored.',
+    opened: 'Backup made on {date}, verified.',
+    passwordIntro:
+      'Choose the local password for this device. It is neither the export password nor stored in the backup.',
+    local: 'Local password',
+    confirm: 'Repeat the password',
+    submit: 'Restore',
+    restoring: 'Restoring the vault…',
+    locked: 'The restore stopped before anything was saved. Open the file again.',
+    cancel: 'Cancel',
+    checkPhrase:
+      'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
+    dismiss: 'Dismiss',
   },
   create: {
     title: 'Create a vault',
@@ -393,6 +435,49 @@ const ptBR: Messages = {
       'Este cofre foi gravado por uma versão mais nova do BlindVault. Atualize o app para abri-lo.',
     corrupt: 'A configuração local deste cofre não pode ser lida.',
     unsupported: 'Este navegador não tem IndexedDB ou Web Locks, de que o BlindVault precisa.',
+    chooseIntro:
+      'O BlindVault não tem servidor: seu cofre existe só nos seus dispositivos e nos seus backups.',
+    create: 'Criar um cofre novo',
+    restore: 'Restaurar de um backup',
+  },
+  restore: {
+    title: 'Restaurar de um backup',
+    intro:
+      'Escolha um arquivo .bvault. Ele abre com a Frase de Recuperação, ou com a senha de exportação, se tiver uma.',
+    file: 'Arquivo de backup',
+    notBackup: 'Este arquivo não é um backup do BlindVault.',
+    newerVersion:
+      'Este backup foi feito por uma versão mais nova do BlindVault. Atualize o app para restaurá-lo.',
+    malformed: 'Este backup está danificado: o cabeçalho não pode ser lido.',
+    header: 'A Frase de Recuperação dele foi criada em {date}. Não verificado até o backup abrir.',
+    method: 'Abrir com',
+    byPhrase: 'Frase de Recuperação',
+    byPassword: 'Senha de exportação',
+    phrase: 'Suas 24 palavras',
+    password: 'Senha de exportação',
+    open: 'Abrir o backup',
+    opening: 'Abrindo o backup…',
+    wrongPhrase: 'O backup não abriu com esta Frase de Recuperação.',
+    wrongPassword: 'O backup não abriu com esta senha de exportação.',
+    noPasswordKeyslot: 'Este backup não tem senha de exportação: use a Frase de Recuperação.',
+    corrupt: 'Este backup está danificado ou incompleto. Ele não pode ser restaurado.',
+    corruptRecord:
+      'Este backup contém um registro que não verifica: {type} {id}. Ele não pode ser restaurado.',
+    corruptUnnamed: 'Este backup contém um registro ilegível. Ele não pode ser restaurado.',
+    inconsistent:
+      'Este backup não confere com a própria Frase de Recuperação. Ele não pode ser restaurado.',
+    opened: 'Backup feito em {date}, verificado.',
+    passwordIntro:
+      'Escolha a senha local deste dispositivo. Ela não é a senha de exportação e não fica no backup.',
+    local: 'Senha local',
+    confirm: 'Repita a senha',
+    submit: 'Restaurar',
+    restoring: 'Restaurando o cofre…',
+    locked: 'A restauração parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
+    cancel: 'Cancelar',
+    checkPhrase:
+      'Este cofre foi restaurado com uma senha de exportação. Em Configurações, confira se a sua Frase de Recuperação ainda o abre.',
+    dismiss: 'Dispensar',
   },
   create: {
     title: 'Criar um cofre',

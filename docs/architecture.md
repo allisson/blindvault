@@ -79,6 +79,18 @@ every project through the references in the root `tsconfig.json`.
   checks. Every key it uses lives in a keyring of its own, wiped before it returns; only the
   Master Key goes to the caller's keyring, and only on success. It writes nothing: applying the
   records, including the domain checks of D59, belongs to the fresh restore in `packages/vault`.
+- **Fresh restore (Phase 2, D33).** `VaultSession.restore` takes a validated backup, reads its
+  records with the same `load` as unlock, so a record that fails the content checks of D59
+  rejects the whole restore (D61, D64), and writes every envelope as it came with a new Local
+  Config in one commit. The device gets a new identity and `localConfigId`, writes no Device
+  record (D30), keeps the default preferences, records no backup date (§13.4, a backup of this
+  device) and takes the restored envelope's `phraseId` as the last seen. Its HLC starts at the
+  clock and receives every restored HLC, so records beyond the bound stay read-only while the vault
+  is writable (D39, D109). `apps/web` reads the file with `<input type="file">`, keeps it and then
+  the validated backup in memory, and asks for the local password last, as creation does; the
+  commit opens the database lazily under the installation guard and the vault lock, and a lock
+  before it wipes the backup's Master Key and writes nothing (D104). Replacing a vault the device
+  holds (D89, D153) is not offered yet: restore is reached only with no vault.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

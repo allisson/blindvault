@@ -3,8 +3,17 @@
 
 import { type Page, expect } from '@playwright/test';
 
+/** Chooses to create a vault on the first screen, unless the phrase screen is already shown. */
+export async function chooseCreate(page: Page): Promise<void> {
+  const choice = page.getByRole('button', { name: 'Create a new vault', exact: true });
+  const phrase = page.getByTestId('recovery-phrase');
+  await expect(choice.or(phrase)).toBeVisible();
+  if (await choice.isVisible()) await choice.click();
+}
+
 /** The 24 words on the phrase screen, in order. */
 export async function readPhrase(page: Page): Promise<string[]> {
+  await chooseCreate(page);
   await expect(page.getByTestId('recovery-phrase')).toBeVisible();
   const words: string[] = [];
   for (let n = 1; n <= 24; n++) {

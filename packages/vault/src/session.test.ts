@@ -49,6 +49,7 @@ import {
   openPasswordKeyslot,
   openRecoveryKeyslot,
   parseBackup,
+  restoreWithPhrase,
 } from '@blindvault/backup';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -60,6 +61,7 @@ import {
   HlcReadOnlyError,
   RecordBlockedError,
   RecordNotFoundError,
+  RestoreRejectedError,
   SubtreeBlockedError,
   UnlockRejectedError,
   VaultLockedError,
@@ -997,6 +999,221 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(openWithPhrase(file.bytes, words).payload.records).toHaveLength(3);
     expect(behind.lastBackupAt).toBe(clock.t);
     caller.wipeAll();
+  });
+});
+
+describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
+  /** A vault with an item, its history and a folder, and its backup made by the phrase only. */
+  async function backedUp(clock = new Clock()) {
+    const vault = await create(clock);
+    const id = await vault.session.createItem(login());
+    await vault.session.updateItem(id, login('Renamed'));
+    await vault.session.createFolder('Work');
+    const file = await vault.session.exportBackup({ kek: kek(vault.keyring), method: 'password' });
+    return { ...vault, id, file };
+  }
+
+  /** Validates `file` with the phrase, as `packages/backup` does, then restores it into `store`. */
+  async function restore(
+    file: Uint8Array,
+    words: string,
+    clock = new Clock(),
+    store = new MemoryStore(),
+    kdfParams = PARAMS,
+  ) {
+    const keyring = new Keyring();
+    const backup = restoreWithPhrase(keyring, parseBackup(file), words);
+    const session = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams,
+      backup,
+      now: clock.now,
+    });
+    open.push(session);
+    return { session, store, keyring, backup };
+  }
+
+  function hexes(records: readonly { readonly envelope: Uint8Array }[]): string[] {
+    return records.map((r) => Buffer.from(r.envelope).toString('hex')).sort();
+  }
+
+  it('writes every record of the backup and the Local Config in one commit (D33)', async () => {
+    const source = await backedUp();
+    const restored = await restore(source.file.bytes, source.words);
+    expect(restored.store.commits).toHaveLength(1);
+    const [commit] = restored.store.commits;
+    expect(commit?.delete).toEqual([]);
+    expect(hexes(commit?.put ?? [])).toEqual(hexes(restored.backup.records));
+    expect(hexes(await restored.store.records())).toEqual(hexes(await source.store.records()));
+  });
+
+  it('opens the same vault, readable by the new local password only', async () => {
+    const source = await backedUp();
+    const { session, store } = await restore(source.file.bytes, source.words);
+    expect(session.vaultId).toEqual(source.session.vaultId);
+    expect(session.items().map((i) => i.item?.title)).toEqual(['Renamed']);
+    expect(session.versions(source.id)).toHaveLength(source.session.versions(source.id).length);
+    expect(session.folders().map((f) => f.name)).toEqual(['Work']);
+    expect(session.recovery).toEqual(source.session.recovery);
+    session.lock();
+    const again = await unlock(store, new Clock(), 2);
+    expect(again.items().map((i) => i.item?.title)).toEqual(['Renamed']);
+    await expect(unlock(store, new Clock(), 1)).rejects.toThrow(UnlockRejectedError);
+  });
+
+  it('is a new, unregistered device: new identity and Local Config, no Device record (D30)', async () => {
+    const source = await backedUp();
+    const { session, store } = await restore(source.file.bytes, source.words);
+    expect(session.deviceId).not.toEqual(source.session.deviceId);
+    expect(session.devices().map((d) => d.deviceId)).toEqual([source.session.deviceId]);
+    expect(store.ofType(RecordType.device)).toHaveLength(1);
+    const config = parseLocalConfig(store.localConfig);
+    const sourceConfig = parseLocalConfig(source.store.localConfig);
+    expect(config.vaultId).toEqual(sourceConfig.vaultId);
+    expect(config.localConfigId).not.toEqual(sourceConfig.localConfigId);
+    expect(config.kek).toMatchObject({ salt: SALT, ...PARAMS });
+    expect(config.prf).toBeUndefined();
+    expect(config.replacesVaultId).toBeUndefined();
+  });
+
+  it('keeps the default preferences, no backup date and the restored phrase as the last seen (§13.4)', async () => {
+    const source = await backedUp();
+    await source.session.setPreferences({ ...DEFAULT_PREFERENCES, autoLockMinutes: 1 });
+    const { session } = await restore(source.file.bytes, source.words);
+    expect(session.preferences).toEqual(DEFAULT_PREFERENCES);
+    expect(session.lastBackupAt).toBeUndefined();
+    expect(source.session.lastBackupAt).toBe(T0);
+    expect(session.lastPhraseId).toEqual(source.session.recovery?.phraseId);
+  });
+
+  it('accepts records beyond the future-clock bound, read-only until within it (D39)', async () => {
+    const clock = new Clock();
+    const source = await create(clock);
+    const ahead = randomId();
+    const at = T0 + 3 * DAY;
+    plant(
+      source.store,
+      keysOf(source.store),
+      RecordType.item,
+      ahead,
+      hlcAt(at),
+      false,
+      itemToCbor(login('Ahead'), false),
+    );
+    const file = await source.session.exportBackup({
+      kek: kek(source.keyring),
+      method: 'password',
+    });
+
+    const restoredClock = new Clock();
+    const { session, store } = await restore(file.bytes, source.words, restoredClock);
+    expect(session.item(ahead)?.readOnly).toBe('future-clock');
+    expect(session.item(ahead)?.item?.title).toBe('Ahead');
+    await expect(session.updateItem(ahead, login('Edited'))).rejects.toThrow(
+      new RecordBlockedError('future-clock'),
+    );
+    // The record does not advance the HLC (D109): the vault itself stays writable.
+    expect(session.writable).toBe(true);
+    expect(session.writableAt).toBeNull();
+    await session.createItem(login('New'));
+    session.lock();
+
+    restoredClock.t = at - FUTURE_CLOCK_BOUND_MS;
+    const later = await unlock(store, restoredClock, 2);
+    expect(later.item(ahead)?.readOnly).toBeUndefined();
+    await later.updateItem(ahead, login('Edited'));
+    expect(later.item(ahead)?.item?.title).toBe('Edited');
+  });
+
+  it('rejects the whole restore for a record that fails the content checks, naming it (D59, D64)', async () => {
+    const source = await create();
+    const keys = keysOf(source.store);
+    const folderId = randomId();
+    // A Folder whose name is not text: valid on receipt, invalid as content (D59).
+    plant(
+      source.store,
+      keys,
+      RecordType.folder,
+      folderId,
+      hlcAt(T0),
+      false,
+      new Map<CborValue, CborValue>([['name', 7]]),
+    );
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const error = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: {
+        vaultId: keys.vaultId,
+        masterKey: keys.masterKey,
+        records: await source.store.records(),
+      },
+      now: new Clock().now,
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RestoreRejectedError);
+    expect((error as RestoreRejectedError).record).toEqual({
+      recordType: RecordType.folder,
+      recordId: folderId,
+    });
+    expect((error as RestoreRejectedError).message).toBe(
+      'restore rejected: a record does not verify',
+    );
+    expect(store.commits).toEqual([]);
+    expect(store.localConfig).toHaveLength(0);
+    expect(keyring.wiped).toBe(true);
+  });
+
+  it('writes nothing and keeps no key when the commit fails (D33, D104)', async () => {
+    const source = await backedUp();
+    const store = new MemoryStore();
+    store.failNext = true;
+    const keyring = new Keyring();
+    const backup = restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words);
+    await expect(
+      VaultSession.restore({
+        store,
+        keyring,
+        kek: kek(keyring, 2),
+        salt: SALT,
+        kdfParams: PARAMS,
+        backup,
+      }),
+    ).rejects.toThrow('storage failure');
+    expect(store.held.size).toBe(0);
+    expect(store.localConfig).toHaveLength(0);
+    expect(keyring.wiped).toBe(true);
+    expect(keyring.size).toBe(0);
+  });
+
+  it('refuses KDF parameters outside the accepted range before deriving anything', async () => {
+    const source = await backedUp();
+    await expect(
+      restore(source.file.bytes, source.words, new Clock(), new MemoryStore(), {
+        opslimit: 1,
+        memlimit: MEMLIMIT,
+      }),
+    ).rejects.toThrow(KdfParamsRejectedError);
+  });
+
+  it('persists no plaintext and no phrase (CRYPTO-INV-001, CRYPTO-INV-006)', async () => {
+    const source = await backedUp();
+    const { store } = await restore(source.file.bytes, source.words);
+    const bytes = [store.localConfig, ...(await store.records()).map((r) => r.envelope)];
+    for (const needle of [
+      'Renamed',
+      'correct horse battery staple',
+      'Work',
+      ...phraseTraces(source.words),
+    ]) {
+      expect(bytes.some((b) => contains(b, utf8(needle)))).toBe(false);
+    }
   });
 });
 
