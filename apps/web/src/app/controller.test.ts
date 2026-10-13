@@ -538,6 +538,62 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     expect(c.afterRestore).toBeUndefined();
   });
 
+  /** Restores `bytes` by the phrase into a new installation. */
+  async function restored(bytes: Uint8Array, words: string) {
+    const c = await empty();
+    if (c.openBackupFile(bytes).kind !== 'ok') throw new Error('not a backup');
+    await c.openBackup({ kind: 'phrase', words });
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
+    return c;
+  }
+
+  it('recommends re-admission once after a restore, until dismissed or locked (D30, D186)', async () => {
+    const source = await backup();
+    const c = await restored(source.bytes, source.words);
+    expect(session(c).registered).toBe(false);
+    expect(c.readmissionNotice).toBe(true);
+    c.dismissReadmission();
+    expect(c.readmissionNotice).toBe(false);
+    // Another installation: this one lets go of the vault's Web Lock (D51).
+    await c.close();
+
+    const again = await restored(source.bytes, source.words);
+    expect(again.readmissionNotice).toBe(true);
+    again.lock();
+    expect(again.readmissionNotice).toBe(false);
+    expect(await again.unlock(NEW_PASSWORD)).toBe('ok');
+    expect(again.readmissionNotice).toBe(false);
+  });
+
+  it('does not recommend re-admission when every other device is retired: the device is the only one (D119)', async () => {
+    const source = await backup();
+    const b = await restored(source.bytes, source.words);
+    const [creator] = session(b).devices();
+    expect(await b.retireDevice(must(creator).deviceId)).toBe('ok');
+    const made = await b.exportBackup({ kind: 'password', password: NEW_PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    await b.close();
+
+    const c = await restored(made.bytes, source.words);
+    expect(session(c).registered).toBe(false);
+    expect(c.readmissionNotice).toBe(false);
+  });
+
+  it('retires another device, refuses its own and a retired one, and nothing once locked (D41, D186)', async () => {
+    const source = await backup();
+    const c = await restored(source.bytes, source.words);
+    const seen: string[] = [];
+    c.subscribe(() => seen.push(c.status.kind));
+    const creator = must(session(c).devices()[0]).deviceId;
+    expect(await c.retireDevice(session(c).deviceId)).toBe('refused');
+    expect(await c.retireDevice(creator)).toBe('ok');
+    expect(seen).toEqual(['unlocked']);
+    expect(session(c).devices()[0]?.device.retired).toBe(true);
+    expect(await c.retireDevice(creator)).toBe('refused');
+    c.lock();
+    expect(await c.retireDevice(creator)).toBe('locked');
+  });
+
   it('reports a file that is not a backup, a phrase that is not one, and a wrong phrase', async () => {
     const source = await backup();
     const c = await empty();

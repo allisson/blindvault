@@ -67,6 +67,7 @@ import {
   RecordBlockedError,
   RecordNotFoundError,
   RestoreRejectedError,
+  RetirementRefusedError,
   SubtreeBlockedError,
   UnlockRejectedError,
   VaultLockedError,
@@ -258,6 +259,13 @@ function plant(
 
 function utf8(text: string): Uint8Array {
   return new TextEncoder().encode(text);
+}
+
+/** IDs sorted as Local Config stores them. */
+function sortedHex(ids: readonly Uint8Array[]): Uint8Array[] {
+  return [...ids].sort((x, y) =>
+    Buffer.from(x).toString('hex').localeCompare(Buffer.from(y).toString('hex')),
+  );
 }
 
 function contains(haystack: Uint8Array, needle: Uint8Array): boolean {
@@ -2641,6 +2649,193 @@ function folder(name: string, trashed: boolean): CborMap {
   return map;
 }
 
+describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
+  /** A Device record of another device, planted as a sync would deliver it. */
+  function plantDevice(
+    store: MemoryStore,
+    hlc: Hlc,
+    options: { displayName?: string; retired?: boolean; extra?: boolean } = {},
+  ) {
+    const identity = generateDeviceIdentity(new Keyring());
+    const content = deviceToCbor({
+      publicKey: identity.publicKey,
+      displayName: options.displayName ?? 'Phone',
+      retired: options.retired ?? false,
+      registeredAt: T0 - DAY,
+    });
+    if (options.extra) content.set('color', 'red');
+    plant(store, keysOf(store), RecordType.device, identity.deviceId, hlc, false, content);
+    return identity.deviceId;
+  }
+
+  /** The decrypted Local Config state of `store`, opened as its device does. */
+  function localState(store: MemoryStore, seed = 1) {
+    const keys = keysOf(store, seed);
+    const config = parseLocalConfig(store.localConfig);
+    const opened = openLocalConfigPart(
+      new Keyring(),
+      keys.subkeys.localConfig,
+      localAad(LocalPurpose.localConfig, config.vaultId, config.localConfigId),
+      config.encrypted,
+    );
+    return readLocalConfigState(opened.content);
+  }
+
+  function deviceOf(session: VaultSession, id: Uint8Array) {
+    return session.devices().find((d) => idKey(d.deviceId) === idKey(id));
+  }
+
+  /** A fresh restore of `source`: an unregistered device (D30). */
+  async function restored(source: Awaited<ReturnType<typeof create>>, clock = new Clock()) {
+    const file = await source.session.exportBackup({
+      kek: kek(source.keyring),
+      method: 'password',
+    });
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const session = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+      now: clock.now,
+    });
+    open.push(session);
+    return { session, store, clock };
+  }
+
+  it('is registered on the creator, not after a fresh restore (D30)', async () => {
+    const source = await create();
+    expect(source.session.registered).toBe(true);
+    const { session } = await restored(source);
+    expect(session.registered).toBe(false);
+    expect(session.devices().map((d) => d.deviceId)).toEqual([source.session.deviceId]);
+  });
+
+  it('retires another device in one commit, keeping its name, date and unknown keys (D31, D59, D186)', async () => {
+    const { store, clock } = await create();
+    const phone = plantDevice(store, hlcAt(T0 + 10), { extra: true });
+    const session = await unlock(store, clock);
+    const commits = store.commits.length;
+    const before = must(deviceOf(session, phone));
+
+    await session.retireDevice(phone);
+    expect(store.commits).toHaveLength(commits + 1);
+    const [commit] = store.commits.slice(-1);
+    expect(commit?.put.map((r) => [r.recordType, idKey(r.recordId)])).toEqual([
+      [RecordType.device, idKey(phone)],
+    ]);
+    expect(commit?.delete).toEqual([]);
+    const after = must(deviceOf(session, phone));
+    expect(after.device).toEqual({ ...before.device, retired: true });
+    expect(after.unknownKeys).toEqual(['color']);
+    expect(compareHlc(after.hlc, before.hlc)).toBeGreaterThan(0);
+    expect(after.hlc.deviceId).toEqual(session.deviceId);
+
+    // As stored: another unlock reads it retired, with the unknown key kept.
+    session.lock();
+    const again = await unlock(store, clock);
+    expect(deviceOf(again, phone)).toMatchObject({
+      device: { retired: true, displayName: 'Phone' },
+      unknownKeys: ['color'],
+    });
+  });
+
+  it('records the retired device as seen-as-retired, so a merge of the same retirement shows no notice (D47, D186)', async () => {
+    const source = await create();
+    const phone = plantDevice(source.store, hlcAt(T0 + 10));
+    const a = await unlock(source.store);
+    const b = await restored({ ...source, session: a });
+    expect(localState(b.store, 2).seenRetiredDevices).toBeUndefined();
+
+    await b.session.retireDevice(phone);
+    expect(localState(b.store, 2).seenRetiredDevices).toEqual([phone]);
+    expect(localState(b.store, 2).seenDevices).toEqual(sortedHex([phone, source.session.deviceId]));
+
+    await a.retireDevice(phone);
+    const file = await a.exportBackup({ kek: kek(source.keyring), method: 'password' });
+    const keyring = new Keyring();
+    const result = await b.session.mergeBackup(
+      restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+    );
+    expect(result.retiredDevices).toEqual([]);
+    expect(result.newDevices).toEqual([]);
+    expect(deviceOf(b.session, phone)?.device.retired).toBe(true);
+  });
+
+  it('lets an unregistered device retire any record (D41)', async () => {
+    const source = await create();
+    const { session, store } = await restored(source);
+    const commits = store.commits.length;
+    await session.retireDevice(source.session.deviceId);
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(deviceOf(session, source.session.deviceId)?.device.retired).toBe(true);
+    expect(session.registered).toBe(false);
+  });
+
+  it('refuses its own record, a retired one, an unknown one and one kept aside as corrupt, writing nothing (D41, D186)', async () => {
+    const { store, clock } = await create();
+    const gone = plantDevice(store, hlcAt(T0 + 10), { retired: true });
+    const broken = plantDevice(store, hlcAt(T0 + 11));
+    const key = { recordType: RecordType.device, recordId: broken };
+    const envelope = must(store.get(key)).envelope.slice() as RecordEnvelope;
+    envelope[envelope.length - 1] = (envelope[envelope.length - 1] ?? 0) ^ 1;
+    store.put({ ...key, envelope });
+    const session = await unlock(store, clock);
+    expect(session.corrupt()).toEqual([key]);
+    const commits = store.commits.length;
+
+    await expect(session.retireDevice(session.deviceId)).rejects.toThrow(
+      new RetirementRefusedError('own-device'),
+    );
+    await expect(session.retireDevice(gone)).rejects.toThrow(
+      new RetirementRefusedError('already-retired'),
+    );
+    await expect(session.retireDevice(randomId())).rejects.toThrow(RecordNotFoundError);
+    await expect(session.retireDevice(broken)).rejects.toThrow(RecordNotFoundError);
+    expect(store.commits).toHaveLength(commits);
+    expect(session.retired).toBe(false);
+  });
+
+  it('retires a record beyond the future-clock bound, under an HLC of now that still wins (D31, D74)', async () => {
+    const { store, clock } = await create();
+    const ahead = hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + 1);
+    const phone = plantDevice(store, ahead);
+    const session = await unlock(store, clock);
+    expect(must(deviceOf(session, phone)).hlc).toEqual(ahead);
+    await session.retireDevice(phone);
+    const after = must(deviceOf(session, phone));
+    expect(after.device.retired).toBe(true);
+    expect(after.hlc.physicalMs).toBe(T0);
+    expect(compareHlc(after.hlc, ahead)).toBeLessThan(0);
+    expect(session.writable).toBe(true);
+  });
+
+  it('retires while the vault is read-only for a clock gone back, with the D85 HLC (D73, D85)', async () => {
+    const clock = new Clock(T0 + 2 * DAY);
+    const { store } = await create(clock);
+    const phone = plantDevice(store, hlcAt(T0 + 2 * DAY + 10));
+    clock.t = T0;
+    const behind = await unlock(store, clock);
+    expect(behind.writable).toBe(false);
+    const state = localState(store).hlc;
+
+    await behind.retireDevice(phone);
+    const after = must(deviceOf(behind, phone));
+    expect(after.device.retired).toBe(true);
+    expect(after.hlc).toEqual({
+      physicalMs: state.physicalMs,
+      counter: state.counter + 1,
+      deviceId: behind.deviceId,
+    });
+    expect(localState(store).hlc).toEqual(after.hlc);
+    expect(behind.writable).toBe(false);
+    await expect(behind.createItem(login())).rejects.toThrow(HlcReadOnlyError);
+  });
+});
+
 describe('read-only records (D52, D73, D74)', () => {
   it('shows an item from a newer app version read-only and blocks every write to it', async () => {
     const { store } = await create();
@@ -3403,6 +3598,8 @@ describe('lock (CRYPTO-INV-010)', () => {
       mergeBackup: () =>
         session.mergeBackup({ vaultId: new Uint8Array(16), masterKey: kek(caller), records: [] }),
       retired: () => session.retired,
+      registered: () => session.registered,
+      retireDevice: () => session.retireDevice(new Uint8Array(16)),
     };
     // Every member but `lock` and `locked` is called: a new one fails here until it is listed.
     const members = Object.getOwnPropertyNames(VaultSession.prototype).filter(

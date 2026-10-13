@@ -167,8 +167,10 @@ test('restores a backup by its export password, then recommends Check Recovery P
   await setLocalPassword(page, NEW_PASSWORD);
   await expect(button(page, 'ACME')).toBeVisible();
   await expect(page.getByTestId('after-restore')).toContainText('Recovery Phrase still opens it');
-  await button(page, 'Dismiss').click();
+  // The re-admission notice has its own Dismiss (D186): this one dismisses only this notice.
+  await page.getByTestId('after-restore').getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('after-restore')).toHaveCount(0);
+  await expect(page.getByTestId('readmission')).toBeVisible();
 
   const secrets = [PASSWORD, NEW_PASSWORD, SECRET, passphrase];
   expect(logged.filter((line) => secrets.some((s) => line.includes(s)))).toEqual([]);

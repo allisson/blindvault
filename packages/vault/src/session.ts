@@ -66,6 +66,7 @@ import {
   RecordBlockedError,
   type RegenerationBlock,
   RegenerationBlockedError,
+  RetirementRefusedError,
   RecordNotFoundError,
   RestoreRejectedError,
   SubtreeBlockedError,
@@ -1681,6 +1682,46 @@ export class VaultSession {
   devices(): DeviceView[] {
     this.#unlocked();
     return [...this.#state.devices.values()].map(deviceView);
+  }
+
+  /**
+   * Whether this device holds its own Device record. A fresh restore leaves it unregistered until
+   * re-admission or its first pairing (D30, D113, D141).
+   */
+  get registered(): boolean {
+    this.#unlocked();
+    return this.#state.devices.has(idKey(this.#identity.deviceId));
+  }
+
+  /**
+   * Marks another device's Device record retired (§8.4, D31, D41, D186): one commit writes it,
+   * keeping its display name, date and unknown keys (D59), and records it as seen-as-retired. Its
+   * HLC is above the held record's while writable, of now while that record is beyond the bound
+   * (D74), and the D85 one while the vault is read-only; a retired record wins whatever its `hlc`.
+   * Throws `RecordNotFoundError` for a record not held as a Device (absent or kept aside as corrupt)
+   * and `RetirementRefusedError` for this device's own record or one already retired.
+   */
+  retireDevice(id: Uint8Array): Promise<void> {
+    return this.#run(() => {
+      const held = this.#state.devices.get(idKey(id));
+      if (!held) throw new RecordNotFoundError();
+      if (sameBytes(id, this.#identity.deviceId)) throw new RetirementRefusedError('own-device');
+      if (held.device.value.retired) throw new RetirementRefusedError('already-retired');
+      const content = deviceToCbor({ ...held.device.value, retired: true }, held.device.content);
+      let hlc: Hlc;
+      if (!this.#clock.writable) hlc = this.#clock.issueRetirement();
+      else if (this.#clock.beyondBound(held.header.hlc)) hlc = this.#clock.issue();
+      else hlc = this.#clock.issue(held.header.hlc);
+      const write = this.#seal(RecordType.device, held.header.recordId, hlc, false, content);
+      const seenRetired = [...(this.#localState.seenRetiredDevices ?? []), held.header.recordId];
+      const seen = [...(this.#localState.seenDevices ?? []), held.header.recordId];
+      return {
+        writes: [write],
+        deletes: [],
+        result: undefined,
+        seen: { seenDevices: sortedIds(seen), seenRetiredDevices: sortedIds(seenRetired) },
+      };
+    });
   }
 
   /** Whether this device's own Device record is retired: the persistent D41 notice. */

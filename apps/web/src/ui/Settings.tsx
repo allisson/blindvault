@@ -3,6 +3,7 @@ import { type Preferences, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState } from 'react';
 
 import { download, phraseLabel } from '../app/backup-file';
+import { devicesOf } from '../app/devices';
 import {
   type BackupExport,
   type ExportAuth,
@@ -32,6 +33,7 @@ export function Settings({
       <BackupSettings controller={controller} session={session} />
       <MergeBackup controller={controller} session={session} />
       <RecoveryPhraseSettings controller={controller} session={session} />
+      <DeviceSettings controller={controller} session={session} />
       <ChangePassword controller={controller} />
       <PasskeySettings controller={controller} session={session} />
       <LockSettings controller={controller} preferences={session.preferences} />
@@ -392,6 +394,130 @@ function RecoveryPhraseSettings({
         </form>
       ) : null}
       <RegeneratePhrase controller={controller} session={session} />
+    </section>
+  );
+}
+
+function hex(id: Uint8Array): string {
+  return Array.from(id, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+type RetireState =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'confirm' | 'working' | 'done'; readonly id: string; readonly name: string }
+  | { readonly kind: 'refused' };
+
+/**
+ * Devices (§8.4, D30, D119, D186): the non-retired Device records, this device's first, and the
+ * count of retired ones. An unregistered device is told to get re-admitted; the only device, to
+ * make a backup and pair another. Retiring another device asks for a confirmation that states it
+ * cannot be undone, is not revocation, and points to re-founding; no password (D186).
+ */
+function DeviceSettings({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const { messages: m, language } = useLanguage();
+  const [retire, setRetire] = useState<RetireState>({ kind: 'idle' });
+  const devices = devicesOf(session);
+  const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' });
+  return (
+    <section className="flex flex-col gap-4" data-testid="devices">
+      <h2 className="font-semibold">{m.settings.devices}</h2>
+      {devices.advice === 'readmit' ? (
+        <Notice>
+          <span data-testid="devices-readmit">{m.settings.devicesReadmit}</span>
+        </Notice>
+      ) : null}
+      {devices.advice === 'only-device' ? (
+        <Notice>
+          <span data-testid="devices-only">{m.settings.devicesOnly}</span>
+        </Notice>
+      ) : null}
+      <ul className="flex flex-col gap-2">
+        {devices.listed.map((d) => {
+          const id = hex(d.deviceId);
+          const name = d.device.displayName;
+          return (
+            <li
+              key={id}
+              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+              data-testid="device"
+            >
+              <span className="flex flex-col">
+                <span className="font-medium">
+                  {d.own ? format(m.settings.devicesThis, { name }) : name}
+                </span>
+                <span className="text-zinc-500">
+                  {format(m.settings.devicesRegistered, {
+                    date: date.format(Number(d.device.registeredAt)),
+                  })}
+                </span>
+              </span>
+              {d.own ? null : (
+                <Button
+                  variant="quiet"
+                  disabled={retire.kind === 'working'}
+                  onClick={() => {
+                    setRetire({ kind: 'confirm', id, name });
+                  }}
+                  data-testid="device-retire"
+                >
+                  {m.settings.devicesRetire}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {devices.retiredCount > 0 ? (
+        <p className="text-sm text-zinc-500" data-testid="devices-retired-count">
+          {format(m.settings.devicesRetiredCount, { n: String(devices.retiredCount) })}
+        </p>
+      ) : null}
+      {retire.kind === 'confirm' || retire.kind === 'working' ? (
+        <div className="flex flex-col gap-2" data-testid="retire-confirm">
+          <Notice>{format(m.settings.devicesRetireWarning, { name: retire.name })}</Notice>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={retire.kind === 'working'}
+              onClick={() => {
+                const target = devices.listed.find((d) => hex(d.deviceId) === retire.id);
+                if (!target) return;
+                setRetire({ ...retire, kind: 'working' });
+                void controller.retireDevice(target.deviceId).then((outcome) => {
+                  if (outcome === 'ok') setRetire({ ...retire, kind: 'done' });
+                  else if (outcome === 'refused') setRetire({ kind: 'refused' });
+                  // Locked meanwhile: this screen is gone, and nothing changed.
+                  else setRetire({ kind: 'idle' });
+                });
+              }}
+            >
+              {format(m.settings.devicesRetireConfirm, { name: retire.name })}
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={retire.kind === 'working'}
+              onClick={() => {
+                setRetire({ kind: 'idle' });
+              }}
+            >
+              {m.settings.devicesRetireCancel}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {retire.kind === 'done' ? (
+        <p role="status">{format(m.settings.devicesRetired, { name: retire.name })}</p>
+      ) : null}
+      {retire.kind === 'refused' ? (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          {m.settings.devicesRefused}
+        </p>
+      ) : null}
     </section>
   );
 }

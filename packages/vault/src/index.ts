@@ -14,6 +14,7 @@ export {
   RecordNotFoundError,
   type RegenerationBlock,
   RegenerationBlockedError,
+  RetirementRefusedError,
   SubtreeBlockedError,
   type BlockedRecord,
   RestoreRejectedError,
