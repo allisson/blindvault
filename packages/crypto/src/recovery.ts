@@ -37,7 +37,8 @@ export function parseRecoveryPhrase(keyring: Keyring, input: string): SymmetricK
     .split(/\p{White_Space}+/u)
     .filter((w) => w.length > 0);
   if (words.length !== PHRASE_WORDS) throw new PhraseRejectedError('word-count');
-  if (!words.every((w) => WORDS.has(w))) throw new PhraseRejectedError('unknown-word');
+  const unknown = words.findIndex((w) => !WORDS.has(w));
+  if (unknown >= 0) throw new PhraseRejectedError('unknown-word', unknown + 1);
   let entropy: Uint8Array;
   try {
     entropy = mnemonicToEntropy(words.join(' '), wordlist);

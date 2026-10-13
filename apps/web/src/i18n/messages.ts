@@ -253,6 +253,26 @@ const en = {
     passkeyUnavailable:
       'This passkey cannot unlock BlindVault: its authenticator lacks the PRF extension. Nothing was set up.',
     passkeyUnsupported: 'This browser does not support passkey unlock.',
+    recovery: 'Recovery Phrase',
+    recoveryCreated: 'The current Recovery Phrase was created on {date}.',
+    recoveryIntro:
+      'Type the 24 words you wrote down to confirm that they open this vault and its backups. Nothing you type is stored.',
+    recoveryInput: 'Your 24 words',
+    recoveryCheck: 'Check Recovery Phrase',
+    recoveryOpens: 'This phrase opens this vault and its backups.',
+    recoveryWrong: "This is not this vault's current Recovery Phrase.",
+    recoveryPublicKey:
+      'This phrase opens the vault, but backups cannot be opened with it. Regenerate the Recovery Phrase, then make a new backup.',
+    recoveryMasterKey:
+      'This phrase opens a Recovery Envelope that does not recover this vault, so backups cannot be restored with it. Regenerate the Recovery Phrase, then make a new backup.',
+    recoveryWordCount: 'A Recovery Phrase has 24 words.',
+    recoveryUnknownWord: 'Word {n} is not a Recovery Phrase word.',
+    recoveryChecksum:
+      'These words are not a valid Recovery Phrase. Check each one against what you wrote down.',
+    recoveryNone:
+      'This vault has no Recovery Phrase: the preview build created it, and it cannot be recovered. Create a new vault to get one.',
+    recoveryCorrupt:
+      'The Recovery Envelope on this device is damaged, so the Recovery Phrase cannot be checked. Regenerate the Recovery Phrase to replace it.',
   },
   templates: {
     login: 'Login',
@@ -547,6 +567,26 @@ const ptBR: Messages = {
     passkeyUnavailable:
       'Esta passkey não desbloqueia o BlindVault: o autenticador dela não tem a extensão PRF. Nada foi configurado.',
     passkeyUnsupported: 'Este navegador não oferece desbloqueio com passkey.',
+    recovery: 'Frase de Recuperação',
+    recoveryCreated: 'A Frase de Recuperação atual foi criada em {date}.',
+    recoveryIntro:
+      'Digite as 24 palavras que você anotou para confirmar que elas abrem este cofre e os backups dele. Nada do que você digita é guardado.',
+    recoveryInput: 'Suas 24 palavras',
+    recoveryCheck: 'Verificar a Frase de Recuperação',
+    recoveryOpens: 'Esta frase abre este cofre e os backups dele.',
+    recoveryWrong: 'Esta não é a Frase de Recuperação atual deste cofre.',
+    recoveryPublicKey:
+      'Esta frase abre o cofre, mas os backups não abrem com ela. Gere uma nova Frase de Recuperação e depois faça um novo backup.',
+    recoveryMasterKey:
+      'Esta frase abre um Envelope de Recuperação que não recupera este cofre, então os backups não podem ser restaurados com ela. Gere uma nova Frase de Recuperação e depois faça um novo backup.',
+    recoveryWordCount: 'Uma Frase de Recuperação tem 24 palavras.',
+    recoveryUnknownWord: 'A palavra {n} não é uma palavra de Frase de Recuperação.',
+    recoveryChecksum:
+      'Estas palavras não formam uma Frase de Recuperação válida. Confira cada uma com o que você anotou.',
+    recoveryNone:
+      'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, e ele não pode ser recuperado. Crie um novo cofre para ter uma.',
+    recoveryCorrupt:
+      'O Envelope de Recuperação neste dispositivo está danificado, então a Frase de Recuperação não pode ser verificada. Gere uma nova Frase de Recuperação para substituí-lo.',
   },
   templates: {
     login: 'Login',

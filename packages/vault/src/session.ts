@@ -17,11 +17,13 @@ import {
   RECORD_FORMAT_VERSION,
   type RecordEnvelope,
   type RecordHeader,
+  type RecoveryCheckResult,
   RecordType,
   SALT_LENGTH,
   type Sealed,
   type SymmetricKey,
   checkKdfParams,
+  checkRecoveryEnvelope,
   deriveMasterSubkeys,
   deriveRecoveryKeys,
   encodeCbor,
@@ -30,6 +32,7 @@ import {
   itemContentLength,
   localAad,
   openLocalConfigPart,
+  parseRecoveryPhrase,
   randomId,
   recoveryEnvelopeRecordId,
   sealLocalConfigPart,
@@ -163,6 +166,12 @@ export interface RecoveryView {
   readonly phraseCreatedAt: number;
 }
 
+/**
+ * What Check Recovery Phrase found (§5.4, D24, D180), or why it could not run: no Recovery
+ * Envelope (a D177 preview vault, D179), or one kept aside as corrupt at unlock.
+ */
+export type RecoveryCheck = RecoveryCheckResult | 'no-envelope' | 'corrupt-envelope';
+
 export interface CreateOptions {
   readonly store: RecordStore;
   /** A new keyring holding only `kek` and `recoveryEntropy`; the session owns it from now on. */
@@ -226,6 +235,8 @@ interface HeldRecovery {
   readonly header: RecordHeader;
   /** The metadata, verified to hold its three fields (crypto-spec.md §9.5 step 8). */
   readonly content: CborMap;
+  /** As stored: Check Recovery Phrase opens its `mk` (D24). */
+  readonly envelope: RecordEnvelope;
 }
 
 interface Write {
@@ -397,7 +408,7 @@ function load(
         case RecordType.recoveryEnvelope:
           // Verification fixed its recordId (one per vault) and checked its metadata.
           if (!content) throw new ContentInvalidError('recovery envelope');
-          state.recovery = { header, content };
+          state.recovery = { header, content, envelope: s.envelope };
           break;
         default:
           break;
@@ -747,6 +758,33 @@ export class VaultSession {
       phraseId: (content.get('phraseId') as Uint8Array).slice(),
       phraseCreatedAt: content.get('phraseCreatedAt') as number,
     };
+  }
+
+  /**
+   * Check Recovery Phrase (§5.4, D24, D180): whether `input`, the phrase as typed, opens the held
+   * Recovery Envelope to this vault's Master Key and derives its recovery keyslot public key, so
+   * backups open with it. Input that is not a phrase throws `PhraseRejectedError`. Writes nothing,
+   * migrates nothing (only one `recordFormatVersion` exists, D38) and keeps no key it derived.
+   */
+  checkRecoveryPhrase(input: string): RecoveryCheck {
+    this.#unlocked();
+    const held = this.#state.recovery;
+    if (!held) {
+      const corrupt = this.#state.corrupt.some((k) => k.recordType === RecordType.recoveryEnvelope);
+      return corrupt ? 'corrupt-envelope' : 'no-envelope';
+    }
+    const typed = new Keyring();
+    try {
+      return checkRecoveryEnvelope(
+        held.envelope,
+        this.#cleartext.vaultId,
+        parseRecoveryPhrase(typed, input),
+        this.#subkeys,
+        held.content.get('keyslotPublicKey') as Uint8Array,
+      );
+    } finally {
+      typed.wipeAll();
+    }
   }
 
   /** The `phraseId` of the last Recovery Envelope this device has seen (D43, D48). */
@@ -1455,7 +1493,7 @@ export class VaultSession {
         this.#state.devices.set(key, { header: h, device: readDevice(content) });
         break;
       case RecordType.recoveryEnvelope:
-        if (content) this.#state.recovery = { header: h, content };
+        if (content) this.#state.recovery = { header: h, content, envelope: w.envelope };
         break;
       default:
         // The Vault Key is already held: it was generated before its record was written.

@@ -5,10 +5,12 @@ import { type Sealed, NONCE_LENGTH, TAG_LENGTH, open, seal, unwrapKey, wrapKey }
 import { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';
 import { CryptoError, DecryptionError, EncodingError } from './errors';
 import { deviceId, recoveryEnvelopeRecordId, vaultKeyRecordId, versionId } from './ids';
-import { KEY_LENGTH, Keyring, type SymmetricKey, generateKey } from './keys';
+import { type MasterSubkeys, deriveMasterSubkeys } from './kdf';
+import { KEY_LENGTH, Keyring, type SymmetricKey, generateKey, keyBytes } from './keys';
 import { type RecordHeader, recordAad } from './layout';
 import { PAD_BLOCK, pad, unpad } from './pad';
-import { ID_LENGTH } from './sodium';
+import { deriveRecoveryKeys } from './recovery';
+import { ID_LENGTH, lib } from './sodium';
 
 export const RECORD_FORMAT_VERSION = 1;
 
@@ -549,4 +551,44 @@ export function openRecoveryEnvelope(
   const { header, mk } = envelope;
   if (header.recordType !== RecordType.recoveryEnvelope || !mk) throw new DecryptionError();
   return unwrapKey(keyring, envelopeKey, recordAad(header, vaultId), mk);
+}
+
+/** What Check Recovery Phrase found (§5.4, D24, D180). */
+export type RecoveryCheckResult =
+  'opens' | 'wrong-phrase' | 'master-key-mismatch' | 'public-key-mismatch';
+
+/**
+ * Check Recovery Phrase (§5.4, D24, D180): whether the phrase whose `entropy` is given opens the
+ * envelope to this vault's Master Key, and whether the envelope's `keyslotPublicKey`, read from its
+ * verified metadata, is the one the phrase derives. The session holds no Master Key, so the one
+ * opened is compared through its `K_vaultKeyWrap` subkey with the session's, in constant time.
+ * Every key it derives is wiped before returning; the caller's keys are left alone.
+ */
+export function checkRecoveryEnvelope(
+  bytes: Uint8Array,
+  vaultId: Uint8Array,
+  entropy: SymmetricKey,
+  subkeys: MasterSubkeys,
+  keyslotPublicKey: Uint8Array,
+): RecoveryCheckResult {
+  const scratch = new Keyring();
+  try {
+    const held = keyBytes(subkeys.vaultKeyWrap);
+    const recovery = deriveRecoveryKeys(scratch, entropy);
+    let masterKey: SymmetricKey;
+    try {
+      masterKey = openRecoveryEnvelope(scratch, bytes, vaultId, recovery.envelopeKey);
+    } catch (error) {
+      if (error instanceof DecryptionError) return 'wrong-phrase';
+      throw error;
+    }
+    const opened = keyBytes(deriveMasterSubkeys(scratch, masterKey).vaultKeyWrap);
+    if (!lib().memcmp(opened, held)) return 'master-key-mismatch';
+    const derived = recovery.keyslotPublicKey;
+    const same =
+      derived.length === keyslotPublicKey.length && lib().memcmp(derived, keyslotPublicKey);
+    return same ? 'opens' : 'public-key-mismatch';
+  } finally {
+    scratch.wipeAll();
+  }
 }

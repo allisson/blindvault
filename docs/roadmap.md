@@ -201,7 +201,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Recovery phrase keyslot (mandatory) and export password keyslot via Argon2id (optional); export password strength check at an estimated 10^14 guesses, with a generated 6-word passphrase offered (D134) and warning that it yields the Master Key (D36)
 - [x] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [x] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
-- [ ] "Check Recovery Phrase" while unlocked
+- [x] "Check Recovery Phrase" while unlocked
 - [ ] Export and restore with version and integrity validation
 - [ ] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)

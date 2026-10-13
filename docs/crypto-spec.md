@@ -348,8 +348,11 @@ ct       = seal(recordKey, AAD_record, sodium_pad(CBOR(metadata), 256))
 metadata = { "keyslotPublicKey": bstr 32, "phraseCreatedAt": uint (Unix ms), "phraseId": bstr 16, …unknown keys kept (D98) }
 ```
 
-Check Recovery Phrase (D24) opens `mk` with `K_envelope` from the typed phrase and compares
-`keyslotPublicKey` with the one derived from the phrase.
+Check Recovery Phrase (D24, D180) opens `mk` with `K_envelope` from the typed phrase, compares
+`K_vaultKeyWrap` derived from the Master Key it opens with the session's, in constant time, and
+compares `keyslotPublicKey` with the one derived from the phrase. The result is `opens`,
+`wrong-phrase` (`mk` does not open), `master-key-mismatch` or `public-key-mismatch`, the Master
+Key checked first; every key derived for the check is wiped before it returns.
 
 **Constraint on a future Vault Key rotation.** `mk` is bound to the envelope's AAD, which holds `e`.
 Moving the envelope to a new epoch therefore rewrites `mk`, which needs the phrase. A rotation

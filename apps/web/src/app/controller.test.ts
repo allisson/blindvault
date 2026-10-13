@@ -178,6 +178,49 @@ describe('Recovery Phrase at creation (§5.4, D179)', () => {
   });
 });
 
+describe('Check Recovery Phrase (§5.4, D24, D180)', () => {
+  it('checks a typed phrase against the vault it created', async () => {
+    const c = controller();
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'Test device');
+    expect(c.recoveryEnvelope()).toBe('held');
+    expect(c.checkRecoveryPhrase(words.toUpperCase())).toEqual({ kind: 'opens' });
+    const other = controller();
+    await other.start();
+    expect(c.checkRecoveryPhrase(must(other.newRecoveryPhrase()))).toEqual({
+      kind: 'wrong-phrase',
+    });
+  });
+
+  it('reports input that is not a phrase, with the position of an unknown word', async () => {
+    const c = controller();
+    await c.start();
+    const words = must(c.newRecoveryPhrase()).split(' ');
+    await c.create(PASSWORD, 'Test device');
+    expect(c.checkRecoveryPhrase(words.slice(2).join(' '))).toEqual({
+      kind: 'invalid',
+      reason: 'word-count',
+    });
+    words[9] = 'blindvault';
+    expect(c.checkRecoveryPhrase(words.join(' '))).toEqual({
+      kind: 'invalid',
+      reason: 'unknown-word',
+      position: 10,
+    });
+  });
+
+  it('checks nothing once locked', async () => {
+    const c = controller();
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'Test device');
+    c.lock();
+    expect(c.recoveryEnvelope()).toBe('locked');
+    expect(c.checkRecoveryPhrase(words)).toEqual({ kind: 'locked' });
+  });
+});
+
 describe('vault controller', () => {
   it('starts with no vault, creates one and requests persistence', async () => {
     const factory = new IDBFactory();

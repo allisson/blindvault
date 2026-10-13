@@ -5,6 +5,7 @@ import {
   ITEM_CAP,
   KdfParamsRejectedError,
   KeyWipedError,
+  PhraseRejectedError,
   Keyring,
   LocalPurpose,
   MEMLIMIT,
@@ -27,11 +28,13 @@ import {
   itemContentLength,
   localAad,
   openRecoveryEnvelope,
+  generateKey,
   parseRecoveryPhrase,
   randomId,
   recoveryEnvelopeRecordId,
   sealLocalConfigPart,
   sealRecord,
+  sealRecoveryEnvelope,
   unwrapKey,
   verifyRecord,
   versionId,
@@ -569,6 +572,108 @@ describe('Recovery Envelope (§5.4, D2, D16, D24, D179)', () => {
     const again = await unlock(store);
     expect(again.recovery).toBeUndefined();
     expect(again.corrupt().map((k) => k.recordType)).toEqual([RecordType.recoveryEnvelope]);
+  });
+});
+
+describe('Check Recovery Phrase (§5.4, D24, D179, D180)', () => {
+  /** Replaces the envelope as another device of the vault would, with a later HLC. */
+  function replaceEnvelope(
+    store: MemoryStore,
+    words: string,
+    over: { masterKey?: SymmetricKey; publicKey?: Uint8Array },
+  ) {
+    const keys = keysOf(store);
+    const phrase = typed(words);
+    const metadata = new Map<CborValue, CborValue>([
+      ['keyslotPublicKey', over.publicKey ?? phrase.keyslotPublicKey],
+      ['phraseCreatedAt', T0],
+      ['phraseId', randomId()],
+    ]);
+    const header: RecordHeader = {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.recoveryEnvelope,
+      recordId: recoveryEnvelopeRecordId(keys.vaultId),
+      keyEpoch: 1,
+      hlc: hlcAt(T0 + 1000),
+      deleted: false,
+    };
+    store.put({
+      recordType: RecordType.recoveryEnvelope,
+      recordId: header.recordId,
+      envelope: sealRecoveryEnvelope(
+        header,
+        keys.vaultId,
+        keys.vaultKey,
+        phrase.envelopeKey,
+        over.masterKey ?? keys.masterKey,
+        metadata,
+      ),
+    });
+  }
+
+  it('confirms the phrase, as typed, opens the vault and its backups', async () => {
+    const { session, store, words } = await create();
+    expect(session.checkRecoveryPhrase(words)).toBe('opens');
+    expect(session.checkRecoveryPhrase(`\n${words.toUpperCase().split(' ').join('  ')}\n`)).toBe(
+      'opens',
+    );
+    expect((await unlock(store)).checkRecoveryPhrase(words)).toBe('opens');
+  });
+
+  it('reports another valid phrase as not this vault one', async () => {
+    const { session } = await create();
+    const other = await create();
+    expect(session.checkRecoveryPhrase(other.words)).toBe('wrong-phrase');
+  });
+
+  it('refuses input that is not a phrase, naming the position of an unknown word', async () => {
+    const { session, words } = await create();
+    const list = words.split(' ');
+    expect(() => session.checkRecoveryPhrase(list.slice(1).join(' '))).toThrow(
+      expect.objectContaining({ reason: 'word-count' }),
+    );
+    list[3] = 'notaword';
+    expect(() => session.checkRecoveryPhrase(list.join(' '))).toThrow(
+      expect.objectContaining({ reason: 'unknown-word', position: 4 }),
+    );
+    expect(() => session.checkRecoveryPhrase('')).toThrow(PhraseRejectedError);
+  });
+
+  it('reports an envelope whose keyslot public key the phrase does not derive (D24)', async () => {
+    const { store, words } = await create();
+    replaceEnvelope(store, words, { publicKey: typed((await create()).words).keyslotPublicKey });
+    expect((await unlock(store)).checkRecoveryPhrase(words)).toBe('public-key-mismatch');
+  });
+
+  it('reports an envelope that opens to another Master Key (D180)', async () => {
+    const { store, words } = await create();
+    replaceEnvelope(store, words, { masterKey: generateKey(new Keyring()) });
+    expect((await unlock(store)).checkRecoveryPhrase(words)).toBe('master-key-mismatch');
+  });
+
+  it('reports a vault without an envelope, and a corrupt envelope, before reading the input', async () => {
+    const { store, words } = await create();
+    const [key, record] = must(
+      [...store.held].find(([, r]) => r.recordType === RecordType.recoveryEnvelope),
+    );
+    store.held.delete(key);
+    const none = await unlock(store);
+    expect(none.checkRecoveryPhrase(words)).toBe('no-envelope');
+    expect(none.checkRecoveryPhrase('')).toBe('no-envelope');
+    const bytes = record.envelope.slice();
+    bytes[bytes.length - 1] = must(bytes[bytes.length - 1]) ^ 1;
+    store.held.set(key, { ...record, envelope: bytes as RecordEnvelope });
+    expect((await unlock(store)).checkRecoveryPhrase(words)).toBe('corrupt-envelope');
+  });
+
+  it('writes nothing and keeps no key it derived (CRYPTO-INV-006)', async () => {
+    const { session, store, keyring, words } = await create();
+    const commits = store.commits.length;
+    const size = keyring.size;
+    expect(session.checkRecoveryPhrase(words)).toBe('opens');
+    expect(session.checkRecoveryPhrase((await create()).words)).toBe('wrong-phrase');
+    expect(store.commits).toHaveLength(commits);
+    expect(keyring.size).toBe(size);
   });
 });
 
@@ -1557,6 +1662,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       passkeyCredentialId: () => session.passkeyCredentialId,
       recovery: () => session.recovery,
       lastPhraseId: () => session.lastPhraseId,
+      checkRecoveryPhrase: () => session.checkRecoveryPhrase('abandon'),
       writable: () => session.writable,
       writableAt: () => session.writableAt,
       items: () => session.items(),
