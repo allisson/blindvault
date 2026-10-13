@@ -74,11 +74,13 @@ export {
   versionId,
 } from './ids';
 export {
+  type BackupEnvelopeCheck,
   type EncryptedRecord,
   type Envelope,
   ITEM_CAP,
   MAX_CIPHERTEXT_LENGTH,
   MAX_ENVELOPE_LENGTH,
+  NewerRecordError,
   RECORD_CAP,
   RECORD_FORMAT_VERSION,
   type RecordEnvelope,
@@ -88,6 +90,7 @@ export {
   type VerificationKeys,
   type VerificationStep,
   type VerifiedRecord,
+  checkBackupRecoveryEnvelope,
   checkRecoveryEnvelope,
   decodeEnvelope,
   encodeEnvelope,

@@ -11,6 +11,7 @@ import { type RecordHeader } from './layout';
 import {
   RecordType,
   type VerificationKeys,
+  checkBackupRecoveryEnvelope,
   checkRecoveryEnvelope,
   decodeEnvelope,
   encodeEnvelope,
@@ -274,5 +275,82 @@ describe('Check Recovery Phrase (§5.4, D24, D180)', () => {
     expect(() =>
       checkRecoveryEnvelope(v.envelope, VAULT_ID, fresh, v.subkeys, v.publicKey),
     ).toThrow(KeyWipedError);
+  });
+});
+
+describe('checkBackupRecoveryEnvelope (backup-format.md §8 step 8, D43)', () => {
+  function backup(over: { masterKey?: 'other'; publicKey?: 'other'; phrase?: 'other' } = {}) {
+    const keyring = new Keyring();
+    const vaultKey = generateKey(keyring);
+    const masterKey = generateKey(keyring);
+    const phrase = generateRecoveryPhrase(keyring);
+    const recovery = deriveRecoveryKeys(keyring, phrase.entropy);
+    const sealer =
+      over.phrase === 'other'
+        ? deriveRecoveryKeys(keyring, generateRecoveryPhrase(keyring).entropy)
+        : recovery;
+    const publicKey = over.publicKey
+      ? deriveRecoveryKeys(keyring, generateRecoveryPhrase(keyring).entropy).keyslotPublicKey
+      : recovery.keyslotPublicKey;
+    const envelope: Uint8Array = sealRecoveryEnvelope(
+      header(),
+      VAULT_ID,
+      vaultKey,
+      sealer.envelopeKey,
+      over.masterKey ? generateKey(keyring) : masterKey,
+      metadata(publicKey),
+    );
+    return { keyring, envelope, masterKey, recovery, publicKey };
+  }
+
+  function check(v: ReturnType<typeof backup>, vaultId = VAULT_ID, bytes = v.envelope) {
+    return checkBackupRecoveryEnvelope(bytes, vaultId, v.recovery, v.masterKey, v.publicKey);
+  }
+
+  it('reports an envelope that opens to the payload Master Key with the phrase key pair', () => {
+    expect(check(backup())).toBe('opens');
+  });
+
+  it('reports an envelope holding another Master Key (D43)', () => {
+    expect(check(backup({ masterKey: 'other' }))).toBe('master-key-mismatch');
+    // Both wrong: the Master Key comes first, as in Check Recovery Phrase.
+    expect(check(backup({ masterKey: 'other', publicKey: 'other' }))).toBe('master-key-mismatch');
+  });
+
+  it('reports an mk that does not open with the phrase as a Master Key mismatch', () => {
+    const v = backup({ phrase: 'other' });
+    expect(check(v)).toBe('master-key-mismatch');
+    expect(check(backup(), randomId())).toBe('master-key-mismatch');
+    expect(check(v, VAULT_ID, fromHex(r.vaultKeyRecord.envelope))).toBe('master-key-mismatch');
+    expect(check(v, VAULT_ID, new Uint8Array(3))).toBe('master-key-mismatch');
+  });
+
+  it('reports a keyslot public key that the phrase does not derive (D43)', () => {
+    expect(check(backup({ publicKey: 'other' }))).toBe('public-key-mismatch');
+    const v = backup();
+    expect(
+      checkBackupRecoveryEnvelope(
+        v.envelope,
+        VAULT_ID,
+        v.recovery,
+        v.masterKey,
+        v.publicKey.subarray(0, 31),
+      ),
+    ).toBe('public-key-mismatch');
+  });
+
+  it('keeps nothing it opened, and leaves the caller keys alone', () => {
+    const v = backup();
+    const size = v.keyring.size;
+    expect(check(v)).toBe('opens');
+    expect(v.keyring.size).toBe(size);
+    expect(keyBytes(v.masterKey)).toHaveLength(32);
+    expect(keyBytes(v.recovery.envelopeKey)).toHaveLength(32);
+  });
+
+  it('throws KeyWipedError for wiped keys, never a check result', () => {
+    const v = backup();
+    v.keyring.wipeAll();
+    expect(() => check(v)).toThrow(KeyWipedError);
   });
 });
