@@ -199,6 +199,10 @@ every project through the references in the root `tsconfig.json`.
   manifest, such as the dev server's fallback page. `src/ui/About.tsx` (`AboutBuild`) shows it with
   the version, at the end of Settings and from the footer of every card before unlock. Whether that
   card is open lives in `AboutContext` above the screens, since each status renders its own card.
+- **Framed app (Phase 3, D193).** `main.tsx` first asks `framed(window)` (`src/app/frame.ts`,
+  `window.self !== window.top`). Inside a frame it renders only `src/ui/Framed.tsx`, a notice with a
+  link to the app in its own tab, and builds no controller, Argon2id worker, update monitor or
+  service worker registration, and reads no asset manifest.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

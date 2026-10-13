@@ -49,6 +49,11 @@ const en = {
     shared:
       'This copy of BlindVault runs under a sub-path of a github.io address, which other sites share: they can read and delete its storage. Do not keep anything here; use a copy served from its own address.',
   },
+  framed: {
+    title: 'Open in its own tab',
+    body: 'BlindVault does not open inside another page, which could hide or imitate parts of it.',
+    open: 'Open BlindVault in its own tab',
+  },
   start: {
     starting: 'Opening…',
     incomplete: 'Part of the app failed to load, so the vault stays closed. Reload to try again.',
@@ -643,6 +648,11 @@ const ptBR: Messages = {
   origin: {
     shared:
       'Esta cópia do BlindVault roda num subcaminho de um endereço github.io, que outros sites compartilham: eles podem ler e apagar os dados dela. Não guarde nada aqui; use uma cópia servida no próprio endereço.',
+  },
+  framed: {
+    title: 'Abra numa aba própria',
+    body: 'O BlindVault não abre dentro de outra página, que poderia esconder ou imitar partes dele.',
+    open: 'Abrir o BlindVault numa aba própria',
   },
   start: {
     starting: 'Abrindo…',
