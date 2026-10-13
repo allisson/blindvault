@@ -175,6 +175,15 @@ every project through the references in the root `tsconfig.json`.
   It lives in `apps/web/build/`, outside `src/`, since it runs in Node at build time; the Vitest and
   `tsconfig.node.json` includes cover it. The `reproducible` CI job compares two builds made at
   different paths and in different environments. `docs/build.md` is the spec.
+- **Service worker and web app manifest (Phase 3, D190).** `apps/web/public/sw.js` is shipped as
+  written: plain JavaScript checked by `tsconfig.sw.json` (`checkJs`, WebWorker lib) and linted with
+  the service-worker globals. Its install checks the asset manifest's format and each file's
+  SHA-256 before writing `blindvault-<manifest hash>`; the `blindvault-state` cache records the
+  `installed` and `active` versions, so a running worker reads only its own. `build/sw.test.ts`
+  runs the file in `node:vm` against fake caches and network. `src/app/service-worker.ts` registers
+  it from `main.tsx` in the production build, through a second Trusted Types policy that vouches for
+  `/sw.js` only. `public/manifest.webmanifest` and the icons, drawn by `build/icons.py` (standard
+  library only, deterministic), are listed in the asset manifest like any other file.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

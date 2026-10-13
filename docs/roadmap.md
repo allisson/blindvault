@@ -234,8 +234,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Tasks
 
-- [ ] PWA manifest and installation
-- [ ] Cache-first service worker with a versioned cache (D5)
+- [x] PWA manifest and installation (D190)
+- [x] Cache-first service worker with a versioned cache (D5, D190)
 - [ ] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned, locking the vault synchronously in the `updatefound` handler, with `registration.update()` whenever the app becomes visible (D63, D142, D162); all code and WebAssembly loaded before the first unlock, none afterwards (D142)
 - [x] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile (D189, `docs/build.md`)
 - [x] CI job that builds twice and compares the asset manifest hash (D189)
@@ -253,7 +253,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### PWA Gate
 
 - [x] Two builds of the same commit produce the same hash in CI
-- [ ] App works offline after installation
+- [x] App works offline after installation (Playwright offline in Chromium and Firefox; WebKit through the cache test, since its offline emulation fails before the service worker, D190)
 - [ ] A new deploy does not replace the code without user confirmation (Playwright test)
 - [ ] The hash shown in the app matches the one published in the release
 - [ ] Self-hosting tested on another static host
