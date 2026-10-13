@@ -479,6 +479,44 @@ const en = {
       device: 'Device record',
     },
   },
+  refound: {
+    title: 'Re-found the vault',
+    intro:
+      'If someone else may hold the Master Key (an exposed Recovery Phrase or export password, a retirement you did not make, a device you did not pair), re-found the vault: what this device holds moves to a new vault under entirely new keys.',
+    start: 'Re-found the vault…',
+    warnSync:
+      'Sync this device first with every other device still in your hands: changes that are not on this device are lost. Afterwards, pair each other device again with the new vault, and destroy the backups of the old vault: they still open it with the old Recovery Phrase.',
+    warnRetired:
+      'This device was retired, so it cannot sync first: changes that exist only on other devices are lost. If a device that was not retired is still in your hands, re-found there instead.',
+    warnTrash:
+      'The trash and the history of every item are emptied. Restore from the trash anything you still need first.',
+    openTrash: 'Open the trash',
+    warnCorrupt: 'Records this device cannot read, which are not carried over: {n}.',
+    warnCopied:
+      'Re-founding protects only what happens afterwards: whoever already copied the old vault keeps it.',
+    warnRejected:
+      'This device rejected records from {names}, made by a newer app version. They are not on this device and will be lost: update the app and sync with those devices first.',
+    understand:
+      'I understand that changes not on this device, the trash and the history are lost, and that the other devices and the old backups stay with the old vault.',
+    understandRejected: 'I understand that the records from {names} are lost.',
+    continue: 'Continue',
+    authIntro: 'Confirm it is you with the local password of this vault, or with its passkey.',
+    auth: 'Local password',
+    authSubmit: 'Confirm',
+    authPasskey: 'Use the passkey',
+    wrong: 'Wrong password.',
+    passkeyCancelled: 'The passkey prompt was closed.',
+    passkeyFailed: 'The passkey did not open the vault. Use the password.',
+    phraseTitle: 'The Recovery Phrase of the new vault',
+    passwordIntro: 'Choose the local password of the new vault on this device.',
+    password: 'New local password',
+    confirmPassword: 'Repeat the new local password',
+    submit: 'Re-found',
+    working: 'Re-founding the vault…',
+    busy: 'BlindVault is busy in another window. Try again once it is done.',
+    cancel: 'Cancel',
+    done: 'The vault was re-founded. Make a backup of the new vault now, pair your other devices with it again, and destroy the backups of the old vault. A passkey can be set up again in Settings.',
+  },
   templates: {
     login: 'Login',
     'secure-note': 'Secure note',
@@ -1000,6 +1038,44 @@ const ptBR: Messages = {
       recoveryEnvelope: 'Envelope de Recuperação',
       device: 'Registro de dispositivo',
     },
+  },
+  refound: {
+    title: 'Refundar o cofre',
+    intro:
+      'Se outra pessoa pode ter a Chave Mestra (uma Frase de Recuperação ou senha de exportação exposta, uma aposentadoria que você não fez, um dispositivo que você não pareou), refunde o cofre: o que este dispositivo tem passa para um cofre novo, com chaves totalmente novas.',
+    start: 'Refundar o cofre…',
+    warnSync:
+      'Antes, sincronize este dispositivo com todos os outros que ainda estão com você: as alterações que não estão neste dispositivo se perdem. Depois, pareie de novo cada um dos outros dispositivos com o cofre novo e destrua os backups do cofre antigo: eles ainda o abrem com a Frase de Recuperação antiga.',
+    warnRetired:
+      'Este dispositivo foi aposentado, então não pode sincronizar antes: as alterações que só existem em outros dispositivos se perdem. Se um dispositivo não aposentado ainda está com você, refunde por ele.',
+    warnTrash:
+      'A lixeira e o histórico de todos os itens são esvaziados. Antes, restaure da lixeira o que você ainda precisar.',
+    openTrash: 'Abrir a lixeira',
+    warnCorrupt: 'Registros que este dispositivo não consegue ler e que não são levados: {n}.',
+    warnCopied:
+      'Refundar protege só o que acontece depois: quem já copiou o cofre antigo continua com ele.',
+    warnRejected:
+      'Este dispositivo recusou registros de {names}, feitos por uma versão mais nova do app. Eles não estão neste dispositivo e serão perdidos: atualize o app e sincronize com esses dispositivos antes.',
+    understand:
+      'Entendo que as alterações que não estão neste dispositivo, a lixeira e o histórico se perdem, e que os outros dispositivos e os backups antigos ficam com o cofre antigo.',
+    understandRejected: 'Entendo que os registros de {names} se perdem.',
+    continue: 'Continuar',
+    authIntro: 'Confirme que é você com a senha local deste cofre, ou com a passkey dele.',
+    auth: 'Senha local',
+    authSubmit: 'Confirmar',
+    authPasskey: 'Usar a passkey',
+    wrong: 'Senha incorreta.',
+    passkeyCancelled: 'O pedido de passkey foi fechado.',
+    passkeyFailed: 'A passkey não abriu o cofre. Use a senha.',
+    phraseTitle: 'A Frase de Recuperação do cofre novo',
+    passwordIntro: 'Escolha a senha local do cofre novo neste dispositivo.',
+    password: 'Nova senha local',
+    confirmPassword: 'Repita a nova senha local',
+    submit: 'Refundar',
+    working: 'Refundando o cofre…',
+    busy: 'O BlindVault está ocupado em outra janela. Tente de novo quando ela terminar.',
+    cancel: 'Cancelar',
+    done: 'O cofre foi refundado. Faça agora um backup do cofre novo, pareie de novo os outros dispositivos com ele e destrua os backups do cofre antigo. Uma passkey pode ser configurada de novo em Configurações.',
   },
   templates: {
     login: 'Login',

@@ -1100,6 +1100,153 @@ describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
   });
 });
 
+describe('re-founding (§14, D28, D89, D93, D96, D120, D187)', () => {
+  const NEW_PASSWORD = 'a new local password after re-founding';
+  const ITEM = { templateId: 'login', templateVersion: 1, title: 'ACME', fields: [], tags: [] };
+
+  /** A controller whose next derivation waits for `answer()` once `hold` is set. */
+  function held(factory: IDBFactory, passkeys?: PasskeyPort) {
+    const gate: { hold: boolean; answer: () => void } = { hold: false, answer: () => undefined };
+    const kdf = () => {
+      const port = fakeKdf()();
+      const post = port.postMessage.bind(port);
+      port.postMessage = (message, transfer) => {
+        if (!gate.hold) {
+          post(message, transfer);
+          return;
+        }
+        gate.answer = () => {
+          post(message, transfer);
+        };
+      };
+      return port;
+    };
+    const c = new VaultController({
+      factory,
+      locks: navigator.locks,
+      kdf,
+      ...(passkeys ? { passkeys } : {}),
+    });
+    controllers.push(c);
+    return { c, gate };
+  }
+
+  async function vault(factory = new IDBFactory(), passkeys?: PasskeyPort) {
+    const { c, gate } = held(factory, passkeys);
+    await c.start();
+    await createIn(c);
+    await session(c).createItem(ITEM);
+    return { c, gate, factory, oldVaultId: session(c).vaultId };
+  }
+
+  async function names(factory: IDBFactory) {
+    return (await factory.databases()).map((d) => d.name).sort();
+  }
+
+  it('re-founds after the password, then keeps only the new vault, under the new password (D28, D89, D96)', async () => {
+    const { c, factory, oldVaultId } = await vault();
+    const old = session(c);
+    expect(c.newRefoundingPhrase()).toBeUndefined();
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    const words = must(c.newRefoundingPhrase());
+    expect(words.split(' ')).toHaveLength(24);
+    expect(c.showingPhrase).toBe(true);
+    expect(await c.refound(NEW_PASSWORD, 'Fallback name')).toEqual({ kind: 'ok' });
+
+    expect(old.locked).toBe(true);
+    const fresh = session(c);
+    expect(fresh.vaultId).not.toEqual(oldVaultId);
+    expect(fresh.items().map((i) => i.item?.title)).toEqual(['ACME']);
+    expect(fresh.devices().map((d) => d.device.displayName)).toEqual(['Test device']);
+    expect(fresh.checkRecoveryPhrase(words)).toBe('opens');
+    expect(c.showingPhrase).toBe(false);
+    expect(c.afterRefounding).toBe(true);
+    expect(await names(factory)).toEqual([databaseName(fresh.vaultId)]);
+    const db = await VaultDatabase.open(fresh.vaultId, factory);
+    expect(parseLocalConfig(must(await db.localConfig())).replacesVaultId).toBeUndefined();
+    db.close();
+
+    c.lock();
+    expect(c.afterRefounding).toBe(false);
+    expect(await c.unlock(PASSWORD)).toBe('wrong-password');
+    expect(await c.unlock(NEW_PASSWORD)).toBe('ok');
+  });
+
+  it('refuses a wrong password before any phrase, and drops everything on cancel (D187)', async () => {
+    const { c } = await vault();
+    expect(await c.beginRefounding({ kind: 'password', password: 'not it' })).toBe(
+      'wrong-password',
+    );
+    expect(c.newRefoundingPhrase()).toBeUndefined();
+    expect(await c.refound(NEW_PASSWORD, 'X')).toEqual({ kind: 'not-started' });
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    expect(await c.refound(NEW_PASSWORD, 'X')).toEqual({ kind: 'no-phrase' });
+    expect(c.newRefoundingPhrase()).toBeDefined();
+    c.cancelRefounding();
+    expect(c.showingPhrase).toBe(false);
+    expect(c.newRefoundingPhrase()).toBeUndefined();
+    expect(await c.refound(NEW_PASSWORD, 'X')).toEqual({ kind: 'not-started' });
+  });
+
+  it('accepts a passkey assertion as the proof (D187)', async () => {
+    const passkeys = new FakeAuthenticator();
+    const { c, factory } = await vault(new IDBFactory(), passkeys);
+    expect((await c.setUpPasskey(PASSWORD)).kind).toBe('ok');
+    const credential = must(session(c).passkeyCredentialId);
+    expect(await c.beginRefounding({ kind: 'passkey' })).toBe('ok');
+    c.newRefoundingPhrase();
+    expect(await c.refound(NEW_PASSWORD, 'X')).toEqual({ kind: 'ok' });
+    // The old vault's passkey wrap went with its Local Config: the authenticator is asked to forget it (D120).
+    expect(passkeys.forgotten).toEqual([credential]);
+    expect(c.leftoverPasskey).toBe(false);
+    expect(session(c).passkeyCredentialId).toBeUndefined();
+    expect(await names(factory)).toHaveLength(1);
+  });
+
+  it('leaves the old vault intact when locked before the commit, also during the derivation (D93, D104)', async () => {
+    const { c, gate, factory, oldVaultId } = await vault();
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    c.newRefoundingPhrase();
+    c.lock();
+    expect(c.showingPhrase).toBe(false);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(c.newRefoundingPhrase()).toBeUndefined();
+
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    c.newRefoundingPhrase();
+    gate.hold = true;
+    const pending = c.refound(NEW_PASSWORD, 'X');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    c.lock();
+    gate.hold = false;
+    gate.answer();
+    expect(await pending).toEqual({ kind: 'locked' });
+    expect(await names(factory)).toEqual([databaseName(oldVaultId)]);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(session(c).vaultId).toEqual(oldVaultId);
+    expect(
+      session(c)
+        .items()
+        .map((i) => i.item?.title),
+    ).toEqual(['ACME']);
+  });
+
+  it('re-founds nothing while another app window holds the installation guard (D97)', async () => {
+    const { c, factory, oldVaultId } = await vault();
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    c.newRefoundingPhrase();
+    const guard = must((await acquireInstallationGuard(navigator.locks)) ?? undefined);
+    try {
+      expect(await c.refound(NEW_PASSWORD, 'X')).toEqual({ kind: 'busy' });
+    } finally {
+      await guard.release();
+    }
+    expect(session(c).vaultId).toEqual(oldVaultId);
+    expect(c.showingPhrase).toBe(true);
+    expect(await names(factory)).toEqual([databaseName(oldVaultId)]);
+  });
+});
+
 describe('vault controller', () => {
   it('starts with no vault, creates one and requests persistence', async () => {
     const factory = new IDBFactory();

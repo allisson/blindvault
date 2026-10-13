@@ -2836,6 +2836,301 @@ describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
   });
 });
 
+describe('re-founding (§14, D28, D40, D60, D72, D86, D99, D187)', () => {
+  /** Re-founds `old` into a new store, with the new password's KEK seed 3 and a new phrase. */
+  async function refound(
+    old: VaultSession,
+    options: { clock?: Clock; seed?: number; method?: UnlockMethod; store?: MemoryStore } = {},
+  ) {
+    const caller = new Keyring();
+    const keyring = new Keyring();
+    const phrase = generateRecoveryPhrase(keyring);
+    const store = options.store ?? new MemoryStore();
+    const session = await VaultSession.refound(old, {
+      store,
+      keyring,
+      kek: kek(keyring, 3),
+      recoveryEntropy: phrase.entropy,
+      salt: SALT,
+      kdfParams: PARAMS,
+      displayName: 'Re-founded laptop',
+      current: { kek: kek(caller, options.seed ?? 1), method: options.method ?? 'password' },
+      now: (options.clock ?? new Clock()).now,
+    });
+    open.push(session);
+    caller.wipeAll();
+    return { session, store, words: phrase.words };
+  }
+
+  function ids(store: MemoryStore): Set<string> {
+    return new Set([...store.held.values()].map((r) => idKey(r.recordId)));
+  }
+
+  /** The folder tree as names: `[name, children, items]`, sorted. */
+  function shape(session: VaultSession): unknown {
+    const names = (s: VaultSession, parent?: Uint8Array): unknown[] =>
+      s
+        .folders()
+        .filter(
+          (f) =>
+            !f.inTrash &&
+            idKey(f.parentId ?? new Uint8Array()) === idKey(parent ?? new Uint8Array()),
+        )
+        .map((f) => [
+          f.name,
+          names(s, f.id),
+          s
+            .items()
+            .filter((i) => !i.inTrash && i.item?.folderId && idKey(i.item.folderId) === idKey(f.id))
+            .map((i) => i.item?.title)
+            .sort(),
+        ])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    return names(session);
+  }
+
+  it('carries live items and folders under new keys, IDs and HLCs, in one commit with the replaced vaultId (D28, D40, D99)', async () => {
+    const clock = new Clock();
+    const { session: old, store: oldStore } = await create(clock);
+    const work = await old.createFolder('Work');
+    const team = await old.createFolder('Team', work);
+    const bank = await old.createItem({ ...login('Bank'), folderId: team });
+    await old.updateItem(bank, { ...login('Bank, edited'), folderId: team });
+    await old.createItem(login('Root item'));
+    clock.t = T0 + 1000;
+    const before = shape(old);
+    const oldHeld = await oldStore.records();
+
+    const { session, store, words } = await refound(old, { clock });
+    expect(store.commits).toHaveLength(1);
+    expect(session.vaultId).not.toEqual(old.vaultId);
+    expect(session.deviceId).not.toEqual(old.deviceId);
+    const config = parseLocalConfig(store.localConfig);
+    expect(config.replacesVaultId).toEqual(old.vaultId);
+    expect(shape(session)).toEqual(before);
+    expect(
+      session
+        .items()
+        .map((i) => i.item?.title)
+        .sort(),
+    ).toEqual(['Bank, edited', 'Root item']);
+    // No history, no record ID and no record of the old vault (D99).
+    for (const i of session.items()) expect(session.versions(i.id)).toEqual([]);
+    const oldIds = new Set(oldHeld.map((r) => idKey(r.recordId)));
+    // Only the Vault Key record shares its ID, fixed by the epoch alone (crypto-spec.md §4).
+    expect([...ids(store)].filter((id) => oldIds.has(id))).toEqual([idKey(vaultKeyRecordId(1))]);
+    expect(store.ofType(RecordType.itemVersion)).toHaveLength(0);
+    for (const i of session.items()) expect(i.hlc.physicalMs).toBe(T0 + 1000);
+    // Its own Device record only, as the creator of the new vault (D40).
+    expect(session.devices().map((d) => [d.deviceId, d.device.displayName])).toEqual([
+      [session.deviceId, 'Re-founded laptop'],
+    ]);
+    expect(session.registered).toBe(true);
+    // The new phrase opens the new envelope; the old vault is untouched.
+    expect(session.checkRecoveryPhrase(words)).toBe('opens');
+    expect(await oldStore.records()).toEqual(oldHeld);
+    session.lock();
+    expect((await unlock(store, clock, 3)).items()).toHaveLength(2);
+  });
+
+  it('empties the trash and the history, and moves to the root what had its folder in the trash (D72, D86)', async () => {
+    const { session: old } = await create();
+    const kept = await old.createFolder('Kept');
+    const gone = await old.createFolder('Gone');
+    const child = await old.createFolder('Child', gone);
+    await old.createItem({ ...login('In kept'), folderId: kept });
+    const orphan = await old.createItem({ ...login('Orphan'), folderId: gone });
+    const trashed = await old.createItem(login('Trashed'));
+    await old.trashItem(trashed);
+    await old.trashFolder(gone);
+    // Restored from the trash on its own: live again, its folder still in the trash (D106).
+    await old.restoreItem(orphan);
+    await old.restoreFolder(child);
+
+    const { session } = await refound(old);
+    expect(
+      session
+        .items()
+        .map((i) => [i.item?.title, i.inTrash])
+        .sort(),
+    ).toEqual([
+      ['In kept', false],
+      ['Orphan', false],
+    ]);
+    const orphanView = must(session.items().find((i) => i.item?.title === 'Orphan'));
+    expect(orphanView.item?.folderId).toBeUndefined();
+    expect(
+      session
+        .folders()
+        .map((f) => [f.name, f.parentId, f.inTrash])
+        .sort(),
+    ).toEqual([
+      ['Child', undefined, false],
+      ['Kept', undefined, false],
+    ]);
+  });
+
+  it('carries a read-only item with its content unchanged, unknown keys included, at the root (D60, D86)', async () => {
+    const { session: old0, store: oldStore } = await create();
+    const work = await old0.createFolder('Work');
+    old0.lock();
+    const keys = keysOf(oldStore);
+    const content = itemToCbor({ ...login('Newer'), folderId: work }, false);
+    content.set('color', 'red');
+    plant(oldStore, keys, RecordType.item, randomId(), hlcAt(T0), false, content);
+    const old = await unlock(oldStore);
+    expect(old.items()[0]?.readOnly).toBe('newer-content');
+
+    const { session, store } = await refound(old);
+    const [view] = session.items();
+    expect(view?.readOnly).toBe('newer-content');
+    const carried = contentOf(store, keysOf(store, 3), RecordType.item, must(view).id);
+    expect(encodeCbor(carried)).toEqual(encodeCbor(content));
+    expect(session.tree().items.map((i) => i.id)).toEqual([must(view).id]);
+  });
+
+  it('carries records beyond the future-clock bound with fresh HLCs, and re-founds a vault read-only for a clock gone back (D73, D149)', async () => {
+    const clock = new Clock(T0 + 2 * DAY);
+    const { session: ahead, store: oldStore } = await create(clock);
+    await ahead.createItem(login('Written ahead'));
+    await ahead.createFolder('Folder ahead');
+    clock.t = T0;
+    const old = await unlock(oldStore, clock);
+    expect(old.writable).toBe(false);
+    expect(old.items()[0]?.readOnly).toBe('future-clock');
+
+    const { session } = await refound(old, { clock });
+    expect(session.writable).toBe(true);
+    expect(session.items().map((i) => [i.item?.title, i.readOnly, i.hlc.physicalMs])).toEqual([
+      ['Written ahead', undefined, T0],
+    ]);
+    expect(session.folders().map((f) => f.name)).toEqual(['Folder ahead']);
+    await session.createItem(login('Now'));
+  });
+
+  it('keeps the preferences and starts with no backup date, devices seen, rejected peers or passkey (D107, D187)', async () => {
+    const { session: old0, keyring } = await create();
+    await old0.setPreferences({ ...DEFAULT_PREFERENCES, autoLockMinutes: 1 });
+    await old0.exportBackup({ kek: kek(keyring), method: 'password' });
+    await old0.setPasskey({
+      current: kek(keyring),
+      prfKek: kek(keyring, 4),
+      credentialId: new Uint8Array([1]),
+      prfInput: new Uint8Array(32),
+    });
+    expect(old0.lastBackupAt).toBe(T0);
+
+    const { session, store } = await refound(old0);
+    expect(session.preferences).toEqual({ ...DEFAULT_PREFERENCES, autoLockMinutes: 1 });
+    expect(session.lastBackupAt).toBeUndefined();
+    expect(session.passkeyCredentialId).toBeUndefined();
+    expect(session.backupMayBeIncomplete).toBe(false);
+    expect(session.lastPhraseId).toEqual(session.recovery?.phraseId);
+    expect(parseLocalConfig(store.localConfig).prf).toBeUndefined();
+  });
+
+  it('takes the passkey as the proof of the user too (D187)', async () => {
+    const { session: old, keyring } = await create();
+    await old.setPasskey({
+      current: kek(keyring),
+      prfKek: kek(keyring, 4),
+      credentialId: new Uint8Array([1]),
+      prfInput: new Uint8Array(32),
+    });
+    const { session } = await refound(old, { seed: 4, method: 'passkey' });
+    expect(session.vaultId).not.toEqual(old.vaultId);
+  });
+
+  it('refuses a KEK that does not open the old vault, and a locked old vault, writing nothing (D93, D187)', async () => {
+    const { session: old } = await create();
+    await old.createItem(login());
+    const store = new MemoryStore();
+    await expect(refound(old, { seed: 2, store })).rejects.toThrow(UnlockRejectedError);
+    await expect(refound(old, { seed: 1, method: 'passkey', store })).rejects.toThrow(
+      UnlockRejectedError,
+    );
+    expect(store.commits).toHaveLength(0);
+    expect(old.items()).toHaveLength(1);
+    old.lock();
+    await expect(refound(old, { store })).rejects.toThrow(VaultLockedError);
+    expect(store.commits).toHaveLength(0);
+  });
+
+  it('confirms the user with the password or passkey KEK, keeping no key (D187)', async () => {
+    const { session, keyring } = await create();
+    const caller = new Keyring();
+    expect(() => {
+      session.confirmUser({ kek: kek(caller), method: 'password' });
+    }).not.toThrow();
+    expect(() => {
+      session.confirmUser({ kek: kek(caller, 2), method: 'password' });
+    }).toThrow(UnlockRejectedError);
+    expect(() => {
+      session.confirmUser({ kek: kek(caller), method: 'passkey' });
+    }).toThrow(UnlockRejectedError);
+    expect(caller.size).toBe(3);
+    const size = keyring.size;
+    session.confirmUser({ kek: kek(caller), method: 'password' });
+    expect(keyring.size).toBe(size);
+  });
+
+  it('names the peers whose records were rejected, for the D116 warning', async () => {
+    const { session, store } = await create();
+    expect(session.rejectedPeers).toEqual([]);
+    session.lock();
+    const keys = keysOf(store);
+    const config = parseLocalConfig(store.localConfig);
+    const peer = randomId();
+    const encrypted = sealLocalConfigPart(
+      keys.subkeys.localConfig,
+      localAad(LocalPurpose.localConfig, config.vaultId, config.localConfigId),
+      localConfigStateToCbor({
+        preferences: DEFAULT_PREFERENCES,
+        hlc: hlcAt(T0),
+        rejectedPeers: [peer],
+      }),
+      generateDeviceIdentity(new Keyring()),
+    );
+    store.localConfig = encodeCbor(localConfigToCbor({ ...config, encrypted }));
+    expect((await unlock(store)).rejectedPeers).toEqual([peer]);
+  });
+
+  it('carries nothing kept aside as corrupt, and wipes its keyring when the commit fails', async () => {
+    const { session: old0, store: oldStore } = await create();
+    await old0.createItem(login('Good'));
+    const bad = await old0.createItem(login('Tampered'));
+    old0.lock();
+    const key = { recordType: RecordType.item, recordId: bad };
+    const envelope = must(oldStore.get(key)).envelope.slice() as RecordEnvelope;
+    envelope[envelope.length - 1] = (envelope[envelope.length - 1] ?? 0) ^ 1;
+    oldStore.put({ ...key, envelope });
+    const old = await unlock(oldStore);
+    expect(old.corrupt()).toHaveLength(1);
+    const { session } = await refound(old);
+    expect(session.items().map((i) => i.item?.title)).toEqual(['Good']);
+
+    const failing = new MemoryStore();
+    failing.failNext = true;
+    const keyring = new Keyring();
+    const caller = new Keyring();
+    await expect(
+      VaultSession.refound(old, {
+        store: failing,
+        keyring,
+        kek: kek(keyring, 3),
+        recoveryEntropy: generateRecoveryPhrase(keyring).entropy,
+        salt: SALT,
+        kdfParams: PARAMS,
+        displayName: 'X',
+        current: { kek: kek(caller), method: 'password' },
+      }),
+    ).rejects.toThrow('storage failure');
+    expect(keyring.wiped).toBe(true);
+    expect(caller.size).toBe(1);
+    expect(old.items().map((i) => i.item?.title)).toEqual(['Good']);
+  });
+});
+
 describe('read-only records (D52, D73, D74)', () => {
   it('shows an item from a newer app version read-only and blocks every write to it', async () => {
     const { store } = await create();
@@ -3600,6 +3895,10 @@ describe('lock (CRYPTO-INV-010)', () => {
       retired: () => session.retired,
       registered: () => session.registered,
       retireDevice: () => session.retireDevice(new Uint8Array(16)),
+      confirmUser: () => {
+        session.confirmUser({ kek: kek(caller), method: 'password' });
+      },
+      rejectedPeers: () => session.rejectedPeers,
     };
     // Every member but `lock` and `locked` is called: a new one fails here until it is listed.
     const members = Object.getOwnPropertyNames(VaultSession.prototype).filter(

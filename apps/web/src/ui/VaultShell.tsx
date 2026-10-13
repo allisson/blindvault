@@ -169,7 +169,7 @@ export function VaultShell({
 
   let body: ReactNode;
   if (screen.name === 'settings') {
-    body = <Settings controller={controller} session={session} />;
+    body = <Settings controller={controller} session={session} nav={nav} />;
   } else if (layout === 'desktop') {
     body = (
       <div className="grid flex-1 grid-cols-[16rem_20rem_1fr] divide-x divide-zinc-200 dark:divide-zinc-800">
@@ -231,6 +231,28 @@ export function VaultShell({
             variant="quiet"
             onClick={() => {
               controller.dismissAfterRestore();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
+      {controller.afterRefounding ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="refounded">
+          <Notice>{m.refound.done}</Notice>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissRefounded();
+              nav.open({ name: 'settings' });
+            }}
+          >
+            {m.restore.openSettings}
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissRefounded();
             }}
           >
             {m.restore.dismiss}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { download, phraseLabel } from '../app/backup-file';
 import { devicesOf } from '../app/devices';
+import { type Navigation } from '../app/nav';
 import {
   type BackupExport,
   type ExportAuth,
@@ -17,14 +18,17 @@ import { Button, Field, Notice, TextArea } from './components';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
+import { RefoundVault } from './RefoundVault';
 import { RegeneratePhrase } from './RegeneratePhrase';
 
 export function Settings({
   controller,
   session,
+  nav,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
+  readonly nav: Navigation;
 }) {
   const { messages: m, language, setLanguage } = useLanguage();
   return (
@@ -37,6 +41,7 @@ export function Settings({
       <ChangePassword controller={controller} />
       <PasskeySettings controller={controller} session={session} />
       <LockSettings controller={controller} preferences={session.preferences} />
+      <RefoundVault controller={controller} session={session} nav={nav} />
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.settings.language}
         <select
