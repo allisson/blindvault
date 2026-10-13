@@ -134,6 +134,20 @@ every project through the references in the root `tsconfig.json`.
   reports `phraseSuperseded` when it replaces an envelope whose `hlc` carries this device's
   `deviceId` (D145). The UI names a phrase by the first 8 hex digits of its `phraseId`
   (`phraseLabel`), next to its creation date.
+- **Restored device and retirement (Phase 2, D30, D41, D119, D186).** `VaultSession.registered`
+  says whether the device holds its own Device record; a fresh restore leaves it unregistered.
+  `VaultSession.retireDevice` writes the held record retired in one commit, keeping its name, date
+  and unknown keys (D59), and adds it to `seenRetiredDevices`; its HLC is above the held record's,
+  of now over a record beyond the bound (D74), or `HlcClock.issueRetirement` while the vault is
+  read-only (D85). It refuses this device's own record and a retired one
+  (`RetirementRefusedError`) and a record not held as a Device (`RecordNotFoundError`). No password
+  is asked (D186). `apps/web/src/app/devices.ts` (`devicesOf`) lists the non-retired records, own
+  first, counts the retired ones and gives the advice: `readmit` on an unregistered device while
+  another non-retired record exists, `only-device` otherwise when no other one exists (D119), which
+  the storage-persistence warning will reuse. `VaultController.readmissionNotice` is set by a fresh
+  restore with `readmit` advice and cleared by dismiss or lock; Settings › Devices keeps the advice
+  while it holds, and retirement asks for a confirmation stating it cannot be undone, is not
+  revocation and points to re-founding.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

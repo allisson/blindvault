@@ -48,10 +48,12 @@ import {
   type MergeResult,
   PasswordResetRejectedError,
   type Preferences,
+  RecordNotFoundError,
   type RecordStore,
   type RecoveryView,
   type RegenerationBlock,
   RegenerationBlockedError,
+  RetirementRefusedError,
   RestoreRejectedError,
   UnlockRejectedError,
   UnsupportedLocalConfigError,
@@ -62,6 +64,7 @@ import {
 } from '@blindvault/vault';
 
 import { backupFileName, recordIdPrefix } from './backup-file';
+import { devicesOf } from './devices';
 import {
   PasskeyCancelledError,
   type PasskeyPort,
@@ -307,6 +310,8 @@ export class VaultController {
     | undefined;
   /** After a restore opened with an export password: recommend Check Recovery Phrase (D43). */
   #afterRestore: 'check-phrase' | undefined;
+  /** After a fresh restore, while other devices exist: recommend re-admission (D30, D186). */
+  #readmission = false;
   /** The replaced vault's passkey, which the authenticator could not be asked to forget (D120). */
   #leftoverPasskey = false;
 
@@ -720,6 +725,7 @@ export class VaultController {
         this.#leftoverPasskey = forgotten !== true;
       }
       this.#afterRestore = backup.openedWith === 'password' ? 'check-phrase' : undefined;
+      this.#readmission = devicesOf(session).advice === 'readmit';
       this.#set({ kind: 'unlocked', session });
       void requestPersistence(this.#deps.storage);
       return { kind: 'ok' };
@@ -800,6 +806,19 @@ export class VaultController {
 
   dismissAfterRestore(): void {
     this.#afterRestore = undefined;
+    this.#set({ ...this.#status });
+  }
+
+  /**
+   * Right after a fresh restore, while other non-retired devices exist: the one-time re-admission
+   * recommendation (§10, D30, D186). Settings keeps it while the device stays unregistered.
+   */
+  get readmissionNotice(): boolean {
+    return this.#readmission;
+  }
+
+  dismissReadmission(): void {
+    this.#readmission = false;
     this.#set({ ...this.#status });
   }
 
@@ -1017,6 +1036,7 @@ export class VaultController {
     this.#phrase = undefined;
     this.#dropRestore();
     this.#afterRestore = undefined;
+    this.#readmission = false;
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
@@ -1365,6 +1385,27 @@ export class VaultController {
     } finally {
       keyring.wipeAll();
     }
+  }
+
+  /**
+   * Retires another device's Device record (§8.4, D31, D41, D186), after the confirmation the UI
+   * asks for; no password, since it exposes no secret. `refused`: this device's own record, one
+   * already retired, or one not held as a Device.
+   */
+  async retireDevice(deviceId: Uint8Array): Promise<'ok' | 'refused' | 'locked'> {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return 'locked';
+    try {
+      await status.session.retireDevice(deviceId);
+    } catch (error) {
+      if (error instanceof VaultLockedError) return 'locked';
+      if (error instanceof RetirementRefusedError || error instanceof RecordNotFoundError) {
+        return 'refused';
+      }
+      throw error;
+    }
+    this.#set({ ...status });
+    return 'ok';
   }
 
   async setPreferences(preferences: Preferences): Promise<void> {

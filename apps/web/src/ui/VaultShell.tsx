@@ -237,6 +237,28 @@ export function VaultShell({
           </Button>
         </div>
       ) : null}
+      {controller.readmissionNotice ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="readmission">
+          <Notice>{m.restore.readmit}</Notice>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissReadmission();
+              nav.open({ name: 'settings' });
+            }}
+          >
+            {m.restore.openSettings}
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissReadmission();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
       {controller.leftoverPasskey ? (
         <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="leftover-passkey">
           <Notice>{m.replace.leftoverPasskey}</Notice>

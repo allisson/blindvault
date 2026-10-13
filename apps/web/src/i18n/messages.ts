@@ -74,6 +74,9 @@ const en = {
     checkPhrase:
       'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
     dismiss: 'Dismiss',
+    readmit:
+      'This device was restored from a backup and is not registered: until another device of the vault re-admits it, it exchanges data with them only through backups. Settings lists those devices.',
+    openSettings: 'Open Settings',
   },
   reset: {
     forgot: 'Forgot the password?',
@@ -452,6 +455,21 @@ const en = {
       'The authenticator did not give what BlindVault needs. Use the password.',
     backupHidden:
       'The vault locks as soon as the app is hidden: if the browser hides it while it saves the file, the vault locks, and the export must be repeated.',
+    devices: 'Devices',
+    devicesThis: '{name} (this device)',
+    devicesRegistered: 'Registered on {date}',
+    devicesRetiredCount: 'Retired devices, not shown: {n}.',
+    devicesReadmit:
+      'This device is not registered: it was restored from a backup, and the other devices do not know it. Until one of the devices below re-admits it, it exchanges data with them only through backups.',
+    devicesOnly:
+      'This is the only device of this vault. If this browser loses its storage, only a backup and the Recovery Phrase bring the vault back: make a backup, and pair another device.',
+    devicesRetire: 'Retire',
+    devicesRetireWarning:
+      'Retire {name}? Retirement cannot be undone. It is not revocation: whatever that device already holds stays readable to whoever has it. If it may be in someone else’s hands, re-found the vault.',
+    devicesRetireConfirm: 'Retire {name}',
+    devicesRetireCancel: 'Cancel',
+    devicesRetired: '{name} is retired.',
+    devicesRefused: 'That device cannot be retired: it is this device, or it is already retired.',
     recordTypes: {
       item: 'Item',
       folder: 'Folder',
@@ -578,6 +596,9 @@ const ptBR: Messages = {
     checkPhrase:
       'Este cofre foi restaurado com uma senha de exportação. Em Configurações, confira se a sua Frase de Recuperação ainda o abre.',
     dismiss: 'Dispensar',
+    readmit:
+      'Este dispositivo foi restaurado de um backup e não está registrado: até que outro dispositivo do cofre o readmita, ele troca dados com eles só por backups. Configurações lista esses dispositivos.',
+    openSettings: 'Abrir Configurações',
   },
   reset: {
     forgot: 'Esqueceu a senha?',
@@ -955,6 +976,22 @@ const ptBR: Messages = {
       'O autenticador não forneceu o que o BlindVault precisa. Use a senha.',
     backupHidden:
       'O cofre bloqueia assim que o app fica oculto: se o navegador o ocultar enquanto salva o arquivo, o cofre bloqueia e a exportação precisa ser repetida.',
+    devices: 'Dispositivos',
+    devicesThis: '{name} (este dispositivo)',
+    devicesRegistered: 'Registrado em {date}',
+    devicesRetiredCount: 'Dispositivos aposentados, não mostrados: {n}.',
+    devicesReadmit:
+      'Este dispositivo não está registrado: ele foi restaurado de um backup, e os outros dispositivos não o conhecem. Até que um dos dispositivos abaixo o readmita, ele troca dados com eles só por backups.',
+    devicesOnly:
+      'Este é o único dispositivo deste cofre. Se este navegador perder o armazenamento, só um backup e a Frase de Recuperação trazem o cofre de volta: faça um backup e pareie outro dispositivo.',
+    devicesRetire: 'Aposentar',
+    devicesRetireWarning:
+      'Aposentar {name}? Não dá para desfazer. Aposentar não é revogar: o que esse dispositivo já tem continua legível para quem estiver com ele. Se ele pode estar nas mãos de outra pessoa, refunde o cofre.',
+    devicesRetireConfirm: 'Aposentar {name}',
+    devicesRetireCancel: 'Cancelar',
+    devicesRetired: '{name} foi aposentado.',
+    devicesRefused:
+      'Esse dispositivo não pode ser aposentado: é este dispositivo, ou já está aposentado.',
     recordTypes: {
       item: 'Item',
       folder: 'Pasta',

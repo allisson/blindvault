@@ -61,6 +61,17 @@ export class RecordBlockedError extends VaultError {
   }
 }
 
+/**
+ * Retirement refused (D41, D186): this device's own Device record, or one already retired. Nothing
+ * was written.
+ */
+export class RetirementRefusedError extends VaultError {
+  override name = 'RetirementRefusedError';
+  constructor(readonly reason: 'own-device' | 'already-retired') {
+    super(`retirement refused: ${reason}`);
+  }
+}
+
 /** A record a folder action would write but may not, and why. */
 export interface BlockedRecord {
   readonly recordType: number;
