@@ -36,6 +36,19 @@ export function Start({
           <Button onClick={() => void controller.takeOver()}>{m.start.takeOver}</Button>
         </Card>
       );
+    case 'incomplete':
+      return (
+        <Card title={m.app.name}>
+          <p role="alert">{m.start.incomplete}</p>
+          <Button
+            onClick={() => {
+              location.reload();
+            }}
+          >
+            {m.app.reload}
+          </Button>
+        </Card>
+      );
     case 'update-required':
       return <Card title={m.app.name}>{m.start.updateRequired}</Card>;
     case 'corrupt':

@@ -12,6 +12,22 @@ const en = {
     settings: 'Settings',
     back: 'Back',
     retry: 'Try again',
+    reload: 'Reload',
+  },
+  update: {
+    available: 'An update is available: version {current} → {next}.',
+    hash: 'SHA-256 of its asset manifest:',
+    verify: 'Compare this hash with the one published in the release before you update.',
+    note: 'Updating locks the vault and reloads the app.',
+    apply: 'Update and lock',
+  },
+  changedWorker: {
+    title: 'Changed service worker',
+    found:
+      'The host served a changed service worker, which can replace this app. The vault was locked.',
+    notes:
+      'A release that changes the service worker must say so and why in its release notes. Do not unlock the vault until you have verified the release outside the app: compare the served files with its published asset manifest, or rebuild it from source.',
+    continue: 'I verified, continue',
   },
   preview: {
     banner:
@@ -23,6 +39,7 @@ const en = {
   },
   start: {
     starting: 'Opening…',
+    incomplete: 'Part of the app failed to load, so the vault stays closed. Reload to try again.',
     busy: 'BlindVault is busy in another window. Finish there, then try again.',
     elsewhere: 'BlindVault is open in another window.',
     takeOver: 'Use here',
@@ -578,6 +595,22 @@ const ptBR: Messages = {
     settings: 'Configurações',
     back: 'Voltar',
     retry: 'Tentar de novo',
+    reload: 'Recarregar',
+  },
+  update: {
+    available: 'Há uma atualização disponível: versão {current} → {next}.',
+    hash: 'SHA-256 do manifesto de assets:',
+    verify: 'Compare este hash com o publicado na versão antes de atualizar.',
+    note: 'Atualizar bloqueia o cofre e recarrega o app.',
+    apply: 'Atualizar e bloquear',
+  },
+  changedWorker: {
+    title: 'Service worker alterado',
+    found:
+      'O host serviu um service worker alterado, que pode substituir este app. O cofre foi bloqueado.',
+    notes:
+      'Uma versão que altera o service worker precisa dizer isso, e por quê, nas notas da versão. Não desbloqueie o cofre antes de verificar a versão fora do app: compare os arquivos servidos com o manifesto de assets publicado, ou recompile a partir do código-fonte.',
+    continue: 'Verifiquei, continuar',
   },
   preview: {
     banner:
@@ -589,6 +622,8 @@ const ptBR: Messages = {
   },
   start: {
     starting: 'Abrindo…',
+    incomplete:
+      'Parte do app não carregou, então o cofre continua fechado. Recarregue para tentar de novo.',
     busy: 'O BlindVault está ocupado em outra janela. Termine lá e tente de novo.',
     elsewhere: 'O BlindVault está aberto em outra janela.',
     takeOver: 'Usar aqui',

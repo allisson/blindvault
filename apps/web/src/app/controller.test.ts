@@ -1747,3 +1747,121 @@ describe('backup reminder (§13.4, D188)', () => {
     expect(c.backupReminder).toEqual({ kind: 'old-phrase', at: T0 });
   });
 });
+
+describe('code loaded before the first unlock (D142, D191)', () => {
+  it('shows no start screen until the code has loaded', async () => {
+    let loaded = (): void => undefined;
+    const c = new VaultController({
+      factory: new IDBFactory(),
+      locks: navigator.locks,
+      kdf: fakeKdf(),
+      preload: () =>
+        new Promise<void>((resolve) => {
+          loaded = resolve;
+        }),
+    });
+    controllers.push(c);
+    const started = c.start();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(c.status.kind).toBe('starting');
+    loaded();
+    await started;
+    expect(c.status.kind).toBe('no-vault');
+  });
+
+  it('asks for a reload, and opens and creates nothing, when the code failed to load', async () => {
+    const factory = new IDBFactory();
+    const c = new VaultController({
+      factory,
+      locks: navigator.locks,
+      kdf: fakeKdf(),
+      preload: () => Promise.reject(new Error('chunk failed')),
+    });
+    controllers.push(c);
+    await c.start();
+    expect(c.status.kind).toBe('incomplete');
+    expect(c.newRecoveryPhrase()).toBeUndefined();
+    await c.create(PASSWORD, 'Test device');
+    await c.unlock(PASSWORD);
+    expect(c.status.kind).toBe('incomplete');
+    expect(await factory.databases()).toEqual([]);
+  });
+
+  it('does not open an existing vault either', async () => {
+    const factory = new IDBFactory();
+    const first = await created(factory);
+    await first.close();
+    const c = new VaultController({
+      factory,
+      locks: navigator.locks,
+      kdf: fakeKdf(),
+      preload: () => Promise.reject(new Error('worker failed')),
+    });
+    controllers.push(c);
+    await c.start();
+    expect(c.status.kind).toBe('incomplete');
+    await c.unlock(PASSWORD);
+    expect(c.status.kind).toBe('incomplete');
+  });
+});
+
+describe('asset update offered only between flows (D152, D191)', () => {
+  it('is allowed with no vault, locked and unlocked, and not while a phrase is shown', async () => {
+    const c = controller();
+    expect(c.updateAllowed).toBe(false);
+    await c.start();
+    expect(c.updateAllowed).toBe(true);
+    c.newRecoveryPhrase();
+    expect(c.updateAllowed).toBe(false);
+    await c.create(PASSWORD, 'Test device');
+    expect(c.status.kind).toBe('unlocked');
+    expect(c.updateAllowed).toBe(true);
+    c.newRegenerationPhrase();
+    expect(c.updateAllowed).toBe(false);
+    c.cancelRegeneration();
+    expect(c.updateAllowed).toBe(true);
+    c.lock();
+    expect(c.updateAllowed).toBe(true);
+  });
+
+  it('is not allowed during a restore or a merge, and says so to its subscribers', async () => {
+    const c = await created();
+    const made = await c.exportBackup({ kind: 'password', password: PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    const seen: boolean[] = [];
+    c.subscribe(() => seen.push(c.updateAllowed));
+    expect(c.openBackupFile(made.bytes).kind).toBe('ok');
+    expect(c.updateAllowed).toBe(false);
+    c.cancelRestore();
+    expect(c.updateAllowed).toBe(true);
+    expect(seen).toEqual([false, true]);
+    c.lock();
+    expect(c.openBackupFile(made.bytes).kind).toBe('ok');
+    expect(c.updateAllowed).toBe(false);
+    c.lock();
+    expect(c.updateAllowed).toBe(true);
+  });
+
+  it('is not allowed during a re-founding, from its proof on', async () => {
+    const c = await created();
+    expect(await c.beginRefounding({ kind: 'password', password: PASSWORD })).toBe('ok');
+    expect(c.updateAllowed).toBe(false);
+    c.cancelRefounding();
+    expect(c.updateAllowed).toBe(true);
+  });
+
+  it('is not allowed in another window, nor while another one is busy', async () => {
+    const factory = new IDBFactory();
+    await created(factory);
+    const second = controller(factory);
+    await second.start();
+    expect(second.status.kind).toBe('elsewhere');
+    expect(second.updateAllowed).toBe(false);
+    const guard = await acquireInstallationGuard(navigator.locks);
+    const third = controller(new IDBFactory());
+    await third.start();
+    expect(third.status.kind).toBe('busy');
+    expect(third.updateAllowed).toBe(false);
+    await guard?.release();
+  });
+});

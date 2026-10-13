@@ -35,7 +35,8 @@ The **manifest hash** is the SHA-256 of the manifest's bytes. The build prints i
 asset manifest sha256 <hex>
 ```
 
-The version gets no line of its own: the code that shows it is in a listed file.
+The version gets no line of its own: `version.txt`, a listed file holding the version of
+`apps/web/package.json` on one line, gives it to the update prompt (D191).
 
 ## Rebuild and compare
 

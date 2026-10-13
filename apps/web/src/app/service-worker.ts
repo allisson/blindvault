@@ -1,11 +1,12 @@
-// Registers the service worker (overview §11, D190): `/sw.js` at the root, with its updates fetched
-// past the HTTP cache. The production build calls it; the dev server does not. Under Trusted Types
-// the URL goes through a policy that vouches for `/sw.js` only (D83).
+// Registers the service worker (overview §11, D190, D191): `/sw.js` at the root, with its updates
+// fetched past the HTTP cache, as soon as the app starts, so the update monitor watches it early. The
+// production build calls it; the dev server does not. Under Trusted Types the URL goes through a
+// policy that vouches for `/sw.js` only (D83).
 
 export const SERVICE_WORKER_URL = '/sw.js';
 
-interface Container {
-  register(url: string, options: RegistrationOptions): Promise<unknown>;
+interface Container<R> {
+  register(url: string, options: RegistrationOptions): Promise<R>;
 }
 
 interface ScriptUrlPolicy {
@@ -25,11 +26,12 @@ export function onlyServiceWorker(input: string): string {
   return input;
 }
 
-export async function registerServiceWorker(
-  container: Container | undefined,
+/** The registration, or `undefined` where there is none. */
+export async function registerServiceWorker<R>(
+  container: Container<R> | undefined,
   trustedTypes?: TrustedTypes,
-): Promise<void> {
-  if (!container) return;
+): Promise<R | undefined> {
+  if (!container) return undefined;
   const url = trustedTypes
     ? // register() takes a TrustedScriptURL where the DOM types say string.
       (trustedTypes
@@ -37,8 +39,9 @@ export async function registerServiceWorker(
         .createScriptURL(SERVICE_WORKER_URL) as string)
     : SERVICE_WORKER_URL;
   try {
-    await container.register(url, { scope: '/', updateViaCache: 'none' });
+    return await container.register(url, { scope: '/', updateViaCache: 'none' });
   } catch {
     // Without a service worker the app still runs, from the network (D190).
+    return undefined;
   }
 }

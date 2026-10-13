@@ -4,10 +4,13 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
   useId,
+  useSyncExternalStore,
 } from 'react';
 
 import { sharedOrigin } from '../app/origin';
 import { useMessages } from '../i18n/context';
+import { format } from '../i18n/messages';
+import { useUpdates } from './update-context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
 export const TARGET = 'min-h-10 pointer-coarse:min-h-11';
@@ -152,6 +155,51 @@ export function PreviewBanner() {
   );
 }
 
+const noUpdates = () => () => undefined;
+
+/**
+ * An asset update the service worker staged, with the running and new versions and the full
+ * manifest hash, offered only between flows (D152, D191). Updating locks and reloads.
+ */
+export function UpdateBanner() {
+  const m = useMessages();
+  const updates = useUpdates();
+  const state = useSyncExternalStore(updates?.monitor.subscribe ?? noUpdates, () =>
+    updates?.monitor.getState(),
+  );
+  const allowed = useSyncExternalStore(
+    updates?.controller.subscribe ?? noUpdates,
+    () => updates?.controller.updateAllowed ?? false,
+  );
+  const offer = state?.offer;
+  if (!updates || !offer || state.changedWorker || !allowed) return null;
+  return (
+    <section
+      role="status"
+      data-testid="update-banner"
+      className="flex flex-col gap-2 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:bg-sky-950 dark:text-sky-50"
+    >
+      <p>{format(m.update.available, { current: __APP_VERSION__, next: offer.version })}</p>
+      <p>
+        {m.update.hash}{' '}
+        <code data-testid="update-hash" className="break-all">
+          {offer.hash}
+        </code>
+      </p>
+      <p>{m.update.verify}</p>
+      <p>{m.update.note}</p>
+      <Button
+        className="self-start"
+        onClick={() => {
+          void updates.monitor.apply();
+        }}
+      >
+        {m.update.apply}
+      </Button>
+    </section>
+  );
+}
+
 /** Shown on every screen when the app runs on an origin other sites share (D90). */
 export function SharedOriginWarning() {
   const m = useMessages();
@@ -180,6 +228,7 @@ export function Card({
     <div className="flex min-h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <SharedOriginWarning />
       <PreviewBanner />
+      <UpdateBanner />
       <main className="flex flex-1 items-center justify-center p-4">
         <section className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-white p-6 shadow-sm dark:bg-zinc-900">
           <header className="flex items-center justify-between">

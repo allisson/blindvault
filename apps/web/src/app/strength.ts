@@ -1,6 +1,7 @@
 // Password strength: zxcvbn score 4 for the local password (D71), an estimated 10^14 guesses for
-// the export password (D134, D155). The dictionaries load on first use, so the app shell does not
-// carry them. A strength check is not cryptographic protection.
+// the export password (D134, D155). The dictionaries are chunks of their own, loaded at startup
+// (`preloadStrength`) before the first unlock, since no code loads after it (D142, D191). A strength
+// check is not cryptographic protection.
 
 import { type Generated } from '@blindvault/crypto';
 
@@ -25,13 +26,26 @@ type Estimator = (password: string) => Strength;
 
 const estimators = new Map<Language, Promise<Estimator>>();
 
-async function load(language: Language): Promise<Estimator> {
-  const [core, common, en, pt] = await Promise.all([
+function importModules() {
+  return Promise.all([
     import('@zxcvbn-ts/core'),
     import('@zxcvbn-ts/language-common'),
     import('@zxcvbn-ts/language-en'),
     import('@zxcvbn-ts/language-pt-br'),
   ]);
+}
+
+let modules: ReturnType<typeof importModules> | undefined;
+
+/** Loads the dictionaries once; the start screen waits for it (D191). */
+export async function preloadStrength(): Promise<void> {
+  modules ??= importModules();
+  await modules;
+}
+
+async function load(language: Language): Promise<Estimator> {
+  modules ??= importModules();
+  const [core, common, en, pt] = await modules;
   const options = {
     translations: language === 'pt-BR' ? pt.translations : en.translations,
     graphs: common.adjacencyGraphs,

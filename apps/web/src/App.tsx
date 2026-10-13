@@ -1,33 +1,28 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import { clipboard } from './app/clipboard';
-import { VaultController } from './app/controller';
-import { kdfWorker } from './app/kdf';
+import { type VaultController } from './app/controller';
 import { LockTimers } from './app/lock-timers';
 import { Navigation } from './app/nav';
-import { browserPasskeys } from './app/passkey';
+import { type UpdateMonitor } from './app/updates';
 import { LanguageProvider } from './i18n/context';
+import { ChangedWorker } from './ui/ChangedWorker';
 import { Start } from './ui/Start';
+import { UpdatesContext } from './ui/update-context';
 import { VaultShell } from './ui/VaultShell';
 
 const ACTIVITY = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
-function supported(): boolean {
+export function supported(): boolean {
   return typeof indexedDB !== 'undefined' && typeof navigator.locks !== 'undefined';
 }
 
-function Root() {
-  const controller = useMemo(
-    () =>
-      new VaultController({
-        factory: indexedDB,
-        locks: navigator.locks,
-        kdf: kdfWorker,
-        storage: navigator.storage,
-        passkeys: browserPasskeys(),
-      }),
-    [],
-  );
+interface RootProps {
+  readonly controller: VaultController;
+  readonly monitor: UpdateMonitor;
+}
+
+function Root({ controller, monitor }: RootProps) {
   const nav = useMemo(() => new Navigation(), []);
   const timers = useMemo(
     () =>
@@ -83,6 +78,10 @@ function Root() {
     else timers.resume();
   }, [showingPhrase, timers]);
 
+  // A changed sw.js locked the vault; its warning comes before every screen (D63, D191).
+  const updates = useSyncExternalStore(monitor.subscribe, monitor.getState);
+  if (updates.warning) return <ChangedWorker monitor={monitor} />;
+
   if (!supported()) return <Start controller={controller} status={{ kind: 'unsupported' }} />;
   if (status.kind === 'unlocked') {
     return <VaultShell controller={controller} session={status.session} nav={nav} />;
@@ -90,10 +89,13 @@ function Root() {
   return <Start controller={controller} status={status} />;
 }
 
-export function App() {
+export function App({ controller, monitor }: RootProps) {
+  const updates = useMemo(() => ({ controller, monitor }), [controller, monitor]);
   return (
     <LanguageProvider>
-      <Root />
+      <UpdatesContext.Provider value={updates}>
+        <Root controller={controller} monitor={monitor} />
+      </UpdatesContext.Provider>
     </LanguageProvider>
   );
 }

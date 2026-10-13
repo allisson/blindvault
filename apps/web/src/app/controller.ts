@@ -95,6 +95,8 @@ export type Status =
   | { readonly kind: 'unlocked'; readonly session: VaultSession }
   /** A Local Config or database schema this app does not know (D164). */
   | { readonly kind: 'update-required' }
+  /** The app's code did not all load, so it opens nothing until a reload (D142, D191). */
+  | { readonly kind: 'incomplete' }
   | { readonly kind: 'corrupt' };
 
 export type Outcome = 'ok' | 'wrong-password';
@@ -259,8 +261,13 @@ export type PasswordReset =
 export interface ControllerDeps {
   readonly factory: IDBFactory;
   readonly locks: LockManager;
-  /** A new Argon2id worker for one request (architecture.md). */
+  /** A port to the Argon2id worker for one request (architecture.md). */
   readonly kdf: () => KdfPort;
+  /**
+   * Loads every piece of code the app may need after the first unlock (D142, D191): the start
+   * screen waits for it, and a failure keeps the vault closed.
+   */
+  readonly preload?: () => Promise<void>;
   readonly now?: () => number;
   readonly storage?: StorageManager;
   /** WebAuthn, for passkey unlock (§5.5); absent where the browser has none. */
@@ -371,6 +378,12 @@ export class VaultController {
   /** Runs the startup cleanup under the installation guard, then finds this installation's vault. */
   async start(): Promise<void> {
     this.#set({ kind: 'starting' });
+    try {
+      await this.#deps.preload?.();
+    } catch {
+      this.#set({ kind: 'incomplete' });
+      return;
+    }
     await initCrypto();
     const { factory, locks } = this.#deps;
     const guard = await acquireInstallationGuard(locks);
@@ -573,6 +586,7 @@ export class VaultController {
     try {
       const parsed = parseBackup(bytes.slice());
       this.#restore = { parsed };
+      this.#set({ ...this.#status });
       const { header } = parsed;
       return {
         kind: 'ok',
@@ -819,6 +833,7 @@ export class VaultController {
   /** Drops the backup being restored, wiping its Master Key. */
   cancelRestore(): void {
     this.#dropRestore();
+    this.#set({ ...this.#status });
   }
 
   #dropRestore(): void {
@@ -1372,6 +1387,23 @@ export class VaultController {
    */
   get showingPhrase(): boolean {
     return this.#status.kind === 'unlocked' && this.#phrase !== undefined;
+  }
+
+  /**
+   * Whether an asset update may be offered now (D152, D191): with no vault, locked or unlocked, and
+   * no restore, merge, re-founding, shown Recovery Phrase or step that follows one in progress.
+   */
+  get updateAllowed(): boolean {
+    const { kind } = this.#status;
+    if (kind !== 'no-vault' && kind !== 'locked' && kind !== 'unlocked') return false;
+    return (
+      this.#phrase === undefined &&
+      this.#restore === undefined &&
+      this.#afterRestore === undefined &&
+      !this.#readmission &&
+      this.#refounding === undefined &&
+      !this.#refounded
+    );
   }
 
   /** Drops the phrase handed out for a regeneration. */
