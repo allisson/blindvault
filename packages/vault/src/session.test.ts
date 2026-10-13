@@ -63,6 +63,7 @@ import {
   ExportRejectedError,
   HlcReadOnlyError,
   MergeRejectedError,
+  PasswordResetRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
   RestoreRejectedError,
@@ -1288,6 +1289,214 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
       'Work',
       ...phraseTraces(source.words),
     ]) {
+      expect(bytes.some((b) => contains(b, utf8(needle)))).toBe(false);
+    }
+  });
+});
+
+describe('forgotten password reset with the Recovery Phrase (§5.4, §14, D173, D184)', () => {
+  /** Resets the local password of the vault in `store` with `words`, to the KEK of `seed`. */
+  async function reset(store: MemoryStore, words: string, clock = new Clock(), seed = 2) {
+    const keyring = new Keyring();
+    const session = await VaultSession.resetPassword({
+      store,
+      localConfig: parseLocalConfig(store.localConfig),
+      keyring,
+      entropy: parseRecoveryPhrase(keyring, words),
+      kek: kek(keyring, seed),
+      salt: new Uint8Array(16).fill(8),
+      kdfParams: PARAMS,
+      now: clock.now,
+    });
+    open.push(session);
+    return { session, keyring };
+  }
+
+  async function rejection(promise: Promise<unknown>) {
+    const error = await promise.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PasswordResetRejectedError);
+    return (error as PasswordResetRejectedError).reason;
+  }
+
+  function hexes(records: readonly { readonly envelope: Uint8Array }[]): string[] {
+    return records.map((r) => Buffer.from(r.envelope).toString('hex')).sort();
+  }
+
+  /** Replaces the held Recovery Envelope with one whose `mk` wraps `masterKey` under `words`. */
+  function plantEnvelope(store: MemoryStore, words: string, masterKey: SymmetricKey) {
+    const keys = keysOf(store);
+    const [held] = store.ofType(RecordType.recoveryEnvelope);
+    const { header } = decodeEnvelope(must(held).envelope);
+    const scratch = new Keyring();
+    const recovery = deriveRecoveryKeys(scratch, parseRecoveryPhrase(scratch, words));
+    const envelope = sealRecoveryEnvelope(
+      header,
+      keys.vaultId,
+      keys.vaultKey,
+      recovery.envelopeKey,
+      masterKey,
+      new Map<CborValue, CborValue>([
+        ['keyslotPublicKey', recovery.keyslotPublicKey],
+        ['phraseId', randomId()],
+        ['phraseCreatedAt', T0],
+      ]),
+    );
+    store.put({ recordType: RecordType.recoveryEnvelope, recordId: header.recordId, envelope });
+    scratch.wipeAll();
+  }
+
+  it('sets a new local password with the phrase, writing only Local Config (D173)', async () => {
+    const { session, store, words } = await create();
+    const id = await session.createItem(login('Only here'));
+    const before = hexes(await store.records());
+    const config = parseLocalConfig(store.localConfig);
+    const deviceId = session.deviceId;
+    session.lock();
+    const commits = store.commits.length;
+
+    const { session: again, keyring } = await reset(store, words);
+    expect(again.item(id)?.item?.title).toBe('Only here');
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)).toMatchObject({ put: [], delete: [] });
+    expect(hexes(await store.records())).toEqual(before);
+    const after = parseLocalConfig(store.localConfig);
+    expect(after.vaultId).toEqual(config.vaultId);
+    expect(after.localConfigId).toEqual(config.localConfigId);
+    expect(after.kek).toMatchObject({ salt: new Uint8Array(16).fill(8), ...PARAMS });
+    // The same device: its identity is kept.
+    expect(again.deviceId).toEqual(deviceId);
+    // The session keeps no Master Key and no recovery key: only what an unlock holds.
+    again.lock();
+    expect(keyring.size).toBe(0);
+
+    await expect(unlock(store, new Clock(), 1)).rejects.toThrow(UnlockRejectedError);
+    const unlocked = await unlock(store, new Clock(), 2);
+    expect(unlocked.item(id)?.item?.title).toBe('Only here');
+  });
+
+  it('refuses a phrase that does not open the held envelope, writing nothing', async () => {
+    const { session, store } = await create();
+    const vaultId = session.vaultId;
+    session.lock();
+    const commits = store.commits.length;
+    const config = store.localConfig;
+    const other = await create();
+    const keyring = new Keyring();
+    expect(
+      await rejection(
+        VaultSession.resetPassword({
+          store,
+          localConfig: parseLocalConfig(config),
+          keyring,
+          entropy: parseRecoveryPhrase(keyring, other.words),
+          kek: kek(keyring, 2),
+          salt: SALT,
+          kdfParams: PARAMS,
+        }),
+      ),
+    ).toBe('wrong-phrase');
+    expect(store.commits).toHaveLength(commits);
+    expect(store.localConfig).toEqual(config);
+    expect(keyring.wiped).toBe(true);
+    expect(keyring.size).toBe(0);
+    expect((await unlock(store, new Clock(), 1)).vaultId).toEqual(vaultId);
+  });
+
+  it('refuses an envelope that opens to another Master Key, and a vault without one (D179)', async () => {
+    const { session, store, words } = await create();
+    session.lock();
+    const scratch = new Keyring();
+    plantEnvelope(store, words, generateKey(scratch));
+    const commits = store.commits.length;
+    expect(await rejection(reset(store, words))).toBe('master-key-mismatch');
+    expect(store.commits).toHaveLength(commits);
+
+    store.held.delete(
+      [...store.held.entries()].find(
+        ([, r]) => r.recordType === RecordType.recoveryEnvelope,
+      )?.[0] ?? '',
+    );
+    expect(await rejection(reset(store, words))).toBe('no-envelope');
+    expect(store.commits).toHaveLength(commits);
+    scratch.wipeAll();
+  });
+
+  it('refuses a tampered Local Config as a Master Key mismatch, writing nothing', async () => {
+    const { session, store, words } = await create();
+    session.lock();
+    const config = parseLocalConfig(store.localConfig);
+    const encrypted = { ...config.encrypted, c: config.encrypted.c.slice() };
+    encrypted.c[0] = (encrypted.c[0] ?? 0) ^ 1;
+    store.localConfig = encodeCbor(localConfigToCbor({ ...config, encrypted }));
+    const commits = store.commits.length;
+    expect(await rejection(reset(store, words))).toBe('master-key-mismatch');
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('resets while the vault is read-only because the clock went back (D73)', async () => {
+    const clock = new Clock();
+    clock.t = T0 + 3 * DAY;
+    const { session, store, words } = await create(clock);
+    await session.createItem(login());
+    session.lock();
+    clock.t = T0;
+    const { session: again } = await reset(store, words, clock);
+    expect(again.writable).toBe(false);
+    again.lock();
+    expect((await unlock(store, clock, 2)).writable).toBe(false);
+  });
+
+  it('keeps the passkey, which wraps the same Master Key (D172, D184)', async () => {
+    const { session, store, keyring, words } = await create();
+    await session.setPasskey({
+      current: kek(keyring),
+      prfKek: kek(keyring, 3),
+      credentialId: new Uint8Array([1]),
+      prfInput: new Uint8Array(32).fill(5),
+    });
+    const vaultId = session.vaultId;
+    session.lock();
+    await reset(store, words);
+    expect(parseLocalConfig(store.localConfig).prf?.credentialId).toEqual(new Uint8Array([1]));
+    expect((await unlock(store, new Clock(), 3, 'passkey')).vaultId).toEqual(vaultId);
+  });
+
+  it('refuses KDF parameters or a salt out of range before opening anything', async () => {
+    const { session, store, words } = await create();
+    session.lock();
+    const keyring = new Keyring();
+    await expect(
+      VaultSession.resetPassword({
+        store,
+        localConfig: parseLocalConfig(store.localConfig),
+        keyring,
+        entropy: parseRecoveryPhrase(keyring, words),
+        kek: kek(keyring, 2),
+        salt: new Uint8Array(15),
+        kdfParams: PARAMS,
+      }),
+    ).rejects.toThrow(RangeError);
+    expect(keyring.wiped).toBe(true);
+    const other = new Keyring();
+    await expect(
+      VaultSession.resetPassword({
+        store,
+        localConfig: parseLocalConfig(store.localConfig),
+        keyring: other,
+        entropy: parseRecoveryPhrase(other, words),
+        kek: kek(other, 2),
+        salt: SALT,
+        kdfParams: { opslimit: 1, memlimit: MEMLIMIT },
+      }),
+    ).rejects.toThrow(KdfParamsRejectedError);
+  });
+
+  it('persists no phrase and no key (CRYPTO-INV-006)', async () => {
+    const { session, store, words } = await create();
+    session.lock();
+    await reset(store, words);
+    const bytes = [store.localConfig, ...(await store.records()).map((r) => r.envelope)];
+    for (const needle of phraseTraces(words)) {
       expect(bytes.some((b) => contains(b, utf8(needle)))).toBe(false);
     }
   });

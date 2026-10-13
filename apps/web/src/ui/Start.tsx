@@ -4,6 +4,7 @@ import { type PasskeyOutcome, type Status, type VaultController } from '../app/c
 import { useMessages } from '../i18n/context';
 import { Button, Card, Field } from './components';
 import { CreateVault } from './CreateVault';
+import { ResetPassword } from './ResetPassword';
 import { RestoreVault } from './RestoreVault';
 
 /** Every screen before unlock, by controller status. */
@@ -46,6 +47,7 @@ export function Start({
     case 'locked':
     case 'unlocking':
     case 'replacing':
+    case 'resetting':
       return <Locked controller={controller} status={status.kind} />;
     case 'unlocked':
       return null;
@@ -58,18 +60,24 @@ function Locked({
   status,
 }: {
   readonly controller: VaultController;
-  readonly status: 'locked' | 'unlocking' | 'replacing';
+  readonly status: 'locked' | 'unlocking' | 'replacing' | 'resetting';
 }) {
-  const [replace, setReplace] = useState(false);
-  if (replace || status === 'replacing') {
+  const [choice, setChoice] = useState<'replace' | 'reset' | undefined>();
+  const back = () => {
+    setChoice(undefined);
+  };
+  if (choice === 'reset' || status === 'resetting') {
+    return (
+      <ResetPassword controller={controller} working={status === 'resetting'} onCancel={back} />
+    );
+  }
+  if (choice === 'replace' || status === 'replacing') {
     return (
       <RestoreVault
         controller={controller}
         working={status === 'replacing'}
         replace
-        onCancel={() => {
-          setReplace(false);
-        }}
+        onCancel={back}
       />
     );
   }
@@ -78,7 +86,10 @@ function Locked({
       controller={controller}
       working={status === 'unlocking'}
       onReplace={() => {
-        setReplace(true);
+        setChoice('replace');
+      }}
+      onReset={() => {
+        setChoice('reset');
       }}
     />
   );
@@ -88,10 +99,12 @@ function Unlock({
   controller,
   working,
   onReplace,
+  onReset,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
   readonly onReplace: () => void;
+  readonly onReset: () => void;
 }) {
   const m = useMessages();
   const [password, setPassword] = useState('');
@@ -164,6 +177,9 @@ function Unlock({
           {working ? m.unlock.working : m.unlock.submit}
         </Button>
       </form>
+      <Button variant="quiet" className="self-start" disabled={working} onClick={onReset}>
+        {m.reset.forgot}
+      </Button>
       <Button variant="quiet" className="self-start" disabled={working} onClick={onReplace}>
         {m.replace.choose}
       </Button>

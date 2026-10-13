@@ -16,6 +16,7 @@ import {
   generatePrfInput,
   generateRecoveryPhrase,
   generateSalt,
+  parseRecoveryPhrase,
   initCrypto,
   isBackupEligible,
   normalizePassword,
@@ -45,6 +46,7 @@ import {
   type LocalConfigCleartext,
   MergeRejectedError,
   type MergeResult,
+  PasswordResetRejectedError,
   type Preferences,
   type RecordStore,
   RestoreRejectedError,
@@ -76,6 +78,8 @@ export type Status =
   | { readonly kind: 'restoring' }
   /** The locked vault being replaced by a backup, until the commit (D89, D153, D183). */
   | { readonly kind: 'replacing' }
+  /** A forgotten local password being reset with the Recovery Phrase (D173, D184). */
+  | { readonly kind: 'resetting' }
   /** Another app window holds the vault's Web Lock (D51). */
   | { readonly kind: 'elsewhere' }
   | { readonly kind: 'locked' }
@@ -202,6 +206,21 @@ export type MergeOutcome =
       readonly kind: 'corrupt-record' | 'immutable-record';
       readonly recordType: number;
       readonly recordId: string;
+    };
+
+/**
+ * A forgotten password reset (§14, D173, D184): `invalid` for input that is not a phrase,
+ * `unavailable` unless the vault is locked, `locked` when a lock stopped it before the commit.
+ */
+export type PasswordReset =
+  | {
+      readonly kind:
+        'ok' | 'no-envelope' | 'wrong-phrase' | 'master-key-mismatch' | 'locked' | 'unavailable';
+    }
+  | {
+      readonly kind: 'invalid';
+      readonly reason: PhraseRejectedError['reason'];
+      readonly position?: number;
     };
 
 export interface ControllerDeps {
@@ -821,6 +840,74 @@ export class VaultController {
     }
   }
 
+  /**
+   * Resets the forgotten local password with the Recovery Phrase (§14, D173, D184): `words` as
+   * typed, and `password`, already checked for strength by the caller (D71). The vault must be
+   * locked; it ends unlocked. Only Local Config is written, in one commit; a lock before it aborts
+   * with nothing written (D104).
+   */
+  async resetPassword(words: string, password: string): Promise<PasswordReset> {
+    const db = this.#db;
+    if (this.#status.kind !== 'locked' || !db) return { kind: 'unavailable' };
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    let entropy: SymmetricKey;
+    try {
+      entropy = parseRecoveryPhrase(keyring, words);
+    } catch (error) {
+      keyring.wipeAll();
+      if (!(error instanceof PhraseRejectedError)) throw error;
+      const { reason, position } = error;
+      return { kind: 'invalid', reason, ...(position !== undefined ? { position } : {}) };
+    }
+    this.#set({ kind: 'resetting' });
+    try {
+      const config = await this.#readConfig(db);
+      if (!config) throw new Aborted();
+      const salt = generateSalt();
+      const { kek, params } = await calibrateDeviceKek(
+        keyring,
+        this.#deps.kdf(),
+        normalizePassword(password),
+        salt,
+      );
+      if (epoch !== this.#epoch) throw new Aborted();
+      const session = await VaultSession.resetPassword({
+        store: db,
+        localConfig: config,
+        keyring,
+        entropy,
+        kek,
+        salt,
+        kdfParams: params,
+        now: this.#now,
+      });
+      if (epoch !== this.#epoch) {
+        // Committed: the new password is set, and the lock stands.
+        session.lock();
+        return { kind: 'ok' };
+      }
+      this.#set({ kind: 'unlocked', session });
+      return { kind: 'ok' };
+    } catch (error) {
+      keyring.wipeAll();
+      if (error instanceof Aborted || epoch !== this.#epoch) {
+        if (this.getStatus().kind === 'resetting') this.#set({ kind: 'locked' });
+        return { kind: 'locked' };
+      }
+      if (error instanceof PasswordResetRejectedError) {
+        this.#set({ kind: 'locked' });
+        return { kind: error.reason };
+      }
+      if (error instanceof ContentInvalidError || error instanceof KdfParamsRejectedError) {
+        this.#set({ kind: 'corrupt' });
+        return { kind: 'locked' };
+      }
+      this.#set({ kind: 'locked' });
+      throw error;
+    }
+  }
+
   /** Whether this vault has passkey unlock set up on this device, as last read. */
   get hasPasskey(): boolean {
     return this.#passkey !== undefined && this.#deps.passkeys !== undefined;
@@ -904,7 +991,7 @@ export class VaultController {
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
     if (status.kind === 'creating' || status.kind === 'restoring') this.#set({ kind: 'no-vault' });
-    if (status.kind === 'replacing') this.#set({ kind: 'locked' });
+    if (status.kind === 'replacing' || status.kind === 'resetting') this.#set({ kind: 'locked' });
   }
 
   /** Locks, releases the vault's Web Lock and closes the database (the app window is closing). */

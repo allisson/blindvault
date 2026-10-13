@@ -7,6 +7,8 @@ export {
   ExportRejectedError,
   HlcReadOnlyError,
   MergeRejectedError,
+  PasswordResetRejectedError,
+  type PasswordResetRejection,
   type MergeRejection,
   RecordBlockedError,
   RecordNotFoundError,

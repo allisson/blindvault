@@ -206,7 +206,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
 - [x] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [x] Restoring a different vault requires explicitly replacing the local one, after a warning; the new database commits before the old one is deleted (D89)
-- [ ] Forgotten local password recovery via recovery phrase
+- [x] Forgotten local password recovery via recovery phrase
 - [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2)
 - [ ] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
 - [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, new vault committed to its own database before the old one is deleted (D28, D89); warning that trash and history are emptied, with an offer to restore from the trash first (D72)

@@ -529,6 +529,96 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   });
 });
 
+describe('forgotten password reset (§14, D173, D184)', () => {
+  const NEW_PASSWORD = 'a new local password for this device';
+
+  async function lockedWithItem(factory = new IDBFactory()) {
+    const c = controller(factory);
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'This device');
+    const id = await session(c).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Only here',
+      fields: [],
+      tags: [],
+    });
+    c.lock();
+    return { c, words, id };
+  }
+
+  async function localConfigBytes(factory: IDBFactory) {
+    const [name] = (await factory.databases()).map((d) => d.name ?? '');
+    const db = must((await VaultDatabase.openExisting(factory, must(name))) ?? undefined);
+    try {
+      return must(await db.localConfig());
+    } finally {
+      db.close();
+    }
+  }
+
+  it('sets a new local password with the Recovery Phrase and unlocks, keeping every change', async () => {
+    const factory = new IDBFactory();
+    const { c, words, id } = await lockedWithItem(factory);
+    const pending = c.resetPassword(words, NEW_PASSWORD);
+    expect(c.status.kind).toBe('resetting');
+    expect(await pending).toEqual({ kind: 'ok' });
+    expect(session(c).item(id)?.item?.title).toBe('Only here');
+
+    c.lock();
+    expect(await c.unlock(PASSWORD)).toBe('wrong-password');
+    await c.close();
+    const again = controller(factory);
+    await again.start();
+    expect(await again.unlock(NEW_PASSWORD)).toBe('ok');
+    expect(session(again).item(id)?.item?.title).toBe('Only here');
+  });
+
+  it('reports input that is not a phrase and a phrase that does not open the vault, writing nothing', async () => {
+    const factory = new IDBFactory();
+    const { c, words } = await lockedWithItem(factory);
+    const before = await localConfigBytes(factory);
+    const typo = words.split(' ');
+    typo[4] = 'notaword';
+    expect(await c.resetPassword(typo.join(' '), NEW_PASSWORD)).toEqual({
+      kind: 'invalid',
+      reason: 'unknown-word',
+      position: 5,
+    });
+    const other = controller();
+    await other.start();
+    const otherWords = must(other.newRecoveryPhrase());
+    expect(await c.resetPassword(otherWords, NEW_PASSWORD)).toEqual({ kind: 'wrong-phrase' });
+    expect(c.status.kind).toBe('locked');
+    expect(await localConfigBytes(factory)).toEqual(before);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+  });
+
+  it('writes nothing when locked during the password derivation (D104)', async () => {
+    const factory = new IDBFactory();
+    const { c, words } = await lockedWithItem(factory);
+    const before = await localConfigBytes(factory);
+    const pending = c.resetPassword(words, NEW_PASSWORD);
+    c.lock();
+    expect(await pending).toEqual({ kind: 'locked' });
+    expect(c.status.kind).toBe('locked');
+    expect(await localConfigBytes(factory)).toEqual(before);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+  });
+
+  it('resets nothing unless the vault is locked', async () => {
+    const c = controller();
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    expect(await c.resetPassword(words, NEW_PASSWORD)).toEqual({ kind: 'unavailable' });
+    await c.create(PASSWORD, 'This device');
+    expect(await c.resetPassword(words, NEW_PASSWORD)).toEqual({ kind: 'unavailable' });
+    c.lock();
+    expect(await c.resetPassword(words, NEW_PASSWORD)).toEqual({ kind: 'ok' });
+  });
+});
+
 describe('replacing the vault by a backup (§10, D89, D96, D120, D153, D154, D183)', () => {
   const NEW_PASSWORD = 'a new local password for this device';
 
