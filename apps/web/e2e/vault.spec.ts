@@ -29,14 +29,16 @@ test('refuses a weak or mismatched password before creating (D71)', async ({ pag
   await page.getByTestId('confirm-password').fill(`${PASSWORD}x`);
   await expect(page.getByText('The passwords do not match.')).toBeVisible();
   await expect(submit).toBeDisabled();
-  await expect(page.getByTestId('phase1-banner')).toBeVisible();
+  await expect(page.getByTestId('preview-banner')).toHaveText(
+    'Preview build: vaults and backups made here may not open in a later version, and no migration is planned for them. Do not keep anything here you cannot lose.',
+  );
 });
 
 test('creates, locks, refuses a wrong password and unlocks, keeping the URL and history', async ({
   page,
 }) => {
   await create(page);
-  await expect(page.getByTestId('phase1-banner')).toBeVisible();
+  await expect(page.getByTestId('preview-banner')).toBeVisible();
   const before = await page.evaluate(() => window.history.length);
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('button', { name: 'Back' }).click();

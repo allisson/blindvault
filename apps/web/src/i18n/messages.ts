@@ -13,9 +13,9 @@ const en = {
     back: 'Back',
     retry: 'Try again',
   },
-  phase1: {
+  preview: {
     banner:
-      'Preview build: there are no backups yet. If you forget the local password or this browser loses its storage, the vault cannot be recovered.',
+      'Preview build: vaults and backups made here may not open in a later version, and no migration is planned for them. Do not keep anything here you cannot lose.',
   },
   origin: {
     shared:
@@ -417,9 +417,9 @@ const ptBR: Messages = {
     back: 'Voltar',
     retry: 'Tentar de novo',
   },
-  phase1: {
+  preview: {
     banner:
-      'Versão de prévia: ainda não há backups. Se você esquecer a senha local ou este navegador perder os dados, o cofre não pode ser recuperado.',
+      'Versão de prévia: cofres e backups feitos aqui podem não abrir numa versão futura, e não há migração prevista para eles. Não guarde aqui nada que você não possa perder.',
   },
   origin: {
     shared:
