@@ -65,6 +65,14 @@ every project through the references in the root `tsconfig.json`.
   `openSealedKey`, `wrapKey`); the export password KEK comes from the Argon2id worker at the fixed
   export parameters (`derivePasswordKek`) and lives in a keyring of its own, wiped once the file key
   is wrapped or unwrapped.
+- **Backup export (Phase 2, D181).** `packages/vault` depends on `packages/backup`, which depends
+  on `crypto` only: `VaultSession.exportBackup` opens the Master Key wrap with the KEK the caller
+  derived again, verifies every stored record as `load` does, and builds the file with the backup
+  keyslots and `sealBackup`, all in a keyring of its own, wiped before it returns. The session's
+  operation queue takes an asynchronous build for it, since the export password KEK comes from the
+  Argon2id worker; a lock during that build rejects with `VaultLockedError` and commits nothing.
+  `apps/web` derives the Device KEK, or asks the passkey for the PRF KEK, and hands the file to the
+  browser as a download; it never holds the Master Key.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

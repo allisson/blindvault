@@ -3,6 +3,7 @@ import {
   type KdfRequest,
   Keyring,
   MEMLIMIT,
+  type RecordEnvelope,
   deriveRecoveryKeys,
   parseRecoveryPhrase,
 } from '@blindvault/crypto';
@@ -10,6 +11,7 @@ import { VaultDatabase, acquireInstallationGuard, acquireVaultLock } from '@blin
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { recordIdPrefix } from './backup-file';
 import { VaultController } from './controller';
 import { PasskeyCancelledError, type PasskeyPort, type PasskeyResult } from './passkey';
 
@@ -108,12 +110,18 @@ class FakeAuthenticator implements PasskeyPort {
   }
 }
 
-function controller(factory = new IDBFactory(), log?: KdfRequest['op'][], passkeys?: PasskeyPort) {
+function controller(
+  factory = new IDBFactory(),
+  log?: KdfRequest['op'][],
+  passkeys?: PasskeyPort,
+  now?: () => number,
+) {
   const c = new VaultController({
     factory,
     locks: navigator.locks,
     kdf: fakeKdf(log),
     ...(passkeys ? { passkeys } : {}),
+    ...(now ? { now } : {}),
   });
   controllers.push(c);
   return c;
@@ -218,6 +226,102 @@ describe('Check Recovery Phrase (§5.4, D24, D180)', () => {
     c.lock();
     expect(c.recoveryEnvelope()).toBe('locked');
     expect(c.checkRecoveryPhrase(words)).toEqual({ kind: 'locked' });
+  });
+});
+
+describe('backup export (§10, D36, D64, D181)', () => {
+  const MAGIC = [0x89, 0x42, 0x56, 0x41, 0x55, 0x4c, 0x54, 0x0a];
+  const EXPORT_PASSWORD = 'orbit-tulip-granite-ferry-cedar-pixel';
+  // 2026-03-04 at noon, local time: the file name takes the local date.
+  const AT = new Date(2026, 2, 4, 12).getTime();
+
+  async function exporting(passkeys?: PasskeyPort) {
+    const log: KdfRequest['op'][] = [];
+    const factory = new IDBFactory();
+    const c = controller(factory, log, passkeys, () => AT);
+    await c.start();
+    await createIn(c);
+    log.length = 0;
+    return { c, log, factory };
+  }
+
+  it('asks for the local password again and makes the file, recording the date (D181, §13.4)', async () => {
+    const { c, log } = await exporting();
+    expect(session(c).lastBackupAt).toBeUndefined();
+    const made = await c.exportBackup({ kind: 'password', password: PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    expect([...made.bytes.subarray(0, 8)]).toEqual(MAGIC);
+    expect(made.name).toBe('blindvault-2026-03-04.bvault');
+    // Only the Device KEK is derived: no export password, no password keyslot.
+    expect(log).toEqual(['derive']);
+    expect(session(c).lastBackupAt).toBe(AT);
+
+    log.length = 0;
+    const protectedFile = await c.exportBackup(
+      { kind: 'password', password: PASSWORD },
+      EXPORT_PASSWORD,
+    );
+    expect(protectedFile.kind).toBe('ok');
+    expect(log).toEqual(['derive', 'derive']);
+  });
+
+  it('refuses another local password, deriving no export KEK and recording nothing', async () => {
+    const { c, log } = await exporting();
+    expect(
+      await c.exportBackup({ kind: 'password', password: 'not the password' }, EXPORT_PASSWORD),
+    ).toEqual({ kind: 'wrong-password' });
+    expect(log).toEqual(['derive']);
+    expect(session(c).lastBackupAt).toBeUndefined();
+  });
+
+  it('makes nothing once locked, before or during the export (D105)', async () => {
+    const { c } = await exporting();
+    const pending = c.exportBackup({ kind: 'password', password: PASSWORD }, EXPORT_PASSWORD);
+    c.lock();
+    expect(await pending).toEqual({ kind: 'locked' });
+    expect(await c.exportBackup({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'locked',
+    });
+  });
+
+  it('accepts a passkey assertion with user verification instead (D181, §14)', async () => {
+    const authenticator = new FakeAuthenticator();
+    const { c } = await exporting(authenticator);
+    expect(await c.exportBackup({ kind: 'passkey' })).toEqual({ kind: 'unavailable' });
+    await c.setUpPasskey(PASSWORD);
+    expect((await c.exportBackup({ kind: 'passkey' })).kind).toBe('ok');
+    authenticator.flags = UP;
+    expect(await c.exportBackup({ kind: 'passkey' })).toEqual({ kind: 'no-user-verification' });
+    authenticator.flags = UP | UV;
+    authenticator.cancel = true;
+    expect(await c.exportBackup({ kind: 'passkey' })).toEqual({ kind: 'cancelled' });
+  });
+
+  it('names a stored record that fails verification, making no file (D64)', async () => {
+    const { c, factory } = await exporting();
+    const id = await session(c).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'ACME',
+      fields: [],
+      tags: [],
+    });
+    const db = await VaultDatabase.open(session(c).vaultId, factory);
+    const item = must((await db.records()).find((r) => r.recordType === 1));
+    const envelope = item.envelope.slice();
+    envelope[envelope.length - 1] = (envelope[envelope.length - 1] ?? 0) ^ 1;
+    await db.commit({
+      put: [{ ...item, envelope: envelope as RecordEnvelope }],
+      delete: [],
+      localConfig: must(await db.localConfig()),
+    });
+    db.close();
+    expect(await c.exportBackup({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'corrupt-record',
+      recordType: 1,
+      recordId: recordIdPrefix(id),
+    });
+    expect(session(c).lastBackupAt).toBeUndefined();
   });
 });
 

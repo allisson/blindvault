@@ -1,7 +1,7 @@
 # BlindVault — Backup Format v1
 
 > Normative for the bytes of a `.bvault` file; `overview.md` prevails on design. Implements
-> overview §10 and D3, D16, D43, D64, D78, D95 and D178, using the conventions, primitives and
+> overview §10 and D3, D16, D43, D64, D78, D95, D178 and D181, using the conventions, primitives and
 > encodings of `crypto-spec.md` (§1, §2, §3, §6, §14). Backup format version 1.
 > Test vectors: `packages/backup/test-vectors/backup-v1.json` (section 9).
 
@@ -161,16 +161,22 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
 
 ## 8. Export and restore
 
-**Export**, on an unlocked device:
+**Export**, on an unlocked device (D181):
 
-1. Verify every held record as on receipt (`crypto-spec.md` §9.5); on a failure, abort, write no
-   file and name the record (D64). Warn that the backup may be incomplete while Local Config lists
-   peers whose records were rejected (D115).
-2. Read `keyslotPublicKey`, `phraseId` and `phraseCreatedAt` from the Recovery Envelope metadata.
-3. Generate the file key; build the recovery keyslot and, with an export password, the password
+1. Open the Master Key wrap with the Device KEK of the local password or the PRF KEK of a passkey
+   assertion with user verification, both asked for again: the unlocked session holds no Master
+   Key. A KEK that does not open it aborts.
+2. Read every stored record again and verify it as on receipt (`crypto-spec.md` §9.5); on a
+   failure, or with a record kept aside as corrupt at unlock, abort, write no file and name the
+   record by its type and the first 8 hex digits of its `recordId` (D64). Warn that the backup may
+   be incomplete while Local Config lists peers whose records were rejected (D115).
+3. Read `keyslotPublicKey`, `phraseId` and `phraseCreatedAt` from the Recovery Envelope metadata;
+   a vault without one cannot export (D179).
+4. Generate the file key; build the recovery keyslot and, with an export password, the password
    keyslot at the export parameters of section 4.
-4. Encode the header, then stream the payload.
-5. Wipe the file key and the KEK. Record the date of the last backup in Local Config (§13.4).
+5. Encode the header, then stream the payload.
+6. Wipe the Master Key, the file key and the KEKs. Record the date of the last backup in Local
+   Config (§13.4) once the file is made, since the app cannot know whether it was saved.
 
 **Restore**, in this order; any failure rejects the file and writes nothing (D61, D64):
 

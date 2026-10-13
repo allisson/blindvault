@@ -121,6 +121,10 @@ test('keeps vault content out of the form history and the spellchecker (D174, D1
   await button(page, 'Settings').click();
   await expectNoneKept(page);
   await expect(page.getByText(BROWSER_SAVE)).toBeVisible();
+  // The export password fields, with a generated passphrase shown as text (D181).
+  await page.getByTestId('backup-protect').check();
+  await button(page, 'Generate a passphrase').click();
+  await expectNoneKept(page);
 });
 
 test('finds a text control the form history may keep, or the browser may spellcheck', async ({

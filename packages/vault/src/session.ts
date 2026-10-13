@@ -2,6 +2,12 @@
 // and every domain operation, written through a `RecordStore`. Locking wipes it (CRYPTO-INV-010).
 
 import {
+  type Keyslots,
+  createPasswordKeyslot,
+  createRecoveryKeyslot,
+  sealBackup,
+} from '@blindvault/backup';
+import {
   type CborMap,
   type CborValue,
   CryptoError,
@@ -10,6 +16,7 @@ import {
   type Hlc,
   ITEM_CAP,
   type KdfParams,
+  type KdfPort,
   Keyring,
   LocalPurpose,
   type MasterSubkeys,
@@ -50,6 +57,7 @@ import {
 import {
   type BlockedRecord,
   ContentInvalidError,
+  ExportRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
   SubtreeBlockedError,
@@ -172,6 +180,27 @@ export interface RecoveryView {
  */
 export type RecoveryCheck = RecoveryCheckResult | 'no-envelope' | 'corrupt-envelope';
 
+export interface BackupOptions {
+  /**
+   * The Device KEK of the local password (`password`) or the PRF KEK of a passkey assertion with
+   * user verification (`passkey`), derived again for this export (D181). The caller wipes it.
+   */
+  readonly kek: SymmetricKey;
+  readonly method: UnlockMethod;
+  /**
+   * The export password, normalized and already checked for strength (D134, D155), with the
+   * Argon2id worker that derives its KEK. The password is wiped and the worker terminated.
+   */
+  readonly exportPassword?: { readonly password: Uint8Array; readonly port: KdfPort };
+}
+
+/** A `.bvault` file (backup-format.md), ready to hand to the browser. */
+export interface BackupFile {
+  readonly bytes: Uint8Array;
+  /** Unix ms, as in the payload and the Local Config's last backup date. */
+  readonly exportedAt: number;
+}
+
 export interface CreateOptions {
   readonly store: RecordStore;
   /** A new keyring holding only `kek` and `recoveryEntropy`; the session owns it from now on. */
@@ -255,6 +284,8 @@ interface Plan<T> {
   /** A new cleartext part or new preferences: commits the Local Config even with no record. */
   readonly cleartext?: Cleartext;
   readonly preferences?: Preferences;
+  /** The date of the last backup made on this device (§13.4). */
+  readonly lastBackupAt?: number;
 }
 
 /** The records held, decrypted at unlock. */
@@ -791,6 +822,109 @@ export class VaultSession {
   get lastPhraseId(): Uint8Array | undefined {
     this.#unlocked();
     return this.#localState.lastPhraseId?.slice();
+  }
+
+  /** The last backup made on this device (Unix ms), as Local Config records it (§13.4). */
+  get lastBackupAt(): number | undefined {
+    this.#unlocked();
+    const at = this.#localState.lastBackupAt;
+    return at === undefined ? undefined : Number(at);
+  }
+
+  /** Local Config lists peers whose records this device rejected: a backup may lack them (D115). */
+  get backupMayBeIncomplete(): boolean {
+    this.#unlocked();
+    return (this.#localState.rejectedPeers?.length ?? 0) > 0;
+  }
+
+  // --- backup ----------------------------------------------------------------------------------
+
+  /**
+   * Makes a `.bvault` file (backup-format.md §8, D181). `kek` must open the Master Key wrap of
+   * `method` (`UnlockRejectedError` otherwise), since the session holds no Master Key. Every stored
+   * record is read again and verified as on receipt; one that fails, or one kept aside at unlock,
+   * throws `ExportRejectedError` naming it (D64). The Master Key, the file key and the export KEK
+   * live in a keyring of their own, wiped before this returns. Records the date of the last backup
+   * in Local Config; writes no record and issues no HLC.
+   */
+  exportBackup(options: BackupOptions): Promise<BackupFile> {
+    const { kek, method, exportPassword } = options;
+    return this.#run(async () => {
+      const scratch = new Keyring();
+      // The worker terminates itself once it answers; one never asked is terminated here.
+      let derived = false;
+      try {
+        const [corrupt] = this.#state.corrupt;
+        if (corrupt) throw new ExportRejectedError('corrupt-record', copyKey(corrupt));
+        const recovery = this.recovery;
+        if (!recovery) throw new ExportRejectedError('no-envelope');
+        const masterKey = this.#openMasterKey(scratch, kek, method);
+        const stored = await this.#store.records();
+        this.#unlocked();
+        this.#verifyAll(scratch, stored);
+        const fileKey = generateKey(scratch);
+        const recoverySlot = createRecoveryKeyslot(fileKey, recovery.keyslotPublicKey);
+        let keyslots: Keyslots = [recoverySlot];
+        if (exportPassword) {
+          derived = true;
+          const { password, port } = exportPassword;
+          keyslots = [recoverySlot, await createPasswordKeyslot(scratch, port, fileKey, password)];
+        }
+        this.#unlocked();
+        const exportedAt = Math.floor(this.#now());
+        const bytes = sealBackup(
+          fileKey,
+          { phraseId: recovery.phraseId, phraseCreatedAt: recovery.phraseCreatedAt, keyslots },
+          { vaultId: this.#cleartext.vaultId, exportedAt, masterKey },
+          stored.map((s) => s.envelope),
+        );
+        return { writes: [], deletes: [], result: { bytes, exportedAt }, lastBackupAt: exportedAt };
+      } finally {
+        scratch.wipeAll();
+        if (exportPassword) {
+          exportPassword.password.fill(0);
+          if (!derived) exportPassword.port.terminate();
+        }
+      }
+    });
+  }
+
+  /** The Master Key, opened into `keyring` from the wrap of `method` (D181). */
+  #openMasterKey(keyring: Keyring, kek: SymmetricKey, method: UnlockMethod): SymmetricKey {
+    const { vaultId, localConfigId } = this.#cleartext;
+    const wrap = method === 'password' ? this.#cleartext.kek.mkWrap : this.#cleartext.prf?.mkWrap;
+    if (!wrap) throw new UnlockRejectedError();
+    const purpose =
+      method === 'password' ? LocalPurpose.mkWrapDeviceKek : LocalPurpose.mkWrapPrfKek;
+    try {
+      return unwrapKey(keyring, kek, localAad(purpose, vaultId, localConfigId), wrap);
+    } catch (error) {
+      if (error instanceof DecryptionError) throw new UnlockRejectedError();
+      throw error;
+    }
+  }
+
+  /** Verifies every stored record as `load` does (crypto-spec.md §9.5, D64); keys go to `keyring`. */
+  #verifyAll(keyring: Keyring, stored: readonly StoredRecord[]): void {
+    const keys = {
+      vaultId: this.#cleartext.vaultId,
+      vaultKey: (epoch: number) => this.#state.vaultKeys.get(epoch),
+      vaultKeyWrapKey: this.#subkeys.vaultKeyWrap,
+      versionIdKey: this.#subkeys.versionId,
+    };
+    for (const s of stored) {
+      const refuse = () => new ExportRejectedError('corrupt-record', copyKey(s));
+      let header: RecordHeader;
+      try {
+        header = verifyRecord(keyring, s.envelope, keys).envelope.header;
+      } catch (error) {
+        if (error instanceof CryptoError) throw refuse();
+        throw error;
+      }
+      if (header.recordType !== s.recordType || !sameBytes(header.recordId, s.recordId)) {
+        throw refuse();
+      }
+    }
   }
 
   /** The credential ID of the passkey set up on this device, if any (§5.5). */
@@ -1424,8 +1558,14 @@ export class VaultSession {
   #localConfig(
     cleartext: Cleartext = this.#cleartext,
     preferences: Preferences = this.#localState.preferences,
+    lastBackupAt: number | bigint | undefined = this.#localState.lastBackupAt,
   ): { bytes: Uint8Array; localState: LocalConfigState } {
-    const localState = { ...this.#localState, preferences, hlc: this.#clock.state };
+    const localState: LocalConfigState = {
+      ...this.#localState,
+      preferences,
+      hlc: this.#clock.state,
+      ...(lastBackupAt !== undefined ? { lastBackupAt } : {}),
+    };
     const { vaultId, localConfigId } = cleartext;
     const encrypted = sealLocalConfigPart(
       this.#subkeys.localConfig,
@@ -1442,13 +1582,24 @@ export class VaultSession {
    * them with the Local Config in one transaction (D62), and applies them to memory only once the
    * commit succeeds. An operation that writes nothing commits nothing.
    */
-  #run<T>(build: () => Plan<T>): Promise<T> {
+  #run<T>(build: () => Plan<T> | Promise<Plan<T>>): Promise<T> {
     const task = this.#queue.then(async () => {
       this.#unlocked();
-      const plan = build();
-      const local = plan.cleartext !== undefined || plan.preferences !== undefined;
+      let plan: Plan<T>;
+      try {
+        plan = await build();
+      } catch (error) {
+        // A lock during an asynchronous build wiped the keys it was using (D105).
+        if (this.#locked) throw new VaultLockedError();
+        throw error;
+      }
+      this.#unlocked();
+      const local =
+        plan.cleartext !== undefined ||
+        plan.preferences !== undefined ||
+        plan.lastBackupAt !== undefined;
       if (plan.writes.length === 0 && plan.deletes.length === 0 && !local) return plan.result;
-      const localConfig = this.#localConfig(plan.cleartext, plan.preferences);
+      const localConfig = this.#localConfig(plan.cleartext, plan.preferences, plan.lastBackupAt);
       await this.#store.commit({
         put: plan.writes.map((w) => ({
           recordType: w.header.recordType as RecordType,
@@ -1526,6 +1677,10 @@ function header(
     hlc,
     deleted,
   };
+}
+
+function copyKey(k: RecordKey): RecordKey {
+  return { recordType: k.recordType, recordId: k.recordId.slice() };
 }
 
 /** The item cap (D139): refused before any HLC is issued. */

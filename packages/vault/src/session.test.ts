@@ -3,6 +3,8 @@ import {
   type CborValue,
   type Hlc,
   ITEM_CAP,
+  type KdfPort,
+  type KdfRequest,
   KdfParamsRejectedError,
   KeyWipedError,
   PhraseRejectedError,
@@ -27,6 +29,7 @@ import {
   initCrypto,
   itemContentLength,
   localAad,
+  normalizePassword,
   openRecoveryEnvelope,
   generateKey,
   parseRecoveryPhrase,
@@ -40,12 +43,20 @@ import {
   versionId,
   wrapKey,
 } from '@blindvault/crypto';
+import {
+  EXPORT_KDF,
+  openBackup,
+  openPasswordKeyslot,
+  openRecoveryKeyslot,
+  parseBackup,
+} from '@blindvault/backup';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import vectors from '../test-vectors/content-v1.json' with { type: 'json' };
 
 import {
   ContentInvalidError,
+  ExportRejectedError,
   HlcReadOnlyError,
   RecordBlockedError,
   RecordNotFoundError,
@@ -56,7 +67,12 @@ import {
 import { FUTURE_CLOCK_BOUND_MS } from './hlc';
 import { idKey } from './ids';
 import { TITLE_MAX, itemToCbor } from './item';
-import { localConfigToCbor, parseLocalConfig } from './local-config';
+import {
+  DEFAULT_PREFERENCES,
+  localConfigStateToCbor,
+  localConfigToCbor,
+  parseLocalConfig,
+} from './local-config';
 import { MemoryStore } from './memory-store';
 import {
   HISTORY_LIMIT,
@@ -674,6 +690,313 @@ describe('Check Recovery Phrase (§5.4, D24, D179, D180)', () => {
     expect(session.checkRecoveryPhrase((await create()).words)).toBe('wrong-phrase');
     expect(store.commits).toHaveLength(commits);
     expect(keyring.size).toBe(size);
+  });
+});
+
+describe('backup export (§10, D36, D64, D115, D181)', () => {
+  const EXPORT_PASSWORD = 'orbit-tulip-granite-ferry-cedar-pixel';
+
+  /**
+   * A stand-in for the Argon2id worker: a key made of the password's bytes, so another password
+   * gives another key. Argon2id itself is tested in `packages/crypto`.
+   */
+  function fakeKdf(onDerive?: () => void) {
+    const requests: { readonly op: string; readonly params?: unknown }[] = [];
+    const sent: Uint8Array[] = [];
+    let terminated = 0;
+    const port = (): KdfPort => {
+      const p: KdfPort = {
+        onmessage: null,
+        onerror: null,
+        postMessage(message: KdfRequest) {
+          requests.push({
+            op: message.op,
+            ...('params' in message ? { params: message.params } : {}),
+          });
+          sent.push(message.password);
+          onDerive?.();
+          const key = new Uint8Array(32);
+          key.set(message.password.subarray(0, 32));
+          const params = 'params' in message ? message.params : PARAMS;
+          queueMicrotask(() => p.onmessage?.({ data: { ok: true, key, params } }));
+        },
+        terminate() {
+          terminated += 1;
+        },
+      };
+      return p;
+    };
+    return { port, requests, sent, terminated: () => terminated };
+  }
+
+  function sorted(records: readonly Uint8Array[]): string[] {
+    return records.map((r) => Buffer.from(r).toString('hex')).sort();
+  }
+
+  /** Opens a backup with the typed phrase, as a restore would (backup-format.md §8, steps 1–5). */
+  function openWithPhrase(file: Uint8Array, words: string) {
+    const keyring = new Keyring();
+    const parsed = parseBackup(file);
+    const phrase = typed(words);
+    const fileKey = openRecoveryKeyslot(keyring, parsed.header, phrase);
+    phrase.keyring.wipeAll();
+    return { parsed, payload: openBackup(keyring, fileKey, parsed), keyring };
+  }
+
+  /** Whether `masterKey` is this vault's: it opens the Vault Key record of `store`. */
+  function opensVaultKey(keyring: Keyring, masterKey: SymmetricKey, store: MemoryStore): boolean {
+    const subkeys = deriveMasterSubkeys(keyring, masterKey);
+    const [record] = store.ofType(RecordType.vaultKey);
+    const { vaultId } = parseLocalConfig(store.localConfig);
+    return (
+      verifyRecord(keyring, must(record).envelope, {
+        vaultId,
+        vaultKey: () => undefined,
+        vaultKeyWrapKey: subkeys.vaultKeyWrap,
+        versionIdKey: subkeys.versionId,
+      }).vaultKey !== undefined
+    );
+  }
+
+  function corruptOne(store: MemoryStore, recordType: RecordType) {
+    const [key, record] = must([...store.held].find(([, r]) => r.recordType === recordType));
+    const bytes = record.envelope.slice();
+    bytes[bytes.length - 1] = must(bytes[bytes.length - 1]) ^ 1;
+    store.held.set(key, { ...record, envelope: bytes as RecordEnvelope });
+    return { key, record };
+  }
+
+  it('exports every stored record under the recovery keyslot, opened by the phrase (§8, D16)', async () => {
+    const { session, store, clock, keyring, words } = await create();
+    const id = await session.createItem(login());
+    await session.updateItem(id, login('Renamed'));
+    await session.createFolder('Work');
+    clock.t += 5000;
+    const stored = await store.records();
+    const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
+
+    expect(file.exportedAt).toBe(T0 + 5000);
+    const { parsed, payload, keyring: opened } = openWithPhrase(file.bytes, words);
+    expect(parsed.header.keyslots.map((k) => k.type)).toEqual(['recovery']);
+    expect(parsed.header.phraseId).toEqual(session.recovery?.phraseId);
+    expect(parsed.header.phraseCreatedAt).toBe(session.recovery?.phraseCreatedAt);
+    expect(payload.vaultId).toEqual(session.vaultId);
+    expect(payload.exportedAt).toBe(T0 + 5000);
+    // Items, the Item Version, the Folder, the Vault Key, the Recovery Envelope and the Device.
+    expect(stored).toHaveLength(6);
+    expect(sorted(payload.records)).toEqual(sorted(stored.map((r) => r.envelope)));
+    expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
+    // Another vault's phrase does not open it.
+    const other = (await create()).words;
+    expect(() => openWithPhrase(file.bytes, other)).toThrow(
+      expect.objectContaining({ reason: 'wrong-secret' }),
+    );
+    opened.wipeAll();
+  });
+
+  it('adds a password keyslot at the export parameters, opened by that password (D36)', async () => {
+    const { session, store, keyring, words } = await create();
+    const kdf = fakeKdf();
+    const password = normalizePassword(EXPORT_PASSWORD);
+    const file = await session.exportBackup({
+      kek: kek(keyring),
+      method: 'password',
+      exportPassword: { password, port: kdf.port() },
+    });
+    expect(kdf.requests).toEqual([{ op: 'derive', params: EXPORT_KDF }]);
+    expect(password.every((b) => b === 0)).toBe(true);
+    expect(kdf.terminated()).toBe(1);
+
+    const parsed = parseBackup(file.bytes);
+    expect(parsed.header.keyslots.map((k) => k.type)).toEqual(['recovery', 'password']);
+    const opened = new Keyring();
+    const fileKey = await openPasswordKeyslot(
+      opened,
+      fakeKdf().port(),
+      parsed.header,
+      normalizePassword(EXPORT_PASSWORD),
+    );
+    const payload = openBackup(opened, fileKey, parsed);
+    expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
+    await expect(
+      openPasswordKeyslot(opened, fakeKdf().port(), parsed.header, normalizePassword('other')),
+    ).rejects.toThrow(expect.objectContaining({ reason: 'wrong-secret' }));
+    // The phrase still opens it.
+    expect(sorted(openWithPhrase(file.bytes, words).payload.records)).toEqual(
+      sorted(payload.records),
+    );
+    opened.wipeAll();
+  });
+
+  it('opens the Master Key with a passkey KEK as well (D181, §14)', async () => {
+    const { session, store, keyring, words } = await create();
+    await session.setPasskey({
+      current: kek(keyring),
+      prfKek: kek(keyring, 3),
+      credentialId: new Uint8Array([9, 8, 7]),
+      prfInput: new Uint8Array(32).fill(4),
+    });
+    const file = await session.exportBackup({ kek: kek(keyring, 3), method: 'passkey' });
+    const { payload, keyring: opened } = openWithPhrase(file.bytes, words);
+    expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
+    opened.wipeAll();
+  });
+
+  it('refuses a KEK that does not open the wrap, writing nothing and wiping the export password (D181)', async () => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    for (const [seed, method] of [
+      [2, 'password'],
+      [1, 'passkey'],
+    ] as const) {
+      const kdf = fakeKdf();
+      const password = normalizePassword(EXPORT_PASSWORD);
+      await expect(
+        session.exportBackup({
+          kek: kek(keyring, seed),
+          method,
+          exportPassword: { password, port: kdf.port() },
+        }),
+      ).rejects.toThrow(UnlockRejectedError);
+      expect(password.every((b) => b === 0)).toBe(true);
+      expect(kdf.requests).toEqual([]);
+      expect(kdf.terminated()).toBe(1);
+    }
+    expect(store.commits).toHaveLength(commits);
+    expect(session.lastBackupAt).toBeUndefined();
+  });
+
+  it('aborts on a stored record that no longer verifies, naming it and writing nothing (D64)', async () => {
+    const { session, store, keyring } = await create();
+    const id = await session.createItem(login());
+    const commits = store.commits.length;
+    corruptOne(store, RecordType.item);
+    const kdf = fakeKdf();
+    const password = normalizePassword(EXPORT_PASSWORD);
+    const refused = session.exportBackup({
+      kek: kek(keyring),
+      method: 'password',
+      exportPassword: { password, port: kdf.port() },
+    });
+    await expect(refused).rejects.toThrow(ExportRejectedError);
+    await expect(refused).rejects.toMatchObject({
+      reason: 'corrupt-record',
+      record: { recordType: RecordType.item, recordId: id },
+    });
+    expect(kdf.requests).toEqual([]);
+    expect(password.every((b) => b === 0)).toBe(true);
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('aborts on a record kept aside as corrupt at unlock, even once the store holds it again (D64)', async () => {
+    const { store } = await create();
+    const { key, record } = corruptOne(store, RecordType.device);
+    const session = await unlock(store);
+    store.held.set(key, record);
+    const caller = new Keyring();
+    await expect(
+      session.exportBackup({ kek: kek(caller), method: 'password' }),
+    ).rejects.toMatchObject({
+      reason: 'corrupt-record',
+      record: { recordType: RecordType.device, recordId: record.recordId },
+    });
+    caller.wipeAll();
+  });
+
+  it('refuses a vault without a Recovery Envelope (D179)', async () => {
+    const { store } = await create();
+    const [key] = must(
+      [...store.held].find(([, r]) => r.recordType === RecordType.recoveryEnvelope),
+    );
+    store.held.delete(key);
+    const session = await unlock(store);
+    const caller = new Keyring();
+    await expect(
+      session.exportBackup({ kek: kek(caller), method: 'password' }),
+    ).rejects.toMatchObject({ reason: 'no-envelope' });
+    caller.wipeAll();
+  });
+
+  it('records the date of the last backup in Local Config, and nothing else (§13.4)', async () => {
+    const { session, store, clock, keyring } = await create();
+    expect(session.lastBackupAt).toBeUndefined();
+    const records = new Map(store.held);
+    const commits = store.commits.length;
+    clock.t += 1234;
+    await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)?.put).toEqual([]);
+    expect(store.commits.at(-1)?.delete).toEqual([]);
+    expect(store.held).toEqual(records);
+    expect(session.lastBackupAt).toBe(T0 + 1234);
+    expect((await unlock(store, clock)).lastBackupAt).toBe(T0 + 1234);
+  });
+
+  it('says the backup may be incomplete while Local Config lists rejected peers (D115)', async () => {
+    const { session, store } = await create();
+    expect(session.backupMayBeIncomplete).toBe(false);
+    session.lock();
+    const keys = keysOf(store);
+    const config = parseLocalConfig(store.localConfig);
+    const encrypted = sealLocalConfigPart(
+      keys.subkeys.localConfig,
+      localAad(LocalPurpose.localConfig, config.vaultId, config.localConfigId),
+      localConfigStateToCbor({
+        preferences: DEFAULT_PREFERENCES,
+        hlc: hlcAt(T0),
+        rejectedPeers: [randomId()],
+      }),
+      generateDeviceIdentity(new Keyring()),
+    );
+    store.localConfig = encodeCbor(localConfigToCbor({ ...config, encrypted }));
+    expect((await unlock(store)).backupMayBeIncomplete).toBe(true);
+  });
+
+  it('rejects and writes nothing when the vault locks during the export password derivation (CRYPTO-INV-010)', async () => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    const caller = new Keyring();
+    const kdf = fakeKdf(() => {
+      session.lock();
+    });
+    await expect(
+      session.exportBackup({
+        kek: kek(caller),
+        method: 'password',
+        exportPassword: { password: normalizePassword(EXPORT_PASSWORD), port: kdf.port() },
+      }),
+    ).rejects.toThrow(VaultLockedError);
+    expect(store.commits).toHaveLength(commits);
+    expect(keyring.wiped).toBe(true);
+    caller.wipeAll();
+  });
+
+  it('keeps no key it used, and leaves the caller KEK to the caller (D181)', async () => {
+    const { session, keyring } = await create();
+    const caller = new Keyring();
+    const callerKek = kek(caller);
+    const size = keyring.size;
+    await session.exportBackup({
+      kek: callerKek,
+      method: 'password',
+      exportPassword: { password: normalizePassword(EXPORT_PASSWORD), port: fakeKdf().port() },
+    });
+    expect(keyring.size).toBe(size);
+    expect(caller.size).toBe(1);
+    caller.wipeAll();
+  });
+
+  it('exports while the vault is read-only beyond the future-clock cap, issuing no HLC (D73)', async () => {
+    const { session, store, clock, words } = await create();
+    session.lock();
+    clock.t = T0 - FUTURE_CLOCK_BOUND_MS - DAY;
+    const behind = await unlock(store, clock);
+    expect(behind.writable).toBe(false);
+    const caller = new Keyring();
+    const file = await behind.exportBackup({ kek: kek(caller), method: 'password' });
+    expect(openWithPhrase(file.bytes, words).payload.records).toHaveLength(3);
+    expect(behind.lastBackupAt).toBe(clock.t);
+    caller.wipeAll();
   });
 });
 
@@ -1663,6 +1986,9 @@ describe('lock (CRYPTO-INV-010)', () => {
       recovery: () => session.recovery,
       lastPhraseId: () => session.lastPhraseId,
       checkRecoveryPhrase: () => session.checkRecoveryPhrase('abandon'),
+      exportBackup: () => session.exportBackup({ kek: kek(caller), method: 'password' }),
+      lastBackupAt: () => session.lastBackupAt,
+      backupMayBeIncomplete: () => session.backupMayBeIncomplete,
       writable: () => session.writable,
       writableAt: () => session.writableAt,
       items: () => session.items(),

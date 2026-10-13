@@ -6,6 +6,6 @@
     "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo",
     "resolveJsonModule": true
   },
-  "references": [{ "path": "../crypto" }],
+  "references": [{ "path": "../crypto" }, { "path": "../backup" }],
   "include": ["src", "test-vectors/*.json", "vitest.config.ts"]
 }
