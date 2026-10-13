@@ -49,6 +49,9 @@ import {
   PasswordResetRejectedError,
   type Preferences,
   type RecordStore,
+  type RecoveryView,
+  type RegenerationBlock,
+  RegenerationBlockedError,
   RestoreRejectedError,
   UnlockRejectedError,
   UnsupportedLocalConfigError,
@@ -117,6 +120,19 @@ export type PhraseCheck =
 export type ExportAuth =
   { readonly kind: 'password'; readonly password: string } | { readonly kind: 'passkey' };
 
+/** Why opening the Master Key wrap again failed (D181, D185). */
+type ReauthFailure =
+  'wrong-password' | 'locked' | 'cancelled' | 'rejected' | 'no-user-verification' | 'unavailable';
+
+/**
+ * A Recovery Phrase regeneration (§5.4, D185): `no-phrase` when no phrase was handed out or it went
+ * with a lock, a cancel or the commit.
+ */
+export type Regeneration =
+  | { readonly kind: 'ok'; readonly recovery: RecoveryView }
+  | { readonly kind: 'blocked'; readonly block: RegenerationBlock }
+  | { readonly kind: ReauthFailure | 'no-phrase' };
+
 /** A backup export (backup-format.md §8, D64, D179, D181). */
 export type BackupExport =
   | { readonly kind: 'ok'; readonly bytes: Uint8Array; readonly name: string }
@@ -135,6 +151,7 @@ export type BackupExport =
 
 /** What a backup's header says before any keyslot opens: unverified until one does (D95). */
 export interface BackupHeaderInfo {
+  readonly phraseId: Uint8Array;
   readonly phraseCreatedAt: number;
   readonly hasExportPassword: boolean;
 }
@@ -245,6 +262,17 @@ function ceremonyFailure(error: unknown): 'cancelled' | 'unavailable' {
   throw error;
 }
 
+/** What a failure to open the Master Key wrap again tells the user (D181, D185). */
+function reauthFailure(error: unknown, auth: ExportAuth): ReauthFailure | undefined {
+  if (error instanceof UnlockRejectedError) {
+    return auth.kind === 'password' ? 'wrong-password' : 'rejected';
+  }
+  if (error instanceof VaultLockedError) return 'locked';
+  if (error instanceof UserVerificationError) return 'no-user-verification';
+  if (error instanceof PrfUnavailableError) return 'unavailable';
+  return undefined;
+}
+
 class Aborted extends Error {
   override name = 'Aborted';
 }
@@ -261,8 +289,9 @@ export class VaultController {
   /** Bumped by every lock: an operation started before it is aborted (D104). */
   #epoch = 0;
   /**
-   * The Recovery Phrase shown for the vault being created, as its entropy only (§5.4, D179). Its
-   * keyring becomes the new session's; a lock or a new phrase wipes it.
+   * The Recovery Phrase shown for the vault being created, or for a regeneration while unlocked, as
+   * its entropy only (§5.4, D179, D185). At creation its keyring becomes the new session's; a lock,
+   * a new phrase or the end of a regeneration wipes it.
    */
   #phrase: { readonly keyring: Keyring; readonly entropy: SymmetricKey } | undefined;
   /**
@@ -516,6 +545,7 @@ export class VaultController {
       return {
         kind: 'ok',
         header: {
+          phraseId: header.phraseId.slice(),
           phraseCreatedAt: header.phraseCreatedAt,
           hasExportPassword: header.keyslots.length === 2,
         },
@@ -1175,36 +1205,9 @@ export class VaultController {
     if (status.kind !== 'unlocked' || !db) return { kind: 'locked' };
     const epoch = this.#epoch;
     const keyring = new Keyring();
-    let assertion: PasskeyResult | undefined;
     try {
-      let kek: SymmetricKey;
-      if (auth.kind === 'passkey') {
-        const passkeys = this.#deps.passkeys;
-        const held = this.#passkey;
-        if (!passkeys || !held) return { kind: 'unavailable' };
-        try {
-          assertion = await passkeys.get(held.credentialId, held.prfInput);
-        } catch (error) {
-          return { kind: ceremonyFailure(error) };
-        }
-        if (!sameBytes(assertion.credentialId, held.credentialId)) throw new UnlockRejectedError();
-        if (!assertion.prfOutput) throw new PrfUnavailableError();
-        kek = derivePrfKek(keyring, {
-          authenticatorData: assertion.authenticatorData,
-          prfOutput: assertion.prfOutput,
-        });
-      } else {
-        const config = await this.#readConfig(db);
-        if (!config) return { kind: 'locked' };
-        const { salt, opslimit, memlimit } = config.kek;
-        kek = await deriveDeviceKek(
-          keyring,
-          this.#deps.kdf(),
-          normalizePassword(auth.password),
-          salt,
-          { opslimit, memlimit },
-        );
-      }
+      const kek = await this.#reauthenticate(auth, keyring, db);
+      if (typeof kek === 'string') return { kind: kek };
       if (epoch !== this.#epoch) return { kind: 'locked' };
       const file = await status.session.exportBackup({
         kek,
@@ -1221,12 +1224,8 @@ export class VaultController {
       this.#set({ ...status });
       return { kind: 'ok', bytes: file.bytes, name: backupFileName(file.exportedAt) };
     } catch (error) {
-      if (error instanceof UnlockRejectedError) {
-        return { kind: auth.kind === 'password' ? 'wrong-password' : 'rejected' };
-      }
-      if (error instanceof VaultLockedError) return { kind: 'locked' };
-      if (error instanceof UserVerificationError) return { kind: 'no-user-verification' };
-      if (error instanceof PrfUnavailableError) return { kind: 'unavailable' };
+      const failure = reauthFailure(error, auth);
+      if (failure) return { kind: failure };
       if (error instanceof ExportRejectedError) {
         const { record } = error;
         if (!record) return { kind: 'no-envelope' };
@@ -1239,7 +1238,132 @@ export class VaultController {
       throw error;
     } finally {
       keyring.wipeAll();
-      assertion?.prfOutput?.fill(0);
+    }
+  }
+
+  /**
+   * The KEK that opens the Master Key wrap again, derived into `keyring` (D181, D185): from a
+   * passkey assertion asked for first, while the click's user activation lasts, or from the local
+   * password. A ceremony that gave no result, or a Local Config gone, returns why.
+   */
+  async #reauthenticate(
+    auth: ExportAuth,
+    keyring: Keyring,
+    db: VaultDatabase,
+  ): Promise<SymmetricKey | 'cancelled' | 'unavailable' | 'locked'> {
+    if (auth.kind === 'password') {
+      const config = await this.#readConfig(db);
+      if (!config) return 'locked';
+      const { salt, opslimit, memlimit } = config.kek;
+      return deriveDeviceKek(keyring, this.#deps.kdf(), normalizePassword(auth.password), salt, {
+        opslimit,
+        memlimit,
+      });
+    }
+    const passkeys = this.#deps.passkeys;
+    const held = this.#passkey;
+    if (!passkeys || !held) return 'unavailable';
+    let assertion: PasskeyResult;
+    try {
+      assertion = await passkeys.get(held.credentialId, held.prfInput);
+    } catch (error) {
+      return ceremonyFailure(error);
+    }
+    try {
+      if (!sameBytes(assertion.credentialId, held.credentialId)) throw new UnlockRejectedError();
+      if (!assertion.prfOutput) throw new PrfUnavailableError();
+      return derivePrfKek(keyring, {
+        authenticatorData: assertion.authenticatorData,
+        prfOutput: assertion.prfOutput,
+      });
+    } finally {
+      assertion.prfOutput?.fill(0);
+    }
+  }
+
+  // --- Recovery Phrase regeneration --------------------------------------------------------------
+
+  /**
+   * A new Recovery Phrase for a regeneration of the unlocked vault (§5.4, D185): its 24 words, to
+   * show once. Replaces any phrase handed out before. `undefined` unless unlocked and regeneration
+   * is possible (`VaultSession.regenerationBlock`). The words are a string, which cannot be wiped:
+   * the UI keeps them only until the phrase is confirmed.
+   */
+  newRegenerationPhrase(): string | undefined {
+    const status = this.#status;
+    if (status.kind !== 'unlocked' || status.session.regenerationBlock) return undefined;
+    this.#phrase?.keyring.wipeAll();
+    const keyring = new Keyring();
+    const { words, entropy } = generateRecoveryPhrase(keyring);
+    this.#phrase = { keyring, entropy };
+    this.#set({ ...status });
+    return words;
+  }
+
+  /**
+   * Whether a regeneration's phrase is being shown or confirmed: the inactivity lock pauses until it
+   * is committed, cancelled or locked away (D104).
+   */
+  get showingPhrase(): boolean {
+    return this.#status.kind === 'unlocked' && this.#phrase !== undefined;
+  }
+
+  /** Drops the phrase handed out for a regeneration. */
+  cancelRegeneration(): void {
+    const status = this.#status;
+    if (status.kind !== 'unlocked' || !this.#phrase) return;
+    this.#phrase.keyring.wipeAll();
+    this.#phrase = undefined;
+    this.#set({ ...status });
+  }
+
+  /**
+   * Regenerates the Recovery Phrase with the phrase last handed out by `newRegenerationPhrase`, once
+   * confirmed (§5.4, D185): the local password, or a passkey assertion, opens the Master Key wrap
+   * again, as for an export (D181). A wrong password or a failed ceremony keeps the phrase for
+   * another try; the commit and a block drop it.
+   */
+  async regenerateRecoveryPhrase(auth: ExportAuth): Promise<Regeneration> {
+    const status = this.#status;
+    const db = this.#db;
+    if (status.kind !== 'unlocked' || !db) return { kind: 'locked' };
+    const phrase = this.#phrase;
+    if (!phrase) return { kind: 'no-phrase' };
+    const drop = () => {
+      if (this.#phrase !== phrase) return;
+      phrase.keyring.wipeAll();
+      this.#phrase = undefined;
+      this.#set({ ...status });
+    };
+    const block = status.session.regenerationBlock;
+    if (block) {
+      drop();
+      return { kind: 'blocked', block };
+    }
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    try {
+      const kek = await this.#reauthenticate(auth, keyring, db);
+      if (typeof kek === 'string') return { kind: kek };
+      if (epoch !== this.#epoch) return { kind: 'locked' };
+      const recovery = await status.session.regenerateRecoveryPhrase({
+        kek,
+        method: auth.kind,
+        entropy: phrase.entropy,
+      });
+      drop();
+      return { kind: 'ok', recovery };
+    } catch (error) {
+      if (epoch !== this.#epoch) return { kind: 'locked' };
+      const failure = reauthFailure(error, auth);
+      if (failure) return { kind: failure };
+      if (error instanceof RegenerationBlockedError) {
+        drop();
+        return { kind: 'blocked', block: error.block };
+      }
+      throw error;
+    } finally {
+      keyring.wipeAll();
     }
   }
 

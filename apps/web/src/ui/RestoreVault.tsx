@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 
+import { phraseLabel } from '../app/backup-file';
 import {
   type BackupFileCheck,
   type BackupHeaderInfo,
@@ -178,7 +179,7 @@ export function OpenBackup({
       }}
     >
       <p className="text-sm" data-testid="restore-header">
-        {format(m.restore.header, { date })}
+        {format(m.restore.header, { date, id: phraseLabel(header.phraseId) })}
       </p>
       {header.hasExportPassword ? (
         <fieldset className="flex gap-4 text-sm">

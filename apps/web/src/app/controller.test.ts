@@ -4,6 +4,7 @@ import {
   Keyring,
   MEMLIMIT,
   type RecordEnvelope,
+  RecordType,
   deriveRecoveryKeys,
   parseRecoveryPhrase,
 } from '@blindvault/crypto';
@@ -232,6 +233,127 @@ describe('Check Recovery Phrase (§5.4, D24, D180)', () => {
     c.lock();
     expect(c.recoveryEnvelope()).toBe('locked');
     expect(c.checkRecoveryPhrase(words)).toEqual({ kind: 'locked' });
+  });
+});
+
+describe('Recovery Phrase regeneration (§5.4, D104, D185)', () => {
+  async function regenerating(passkeys?: PasskeyPort) {
+    const log: KdfRequest['op'][] = [];
+    const factory = new IDBFactory();
+    const c = controller(factory, log, passkeys);
+    await c.start();
+    const old = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'Test device');
+    log.length = 0;
+    return { c, log, factory, old };
+  }
+
+  it('shows a new phrase until the commit, then regenerates with the local password again', async () => {
+    const { c, log, old } = await regenerating();
+    const notified = vi.fn();
+    c.subscribe(notified);
+    const before = must(session(c).recovery);
+    expect(c.showingPhrase).toBe(false);
+    const words = must(c.newRegenerationPhrase());
+    expect(words.split(' ')).toHaveLength(24);
+    expect(c.showingPhrase).toBe(true);
+    expect(notified).toHaveBeenCalled();
+
+    const done = await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD });
+    if (done.kind !== 'ok') throw new Error(done.kind);
+    expect(log).toEqual(['derive']);
+    expect(c.showingPhrase).toBe(false);
+    expect(done.recovery.phraseId).not.toEqual(before.phraseId);
+    expect(session(c).recovery).toEqual(done.recovery);
+    expect(c.checkRecoveryPhrase(words)).toEqual({ kind: 'opens' });
+    expect(c.checkRecoveryPhrase(old)).toEqual({ kind: 'wrong-phrase' });
+    // The phrase went with the commit: a second regeneration needs a new one.
+    expect(await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'no-phrase',
+    });
+  });
+
+  it('keeps the phrase for another try after a wrong password, writing nothing', async () => {
+    const { c, old } = await regenerating();
+    const words = must(c.newRegenerationPhrase());
+    expect(
+      await c.regenerateRecoveryPhrase({ kind: 'password', password: 'not the password' }),
+    ).toEqual({ kind: 'wrong-password' });
+    expect(c.showingPhrase).toBe(true);
+    expect(c.checkRecoveryPhrase(old)).toEqual({ kind: 'opens' });
+    expect((await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).kind).toBe(
+      'ok',
+    );
+    expect(c.checkRecoveryPhrase(words)).toEqual({ kind: 'opens' });
+  });
+
+  it('drops the phrase on cancel and on lock, also during the password derivation (D104)', async () => {
+    const { c, old } = await regenerating();
+    c.newRegenerationPhrase();
+    c.cancelRegeneration();
+    expect(c.showingPhrase).toBe(false);
+    expect(await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'no-phrase',
+    });
+
+    c.newRegenerationPhrase();
+    const pending = c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD });
+    c.lock();
+    expect(await pending).toEqual({ kind: 'locked' });
+    expect(c.showingPhrase).toBe(false);
+    expect(c.newRegenerationPhrase()).toBeUndefined();
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(c.checkRecoveryPhrase(old)).toEqual({ kind: 'opens' });
+    expect(await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'no-phrase',
+    });
+  });
+
+  it('reports a block before asking for the password, and hands out no phrase then (D179)', async () => {
+    const { c, log, factory } = await regenerating();
+    c.newRegenerationPhrase();
+    const { vaultId } = session(c);
+    c.lock();
+    const db = await VaultDatabase.open(vaultId, factory);
+    const envelope = must(
+      (await db.records()).find((r) => r.recordType === RecordType.recoveryEnvelope),
+    );
+    await db.commit({
+      put: [],
+      delete: [{ recordType: envelope.recordType, recordId: envelope.recordId }],
+      localConfig: must(await db.localConfig()),
+    });
+    db.close();
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    log.length = 0;
+    expect(c.newRegenerationPhrase()).toBeUndefined();
+    expect(await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'no-phrase',
+    });
+    expect(log).toEqual([]);
+  });
+
+  it('accepts a passkey assertion with user verification instead (D181, D185)', async () => {
+    const authenticator = new FakeAuthenticator();
+    const { c } = await regenerating(authenticator);
+    c.newRegenerationPhrase();
+    expect(await c.regenerateRecoveryPhrase({ kind: 'passkey' })).toEqual({
+      kind: 'unavailable',
+    });
+    await c.setUpPasskey(PASSWORD);
+    authenticator.flags = UP;
+    expect(await c.regenerateRecoveryPhrase({ kind: 'passkey' })).toEqual({
+      kind: 'no-user-verification',
+    });
+    authenticator.flags = UP | UV;
+    expect((await c.regenerateRecoveryPhrase({ kind: 'passkey' })).kind).toBe('ok');
+  });
+
+  it('hands out no regeneration phrase without an unlocked vault', async () => {
+    const c = controller();
+    await c.start();
+    expect(c.newRegenerationPhrase()).toBeUndefined();
+    expect(c.showingPhrase).toBe(false);
   });
 });
 

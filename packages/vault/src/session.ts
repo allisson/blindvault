@@ -64,6 +64,8 @@ import {
   MergeRejectedError,
   PasswordResetRejectedError,
   RecordBlockedError,
+  type RegenerationBlock,
+  RegenerationBlockedError,
   RecordNotFoundError,
   RestoreRejectedError,
   SubtreeBlockedError,
@@ -112,6 +114,8 @@ export const PURGE_DELAY_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 
 const FIRST_EPOCH = 1;
+/** The Recovery Envelope metadata keys this app knows (crypto-spec.md §9.5 step 8, D98). */
+const RECOVERY_METADATA_KEYS = 3;
 
 export type UnlockMethod = 'password' | 'passkey';
 
@@ -208,6 +212,23 @@ export interface BackupFile {
   readonly exportedAt: number;
 }
 
+export interface RegenerateOptions {
+  /**
+   * The Device KEK of the local password (`password`) or the PRF KEK of a passkey assertion with
+   * user verification (`passkey`), derived again for this regeneration (D185). The caller wipes it.
+   */
+  readonly kek: SymmetricKey;
+  readonly method: UnlockMethod;
+  /** The entropy of the new Recovery Phrase, once confirmed (D179). The caller wipes it. */
+  readonly entropy: SymmetricKey;
+}
+
+/** A Recovery Phrase named by its `phraseId` and creation date (Unix ms), as a notice shows it. */
+export interface PhraseName {
+  readonly phraseId: Uint8Array;
+  readonly phraseCreatedAt: number;
+}
+
 export interface CreateOptions {
   readonly store: RecordStore;
   /** A new keyring holding only `kek` and `recoveryEntropy`; the session owns it from now on. */
@@ -256,8 +277,16 @@ export interface MergeResult {
   readonly replaced: number;
   /** Item Versions written: received, or made from a conflict loser (D6). */
   readonly versions: number;
-  /** The Recovery Envelope's `phraseId` differs from the last one seen (D43). */
+  /**
+   * The Recovery Envelope's `phraseId` differs from the last one seen (D43), unless
+   * `phraseSuperseded` says more.
+   */
   readonly phraseChanged: boolean;
+  /**
+   * The envelope this device wrote, replaced by one of another `phraseId`: the phrase it names is
+   * superseded (D145, D185).
+   */
+  readonly phraseSuperseded?: PhraseName;
   /** Device records never seen before, the own one excepted (D48, D53). */
   readonly newDevices: readonly DeviceView[];
   /** Device records seen before, now retired, the own one excepted (D47). */
@@ -1097,6 +1126,84 @@ export class VaultSession {
     }
   }
 
+  /** Why Recovery Phrase regeneration is blocked now, or `undefined` when it is possible (D185). */
+  get regenerationBlock(): RegenerationBlock | undefined {
+    this.#unlocked();
+    const held = this.#state.recovery;
+    if (!held) {
+      // An envelope kept aside as corrupt is replaced by regeneration (D185).
+      const corrupt = this.#state.corrupt.some((k) => k.recordType === RecordType.recoveryEnvelope);
+      if (!corrupt) return { reason: 'no-envelope' };
+    }
+    const writableAt = this.#clock.writableAt;
+    if (writableAt !== null) return { reason: 'read-only', until: writableAt };
+    if (!held) return undefined;
+    // Verification checked the three known keys: any other is from a newer app version (D98).
+    if (held.content.size !== RECOVERY_METADATA_KEYS) return { reason: 'newer-content' };
+    if (this.#clock.beyondBound(held.header.hlc)) {
+      return { reason: 'future-clock', until: held.header.hlc.physicalMs - FUTURE_CLOCK_BOUND_MS };
+    }
+    return undefined;
+  }
+
+  /**
+   * Regenerates the Recovery Phrase (§5.4, D2, D185): `kek` must open the Master Key wrap of
+   * `method` (`UnlockRejectedError` otherwise), since the session holds no Master Key. One commit
+   * writes a new Recovery Envelope for `entropy`, with a new `phraseId`, under an HLC above the held
+   * envelope's, and records the new `phraseId` as the last one seen (D43); no other record changes.
+   * A block throws `RegenerationBlockedError` before anything is opened. The Master Key and the
+   * phrase-derived keys live in a keyring of their own, wiped before this returns.
+   */
+  regenerateRecoveryPhrase(options: RegenerateOptions): Promise<RecoveryView> {
+    const { kek, method, entropy } = options;
+    return this.#run(() => {
+      const block = this.regenerationBlock;
+      if (block) throw new RegenerationBlockedError(block);
+      const scratch = new Keyring();
+      try {
+        const masterKey = this.#openMasterKey(scratch, kek, method);
+        const recovery = deriveRecoveryKeys(scratch, entropy);
+        const phraseId = randomId();
+        const phraseCreatedAt = Math.floor(this.#now());
+        const metadata = new Map<CborValue, CborValue>([
+          ['keyslotPublicKey', recovery.keyslotPublicKey],
+          ['phraseCreatedAt', phraseCreatedAt],
+          ['phraseId', phraseId],
+        ]);
+        const { vaultId } = this.#cleartext;
+        // A corrupt envelope's header is not trusted: only the HLC state bounds the new one.
+        const hlc = this.#clock.issue(this.#state.recovery?.header.hlc);
+        const h = header(
+          RecordType.recoveryEnvelope,
+          recoveryEnvelopeRecordId(vaultId),
+          hlc,
+          false,
+          this.#epoch(),
+        );
+        const envelope = sealRecoveryEnvelope(
+          h,
+          vaultId,
+          this.#vaultKey(h.keyEpoch),
+          recovery.envelopeKey,
+          masterKey,
+          metadata,
+        );
+        return {
+          writes: [{ header: h, content: metadata, envelope }],
+          deletes: [],
+          result: {
+            keyslotPublicKey: recovery.keyslotPublicKey.slice(),
+            phraseId: phraseId.slice(),
+            phraseCreatedAt,
+          },
+          seen: { lastPhraseId: phraseId },
+        };
+      } finally {
+        scratch.wipeAll();
+      }
+    });
+  }
+
   /** The `phraseId` of the last Recovery Envelope this device has seen (D43, D48). */
   get lastPhraseId(): Uint8Array | undefined {
     this.#unlocked();
@@ -1451,6 +1558,7 @@ export class VaultSession {
     const envelope = incoming.recovery;
     const heldEnvelope = this.#state.recovery;
     let current = heldEnvelope;
+    let phraseSuperseded: PhraseName | undefined;
     if (
       envelope &&
       (!heldEnvelope ||
@@ -1459,11 +1567,21 @@ export class VaultSession {
     ) {
       take(envelope.header, envelope.content, heldEnvelope !== null);
       current = envelope;
+      // The envelope replaced was this device's own: its phrase is superseded (D145, D185).
+      if (heldEnvelope && sameBytes(heldEnvelope.header.hlc.deviceId, this.#identity.deviceId)) {
+        phraseSuperseded = {
+          phraseId: phraseIdOf(heldEnvelope).slice(),
+          phraseCreatedAt: heldEnvelope.content.get('phraseCreatedAt') as number,
+        };
+      }
     }
     const lastPhraseId = current ? phraseIdOf(current) : this.#localState.lastPhraseId;
     const previous = this.#localState.lastPhraseId;
     const phraseChanged =
-      previous !== undefined && lastPhraseId !== undefined && !sameBytes(previous, lastPhraseId);
+      !phraseSuperseded &&
+      previous !== undefined &&
+      lastPhraseId !== undefined &&
+      !sameBytes(previous, lastPhraseId);
 
     const next: Seen = {
       ...(seen.size > 0 ? { seenDevices: sortedIds([...seen.values()]) } : {}),
@@ -1483,6 +1601,7 @@ export class VaultSession {
         replaced,
         versions: versionsWritten,
         phraseChanged,
+        ...(phraseSuperseded ? { phraseSuperseded } : {}),
         newDevices,
         retiredDevices,
         droppedLosers,

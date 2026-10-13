@@ -16,6 +16,11 @@ export function recordIdPrefix(recordId: Uint8Array): string {
   return [...recordId.subarray(0, 4)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** A `phraseId` as the UI shows it, next to the phrase's creation date: a label, not a check (D185). */
+export function phraseLabel(phraseId: Uint8Array): string {
+  return recordIdPrefix(phraseId);
+}
+
 /** How long the object URL outlives the click, so every browser has taken the file. */
 const REVOKE_AFTER_MS = 10_000;
 

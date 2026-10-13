@@ -80,6 +80,24 @@ export class SubtreeBlockedError extends VaultError {
 }
 
 /**
+ * Why Recovery Phrase regeneration is blocked (overview §5.4, D185): no Recovery Envelope (a D177
+ * preview vault, D179), envelope metadata from a newer app version (D98), a held envelope beyond the
+ * future-clock bound (D74), or a vault read-only because the clock went back (D73). `until` is when
+ * it becomes possible (Unix ms).
+ */
+export type RegenerationBlock =
+  | { readonly reason: 'no-envelope' | 'newer-content' }
+  | { readonly reason: 'future-clock' | 'read-only'; readonly until: number };
+
+/** Regeneration was refused before opening anything; nothing was written. */
+export class RegenerationBlockedError extends VaultError {
+  override name = 'RegenerationBlockedError';
+  constructor(readonly block: RegenerationBlock) {
+    super(`regeneration blocked: ${block.reason}`);
+  }
+}
+
+/**
  * Why a backup was not made (backup-format.md §8, D64, D179, D181): a record that fails
  * verification, stored now or kept aside at unlock, named by `record`; or no Recovery Envelope to
  * seal the recovery keyslot to (a D177 preview vault). No file was made and nothing was written.

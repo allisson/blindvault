@@ -76,6 +76,13 @@ function Root() {
     };
   }, [preferences, timers, nav, controller]);
 
+  // The inactivity lock pauses while a regeneration's Recovery Phrase is shown (D104, D185).
+  const showingPhrase = useSyncExternalStore(controller.subscribe, () => controller.showingPhrase);
+  useEffect(() => {
+    if (showingPhrase) timers.pause();
+    else timers.resume();
+  }, [showingPhrase, timers]);
+
   if (!supported()) return <Start controller={controller} status={{ kind: 'unsupported' }} />;
   if (status.kind === 'unlocked') {
     return <VaultShell controller={controller} session={status.session} nav={nav} />;

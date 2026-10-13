@@ -72,7 +72,7 @@ import {
   VaultLockedError,
 } from './errors';
 import { deviceToCbor } from './folder';
-import { FUTURE_CLOCK_BOUND_MS } from './hlc';
+import { FUTURE_CLOCK_BOUND_MS, compareHlc } from './hlc';
 import { idKey } from './ids';
 import { TITLE_MAX, itemToCbor } from './item';
 import {
@@ -1009,6 +1009,270 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
   });
 });
 
+describe('Recovery Phrase regeneration (§5.4, D2, D73, D74, D98, D185)', () => {
+  /** A new phrase, as the controller holds it once confirmed: its words and its entropy. */
+  function newPhrase() {
+    const keyring = new Keyring();
+    const phrase = generateRecoveryPhrase(keyring);
+    return { keyring, words: phrase.words, entropy: phrase.entropy };
+  }
+
+  async function regenerate(session: VaultSession, seed = 1, method: UnlockMethod = 'password') {
+    const phrase = newPhrase();
+    const caller = new Keyring();
+    try {
+      const recovery = await session.regenerateRecoveryPhrase({
+        kek: kek(caller, seed),
+        method,
+        entropy: phrase.entropy,
+      });
+      return { recovery, words: phrase.words };
+    } finally {
+      caller.wipeAll();
+      phrase.keyring.wipeAll();
+    }
+  }
+
+  function envelopeKeyOf(store: MemoryStore): string {
+    return must([...store.held].find(([, r]) => r.recordType === RecordType.recoveryEnvelope))[0];
+  }
+
+  function plantMetadata(store: MemoryStore, hlc: Hlc, extra: [string, CborValue][] = []) {
+    const keys = keysOf(store);
+    const phrase = newPhrase();
+    const recovery = deriveRecoveryKeys(phrase.keyring, phrase.entropy);
+    const metadata = new Map<CborValue, CborValue>([
+      ['keyslotPublicKey', recovery.keyslotPublicKey],
+      ['phraseCreatedAt', hlc.physicalMs],
+      ['phraseId', randomId()],
+      ...extra,
+    ]);
+    const header: RecordHeader = {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.recoveryEnvelope,
+      recordId: recoveryEnvelopeRecordId(keys.vaultId),
+      keyEpoch: 1,
+      hlc,
+      deleted: false,
+    };
+    store.put({
+      recordType: RecordType.recoveryEnvelope,
+      recordId: header.recordId,
+      envelope: sealRecoveryEnvelope(
+        header,
+        keys.vaultId,
+        keys.vaultKey,
+        recovery.envelopeKey,
+        keys.masterKey,
+        metadata,
+      ),
+    });
+    return { words: phrase.words, header };
+  }
+
+  /** Whether `words` open the backup `file` to this vault (backup-format.md §8, steps 1 to 8). */
+  function restores(file: Uint8Array, words: string, vaultId: Uint8Array): boolean {
+    const keyring = new Keyring();
+    try {
+      return sameId(restoreWithPhrase(keyring, parseBackup(file), words).vaultId, vaultId);
+    } catch {
+      return false;
+    } finally {
+      keyring.wipeAll();
+    }
+  }
+
+  function sameId(a: Uint8Array, b: Uint8Array): boolean {
+    return idKey(a) === idKey(b);
+  }
+
+  it('replaces only the envelope, in one commit with the new phraseId as the last seen (Gate B)', async () => {
+    const { session, store, clock, words } = await create();
+    const id = await session.createItem(login());
+    await session.updateItem(id, login('Renamed'));
+    await session.createFolder('Work');
+    const before = must(session.recovery);
+    const envelopeKey = envelopeKeyOf(store);
+    const oldEnvelope = must(store.held.get(envelopeKey));
+    const others = new Map([...store.held].filter(([key]) => key !== envelopeKey));
+    const commits = store.commits.length;
+    clock.t += 5000;
+
+    const { recovery, words: next } = await regenerate(session);
+
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)?.put.map((r) => r.recordType)).toEqual([
+      RecordType.recoveryEnvelope,
+    ]);
+    expect(store.commits.at(-1)?.delete).toEqual([]);
+    expect(new Map([...store.held].filter(([key]) => key !== envelopeKey))).toEqual(others);
+    const header = decodeEnvelope(must(store.held.get(envelopeKey)).envelope).header;
+    expect(compareHlc(header.hlc, decodeEnvelope(oldEnvelope.envelope).header.hlc)).toBe(1);
+    expect(header.hlc.deviceId).toEqual(session.deviceId);
+    expect(recovery.phraseId).not.toEqual(before.phraseId);
+    expect(recovery.phraseCreatedAt).toBe(T0 + 5000);
+    expect(recovery.keyslotPublicKey).toEqual(typed(next).keyslotPublicKey);
+    expect(session.recovery).toEqual(recovery);
+    expect(session.lastPhraseId).toEqual(recovery.phraseId);
+    expect(session.checkRecoveryPhrase(next)).toBe('opens');
+    expect(session.checkRecoveryPhrase(words)).toBe('wrong-phrase');
+    const again = await unlock(store, clock);
+    expect(again.recovery).toEqual(recovery);
+    expect(again.lastPhraseId).toEqual(recovery.phraseId);
+    expect(again.items().map((i) => i.item?.title)).toEqual(['Renamed']);
+  });
+
+  it('makes the next backup open with the new phrase only (Gate B)', async () => {
+    const { session, keyring, words } = await create();
+    await session.createItem(login());
+    const old = await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    const { recovery, words: next } = await regenerate(session);
+    const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    expect(parseBackup(file.bytes).header.phraseId).toEqual(recovery.phraseId);
+    expect(restores(file.bytes, next, session.vaultId)).toBe(true);
+    expect(restores(file.bytes, words, session.vaultId)).toBe(false);
+    // An earlier backup still opens with the old phrase only (§5.4, documented limitation).
+    expect(restores(old.bytes, words, session.vaultId)).toBe(true);
+    expect(restores(old.bytes, next, session.vaultId)).toBe(false);
+  });
+
+  it('opens the Master Key with a passkey KEK as well (D181, D185)', async () => {
+    const { session, keyring } = await create();
+    await session.setPasskey({
+      current: kek(keyring),
+      prfKek: kek(keyring, 3),
+      credentialId: new Uint8Array([9, 8, 7]),
+      prfInput: new Uint8Array(32).fill(4),
+    });
+    const { words } = await regenerate(session, 3, 'passkey');
+    expect(session.checkRecoveryPhrase(words)).toBe('opens');
+  });
+
+  it('refuses a KEK that does not open the wrap, writing nothing (D185)', async () => {
+    const { session, store, words } = await create();
+    const before = session.recovery;
+    const commits = store.commits.length;
+    await expect(regenerate(session, 2)).rejects.toThrow(UnlockRejectedError);
+    await expect(regenerate(session, 1, 'passkey')).rejects.toThrow(UnlockRejectedError);
+    expect(store.commits).toHaveLength(commits);
+    expect(session.recovery).toEqual(before);
+    expect(session.checkRecoveryPhrase(words)).toBe('opens');
+  });
+
+  it('keeps no key it derived, and leaves the KEK and the entropy to the caller (CRYPTO-INV-006)', async () => {
+    const { session, store, keyring } = await create();
+    const size = keyring.size;
+    const phrase = newPhrase();
+    const caller = new Keyring();
+    await session.regenerateRecoveryPhrase({
+      kek: kek(caller),
+      method: 'password',
+      entropy: phrase.entropy,
+    });
+    expect(keyring.size).toBe(size);
+    expect(caller.size).toBe(1);
+    expect(phrase.keyring.size).toBe(1);
+    const persisted = [store.localConfig, ...[...store.held.values()].map((r) => r.envelope)];
+    for (const text of phraseTraces(phrase.words)) {
+      expect(persisted.some((bytes) => contains(bytes, utf8(text)))).toBe(false);
+    }
+    caller.wipeAll();
+    phrase.keyring.wipeAll();
+  });
+
+  it('is blocked for a vault without an envelope (D179)', async () => {
+    const { store } = await create();
+    store.held.delete(envelopeKeyOf(store));
+    const session = await unlock(store);
+    expect(session.regenerationBlock).toEqual({ reason: 'no-envelope' });
+    const commits = store.commits.length;
+    await expect(regenerate(session)).rejects.toMatchObject({
+      name: 'RegenerationBlockedError',
+      block: { reason: 'no-envelope' },
+    });
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('is blocked while the envelope metadata holds a key from a newer app version (D98)', async () => {
+    const { session, store } = await create();
+    expect(session.regenerationBlock).toBeUndefined();
+    const { words, header } = plantMetadata(store, hlcAt(T0 + 1000), [['hint', 'newer']]);
+    const newer = await unlock(store);
+    // Kept as received: Check Recovery Phrase still verifies it.
+    expect(newer.corrupt()).toEqual([]);
+    expect(newer.checkRecoveryPhrase(words)).toBe('opens');
+    expect(newer.regenerationBlock).toEqual({ reason: 'newer-content' });
+    const commits = store.commits.length;
+    await expect(regenerate(newer)).rejects.toMatchObject({
+      block: { reason: 'newer-content' },
+    });
+    expect(store.commits).toHaveLength(commits);
+    expect(decodeEnvelope(must(store.held.get(envelopeKeyOf(store))).envelope).header).toEqual(
+      header,
+    );
+  });
+
+  it('is blocked while the held envelope is beyond the future-clock bound, until within it (D74)', async () => {
+    const { store, clock } = await create();
+    const at = T0 + FUTURE_CLOCK_BOUND_MS + DAY;
+    const { header } = plantMetadata(store, hlcAt(at));
+    const session = await unlock(store, clock);
+    expect(session.writable).toBe(true);
+    expect(session.regenerationBlock).toEqual({
+      reason: 'future-clock',
+      until: at - FUTURE_CLOCK_BOUND_MS,
+    });
+    const commits = store.commits.length;
+    await expect(regenerate(session)).rejects.toMatchObject({
+      block: { reason: 'future-clock', until: at - FUTURE_CLOCK_BOUND_MS },
+    });
+    expect(store.commits).toHaveLength(commits);
+    clock.t = at - FUTURE_CLOCK_BOUND_MS;
+    expect(session.regenerationBlock).toBeUndefined();
+    await regenerate(session);
+    const written = decodeEnvelope(must(store.held.get(envelopeKeyOf(store))).envelope).header;
+    expect(compareHlc(written.hlc, header.hlc)).toBe(1);
+  });
+
+  it('is blocked while the vault is read-only because the clock went back (D73)', async () => {
+    const { session, store, clock } = await create();
+    session.lock();
+    clock.t = T0 - FUTURE_CLOCK_BOUND_MS - DAY;
+    const behind = await unlock(store, clock);
+    expect(behind.regenerationBlock).toEqual({ reason: 'read-only', until: behind.writableAt });
+    const commits = store.commits.length;
+    await expect(regenerate(behind)).rejects.toMatchObject({ block: { reason: 'read-only' } });
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('replaces an envelope kept aside as corrupt at unlock (D185)', async () => {
+    const { store, clock } = await create();
+    const key = envelopeKeyOf(store);
+    const record = must(store.held.get(key));
+    const bytes = record.envelope.slice();
+    bytes[bytes.length - 1] = must(bytes[bytes.length - 1]) ^ 1;
+    store.held.set(key, { ...record, envelope: bytes as RecordEnvelope });
+    const session = await unlock(store, clock);
+    expect(session.corrupt().map((k) => k.recordType)).toEqual([RecordType.recoveryEnvelope]);
+    expect(session.regenerationBlock).toBeUndefined();
+
+    const { recovery, words } = await regenerate(session);
+    expect(session.corrupt()).toEqual([]);
+    expect(session.checkRecoveryPhrase(words)).toBe('opens');
+    const again = await unlock(store, clock);
+    expect(again.corrupt()).toEqual([]);
+    expect(again.recovery).toEqual(recovery);
+  });
+
+  it('refuses once locked, writing nothing (CRYPTO-INV-010)', async () => {
+    const { session, store } = await create();
+    const commits = store.commits.length;
+    session.lock();
+    await expect(regenerate(session)).rejects.toThrow(VaultLockedError);
+    expect(store.commits).toHaveLength(commits);
+  });
+});
+
 describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
   /** A vault with an item, its history and a folder, and its backup made by the phrase only. */
   async function backedUp(clock = new Clock()) {
@@ -1830,7 +2094,55 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     expect(result.replaced).toBe(1);
     expect(b.session.recovery?.phraseId).toEqual(phraseId);
     expect(b.session.lastPhraseId).toEqual(phraseId);
+    // The envelope replaced was written by A, not by this device: no D145 warning.
+    expect(result.phraseSuperseded).toBeUndefined();
     expect((await b.session.mergeBackup(await rawBackup(a.store))).phraseChanged).toBe(false);
+  });
+
+  it('warns that the phrase this device wrote was superseded, in place of the D43 notice (D145, D185)', async () => {
+    const { a, b } = await twoDevices();
+    // A wrote the envelope at creation; B regenerates later, so B's envelope wins.
+    const replaced = must(a.session.recovery);
+    b.clock.t = T0 + 5000;
+    const phrase = generateRecoveryPhrase(new Keyring());
+    const caller = new Keyring();
+    const next = await b.session.regenerateRecoveryPhrase({
+      kek: kek(caller, 2),
+      method: 'password',
+      entropy: phrase.entropy,
+    });
+    caller.wipeAll();
+
+    const result = await a.session.mergeBackup(await backupOf(b.session, 2, phrase.words));
+    expect(result.phraseSuperseded).toEqual({
+      phraseId: replaced.phraseId,
+      phraseCreatedAt: replaced.phraseCreatedAt,
+    });
+    expect(result.phraseChanged).toBe(false);
+    expect(a.session.recovery).toEqual(next);
+    expect(a.session.lastPhraseId).toEqual(next.phraseId);
+    // Once merged, the envelope held is B's: a second merge warns of nothing.
+    const again = await a.session.mergeBackup(await backupOf(b.session, 2, phrase.words));
+    expect(again.phraseSuperseded).toBeUndefined();
+    expect(again.phraseChanged).toBe(false);
+  });
+
+  it('keeps the phrase this device wrote against an older envelope of another phraseId (D185)', async () => {
+    const { a, b } = await twoDevices();
+    b.clock.t = T0 + 5000;
+    const phrase = generateRecoveryPhrase(new Keyring());
+    const caller = new Keyring();
+    const kept = await b.session.regenerateRecoveryPhrase({
+      kek: kek(caller, 2),
+      method: 'password',
+      entropy: phrase.entropy,
+    });
+    caller.wipeAll();
+    // A's envelope, from creation, is older: B keeps its own and is told nothing.
+    const result = await b.session.mergeBackup(await backupOf(a.session, 1, a.words));
+    expect(result.phraseSuperseded).toBeUndefined();
+    expect(result.phraseChanged).toBe(false);
+    expect(b.session.recovery).toEqual(kept);
   });
 
   it('rejects the whole merge for a Recovery Envelope changed under the held phraseId (D44)', async () => {
@@ -3057,6 +3369,13 @@ describe('lock (CRYPTO-INV-010)', () => {
       recovery: () => session.recovery,
       lastPhraseId: () => session.lastPhraseId,
       checkRecoveryPhrase: () => session.checkRecoveryPhrase('abandon'),
+      regenerationBlock: () => session.regenerationBlock,
+      regenerateRecoveryPhrase: () =>
+        session.regenerateRecoveryPhrase({
+          kek: kek(caller),
+          method: 'password',
+          entropy: generateRecoveryPhrase(caller).entropy,
+        }),
       exportBackup: () => session.exportBackup({ kek: kek(caller), method: 'password' }),
       lastBackupAt: () => session.lastBackupAt,
       backupMayBeIncomplete: () => session.backupMayBeIncomplete,

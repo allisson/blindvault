@@ -2,7 +2,7 @@ import { RecordType } from '@blindvault/crypto';
 import { type Preferences, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState } from 'react';
 
-import { download } from '../app/backup-file';
+import { download, phraseLabel } from '../app/backup-file';
 import {
   type BackupExport,
   type ExportAuth,
@@ -16,6 +16,7 @@ import { Button, Field, Notice, TextArea } from './components';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
+import { RegeneratePhrase } from './RegeneratePhrase';
 
 export function Settings({
   controller,
@@ -324,7 +325,8 @@ function phraseResult(
 
 /**
  * Check Recovery Phrase (§5.4, D24, D180): the typed words are checked, then dropped from the field
- * at once. A vault without an envelope (D179) or with a corrupt one says so instead.
+ * at once. A vault without an envelope (D179) or with a corrupt one says so instead. Then
+ * regeneration (D185), which also replaces a corrupt envelope.
  */
 function RecoveryPhraseSettings({
   controller,
@@ -339,6 +341,7 @@ function RecoveryPhraseSettings({
   const envelope = controller.recoveryEnvelope();
   const recovery = session.recovery;
   const result = check ? phraseResult(m, check) : undefined;
+  const last = session.lastBackupAt;
   return (
     <section className="flex flex-col gap-4">
       <h2 className="font-semibold">{m.settings.recovery}</h2>
@@ -353,13 +356,19 @@ function RecoveryPhraseSettings({
             setInput('');
           }}
         >
-          <p className="text-sm">
+          <p className="text-sm" data-testid="recovery-current">
             {format(m.settings.recoveryCreated, {
               date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(
                 recovery.phraseCreatedAt,
               ),
+              id: phraseLabel(recovery.phraseId),
             })}
           </p>
+          {last !== undefined && last < recovery.phraseCreatedAt ? (
+            <Notice>
+              <span data-testid="recovery-no-backup">{m.settings.recoveryNoBackup}</span>
+            </Notice>
+          ) : null}
           <p className="text-sm">{m.settings.recoveryIntro}</p>
           <TextArea
             label={m.settings.recoveryInput}
@@ -382,6 +391,7 @@ function RecoveryPhraseSettings({
           ) : null}
         </form>
       ) : null}
+      <RegeneratePhrase controller={controller} session={session} />
     </section>
   );
 }
@@ -451,6 +461,7 @@ function BackupSettings({
     );
   }
   const last = session.lastBackupAt;
+  const { phraseId, phraseCreatedAt } = session.recovery;
   const run = (auth: ExportAuth) => {
     setWorking(true);
     setOutcome(undefined);
@@ -542,7 +553,13 @@ function BackupSettings({
         </Button>
       ) : null}
       {outcome?.kind === 'ok' ? (
-        <p role="status">{format(m.settings.backupDone, { name: outcome.name })}</p>
+        <p role="status">
+          {format(m.settings.backupDone, {
+            name: outcome.name,
+            id: phraseLabel(phraseId),
+            date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(phraseCreatedAt),
+          })}
+        </p>
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">

@@ -45,7 +45,8 @@ const en = {
     newerVersion:
       'This backup was made by a newer version of BlindVault. Update the app to restore it.',
     malformed: 'This backup is damaged: its header cannot be read.',
-    header: 'Its Recovery Phrase was created on {date}. Not verified until the backup opens.',
+    header:
+      'Its Recovery Phrase, {id}, was created on {date}. Not verified until the backup opens.',
     method: 'Open with',
     byPhrase: 'Recovery Phrase',
     byPassword: 'Export password',
@@ -123,7 +124,10 @@ const en = {
       "This backup holds records dated ahead of this device's clock. It can be merged from {date}.",
     locked: 'The merge stopped before anything was saved. Open the file again.',
     phraseChanged:
-      'The Recovery Phrase was regenerated on another device on {date}. New backups open only with the new phrase: check yours with Check Recovery Phrase below.',
+      'The Recovery Phrase was regenerated on another device: the new one, {id}, was created on {date}. New backups open only with it: check yours with Check Recovery Phrase below.',
+    phraseSuperseded:
+      'The Recovery Phrase you wrote down for this device, {id}, created on {date}, was replaced by one regenerated on another device. Backups made with it open only with it, so keep it until you have a new backup. New backups open only with the new phrase.',
+    backupNow: 'Make a backup now',
     newDevices:
       'Devices this device had never seen: {names}. A device you did not pair means someone holding the Master Key added it.',
     alreadyRetired: '{name} (already retired)',
@@ -356,7 +360,41 @@ const en = {
       'This passkey cannot unlock BlindVault: its authenticator lacks the PRF extension. Nothing was set up.',
     passkeyUnsupported: 'This browser does not support passkey unlock.',
     recovery: 'Recovery Phrase',
-    recoveryCreated: 'The current Recovery Phrase was created on {date}.',
+    recoveryCreated: 'The current Recovery Phrase was created on {date} ({id}).',
+    recoveryNoBackup:
+      'No backup made on this device opens with the current Recovery Phrase yet: make one in Backup, above.',
+    regenTitle: 'Regenerate the Recovery Phrase',
+    regenIntro:
+      'If you lost the Recovery Phrase, regenerate it while the vault is unlocked: a new phrase replaces it, and nothing in the vault changes.',
+    regenExposed:
+      'Regenerating does not help if someone else saw or copied the phrase: it still opens every backup made with it, and the Recovery Envelope of any device that has not synced since, and so yields the Master Key. An exposed phrase means the vault must be re-founded.',
+    regenBackups:
+      'Backups made until now open only with the current phrase. Your other devices keep it, and keep making backups for it, until they sync with this one.',
+    regenStart: 'Regenerate the Recovery Phrase…',
+    regenContinue: 'Show the new phrase',
+    regenCancel: 'Cancel',
+    regenPhraseTitle: 'Your new Recovery Phrase',
+    regenAuthIntro:
+      'The new phrase recovers the Master Key, so regenerating asks for your local password again.',
+    regenAuth: 'Local password',
+    regenSubmit: 'Regenerate',
+    regenWorking: 'Regenerating…',
+    regenPasskey: 'Regenerate with the passkey instead',
+    regenWrong: 'Wrong password. The Recovery Phrase did not change.',
+    regenPasskeyCancelled: 'The passkey prompt was closed. The Recovery Phrase did not change.',
+    regenPasskeyFailed: 'The passkey did not open the vault. Use the password.',
+    regenDone: 'The Recovery Phrase was regenerated: {id}, created on {date}.',
+    regenOtherDevices:
+      'The new phrase is not on your other devices yet: they receive it when they sync with this one, and until then their backups open only with the previous phrase.',
+    regenOldBackups:
+      'Backups made before now open only with the previous phrase. Make a new backup now.',
+    regenBackupNow: 'Make a backup now',
+    regenNewer:
+      'The Recovery Envelope was written by a newer version of BlindVault. Update the app to regenerate the Recovery Phrase.',
+    regenFutureClock:
+      "The Recovery Envelope is dated ahead of this device's clock. The Recovery Phrase can be regenerated from {date}.",
+    regenReadOnly:
+      "This device's clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from {date}.",
     recoveryIntro:
       'Type the 24 words you wrote down to confirm that they open this vault and its backups. Nothing you type is stored.',
     recoveryInput: 'Your 24 words',
@@ -401,7 +439,8 @@ const en = {
     backupExport: 'Export',
     backupExporting: 'Exporting…',
     backupPasskey: 'Export with the passkey instead',
-    backupDone: 'Backup exported as {name}. Keep it somewhere other than this device.',
+    backupDone:
+      'Backup exported as {name}. It opens with the Recovery Phrase {id}, created on {date}. Keep it somewhere other than this device.',
     backupWrong: 'Wrong password. No backup was made.',
     backupCorrupt:
       'A record failed verification, so no backup was made: {type} {id}. Nothing on this device was changed.',
@@ -509,7 +548,8 @@ const ptBR: Messages = {
     newerVersion:
       'Este backup foi feito por uma versão mais nova do BlindVault. Atualize o app para restaurá-lo.',
     malformed: 'Este backup está danificado: o cabeçalho não pode ser lido.',
-    header: 'A Frase de Recuperação dele foi criada em {date}. Não verificado até o backup abrir.',
+    header:
+      'A Frase de Recuperação dele, {id}, foi criada em {date}. Não verificado até o backup abrir.',
     method: 'Abrir com',
     byPhrase: 'Frase de Recuperação',
     byPassword: 'Senha de exportação',
@@ -589,7 +629,10 @@ const ptBR: Messages = {
       'Este backup contém registros com data à frente do relógio deste dispositivo. Ele pode ser mesclado a partir de {date}.',
     locked: 'A mesclagem parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
     phraseChanged:
-      'A Frase de Recuperação foi gerada de novo em outro dispositivo em {date}. Os novos backups só abrem com a frase nova: confira a sua em Verificar a Frase de Recuperação, abaixo.',
+      'A Frase de Recuperação foi gerada de novo em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Verificar a Frase de Recuperação, abaixo.',
+    phraseSuperseded:
+      'A Frase de Recuperação que você anotou para este dispositivo, {id}, criada em {date}, foi substituída por uma gerada de novo em outro dispositivo. Os backups feitos com ela só abrem com ela, então guarde-a até ter um novo backup. Os novos backups só abrem com a frase nova.',
+    backupNow: 'Fazer um backup agora',
     newDevices:
       'Dispositivos que este dispositivo nunca tinha visto: {names}. Um dispositivo que você não pareou significa que alguém com a Chave Mestra o adicionou.',
     alreadyRetired: '{name} (já aposentado)',
@@ -820,7 +863,41 @@ const ptBR: Messages = {
       'Esta passkey não desbloqueia o BlindVault: o autenticador dela não tem a extensão PRF. Nada foi configurado.',
     passkeyUnsupported: 'Este navegador não oferece desbloqueio com passkey.',
     recovery: 'Frase de Recuperação',
-    recoveryCreated: 'A Frase de Recuperação atual foi criada em {date}.',
+    recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
+    recoveryNoBackup:
+      'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Backup, acima.',
+    regenTitle: 'Gerar uma nova Frase de Recuperação',
+    regenIntro:
+      'Se você perdeu a Frase de Recuperação, gere uma nova com o cofre desbloqueado: a nova frase substitui a atual, e nada no cofre muda.',
+    regenExposed:
+      'Gerar uma nova frase não adianta se outra pessoa viu ou copiou a atual: ela continua abrindo todos os backups feitos com ela e o Envelope de Recuperação de qualquer dispositivo que ainda não sincronizou, e assim entrega a Chave Mestra. Uma frase exposta exige refundar o cofre.',
+    regenBackups:
+      'Os backups feitos até agora só abrem com a frase atual. Os seus outros dispositivos continuam com ela, e continuam fazendo backups para ela, até sincronizarem com este.',
+    regenStart: 'Gerar uma nova Frase de Recuperação…',
+    regenContinue: 'Mostrar a nova frase',
+    regenCancel: 'Cancelar',
+    regenPhraseTitle: 'Sua nova Frase de Recuperação',
+    regenAuthIntro:
+      'A nova frase recupera a Chave Mestra, então gerar uma nova pede a sua senha local de novo.',
+    regenAuth: 'Senha local',
+    regenSubmit: 'Gerar a nova frase',
+    regenWorking: 'Gerando a nova frase…',
+    regenPasskey: 'Gerar com a passkey',
+    regenWrong: 'Senha incorreta. A Frase de Recuperação não mudou.',
+    regenPasskeyCancelled: 'O pedido de passkey foi fechado. A Frase de Recuperação não mudou.',
+    regenPasskeyFailed: 'A passkey não abriu o cofre. Use a senha.',
+    regenDone: 'A nova Frase de Recuperação foi gerada: {id}, criada em {date}.',
+    regenOtherDevices:
+      'A nova frase ainda não está nos seus outros dispositivos: eles a recebem quando sincronizarem com este, e até lá os backups deles só abrem com a frase anterior.',
+    regenOldBackups:
+      'Os backups feitos antes de agora só abrem com a frase anterior. Faça um novo backup agora.',
+    regenBackupNow: 'Fazer um backup agora',
+    regenNewer:
+      'O Envelope de Recuperação foi gravado por uma versão mais nova do BlindVault. Atualize o app para gerar uma nova Frase de Recuperação.',
+    regenFutureClock:
+      'O Envelope de Recuperação tem data à frente do relógio deste dispositivo. Uma nova Frase de Recuperação pode ser gerada a partir de {date}.',
+    regenReadOnly:
+      'O relógio deste dispositivo voltou, então o cofre está somente leitura. Uma nova Frase de Recuperação pode ser gerada a partir de {date}.',
     recoveryIntro:
       'Digite as 24 palavras que você anotou para confirmar que elas abrem este cofre e os backups dele. Nada do que você digita é guardado.',
     recoveryInput: 'Suas 24 palavras',
@@ -865,7 +942,8 @@ const ptBR: Messages = {
     backupExport: 'Exportar',
     backupExporting: 'Exportando…',
     backupPasskey: 'Exportar com a passkey',
-    backupDone: 'Backup exportado como {name}. Guarde-o em outro lugar além deste dispositivo.',
+    backupDone:
+      'Backup exportado como {name}. Ele abre com a Frase de Recuperação {id}, criada em {date}. Guarde-o em outro lugar além deste dispositivo.',
     backupWrong: 'Senha incorreta. Nenhum backup foi feito.',
     backupCorrupt:
       'Um registro falhou na verificação, então nenhum backup foi feito: {type} {id}. Nada foi alterado neste dispositivo.',
