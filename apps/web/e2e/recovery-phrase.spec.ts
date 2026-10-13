@@ -105,3 +105,47 @@ test('keeps the phrase out of IndexedDB and Web Storage, before and after creati
   expect(found(values, words)).toEqual([]);
   expect(found(values, shown)).toEqual([]);
 });
+
+test('checks the Recovery Phrase while unlocked, keeping the typed words nowhere (D24, CRYPTO-INV-006)', async ({
+  page,
+}) => {
+  const logged: string[] = [];
+  page.on('console', (message) => logged.push(message.text()));
+  await page.goto('/');
+  const words = await createVault(page, PASSWORD);
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await expect(page.getByText(/The current Recovery Phrase was created on/)).toBeVisible();
+  const field = page.getByTestId('check-phrase');
+  const check = async (typed: string) => {
+    await field.fill(typed);
+    await button(page, 'Check Recovery Phrase').click();
+    // The words leave the field as soon as they are checked.
+    await expect(field).toHaveValue('');
+  };
+
+  // As written on paper: one word per line, some in capitals.
+  await check(words.map((w, i) => (i % 2 ? w.toUpperCase() : w)).join('\n'));
+  await expect(page.getByRole('status')).toHaveText(
+    'This phrase opens this vault and its backups.',
+  );
+
+  const unknown = [...words];
+  unknown[4] = 'blindvault';
+  await check(unknown.join(' '));
+  await expect(page.getByRole('alert')).toHaveText('Word 5 is not a Recovery Phrase word.');
+  await check(words.slice(1).join(' '));
+  await expect(page.getByRole('alert')).toHaveText('A Recovery Phrase has 24 words.');
+  // 24 × "abandon" fails the checksum; 23 × "abandon" + "art" is another valid phrase.
+  await check(Array(24).fill('abandon').join(' '));
+  await expect(page.getByRole('alert')).toHaveText(/not a valid Recovery Phrase/);
+  await check(`${Array(23).fill('abandon').join(' ')} art`);
+  await expect(page.getByRole('alert')).toHaveText(
+    "This is not this vault's current Recovery Phrase.",
+  );
+
+  const found = traces(words).filter((t) => logged.some((v) => v.includes(t)));
+  expect(found).toEqual([]);
+  const values = await stored(page);
+  expect(traces(words).filter((t) => values.some((v) => v.includes(t)))).toEqual([]);
+  expect(logged).toEqual([]);
+});

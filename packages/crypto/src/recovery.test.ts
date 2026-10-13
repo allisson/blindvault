@@ -42,6 +42,37 @@ describe('Recovery Phrase (crypto-spec.md §5.1, D2)', () => {
   });
 
   it.each([
+    [1, 'zzz'],
+    [7, 'Zebrax'],
+    [24, 'abandonn'],
+  ])('names position %i of the first word not in the list, not the word', (position, word) => {
+    const words = bip39.mnemonic.split(' ');
+    words[position - 1] = word;
+    if (position === 1) words[5] = 'qqq';
+    const thrown = (() => {
+      try {
+        parseRecoveryPhrase(new Keyring(), words.join(' '));
+      } catch (error) {
+        return error;
+      }
+      return undefined;
+    })();
+    expect(thrown).toMatchObject({ reason: 'unknown-word', position });
+    expect((thrown as Error).message).not.toContain(word.toLowerCase());
+  });
+
+  it('gives no position for the other reasons', () => {
+    for (const { input } of bip39.rejectedInput) {
+      try {
+        parseRecoveryPhrase(new Keyring(), input);
+      } catch (error) {
+        const e = error as PhraseRejectedError;
+        if (e.reason !== 'unknown-word') expect(e.position).toBeUndefined();
+      }
+    }
+  });
+
+  it.each([
     ['empty input', ''],
     ['25 words', `${bip39.mnemonic} trust`],
     ['a 12-word phrase', bip39.mnemonic.split(' ').slice(0, 12).join(' ')],

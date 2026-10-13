@@ -1,10 +1,10 @@
 import { type Preferences, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState } from 'react';
 
-import { type PasskeySetup, type VaultController } from '../app/controller';
+import { type PasskeySetup, type PhraseCheck, type VaultController } from '../app/controller';
 import { useLanguage } from '../i18n/context';
-import { LANGUAGES } from '../i18n/messages';
-import { Button, Field, Notice } from './components';
+import { LANGUAGES, type Messages, format } from '../i18n/messages';
+import { Button, Field, Notice, TextArea } from './components';
 import { NewPassword } from './NewPassword';
 
 export function Settings({
@@ -18,6 +18,7 @@ export function Settings({
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">
       <h1 className="text-xl font-semibold">{m.settings.title}</h1>
+      <RecoveryPhraseSettings controller={controller} session={session} />
       <ChangePassword controller={controller} />
       <PasskeySettings controller={controller} session={session} />
       <LockSettings controller={controller} preferences={session.preferences} />
@@ -272,6 +273,101 @@ function PasskeySettings({
           <Button type="submit" disabled={password === '' || state.kind === 'working'}>
             {state.kind === 'working' ? m.settings.passkeySettingUp : m.settings.passkeySetUp}
           </Button>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
+/** What a check result says, and whether it is good news (§5.4, D24, D179, D180). */
+function phraseResult(
+  m: Messages,
+  check: PhraseCheck,
+): { readonly ok: boolean; readonly text: string } {
+  const s = m.settings;
+  switch (check.kind) {
+    case 'opens':
+      return { ok: true, text: s.recoveryOpens };
+    case 'wrong-phrase':
+      return { ok: false, text: s.recoveryWrong };
+    case 'public-key-mismatch':
+      return { ok: false, text: s.recoveryPublicKey };
+    case 'master-key-mismatch':
+      return { ok: false, text: s.recoveryMasterKey };
+    case 'no-envelope':
+      return { ok: false, text: s.recoveryNone };
+    case 'corrupt-envelope':
+      return { ok: false, text: s.recoveryCorrupt };
+    case 'locked':
+      return { ok: false, text: '' };
+    case 'invalid':
+      if (check.reason === 'word-count') return { ok: false, text: s.recoveryWordCount };
+      if (check.reason === 'checksum') return { ok: false, text: s.recoveryChecksum };
+      return {
+        ok: false,
+        text: format(s.recoveryUnknownWord, { n: String(check.position ?? '') }),
+      };
+  }
+}
+
+/**
+ * Check Recovery Phrase (§5.4, D24, D180): the typed words are checked, then dropped from the field
+ * at once. A vault without an envelope (D179) or with a corrupt one says so instead.
+ */
+function RecoveryPhraseSettings({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const { messages: m, language } = useLanguage();
+  const [input, setInput] = useState('');
+  const [check, setCheck] = useState<PhraseCheck>();
+  const envelope = controller.recoveryEnvelope();
+  const recovery = session.recovery;
+  const result = check ? phraseResult(m, check) : undefined;
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="font-semibold">{m.settings.recovery}</h2>
+      {envelope === 'none' ? <Notice>{m.settings.recoveryNone}</Notice> : null}
+      {envelope === 'corrupt' ? <Notice>{m.settings.recoveryCorrupt}</Notice> : null}
+      {envelope === 'held' && recovery ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setCheck(controller.checkRecoveryPhrase(input));
+            setInput('');
+          }}
+        >
+          <p className="text-sm">
+            {format(m.settings.recoveryCreated, {
+              date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(
+                recovery.phraseCreatedAt,
+              ),
+            })}
+          </p>
+          <p className="text-sm">{m.settings.recoveryIntro}</p>
+          <TextArea
+            label={m.settings.recoveryInput}
+            autoCapitalize="none"
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setCheck(undefined);
+            }}
+            data-testid="check-phrase"
+          />
+          <Button type="submit" disabled={input.trim() === ''}>
+            {m.settings.recoveryCheck}
+          </Button>
+          {result?.ok ? <p role="status">{result.text}</p> : null}
+          {result && !result.ok && result.text !== '' ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {result.text}
+            </p>
+          ) : null}
         </form>
       ) : null}
     </section>

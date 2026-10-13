@@ -57,10 +57,17 @@ export class KdfWorkerError extends CryptoError {
   }
 }
 
-/** A typed Recovery Phrase is not 24 words of the English list with a valid checksum (§5.1). */
+/**
+ * A typed Recovery Phrase is not 24 words of the English list with a valid checksum (§5.1). For
+ * `unknown-word`, `position` is the 1-based position of the first word not in the list; the word
+ * itself is never kept.
+ */
 export class PhraseRejectedError extends CryptoError {
   override name = 'PhraseRejectedError';
-  constructor(readonly reason: 'word-count' | 'unknown-word' | 'checksum') {
+  constructor(
+    readonly reason: 'word-count' | 'unknown-word' | 'checksum',
+    readonly position?: number,
+  ) {
     super(`recovery phrase rejected: ${reason}`);
   }
 }

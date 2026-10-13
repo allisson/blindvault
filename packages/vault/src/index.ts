@@ -81,6 +81,7 @@ export {
   MAINTENANCE_INTERVAL_MS,
   PURGE_DELAY_MS,
   type ReadOnlyReason,
+  type RecoveryCheck,
   type RecoveryView,
   type TreeItem,
   type UnlockMethod,

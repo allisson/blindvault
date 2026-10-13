@@ -50,6 +50,12 @@ every project through the references in the root `tsconfig.json`.
   the founding commit and releases the entropy, `K_envelope` and the keyslot private key at once,
   keeping only the public key in the envelope's metadata. The words are a string, which cannot be
   wiped: the creation screen drops them from its state once they are confirmed.
+- **Check Recovery Phrase (Phase 2, D180).** The session keeps each Recovery Envelope's stored
+  bytes with its metadata. `VaultSession.checkRecoveryPhrase` parses the typed words into a
+  keyring of its own, wiped before it returns, and `checkRecoveryEnvelope` in `crypto` derives the
+  recovery keys, opens `mk` and compares `K_vaultKeyWrap` of the Master Key it opens with the
+  session's, since the session holds no Master Key. Settings empties the field once the words are
+  checked.
 - **Backup payload in `crypto` (Phase 2).** The `.bvault` payload holds the Master Key's bytes, so
   `packages/crypto` builds and reads the stream and payload of `backup-format.md` §5 and §6
   (`BackupStreamWriter`, `openBackupStream`), as it does the Local Config encrypted part. The file

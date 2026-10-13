@@ -6,6 +6,9 @@ import {
   type KdfPort,
   KdfParamsRejectedError,
   Keyring,
+  PhraseRejectedError,
+  type RecoveryCheckResult,
+  RecordType,
   UserVerificationError,
   calibrateDeviceKek,
   deriveDeviceKek,
@@ -76,6 +79,16 @@ export type PasskeySetup =
   /** `backupEligible`: a synced passkey, for the D84 notice. */
   | { readonly kind: 'ok'; readonly backupEligible: boolean }
   | { readonly kind: 'wrong-password' | 'cancelled' | 'no-user-verification' | 'unavailable' };
+
+/** Check Recovery Phrase (§5.4, D24, D180): `invalid` for input that is not a phrase at all. */
+export type PhraseCheck =
+  | { readonly kind: RecoveryCheckResult | 'no-envelope' | 'corrupt-envelope' | 'locked' }
+  | {
+      readonly kind: 'invalid';
+      readonly reason: PhraseRejectedError['reason'];
+      /** For `unknown-word`: the 1-based position of the first word not in the list. */
+      readonly position?: number;
+    };
 
 export interface ControllerDeps {
   readonly factory: IDBFactory;
@@ -599,6 +612,41 @@ export class VaultController {
     this.#set({ ...status });
     if (!credentialId) return 'forgotten';
     return (await this.#deps.passkeys?.forget(credentialId)) ? 'forgotten' : 'by-hand';
+  }
+
+  // --- Recovery Phrase ---------------------------------------------------------------------------
+
+  /**
+   * Whether the unlocked vault has a Recovery Envelope to check: `none` for a D177 preview vault
+   * (D179), `corrupt` for one kept aside at unlock.
+   */
+  recoveryEnvelope(): 'held' | 'none' | 'corrupt' | 'locked' {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return 'locked';
+    if (status.session.recovery) return 'held';
+    const corrupt = status.session
+      .corrupt()
+      .some((k) => k.recordType === RecordType.recoveryEnvelope);
+    return corrupt ? 'corrupt' : 'none';
+  }
+
+  /**
+   * Check Recovery Phrase (§5.4, D24, D180) on `input`, the phrase as typed. Writes nothing; the
+   * caller drops `input` once checked.
+   */
+  checkRecoveryPhrase(input: string): PhraseCheck {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return { kind: 'locked' };
+    try {
+      return { kind: status.session.checkRecoveryPhrase(input) };
+    } catch (error) {
+      if (error instanceof PhraseRejectedError) {
+        const { reason, position } = error;
+        return { kind: 'invalid', reason, ...(position !== undefined ? { position } : {}) };
+      }
+      if (error instanceof VaultLockedError) return { kind: 'locked' };
+      throw error;
+    }
   }
 
   async setPreferences(preferences: Preferences): Promise<void> {

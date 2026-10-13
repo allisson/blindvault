@@ -3,20 +3,22 @@
 import { describe, expect, it } from 'vitest';
 
 import { type CborMap, type CborValue } from './cbor';
-import { DecryptionError, EncodingError } from './errors';
+import { DecryptionError, EncodingError, KeyWipedError } from './errors';
 import { recoveryEnvelopeRecordId } from './ids';
+import { deriveMasterSubkeys } from './kdf';
 import { Keyring, adoptKey, generateKey, keyBytes } from './keys';
 import { type RecordHeader } from './layout';
 import {
   RecordType,
   type VerificationKeys,
+  checkRecoveryEnvelope,
   decodeEnvelope,
   encodeEnvelope,
   openRecoveryEnvelope,
   sealRecoveryEnvelope,
   verifyRecord,
 } from './record';
-import { deriveRecoveryKeys, generateRecoveryPhrase } from './recovery';
+import { deriveRecoveryKeys, generateRecoveryPhrase, parseRecoveryPhrase } from './recovery';
 import { initCrypto, randomId } from './sodium';
 import { fromHex, toHex, vectors } from './test-helpers';
 
@@ -166,5 +168,111 @@ describe('Recovery Envelope (crypto-spec.md §11)', () => {
     expect(() =>
       sealRecoveryEnvelope(h, VAULT_ID, vaultKey, recovery.envelopeKey, masterKey, meta),
     ).toThrow(EncodingError);
+  });
+});
+
+describe('Check Recovery Phrase (§5.4, D24, D180)', () => {
+  /** A vault's envelope and what an unlocked device holds of it; the typed phrase's entropy. */
+  function vault(over: { masterKey?: 'other'; publicKey?: 'other' } = {}) {
+    const keyring = new Keyring();
+    const vaultKey = generateKey(keyring);
+    const masterKey = generateKey(keyring);
+    const phrase = generateRecoveryPhrase(keyring);
+    const recovery = deriveRecoveryKeys(keyring, phrase.entropy);
+    const sealedKey = over.masterKey ? generateKey(keyring) : masterKey;
+    const publicKey = over.publicKey
+      ? deriveRecoveryKeys(keyring, generateRecoveryPhrase(keyring).entropy).keyslotPublicKey
+      : recovery.keyslotPublicKey;
+    // As stored bytes: the check takes any bytes, not only a sealed envelope.
+    const envelope: Uint8Array = sealRecoveryEnvelope(
+      header(),
+      VAULT_ID,
+      vaultKey,
+      recovery.envelopeKey,
+      sealedKey,
+      metadata(publicKey),
+    );
+    return {
+      keyring,
+      envelope,
+      subkeys: deriveMasterSubkeys(keyring, masterKey),
+      publicKey,
+      words: phrase.words,
+    };
+  }
+
+  function check(v: ReturnType<typeof vault>, words = v.words, vaultId = VAULT_ID) {
+    const typed = new Keyring();
+    try {
+      return checkRecoveryEnvelope(
+        v.envelope,
+        vaultId,
+        parseRecoveryPhrase(typed, words),
+        v.subkeys,
+        v.publicKey,
+      );
+    } finally {
+      typed.wipeAll();
+    }
+  }
+
+  it('reports that the phrase opens the envelope to this vault and its backups', () => {
+    expect(check(vault())).toBe('opens');
+  });
+
+  it('accepts the phrase as typed: uppercase, newlines, extra spaces', () => {
+    const v = vault();
+    expect(check(v, `  ${v.words.toUpperCase().split(' ').join('\n ')} `)).toBe('opens');
+  });
+
+  it('reports another valid phrase as wrong, and the same for another vault', () => {
+    const v = vault();
+    expect(check(v, generateRecoveryPhrase(new Keyring()).words)).toBe('wrong-phrase');
+    expect(check(v, v.words, randomId())).toBe('wrong-phrase');
+  });
+
+  it('reports a record that is not a Recovery Envelope as a wrong phrase', () => {
+    const v = vault();
+    expect(check({ ...v, envelope: fromHex(r.vaultKeyRecord.envelope) })).toBe('wrong-phrase');
+    expect(check({ ...v, envelope: new Uint8Array(3) })).toBe('wrong-phrase');
+  });
+
+  it('reports a recovery keyslot public key that the phrase does not derive (D24)', () => {
+    expect(check(vault({ publicKey: 'other' }))).toBe('public-key-mismatch');
+  });
+
+  it('reports an envelope whose Master Key is not this vault one (D180)', () => {
+    expect(check(vault({ masterKey: 'other' }))).toBe('master-key-mismatch');
+    // Both wrong: the Master Key is reported, since the envelope recovers another vault.
+    expect(check(vault({ masterKey: 'other', publicKey: 'other' }))).toBe('master-key-mismatch');
+  });
+
+  it('keeps nothing it derived, and leaves the caller keys alone', () => {
+    const v = vault();
+    const typed = new Keyring();
+    const entropy = parseRecoveryPhrase(typed, v.words);
+    const size = v.keyring.size;
+    expect(checkRecoveryEnvelope(v.envelope, VAULT_ID, entropy, v.subkeys, v.publicKey)).toBe(
+      'opens',
+    );
+    expect(typed.size).toBe(1);
+    expect(v.keyring.size).toBe(size);
+    expect(keyBytes(entropy)).toHaveLength(32);
+  });
+
+  it('throws KeyWipedError for wiped keys, never a check result', () => {
+    const v = vault();
+    const typed = new Keyring();
+    const entropy = parseRecoveryPhrase(typed, v.words);
+    typed.wipeAll();
+    expect(() =>
+      checkRecoveryEnvelope(v.envelope, VAULT_ID, entropy, v.subkeys, v.publicKey),
+    ).toThrow(KeyWipedError);
+    const again = new Keyring();
+    const fresh = parseRecoveryPhrase(again, v.words);
+    v.keyring.wipeAll();
+    expect(() =>
+      checkRecoveryEnvelope(v.envelope, VAULT_ID, fresh, v.subkeys, v.publicKey),
+    ).toThrow(KeyWipedError);
   });
 });
