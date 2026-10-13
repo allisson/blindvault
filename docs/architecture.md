@@ -148,6 +148,19 @@ every project through the references in the root `tsconfig.json`.
   restore with `readmit` advice and cleared by dismiss or lock; Settings › Devices keeps the advice
   while it holds, and retirement asks for a confirmation stating it cannot be undone, is not
   revocation and points to re-founding.
+- **Re-founding (Phase 2, D28, D60, D72, D86, D89, D99, D187).** `VaultSession.refound(old, …)`
+  takes the options of `create` and `current`, the KEK of the old vault's password or passkey,
+  checked by `confirmUser` as a proof only. It shares the founding with `create` (`#found`), reads
+  from `old` the Items and Folders that are neither tombstones nor in the trash (`#carried`), and
+  writes them in the founding commit under new random IDs and fresh HLCs (`#carry`): a valid record
+  has its folder reference rewritten or removed, a read-only item keeps its content map unchanged.
+  The Local Config records `replacesVaultId` and keeps the old preferences. Only the Vault Key
+  record keeps its `recordId`, which the epoch alone fixes. `rejectedPeers` names the D116 peers.
+  `VaultController` holds the proof (`beginRefounding`), the new phrase in its phrase slot
+  (`newRefoundingPhrase`, so `showingPhrase` pauses the inactivity lock) and then `refound` runs as
+  a creation under the installation guard; after the commit it locks the old session, deletes the
+  old database and forgets the old passkey as a replacement does (D96, D120). `afterRefounding`
+  shows the next steps. `RefoundVault.tsx` is the Settings flow.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

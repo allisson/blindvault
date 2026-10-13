@@ -56,6 +56,7 @@ import {
   RetirementRefusedError,
   RestoreRejectedError,
   UnlockRejectedError,
+  type UnlockMethod,
   UnsupportedLocalConfigError,
   VaultLockedError,
   VaultSession,
@@ -135,6 +136,17 @@ export type Regeneration =
   | { readonly kind: 'ok'; readonly recovery: RecoveryView }
   | { readonly kind: 'blocked'; readonly block: RegenerationBlock }
   | { readonly kind: ReauthFailure | 'no-phrase' };
+
+/** The proof of the user that starts a re-founding (D187). */
+export type RefoundingStart = 'ok' | ReauthFailure;
+
+/**
+ * A re-founding (§14, D28, D187): `not-started` without the proof of `beginRefounding`, `no-phrase`
+ * without the phrase of `newRefoundingPhrase`, `busy` while another app window holds the
+ * installation guard (D97), `locked` when a lock aborted it before the commit (D93).
+ */
+export type Refounding =
+  { readonly kind: 'ok' } | { readonly kind: 'not-started' | 'no-phrase' | 'busy' | 'locked' };
 
 /** A backup export (backup-format.md §8, D64, D179, D181). */
 export type BackupExport =
@@ -310,6 +322,15 @@ export class VaultController {
     | undefined;
   /** After a restore opened with an export password: recommend Check Recovery Phrase (D43). */
   #afterRestore: 'check-phrase' | undefined;
+  /**
+   * The KEK that proved the user for a re-founding (D187), held until its commit; a lock or a
+   * cancel wipes it.
+   */
+  #refounding:
+    | { readonly keyring: Keyring; readonly kek: SymmetricKey; readonly method: UnlockMethod }
+    | undefined;
+  /** After a re-founding: what to do next (§14, D107). */
+  #refounded = false;
   /** After a fresh restore, while other devices exist: recommend re-admission (D30, D186). */
   #readmission = false;
   /** The replaced vault's passkey, which the authenticator could not be asked to forget (D120). */
@@ -1037,6 +1058,8 @@ export class VaultController {
     this.#dropRestore();
     this.#afterRestore = undefined;
     this.#readmission = false;
+    this.#dropRefounding();
+    this.#refounded = false;
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
@@ -1385,6 +1408,178 @@ export class VaultController {
     } finally {
       keyring.wipeAll();
     }
+  }
+
+  // --- re-founding --------------------------------------------------------------------------------
+
+  /**
+   * Starts a re-founding after its warnings (§14, D187): the local password, or a passkey assertion,
+   * must open the Master Key wrap. Its KEK is held as the proof until the commit, a cancel or a lock.
+   */
+  async beginRefounding(auth: ExportAuth): Promise<RefoundingStart> {
+    const status = this.#status;
+    const db = this.#db;
+    if (status.kind !== 'unlocked' || !db) return 'locked';
+    this.#dropRefounding();
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    try {
+      const kek = await this.#reauthenticate(auth, keyring, db);
+      if (typeof kek === 'string') {
+        keyring.wipeAll();
+        return kek;
+      }
+      if (epoch !== this.#epoch) throw new Aborted();
+      status.session.confirmUser({ kek, method: auth.kind });
+      this.#refounding = { keyring, kek, method: auth.kind };
+      this.#set({ ...status });
+      return 'ok';
+    } catch (error) {
+      keyring.wipeAll();
+      if (error instanceof Aborted || epoch !== this.#epoch) return 'locked';
+      const failure = reauthFailure(error, auth);
+      if (failure) return failure;
+      throw error;
+    }
+  }
+
+  /**
+   * The new Recovery Phrase of a re-founding, once `beginRefounding` proved the user: its 24 words,
+   * to show once (D187). The inactivity lock pauses while it is held (`showingPhrase`, D104).
+   */
+  newRefoundingPhrase(): string | undefined {
+    const status = this.#status;
+    if (status.kind !== 'unlocked' || !this.#refounding) return undefined;
+    this.#phrase?.keyring.wipeAll();
+    const keyring = new Keyring();
+    const { words, entropy } = generateRecoveryPhrase(keyring);
+    this.#phrase = { keyring, entropy };
+    this.#set({ ...status });
+    return words;
+  }
+
+  /** Drops a re-founding in progress: its proof and its phrase. */
+  cancelRefounding(): void {
+    const status = this.#status;
+    this.#dropRefounding();
+    if (status.kind === 'unlocked') this.#set({ ...status });
+  }
+
+  #dropRefounding(): void {
+    if (!this.#refounding) return;
+    this.#refounding.keyring.wipeAll();
+    this.#refounding = undefined;
+    this.#phrase?.keyring.wipeAll();
+    this.#phrase = undefined;
+  }
+
+  /**
+   * Re-founds the vault (§14, D28, D89, D96, D187) with the confirmed phrase and `password`, already
+   * checked for strength by the caller (D71). Holds the installation guard until the commit; a lock
+   * before it aborts with the old vault intact (D93). The new Device record takes the old own
+   * record's name, or `defaultName` on an unregistered device. After the commit, the old vault is
+   * locked, its database deleted (the startup cleanup does it if this fails) and its passkey handled
+   * as after a replacement (D120).
+   */
+  async refound(password: string, defaultName: string): Promise<Refounding> {
+    const status = this.#status;
+    const oldDb = this.#db;
+    const oldLock = this.#lock;
+    const oldVaultId = this.#vaultId;
+    if (status.kind !== 'unlocked' || !oldDb || !oldLock || !oldVaultId) return { kind: 'locked' };
+    const proof = this.#refounding;
+    if (!proof) return { kind: 'not-started' };
+    const phrase = this.#phrase;
+    if (!phrase) return { kind: 'no-phrase' };
+    const epoch = this.#epoch;
+    const { factory, locks } = this.#deps;
+    const guard = await acquireInstallationGuard(locks);
+    if (!guard) return { kind: 'busy' };
+    let db: VaultDatabase | undefined;
+    let lock: HeldLock | undefined;
+    try {
+      if (epoch !== this.#epoch) throw new Aborted();
+      const old = status.session;
+      const own = old.devices().find((d) => sameBytes(d.deviceId, old.deviceId));
+      const salt = generateSalt();
+      const { kek, params } = await calibrateDeviceKek(
+        phrase.keyring,
+        this.#deps.kdf(),
+        normalizePassword(password),
+        salt,
+      );
+      if (epoch !== this.#epoch) throw new Aborted();
+      const store: RecordStore = {
+        records: () => (db ? db.records() : Promise.resolve([])),
+        commit: async (commit) => {
+          if (epoch !== this.#epoch) throw new Aborted();
+          if (!db) {
+            const { vaultId } = parseLocalConfig(commit.localConfig);
+            lock = (await acquireVaultLock(vaultId, {}, locks)) ?? undefined;
+            if (!lock) throw new Aborted();
+            db = await VaultDatabase.open(vaultId, factory);
+          }
+          await db.commit(commit);
+        },
+      };
+      // The phrase's keyring becomes the new session's, as at creation.
+      this.#phrase = undefined;
+      const session = await VaultSession.refound(old, {
+        store,
+        keyring: phrase.keyring,
+        kek,
+        recoveryEntropy: phrase.entropy,
+        salt,
+        kdfParams: params,
+        displayName: own?.device.displayName ?? defaultName,
+        current: { kek: proof.kek, method: proof.method },
+        now: this.#now,
+      });
+      if (!db || !lock) throw new Aborted();
+      this.#dropRefounding();
+      old.lock();
+      oldDb.close();
+      try {
+        await deleteDatabase(factory, databaseName(oldVaultId));
+        await session.forgetReplacedVault();
+      } catch {
+        // The new vault has committed: the startup cleanup deletes the old one (D89, D96).
+      }
+      this.#hold(lock);
+      await oldLock.release();
+      this.#db = db;
+      this.#vaultId = session.vaultId;
+      const oldPasskey = this.#passkey;
+      this.#passkey = undefined;
+      if (oldPasskey) {
+        const forgotten = await this.#deps.passkeys?.forget(oldPasskey.credentialId);
+        this.#leftoverPasskey = forgotten !== true;
+      }
+      this.#refounded = true;
+      this.#set({ kind: 'unlocked', session });
+      void requestPersistence(this.#deps.storage);
+      return { kind: 'ok' };
+    } catch (error) {
+      phrase.keyring.wipeAll();
+      if (this.#phrase === phrase) this.#phrase = undefined;
+      db?.close();
+      await lock?.release();
+      if (error instanceof Aborted || epoch !== this.#epoch) return { kind: 'locked' };
+      this.#dropRefounding();
+      throw error;
+    } finally {
+      await guard.release();
+    }
+  }
+
+  /** Right after a re-founding: back up the new vault, pair the other devices again (§14, D107). */
+  get afterRefounding(): boolean {
+    return this.#refounded;
+  }
+
+  dismissRefounded(): void {
+    this.#refounded = false;
+    this.#set({ ...this.#status });
   }
 
   /**

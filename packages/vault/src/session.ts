@@ -245,6 +245,15 @@ export interface CreateOptions {
   readonly now?: () => number;
 }
 
+export interface RefoundOptions extends CreateOptions {
+  /**
+   * The Device KEK of the local password (`password`) or the PRF KEK of a passkey assertion with
+   * user verification (`passkey`) of the vault re-founded: only a proof of the user (D187), left to
+   * the caller.
+   */
+  readonly current: { readonly kek: SymmetricKey; readonly method: UnlockMethod };
+}
+
 export interface RestoreOptions {
   readonly store: RecordStore;
   /** A new keyring holding only `kek` and the backup's Master Key; the session owns it from now on. */
@@ -385,6 +394,12 @@ interface Candidate {
   readonly write?: Write;
   /** Made from a conflict loser: who wrote that state, for the D70 notice. */
   readonly loser?: { readonly deviceId: Uint8Array; readonly title: string };
+}
+
+/** What re-founding carries over from the old vault's decrypted state (D60, D86). */
+interface Carried {
+  readonly folders: readonly { readonly id: Uint8Array; readonly folder: Kept<Folder> }[];
+  readonly items: readonly { readonly content: CborMap; readonly reading: ItemReading }[];
 }
 
 /** What a merge records in Local Config (sync-protocol.md §1.5, D43, D48). */
@@ -618,7 +633,77 @@ export class VaultSession {
    * phrase (§5.4, D2, D16), this device's Device record (D30) and the Local Config, which records
    * the new `phraseId` as the last one seen (D43).
    */
-  static async create(options: CreateOptions): Promise<VaultSession> {
+  static create(options: CreateOptions): Promise<VaultSession> {
+    return VaultSession.#found(options);
+  }
+
+  /**
+   * Re-founds `old` (§14, D28, D187): `current` must open its Master Key wrap of `current.method`
+   * (`UnlockRejectedError` otherwise), as a proof of the user only. One commit writes a new vault,
+   * as `create` does, with every Item and Folder of `old` that is neither a tombstone nor in the
+   * trash under a new random ID and a fresh HLC (D72, D99): a valid one has its `folderId` or
+   * `parentId` rewritten, or removed when that folder is not carried over (D86); a read-only item
+   * keeps its content unchanged (D60). The Local Config records the replaced `vaultId` (D89, D96)
+   * and keeps the preferences of `old` (D187). `old` is left unchanged; the caller locks it.
+   */
+  static refound(old: VaultSession, options: RefoundOptions): Promise<VaultSession> {
+    const { keyring } = options;
+    try {
+      old.confirmUser(options.current);
+    } catch (error) {
+      keyring.wipeAll();
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+    return VaultSession.#found(options, {
+      replacesVaultId: old.#cleartext.vaultId.slice(),
+      preferences: old.#localState.preferences,
+      carried: old.#carried(),
+    });
+  }
+
+  /**
+   * Proves the user before a re-founding (D187): `kek` must open the Master Key wrap of `method`,
+   * or `UnlockRejectedError`. Nothing is kept; `kek` is left to the caller.
+   */
+  confirmUser(current: { readonly kek: SymmetricKey; readonly method: UnlockMethod }): void {
+    this.#unlocked();
+    const scratch = new Keyring();
+    try {
+      this.#openMasterKey(scratch, current.kek, current.method);
+    } finally {
+      scratch.wipeAll();
+    }
+  }
+
+  /** The peers whose records this device rejected (D115), for the re-founding warning (D116). */
+  get rejectedPeers(): Uint8Array[] {
+    this.#unlocked();
+    return (this.#localState.rejectedPeers ?? []).map((id) => id.slice());
+  }
+
+  /** What re-founding carries over, read now from the decrypted state (D60, D72, D86). */
+  #carried(): Carried {
+    const folders = [...this.#state.folders.values()].filter(
+      (f): f is LiveFolder => f.folder !== null && !f.header.deleted,
+    );
+    const items = [...this.#state.items.values()].filter(
+      (i): i is HeldItem & { content: CborMap; reading: ItemReading } =>
+        i.content !== null && i.reading !== null && !i.header.deleted,
+    );
+    return {
+      folders: folders.map((f) => ({ id: f.header.recordId, folder: f.folder })),
+      items: items.map((i) => ({ content: i.content, reading: i.reading })),
+    };
+  }
+
+  static async #found(
+    options: CreateOptions,
+    refounding?: {
+      readonly replacesVaultId: Uint8Array;
+      readonly preferences: Preferences;
+      readonly carried: Carried;
+    },
+  ): Promise<VaultSession> {
     const { store, keyring, kek, recoveryEntropy, salt, kdfParams, displayName } = options;
     const now = options.now ?? Date.now;
     try {
@@ -649,9 +734,10 @@ export class VaultSession {
           vaultId,
           localConfigId,
           kek: { salt, opslimit: kdfParams.opslimit, memlimit: kdfParams.memlimit, mkWrap },
+          ...(refounding ? { replacesVaultId: refounding.replacesVaultId } : {}),
         },
         localState: {
-          preferences: DEFAULT_PREFERENCES,
+          preferences: refounding?.preferences ?? DEFAULT_PREFERENCES,
           hlc: clock.state,
           lastPhraseId: phrase.phraseId,
         },
@@ -660,8 +746,8 @@ export class VaultSession {
         now,
       });
       try {
-        await session.#run(() =>
-          session.#founding(displayName, {
+        await session.#run(() => {
+          const founding = session.#founding(displayName, {
             masterKey,
             envelopeKey: recovery.envelopeKey,
             metadata: new Map<CborValue, CborValue>([
@@ -669,8 +755,13 @@ export class VaultSession {
               ['phraseCreatedAt', phrase.phraseCreatedAt],
               ['phraseId', phrase.phraseId],
             ]),
-          }),
-        );
+          });
+          if (!refounding) return founding;
+          return {
+            ...founding,
+            writes: [...founding.writes, ...session.#carry(refounding.carried)],
+          };
+        });
       } finally {
         // Only the public key outlives creation: the phrase-derived secrets go now (§5.4).
         keyring.release(recovery.envelopeKey);
@@ -2157,6 +2248,35 @@ export class VaultSession {
   }
 
   // --- creation --------------------------------------------------------------------------------
+
+  /** The writes of what re-founding carries, under new IDs and fresh HLCs (D60, D86, D99). */
+  #carry(carried: Carried): Write[] {
+    const newIds = new Map<string, Uint8Array>();
+    for (const f of carried.folders) newIds.set(idKey(f.id), randomId());
+    const mapped = (id: Uint8Array | undefined) => (id ? newIds.get(idKey(id)) : undefined);
+    const writes: Write[] = [];
+    for (const f of carried.folders) {
+      const parentId = mapped(f.folder.value.parentId);
+      const content = folderToCbor(
+        { name: f.folder.value.name, ...(parentId ? { parentId } : {}) },
+        false,
+        f.folder.content,
+      );
+      const id = present(newIds.get(idKey(f.id)));
+      writes.push(this.#seal(RecordType.folder, id, this.#clock.issue(), false, content));
+    }
+    for (const i of carried.items) {
+      let content = i.content;
+      if (!i.reading.readOnly) {
+        // A live item has no `trashOperationId`: only its folder reference changes.
+        const { folderId, ...item } = i.reading.item;
+        const parent = mapped(folderId);
+        content = itemToCbor({ ...item, ...(parent ? { folderId: parent } : {}) }, false);
+      }
+      writes.push(this.#seal(RecordType.item, randomId(), this.#clock.issue(), false, content));
+    }
+    return writes;
+  }
 
   #founding(
     displayName: string,

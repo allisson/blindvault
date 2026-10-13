@@ -209,7 +209,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Forgotten local password recovery via recovery phrase
 - [x] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2, D185)
 - [x] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
-- [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, new vault committed to its own database before the old one is deleted (D28, D89); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
+- [x] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, new vault committed to its own database before the old one is deleted (D28, D89); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
 - [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
 
 ### Gate B
@@ -224,7 +224,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Merging a backup with a different `vaultId` is rejected (D13)
 - [x] Restore interrupted midway leaves storage untouched (D33)
 - [x] A fresh restore of a backup whose HLCs are beyond the future-clock bound keeps every record, read-only until within the bound (D39)
-- [ ] Re-founding interrupted midway, or locked before its commit, leaves the old vault intact; interrupted after the new database commits, startup keeps only the new vault; afterwards old backups and old devices cannot open or sync with the new vault (D28, D89, D93)
+- [x] Re-founding interrupted midway, or locked before its commit, leaves the old vault intact; interrupted after the new database commits, startup keeps only the new vault; afterwards old backups and old devices cannot open or sync with the new vault (D28, D89, D93)
 
 ---
 
