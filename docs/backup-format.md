@@ -157,7 +157,9 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
   extension is a new `formatVersion`.
 - Unknown content inside records is untouched: envelopes travel as stored, so a newer app's content
   keys survive an export and a restore (D98). A record with an unknown `recordFormatVersion` or
-  `recordType` rejects the whole restore (D61, D81).
+  `recordType` rejects the whole restore (D61, D81) as needing a newer app: a `v` above 1, or `v`
+  = 1 with a `t` this app does not know. Any other envelope that fails to decode is a corrupt
+  record.
 
 ## 8. Export and restore
 
@@ -178,7 +180,8 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
 6. Wipe the Master Key, the file key and the KEKs. Record the date of the last backup in Local
    Config (§13.4) once the file is made, since the app cannot know whether it was saved.
 
-**Restore**, in this order; any failure rejects the file and writes nothing (D61, D64):
+**Restore**, in this order; any failure rejects the file and writes nothing (D61, D64). Each
+rejection names its reason (in parentheses):
 
 1. `magic`, `formatVersion`, `headerLength` within range; strict decode of `headerMap`
    (sections 2, 3, 7).
@@ -186,21 +189,38 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
 3. Password keyslot: check `mem` and `ops` against section 4, then derive the KEK and open `c`.
    Recovery keyslot: parse the phrase (`crypto-spec.md` §5.1), derive the key pair and open `c`.
    A wrong secret and a tampered keyslot fail with the same error, which says only that the file
-   did not open with that secret.
+   did not open with that secret (`wrong-secret`).
 4. Pull the stream (section 5); the first chunk authenticates the header, after which `phraseId`,
-   `phraseCreatedAt` and the keyslot parameters count as verified.
-5. Decode `meta` and the envelopes (section 6).
-6. Exactly one Recovery Envelope MUST be present for `meta.vaultId`, and its metadata `phraseId`
-   and `phraseCreatedAt` MUST equal the header's (D178).
-7. Opened with the phrase: open the payload's Recovery Envelope `mk` with `K_envelope` and require
-   it to equal `meta.masterKey` (`sodium_memcmp`), and its `keyslotPublicKey` to equal the one
-   derived from the phrase (D43). Opened with an export password: the restore ends by recommending
-   Check Recovery Phrase (D43).
-8. Verify every record as on receipt (`crypto-spec.md` §9.5) under `meta.vaultId`, with the Vault
-   Keys unwrapped by `meta.masterKey`.
+   `phraseCreatedAt` and the keyslot parameters count as verified (`corrupt`).
+5. Decode `meta` and the envelopes (section 6) (`malformed`).
+6. Verify every record as on receipt (`crypto-spec.md` §9.5) under `meta.vaultId`, with
+   `K_vaultKeyWrap` and `K_versionId` derived from `meta.masterKey`: the Vault Key records first,
+   since every other record needs the Vault Key of its epoch.
+   - A record with an unknown `recordFormatVersion` or `recordType` (section 7) rejects the file
+     as needing a newer app, whatever else it holds (`newer-record`).
+   - Otherwise the first record, in that order, that fails verification, or that repeats the
+     `recordType` and `recordId` of an earlier one, is named by its type and the first 8 hex
+     digits of its `recordId` (`corrupt-record`, D64); a record that does not decode (§9.5 steps 1
+     to 5) has no type or ID to name. A store never holds two records with one identity, so a
+     restore never picks one of two.
+   The envelope's metadata is read only once its record verifies, which is why this step comes
+   before the next two. Domain checks on record values (D59) run when the records are applied,
+   in step 9, and reject the whole restore the same way.
+7. A Recovery Envelope MUST be present, and its metadata `phraseId` and `phraseCreatedAt` MUST
+   equal the header's (D178) (`envelope-mismatch`). Its `recordId` derives from `vaultId` and its
+   AAD binds `meta.vaultId`, so step 6 already refuses one of another vault and a second one.
+8. Opened with the phrase: open the payload's Recovery Envelope `mk` with `K_envelope` and require
+   it to equal `meta.masterKey` (`sodium_memcmp`); an `mk` that does not open with the phrase
+   fails the same way (`master-key-mismatch`). Then require its `keyslotPublicKey` to equal the
+   one derived from the phrase (`public-key-mismatch`) (D43). Opened with an export password: the
+   restore ends by recommending Check Recovery Phrase (D43).
 9. Apply it as a fresh restore or a backup merge (overview §10, D13, D33, D39, D57, D89, D153).
-10. Wipe the file key, the KEK, the phrase-derived keys and, unless the restore committed, the
-    Master Key.
+10. Wipe the file key, the KEK, the phrase-derived keys, the Vault Keys and subkeys used in step 6
+    and, unless the restore committed, the Master Key.
+
+Steps 3 to 8 run in `packages/backup` and return the `vaultId`, the export date, the Master Key,
+every envelope with its `recordType` and `recordId`, exactly as in the file, and whether the
+phrase or an export password opened it. Nothing is written before step 9.
 
 ## 9. Test vectors
 
@@ -215,8 +235,15 @@ tagged with the restore step of section 8 that rejects it:
 - rejected: wrong magic; `formatVersion` 0 and 2; unknown header key; three keyslots; password
   keyslot first; parameters below and above the range; header byte changed; keyslot byte changed;
   truncated before `TAG_FINAL`; bytes after `TAG_FINAL`; `TAG_FINAL` on an earlier chunk;
-  `recordCount` too high and too low; trailing payload byte; header `phraseId` different from the
-  Recovery Envelope's; Recovery Envelope whose Master Key differs from `meta.masterKey`.
+  `recordCount` too high and too low; trailing payload byte;
+- rejected by the restore checks of section 8, each opened with the phrase and with the export
+  password: a record with `recordFormatVersion` 2 and one with an unknown `recordType` (step 6,
+  `newer-record`); a record whose `ct` does not authenticate, a record of an epoch without its Vault
+  Key, the same record twice, a second Recovery Envelope, a Recovery Envelope of another `vaultId`,
+  and a `meta.masterKey` that opens no Vault Key (step 6, `corrupt-record`); no Recovery Envelope, a
+  header `phraseId` and a header `phraseCreatedAt` different from the envelope's (step 7); an
+  envelope whose `mk` holds another Master Key, one whose `mk` is sealed under another phrase, and
+  one whose `keyslotPublicKey` is not the phrase's (step 8, phrase only).
 
 Every file carries the fixed file key in `inputs.fileKey`, so the stream cases run without a keyslot.
 A rejected file is given whole, or as an `edit` of a valid one (`base`, then `flip` one byte at an
@@ -226,5 +253,10 @@ generator checks every file against its own reference reader before writing it.
 `inputs.phraseEntropy` and `inputs.exportPassword` open the recovery and password keyslots of every
 valid file, and `inputs.passwordKek` is the KEK PyNaCl derived at the export parameters.
 `rejectPasswordKeyslot` holds password keyslots whose parameters are outside the accepted range,
-refused before Argon2id runs while the recovery keyslot of the same file still opens. The restore
-checks of section 8 (the phrase and Master Key checks) are added with that step.
+refused before Argon2id runs while the recovery keyslot of the same file still opens.
+Every record of a valid file is a real record of the vectors' vault, which steps 6 to 8 accept:
+the Vault Key record, the Recovery Envelope, and Items (the large ones make the payloads of more
+than one chunk). `rejectRestore` holds the files of the last item above, each with its step and
+reason, `phraseOnly` when only a restore opened with the phrase rejects it, and for
+`corrupt-record` the `record` it names (`recordType` and the first 4 bytes of `recordId`), or `null`
+for a record that does not decode.

@@ -12,6 +12,7 @@ import {
   ITEM_CAP,
   MAX_CIPHERTEXT_LENGTH,
   MAX_ENVELOPE_LENGTH,
+  NewerRecordError,
   RECORD_CAP,
   RecordRejectedError,
   RecordType,
@@ -602,5 +603,65 @@ describe('encrypt and decrypt every record type (Gate A)', () => {
     expect(
       rejectedAt(() => verifyRecord(new Keyring(), bytes, { ...keys, vaultId: randomId() })),
     ).toBe(7);
+  });
+});
+
+describe('records of a newer app (crypto-spec.md §9.5 step 3, D61, D81)', () => {
+  function edited(entries: [string, CborValue][]): Uint8Array {
+    const m = decodeCbor(fromHex(r.item.envelope)) as CborMap;
+    for (const [k, v] of entries) m.set(k, v);
+    return encodeCbor(m);
+  }
+
+  function rejection(bytes: Uint8Array): unknown {
+    try {
+      decodeEnvelope(bytes);
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  it.each([
+    ['recordFormatVersion 2', [['v', 2]]],
+    ['recordFormatVersion 2^32', [['v', 2 ** 32]]],
+    ['recordType 7', [['t', 7]]],
+    ['recordType 0', [['t', 0]]],
+    [
+      'recordFormatVersion 2 with a shape v1 does not know',
+      [
+        ['v', 2],
+        ['x', 1],
+      ],
+    ],
+  ] as [string, [string, CborValue][]][])('is a newer record: %s', (_, entries) => {
+    const error = rejection(edited(entries));
+    expect(error).toBeInstanceOf(NewerRecordError);
+    expect((error as NewerRecordError).step).toBe(3);
+    expect(rejectedAt(() => verifyRecord(new Keyring(), edited(entries), keys))).toBe(3);
+  });
+
+  it.each([
+    ['recordFormatVersion 0', [['v', 0]]],
+    ['recordFormatVersion as text', [['v', '2']]],
+    ['recordFormatVersion negative', [['v', -1]]],
+    ['recordType as text', [['t', '1']]],
+    [
+      'recordType 7 with recordFormatVersion 0',
+      [
+        ['v', 0],
+        ['t', 7],
+      ],
+    ],
+    ['an unknown envelope key', [['x', 1]]],
+  ] as [string, [string, CborValue][]][])('is not a newer record: %s', (_, entries) => {
+    const error = rejection(edited(entries));
+    expect(error).toBeInstanceOf(RecordRejectedError);
+    expect(error).not.toBeInstanceOf(NewerRecordError);
+  });
+
+  it('is not a newer record when the bytes are no CBOR map at all', () => {
+    expect(rejection(new Uint8Array([0xff]))).not.toBeInstanceOf(NewerRecordError);
+    expect(rejection(encodeCbor([1, 2]))).not.toBeInstanceOf(NewerRecordError);
   });
 });

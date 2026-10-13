@@ -9,7 +9,7 @@ import { type MasterSubkeys, deriveMasterSubkeys } from './kdf';
 import { KEY_LENGTH, Keyring, type SymmetricKey, generateKey, keyBytes } from './keys';
 import { type RecordHeader, recordAad } from './layout';
 import { PAD_BLOCK, pad, unpad } from './pad';
-import { deriveRecoveryKeys } from './recovery';
+import { type RecoveryKeys, deriveRecoveryKeys } from './recovery';
 import { ID_LENGTH, lib } from './sodium';
 
 export const RECORD_FORMAT_VERSION = 1;
@@ -99,6 +99,19 @@ export class RecordRejectedError extends CryptoError {
   }
 }
 
+/**
+ * A record of a newer app: a `recordFormatVersion` above this one, or this version with a
+ * `recordType` this app does not know (backup-format.md §7, D61, D81). Rejected at step 3 like any
+ * other unknown structure, but a restore reports it as needing a newer app.
+ */
+export class NewerRecordError extends RecordRejectedError {
+  override name = 'NewerRecordError';
+
+  constructor() {
+    super(3, 'unknown version or type');
+  }
+}
+
 function reject(step: VerificationStep, reason: string): never {
   throw new RecordRejectedError(step, reason);
 }
@@ -174,6 +187,10 @@ export function decodeEnvelope(bytes: Uint8Array): Envelope {
   }
   const v = map.get('v');
   const t = map.get('t');
+  if (isUint(v, Number.MAX_SAFE_INTEGER) && v > RECORD_FORMAT_VERSION) throw new NewerRecordError();
+  if (v === RECORD_FORMAT_VERSION && isUint(t, Number.MAX_SAFE_INTEGER) && !isRecordType(t)) {
+    throw new NewerRecordError();
+  }
   if (v !== RECORD_FORMAT_VERSION || typeof t !== 'number' || !isRecordType(t)) {
     reject(3, 'unknown version or type');
   }
@@ -551,6 +568,43 @@ export function openRecoveryEnvelope(
   const { header, mk } = envelope;
   if (header.recordType !== RecordType.recoveryEnvelope || !mk) throw new DecryptionError();
   return unwrapKey(keyring, envelopeKey, recordAad(header, vaultId), mk);
+}
+
+/** What a restore opened with the phrase found in the payload's Recovery Envelope (D43). */
+export type BackupEnvelopeCheck = 'opens' | 'master-key-mismatch' | 'public-key-mismatch';
+
+/**
+ * The phrase check of a restore (backup-format.md §8 step 8, D43): whether the payload's Recovery
+ * Envelope opens, with the `K_envelope` of the phrase that opened the file, to the payload's Master
+ * Key, compared in constant time, and whether `keyslotPublicKey`, read from the envelope's verified
+ * metadata, is the one the phrase derives. An `mk` that does not open is a Master Key mismatch too:
+ * the phrase already opened the file. The Master Key it opens is wiped before returning.
+ */
+export function checkBackupRecoveryEnvelope(
+  bytes: Uint8Array,
+  vaultId: Uint8Array,
+  recovery: RecoveryKeys,
+  masterKey: SymmetricKey,
+  keyslotPublicKey: Uint8Array,
+): BackupEnvelopeCheck {
+  const expected = keyBytes(masterKey);
+  const scratch = new Keyring();
+  try {
+    let opened: SymmetricKey;
+    try {
+      opened = openRecoveryEnvelope(scratch, bytes, vaultId, recovery.envelopeKey);
+    } catch (error) {
+      if (error instanceof DecryptionError) return 'master-key-mismatch';
+      throw error;
+    }
+    if (!lib().memcmp(keyBytes(opened), expected)) return 'master-key-mismatch';
+    const derived = recovery.keyslotPublicKey;
+    const same =
+      derived.length === keyslotPublicKey.length && lib().memcmp(derived, keyslotPublicKey);
+    return same ? 'opens' : 'public-key-mismatch';
+  } finally {
+    scratch.wipeAll();
+  }
 }
 
 /** What Check Recovery Phrase found (§5.4, D24, D180). */

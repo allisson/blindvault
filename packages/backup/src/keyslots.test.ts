@@ -1,6 +1,4 @@
 import {
-  type KdfPort,
-  type KdfRequest,
   KeyWipedError,
   Keyring,
   deriveRecoveryKeys,
@@ -20,56 +18,11 @@ import {
   openPasswordKeyslot,
   openRecoveryKeyslot,
 } from './keyslots';
-import { fromBase64, fromHex, validFile, vectors } from './test-helpers';
+import { fromBase64, fromHex, validFile, vectorKdf, vectors } from './test-helpers';
 
 beforeAll(initCrypto);
 
 const PASSWORD = vectors.inputs.exportPassword;
-
-function equal(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((x, i) => x === b[i]);
-}
-
-/**
- * A stand-in for the Argon2id worker. For the vectors' password, salt and the export parameters it
- * answers the KEK PyNaCl derived (`inputs.passwordKek`); for anything else, a key made of the
- * password's bytes, so another password gives another key. Argon2id itself is tested in
- * `packages/crypto`.
- */
-function vectorKdf(onDerive?: () => void) {
-  const requests: KdfRequest[] = [];
-  const expected = normalizePassword(PASSWORD);
-  const salt = fromHex(vectors.valid[0]?.header.keyslots[1]?.salt ?? '');
-  const port = (): KdfPort => {
-    const p: KdfPort = {
-      onmessage: null,
-      onerror: null,
-      postMessage(message) {
-        requests.push(message);
-        onDerive?.();
-        let key: Uint8Array = new Uint8Array(32);
-        key.set(message.password.subarray(0, 32));
-        if (
-          message.op === 'derive' &&
-          equal(message.password, expected) &&
-          equal(message.salt, salt) &&
-          message.params.opslimit === EXPORT_KDF.opslimit &&
-          message.params.memlimit === EXPORT_KDF.memlimit
-        ) {
-          key = fromHex(vectors.inputs.passwordKek);
-        }
-        const params = message.op === 'derive' ? message.params : EXPORT_KDF;
-        message.password.fill(0);
-        queueMicrotask(() => p.onmessage?.({ data: { ok: true, key, params } }));
-      },
-      terminate() {
-        // nothing runs in the background
-      },
-    };
-    return p;
-  };
-  return { port, requests };
-}
 
 function vectorPhrase(keyring: Keyring) {
   return deriveRecoveryKeys(keyring, keyring.adopt(fromHex(vectors.inputs.phraseEntropy)));

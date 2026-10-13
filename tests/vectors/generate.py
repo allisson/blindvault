@@ -1111,6 +1111,88 @@ def bv_read(f: bytes, key: bytes = BV_FILE_KEY):
     return m, header, bv_parse_payload(bv_read_stream(f, header, m["stream"], key))
 
 
+def bv_newer(e: bytes) -> bool:
+    """backup-format.md section 7: a record of a newer app, told apart from a corrupt one."""
+    try:
+        env = strict_decode(e)
+    except Exception:
+        return False
+    if not isinstance(env, dict):
+        return False
+    v, t = env.get("v"), env.get("t")
+    if _bv_uint(v) and v > RECORD_FORMAT_VERSION:
+        return True
+    return v == RECORD_FORMAT_VERSION and _bv_uint(t) and t not in ENVELOPE_KEYS
+
+
+def bv_identity(e: bytes):
+    """(recordType, recordId) of an envelope that passes crypto-spec section 9.5 steps 1 to 5, else None."""
+    try:
+        verify(e, VAULT_ID, {}, bytes(32), bytes(32))
+    except Reject as r:
+        if r.step <= 5:
+            return None
+    env = strict_decode(e)
+    return env["t"], env["id"]
+
+
+def bv_restore(f: bytes, via: str, key: bytes = BV_FILE_KEY):
+    """Reference for backup-format.md section 8 steps 6 to 8 after steps 1 to 5; raises BvReject.
+
+    A corrupt-record rejection carries the record it names in `record` (None if it does not decode).
+    """
+    m, _, (meta, records) = bv_read(f, key)
+    if any(bv_newer(e) for e in records):
+        raise BvReject("newer-record", "unknown recordFormatVersion or recordType")
+    k_vkwrap = kdf(meta["masterKey"], 1, "bvmaster")
+    k_version = kdf(meta["masterKey"], 2, "bvmaster")
+    ids = [bv_identity(e) for e in records]
+    order = [i for i, x in enumerate(ids) if x and x[0] == RT_VAULT_KEY]
+    order += [i for i in range(len(records)) if i not in order]
+    vault_keys, seen, envelopes = {}, set(), []
+
+    def corrupt(ident, why):
+        r = BvReject("corrupt-record", why)
+        r.record = ident
+        return r
+
+    for i in order:
+        e, ident = records[i], ids[i]
+        try:
+            content = verify(e, meta["vaultId"], vault_keys, k_vkwrap, k_version)
+        except Reject as r:
+            raise corrupt(ident, str(r))
+        if ident in seen:
+            raise corrupt(ident, "same record twice")
+        seen.add(ident)
+        env = strict_decode(e)
+        if env["t"] == RT_VAULT_KEY:
+            aad = record_aad(RT_VAULT_KEY, env["id"], env["e"], tuple(env["hlc"]), False, vault_id=meta["vaultId"])
+            vault_keys[env["e"]] = bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
+                env["ct"]["c"], aad, env["ct"]["n"], k_vkwrap)
+        elif env["t"] == RT_RECOVERY_ENVELOPE:
+            envelopes.append((env, content))
+    if not envelopes:
+        raise BvReject("envelope-mismatch", "no Recovery Envelope")
+    env, content = envelopes[0]
+    if content["phraseId"] != m["phraseId"] or content["phraseCreatedAt"] != m["phraseCreatedAt"]:
+        raise BvReject("envelope-mismatch", "phrase of the header")
+    if via == "phrase":
+        recovery_kek = kdf(PHRASE_ENTROPY, 1, "bvrphras")
+        k_envelope = kdf(recovery_kek, 1, "bvrckek_")
+        pk = bindings.crypto_box_seed_keypair(kdf(recovery_kek, 2, "bvrckek_"))[0]
+        aad = record_aad(RT_RECOVERY_ENVELOPE, env["id"], env["e"], tuple(env["hlc"]), False, vault_id=meta["vaultId"])
+        try:
+            mk = bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(env["mk"]["c"], aad, env["mk"]["n"], k_envelope)
+        except Exception:
+            mk = None
+        if mk != meta["masterKey"]:
+            raise BvReject("master-key-mismatch", "Recovery Envelope Master Key")
+        if content["keyslotPublicKey"] != pk:
+            raise BvReject("public-key-mismatch", "Recovery Envelope keyslot public key")
+    return meta, records
+
+
 def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int) -> dict:
     kek = pwhash.argon2id.kdf(32, normalize_password(BV_EXPORT_PASSWORD), BV_EXPORT_SALT,
                               opslimit=BV_EXPORT_OPS, memlimit=BV_EXPORT_MEM)
@@ -1139,12 +1221,90 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
             body += bindings.crypto_secretstream_xchacha20poly1305_push(st, part, ad, tag)
         return header, body
 
-    small_payload = bv_payload(bv_meta(real_records), real_records)
-    two = real_records + [bv_filler(70_000)]
-    two_payload = bv_payload(bv_meta(two), two)
-    base_len = len(bv_payload(bv_meta(real_records + [b"x"]), real_records + [b"x"]))
-    exact = real_records + [bv_filler(BV_CHUNK - base_len + 1)]
-    exact_payload = bv_payload(bv_meta(exact), exact)
+    # --- real records of the vectors' vault (crypto-spec.md section 9), for the restore checks ---
+    k_vkwrap = kdf(MASTER_KEY, 1, "bvmaster")
+    recovery_kek = kdf(PHRASE_ENTROPY, 1, "bvrphras")
+    k_envelope = kdf(recovery_kek, 1, "bvrckek_")
+    serial = iter(range(1, 1_000_000))
+
+    def bnonce() -> bytes:
+        return blake2b(b"bvault vector nonce" + u32(next(serial)), 24)
+
+    def bkey() -> bytes:
+        return blake2b(b"bvault vector record key" + u32(next(serial)), 32)
+
+    def bid(i: int) -> bytes:
+        return blake2b(b"bvault vector item " + u32(i), 16)
+
+    def item_rec(record_id=ITEM_ID, notes=None, hlc=HLC, epoch=KEY_EPOCH, vault_key=VAULT_KEY, version=None):
+        content = {"templateId": "login", "templateVersion": 1, "title": "Example"}
+        if notes is not None:
+            content["notes"] = notes
+        aad = record_aad(RT_ITEM, record_id, epoch, hlc, False)
+        rk = bkey()
+        env = envelope(RT_ITEM, record_id, epoch, hlc, False,
+                       wk=sealed_cbor(seal(vault_key, aad, rk, bnonce())),
+                       ct=sealed_cbor(seal(rk, aad, pad(cbor(content)), bnonce())))
+        if version is not None:
+            env.update(version)
+        return cbor(env)
+
+    def env_rec(vault=VAULT_ID, master=MASTER_KEY, env_key=k_envelope, hlc=(1_760_000_000_000, 1, DEVICE_ID), **md):
+        rid = blake2b(layout(label("bv.v1.recordid.recovery-envelope"), vault), 16)
+        aad = record_aad(RT_RECOVERY_ENVELOPE, rid, KEY_EPOCH, hlc, False, vault_id=vault)
+        metadata = {"keyslotPublicKey": keyslot_pk, "phraseCreatedAt": phrase_created_at, "phraseId": PHRASE_ID, **md}
+        rk = bkey()
+        return cbor(envelope(RT_RECOVERY_ENVELOPE, rid, KEY_EPOCH, hlc, False,
+                             mk=sealed_cbor(seal(env_key, aad, master, bnonce())),
+                             wk=sealed_cbor(seal(VAULT_KEY, aad, rk, bnonce())),
+                             ct=sealed_cbor(seal(rk, aad, pad(cbor(metadata)), bnonce()))))
+
+    def payload_of(records) -> bytes:
+        return bv_payload(bv_meta(records), records)
+
+    small_payload = payload_of(real_records)
+    two = real_records + [item_rec(bid(1), notes="x" * 70_000)]
+    two_payload = payload_of(two)
+
+    # An exact multiple of 65,536: the padding moves an envelope by 256 bytes at a time, and the CBOR
+    # sizes of the HLC fields of small Items move it byte by byte (1, 2, 3, 5 or 9 bytes each).
+    def uint_size(n: int) -> int:
+        return 1 if n < 24 else 2 if n < 256 else 3 if n < 65536 else 5 if n < 2**32 else 9
+
+    ms_values = [1_760_000_000_000, 1_000_000, 1000, 100, 10]
+    ctr_values = [7, 100, 1000, 100_000]
+    shifts = {}
+    for ms in ms_values:
+        for ctr in ctr_values:
+            shifts.setdefault(uint_size(ms) - 9 + uint_size(ctr) - 1, (ms, ctr))
+
+    def decompose(d: int, n: int):
+        reach = {0: []}
+        for _ in range(n):
+            step = {}
+            for a, path in reach.items():
+                for b in shifts:
+                    step.setdefault(a + b, path + [b])
+            reach = step
+        return reach.get(d)
+
+    exact = None
+    for n in range(0, 40):
+        plain = [item_rec(bid(100 + i)) for i in range(n)]
+        base = payload_of(real_records + plain + [item_rec(bid(2), notes="x" * 300)])
+        for d in range(-8 * n, 4 * n + 1):
+            if (len(base) + d) % 256 or len(base) + d > BV_CHUNK:
+                continue
+            path = decompose(d, n)
+            if path is None:
+                continue
+            smalls = [item_rec(bid(100 + i), hlc=(*shifts[b], DEVICE_ID)) for i, b in enumerate(path)]
+            j = (BV_CHUNK - len(base) - d) // 256
+            exact = real_records + smalls + [item_rec(bid(2), notes="x" * (300 + 256 * j))]
+            break
+        if exact:
+            break
+    exact_payload = payload_of(exact)
     assert len(exact_payload) == BV_CHUNK and len(two_payload) > BV_CHUNK
 
     valid_specs = [
@@ -1160,6 +1320,8 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         files[name] = (header, body)
         m, hb, (meta, got) = bv_read(f)
         assert got == records and meta["masterKey"] == MASTER_KEY
+        bv_restore(f, "phrase")
+        bv_restore(f, "password")
         valid.append({
             "name": name, "case": case, "file": b64(f), "headerLength": len(hb),
             "header": {"phraseId": h(PHRASE_ID), "phraseCreatedAt": phrase_created_at, "stream": h(m["stream"]),
@@ -1328,6 +1490,75 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         assert not params_accepted({**password_slot, **over})
         rp.append({"case": case, "reason": "malformed", "file": b64(f)})
 
+    # --- rejected by the restore checks: section 8 steps 6 to 8 ---
+    vk_rec, rec_rec, it_rec = real_records
+    other_vault = seq(0xB0, 16)
+    other_entropy = seq(0x70, 32)
+    other_kek = kdf(other_entropy, 1, "bvrphras")
+    other_pk = bindings.crypto_box_seed_keypair(kdf(other_kek, 2, "bvrckek_"))[0]
+    env_id = blake2b(layout(label("bv.v1.recordid.recovery-envelope"), VAULT_ID), 16)
+    vk_id = strict_decode(vk_rec)["id"]
+    tampered = bytearray(it_rec)
+    tampered[-1] ^= 1
+    garbage = b"\xff\x00\x01"
+
+    def restore_file(records, *, hmap_over=None, **meta_over) -> bytes:
+        header, body = seal_file(bv_payload(bv_meta(records, **meta_over), records), both, hmap_over=hmap_over)
+        return header + body
+
+    reject_restore = [
+        (6, "newer-record", "a record with recordFormatVersion 2",
+         [vk_rec, rec_rec, item_rec(bid(3), version={"v": 2})], {}, None),
+        (6, "newer-record", "a record with an unknown recordType",
+         [vk_rec, rec_rec, item_rec(bid(3), version={"t": 7})], {}, None),
+        (6, "newer-record", "a newer record after a corrupt one",
+         [vk_rec, rec_rec, bytes(tampered), item_rec(bid(3), version={"v": 2})], {}, None),
+        (6, "corrupt-record", "an Item whose ct does not authenticate",
+         [vk_rec, rec_rec, bytes(tampered)], {}, (RT_ITEM, ITEM_ID)),
+        (6, "corrupt-record", "an Item of an epoch without its Vault Key",
+         [vk_rec, rec_rec, item_rec(bid(4), epoch=2)], {}, (RT_ITEM, bid(4))),
+        (6, "corrupt-record", "the same Item twice",
+         [vk_rec, rec_rec, it_rec, it_rec], {}, (RT_ITEM, ITEM_ID)),
+        (6, "corrupt-record", "a second Recovery Envelope",
+         [vk_rec, rec_rec, env_rec(hlc=(1_760_000_000_000, 2, DEVICE_ID)), it_rec], {},
+         (RT_RECOVERY_ENVELOPE, env_id)),
+        (6, "corrupt-record", "a Recovery Envelope of another vaultId",
+         [vk_rec, env_rec(vault=other_vault), it_rec], {},
+         (RT_RECOVERY_ENVELOPE, blake2b(layout(label("bv.v1.recordid.recovery-envelope"), other_vault), 16))),
+        (6, "corrupt-record", "a meta masterKey that opens no Vault Key",
+         real_records, {"masterKey": seq(0x01, 32)}, (RT_VAULT_KEY, vk_id)),
+        (6, "corrupt-record", "a record that does not decode", [vk_rec, rec_rec, garbage], {}, "none"),
+        (7, "envelope-mismatch", "no Recovery Envelope", [vk_rec, it_rec], {}, None),
+        (7, "envelope-mismatch", "a header phraseId different from the envelope's",
+         real_records, {"hmap_over": {"phraseId": seq(0xD0, 16)}}, None),
+        (7, "envelope-mismatch", "a header phraseCreatedAt different from the envelope's",
+         real_records, {"hmap_over": {"phraseCreatedAt": phrase_created_at + 1}}, None),
+        (8, "master-key-mismatch", "a Recovery Envelope whose mk holds another Master Key",
+         [vk_rec, env_rec(master=seq(0x01, 32)), it_rec], {}, None),
+        (8, "master-key-mismatch", "a Recovery Envelope whose mk is sealed under another phrase",
+         [vk_rec, env_rec(env_key=kdf(other_kek, 1, "bvrckek_")), it_rec], {}, None),
+        (8, "public-key-mismatch", "a Recovery Envelope whose keyslotPublicKey is not the phrase's",
+         [vk_rec, env_rec(keyslotPublicKey=other_pk), it_rec], {}, None),
+    ]
+    rr_out = []
+    for step, reason, case, records, over, record in reject_restore:
+        f = restore_file(records, **over)
+        phrase_only = step == 8
+        for via in ("phrase", "password"):
+            try:
+                bv_restore(f, via)
+                assert phrase_only and via == "password", f"accepted: {case} ({via})"
+            except BvReject as r:
+                assert r.reason == reason, f"{case} ({via}): {r}"
+                if reason == "corrupt-record":
+                    assert r.record == (None if record == "none" else record), f"{case}: {r.record}"
+        entry = {"case": case, "step": step, "reason": reason, "file": b64(f)}
+        if phrase_only:
+            entry["phraseOnly"] = True
+        if reason == "corrupt-record":
+            entry["record"] = None if record == "none" else {"recordType": record[0], "recordIdPrefix": h(record[1][:4])}
+        rr_out.append(entry)
+
     # the largest record is accepted
     largest = [bv_filler(MAX_ENVELOPE)]
     bv_read(payload_file(bv_payload(bv_meta(largest), largest)))
@@ -1342,11 +1573,13 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         "inputs": {
             "fileKey": h(BV_FILE_KEY), "exportPassword": BV_EXPORT_PASSWORD, "passwordKek": h(kek),
             "keyslotPublicKey": h(keyslot_pk), "phraseEntropy": h(PHRASE_ENTROPY),
+            "phrase": Mnemonic("english").to_mnemonic(PHRASE_ENTROPY),
         },
         "valid": valid,
         "rejectHeader": rh,
         "rejectStream": rs,
         "rejectPasswordKeyslot": rp,
+        "rejectRestore": rr_out,
     }
 
 

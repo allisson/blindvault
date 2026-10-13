@@ -1,6 +1,6 @@
 // @blindvault/backup: .bvault format, keyslots, export and restore.
 
-export { type BackupRejection, BackupRejectedError } from './errors';
+export { type BackupRejection, BackupRejectedError, type RejectedRecord } from './errors';
 export {
   BACKUP_FORMAT_VERSION,
   BACKUP_MAGIC,
@@ -22,3 +22,4 @@ export {
   openPasswordKeyslot,
   openRecoveryKeyslot,
 } from './keyslots';
+export { type ValidatedBackup, restoreWithPassword, restoreWithPhrase } from './restore';

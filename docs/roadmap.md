@@ -202,7 +202,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Recovery Envelope record with recovery keyslot public key and `phraseId` (D2, D16)
 - [x] Recovery keyslot as `crypto_box_seal` of the file key, created without the phrase (D16)
 - [x] "Check Recovery Phrase" while unlocked
-- [ ] Export and restore with version and integrity validation
+- [x] Export and restore with version and integrity validation
 - [ ] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
 - [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning; the new database commits before the old one is deleted (D89)

@@ -354,6 +354,12 @@ compares `keyslotPublicKey` with the one derived from the phrase. The result is 
 `wrong-phrase` (`mk` does not open), `master-key-mismatch` or `public-key-mismatch`, the Master
 Key checked first; every key derived for the check is wiped before it returns.
 
+A restore opened with the phrase (`backup-format.md` §8 step 8, D43) runs the same check against
+the payload's Master Key instead of the session's: it opens `mk` with the `K_envelope` it already
+derived for the keyslot and compares the Master Key itself with `meta.masterKey` in constant time.
+An `mk` that does not open and another Master Key are both `master-key-mismatch` there, since the
+phrase already opened the file.
+
 **Constraint on a future Vault Key rotation.** `mk` is bound to the envelope's AAD, which holds `e`.
 Moving the envelope to a new epoch therefore rewrites `mk`, which needs the phrase. A rotation
 design (after v1, D11) MUST account for this, as format migration already does (§5.7).

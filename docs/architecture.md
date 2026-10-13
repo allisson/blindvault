@@ -73,6 +73,12 @@ every project through the references in the root `tsconfig.json`.
   Argon2id worker; a lock during that build rejects with `VaultLockedError` and commits nothing.
   `apps/web` derives the Device KEK, or asks the passkey for the PRF KEK, and hands the file to the
   browser as a download; it never holds the Master Key.
+- **Restore validation (Phase 2).** `packages/backup` runs `backup-format.md` §8 steps 3 to 8 in
+  `restoreWithPhrase` and `restoreWithPassword`: the keyslot, the stream, the verification of
+  every record with the Vault Keys the payload's Master Key unwraps, and the Recovery Envelope
+  checks. Every key it uses lives in a keyring of its own, wiped before it returns; only the
+  Master Key goes to the caller's keyring, and only on success. It writes nothing: applying the
+  records, including the domain checks of D59, belongs to the fresh restore in `packages/vault`.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
