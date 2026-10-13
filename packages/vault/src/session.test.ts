@@ -30,6 +30,7 @@ import {
   itemContentLength,
   localAad,
   normalizePassword,
+  openLocalConfigPart,
   openRecoveryEnvelope,
   generateKey,
   parseRecoveryPhrase,
@@ -38,7 +39,9 @@ import {
   sealLocalConfigPart,
   sealRecord,
   sealRecoveryEnvelope,
+  sealVaultKeyRecord,
   unwrapKey,
+  vaultKeyRecordId,
   verifyRecord,
   versionId,
   wrapKey,
@@ -59,6 +62,7 @@ import {
   ContentInvalidError,
   ExportRejectedError,
   HlcReadOnlyError,
+  MergeRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
   RestoreRejectedError,
@@ -66,6 +70,7 @@ import {
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
+import { deviceToCbor } from './folder';
 import { FUTURE_CLOCK_BOUND_MS } from './hlc';
 import { idKey } from './ids';
 import { TITLE_MAX, itemToCbor } from './item';
@@ -74,6 +79,7 @@ import {
   localConfigStateToCbor,
   localConfigToCbor,
   parseLocalConfig,
+  readLocalConfigState,
 } from './local-config';
 import { MemoryStore } from './memory-store';
 import {
@@ -194,12 +200,12 @@ interface Keys {
 }
 
 /** The vault's keys, opened from the store the way another device of the vault holds them. */
-function keysOf(store: MemoryStore): Keys {
+function keysOf(store: MemoryStore, seed = 1): Keys {
   const keyring = new Keyring();
   const config = parseLocalConfig(store.localConfig);
   const masterKey = unwrapKey(
     keyring,
-    kek(keyring),
+    kek(keyring, seed),
     localAad(LocalPurpose.mkWrapDeviceKek, config.vaultId, config.localConfigId),
     config.kek.mkWrap,
   );
@@ -1217,6 +1223,574 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
   });
 });
 
+describe('backup merge (§10, D13, D57, D64, D182)', () => {
+  /** A vault created at T0 with one item, and a second device of it made by a fresh restore. */
+  async function twoDevices() {
+    const clockA = new Clock();
+    const a = await create(clockA);
+    const id = await a.session.createItem(login('Original'));
+    const file = await a.session.exportBackup({ kek: kek(a.keyring), method: 'password' });
+    const clockB = new Clock();
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const session = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), a.words),
+      now: clockB.now,
+    });
+    open.push(session);
+    return { a, clockA, b: { session, store, keyring, clock: clockB }, id };
+  }
+
+  /** A backup of `session`, validated with the phrase as `packages/backup` does. */
+  async function backupOf(session: VaultSession, seed: number, words: string) {
+    const keyring = new Keyring();
+    const file = await session.exportBackup({ kek: kek(keyring, seed), method: 'password' });
+    return restoreWithPhrase(keyring, parseBackup(file.bytes), words);
+  }
+
+  /** The records of `store` as a validated backup would hold them, with the vault's Master Key. */
+  async function rawBackup(store: MemoryStore, seed = 1) {
+    const keys = keysOf(store, seed);
+    return { vaultId: keys.vaultId, masterKey: keys.masterKey, records: await store.records() };
+  }
+
+  function plantEnvelope(
+    store: MemoryStore,
+    keys: Keys,
+    hlc: Hlc,
+    envelopeKey: SymmetricKey,
+    metadata: CborMap,
+  ): void {
+    const recordId = recoveryEnvelopeRecordId(keys.vaultId);
+    const header: RecordHeader = {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.recoveryEnvelope,
+      recordId,
+      keyEpoch: 1,
+      hlc,
+      deleted: false,
+    };
+    store.put({
+      recordType: RecordType.recoveryEnvelope,
+      recordId,
+      envelope: sealRecoveryEnvelope(
+        header,
+        keys.vaultId,
+        keys.vaultKey,
+        envelopeKey,
+        keys.masterKey,
+        metadata,
+      ),
+    });
+  }
+
+  function titles(session: VaultSession, id: Uint8Array) {
+    return session.versions(id).map((v) => v.item?.title);
+  }
+
+  it('takes a newer edit from the backup and keeps the local one in history (Gate B)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    clockA.t = T0 + 1000;
+    await a.session.updateItem(id, login('Edited on A'));
+    b.clock.t = T0 + 2000;
+    await b.session.updateItem(id, login('Edited on B'));
+    const backup = await backupOf(b.session, 2, a.words);
+    const commits = a.store.commits.length;
+
+    const result = await a.session.mergeBackup(backup);
+    expect(result).toMatchObject({ added: 0, replaced: 1, versions: 1, phraseChanged: false });
+    expect(a.session.item(id)?.item?.title).toBe('Edited on B');
+    expect(titles(a.session, id)).toEqual(['Edited on A', 'Original']);
+    expect(a.store.commits).toHaveLength(commits + 1);
+
+    a.session.lock();
+    const again = await unlock(a.store, clockA);
+    expect(again.item(id)?.item?.title).toBe('Edited on B');
+    expect(titles(again, id)).toEqual(['Edited on A', 'Original']);
+    // The receive rule (D109): a write after the merge takes an HLC above every merged one.
+    const next = await again.createItem(login('After'));
+    expect(must(again.item(next)).hlc.physicalMs).toBe(T0 + 2000);
+    expect(must(again.item(next)).hlc.counter).toBeGreaterThan(0);
+  });
+
+  it('keeps a newer local edit and stores the backup’s older one as an Item Version (D6)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    b.clock.t = T0 + 1000;
+    await b.session.updateItem(id, login('Edited on B'));
+    clockA.t = T0 + 2000;
+    await a.session.updateItem(id, login('Edited on A'));
+    const loser = must(b.session.item(id)).hlc;
+
+    const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(result).toMatchObject({ added: 0, replaced: 0, versions: 1 });
+    expect(a.session.item(id)?.item?.title).toBe('Edited on A');
+    expect(titles(a.session, id)).toEqual(['Edited on B', 'Original']);
+    expect(a.session.versions(id)[0]?.hlc).toEqual(loser);
+  });
+
+  it('stores a losing tombstone as an Item Version of its content, not deleted (D56)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    b.clock.t = T0 + 1000;
+    await b.session.trashItem(id);
+    clockA.t = T0 + 2000;
+    await a.session.updateItem(id, login('Edited on A'));
+
+    await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(a.session.item(id)?.inTrash).toBe(false);
+    const [version] = a.session.versions(id);
+    expect(version?.hlc).toEqual(must(b.session.item(id)).hlc);
+    expect(version?.item?.trashOperationId).toBeDefined();
+    const stored = a.store.get({
+      recordType: RecordType.itemVersion,
+      recordId: must(version).versionId,
+    });
+    expect(decodeEnvelope((stored as { envelope: Uint8Array }).envelope).header.deleted).toBe(
+      false,
+    );
+  });
+
+  it('purges a winning tombstone past its purge date on arrival, with its history, naming the own loser (D7, D70, D137)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    clockA.t = T0 + 500;
+    await a.session.updateItem(id, login('Edited on A'));
+    b.clock.t = T0 + 1000;
+    await b.session.trashItem(id);
+    const backup = await backupOf(b.session, 2, a.words);
+
+    clockA.t = T0 + 1000 + PURGE_DELAY_MS + 1;
+    const result = await a.session.mergeBackup(backup);
+    expect(result.droppedLosers).toEqual([{ itemId: id, title: 'Edited on A' }]);
+    expect(a.session.item(id)).toBeUndefined();
+    expect(a.session.versions(id)).toEqual([]);
+    const stored = must(a.store.get({ recordType: RecordType.item, recordId: id }));
+    const { header } = decodeEnvelope(stored.envelope);
+    expect(header.deleted).toBe(true);
+    expect(header.hlc).toEqual(must(b.session.item(id)).hlc);
+    expect(a.store.ofType(RecordType.itemVersion)).toEqual([]);
+  });
+
+  it('applies the history cut across held, received and losing versions, naming an own loser cut (D6, D70)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    clockA.t = T0 + 1;
+    await a.session.updateItem(id, login('Edited on A'));
+    for (let i = 0; i <= HISTORY_LIMIT; i++) {
+      b.clock.t = T0 + 100 + i;
+      await b.session.updateItem(id, login(`B ${String(i)}`));
+    }
+    const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(result.droppedLosers).toEqual([{ itemId: id, title: 'Edited on A' }]);
+    expect(a.session.versions(id)).toHaveLength(HISTORY_LIMIT);
+    expect(titles(a.session, id)).not.toContain('Edited on A');
+    expect(titles(a.session, id)).not.toContain('Original');
+    expect(a.store.ofType(RecordType.itemVersion)).toHaveLength(HISTORY_LIMIT);
+  });
+
+  it('reports no loser written by another device when the cut drops it (D70)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    b.clock.t = T0 + 1;
+    await b.session.updateItem(id, login('Edited on B'));
+    for (let i = 0; i <= HISTORY_LIMIT; i++) {
+      clockA.t = T0 + 100 + i;
+      await a.session.updateItem(id, login(`A ${String(i)}`));
+    }
+    const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(result.droppedLosers).toEqual([]);
+    expect(titles(a.session, id)).not.toContain('Edited on B');
+    expect(a.session.versions(id)).toHaveLength(HISTORY_LIMIT);
+  });
+
+  it('merges folders by last-write-wins and adds what only the backup holds', async () => {
+    const { a, clockA, b } = await twoDevices();
+    const folder = await a.session.createFolder('Work');
+    const older = await backupOf(a.session, 1, a.words);
+    await b.session.mergeBackup(older);
+    clockA.t = T0 + 1000;
+    await a.session.renameFolder(folder, 'A name');
+    b.clock.t = T0 + 2000;
+    await b.session.renameFolder(folder, 'B name');
+    const added = await b.session.createItem(login('Only on B'));
+
+    const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(result).toMatchObject({ added: 1, replaced: 1, versions: 0 });
+    expect(a.session.folder(folder)?.name).toBe('B name');
+    expect(a.session.item(added)?.item?.title).toBe('Only on B');
+    expect(a.store.ofType(RecordType.itemVersion)).toHaveLength(0);
+    // An older copy loses, and is dropped: folders have no history.
+    expect(await a.session.mergeBackup(older)).toMatchObject({
+      added: 0,
+      replaced: 0,
+      versions: 0,
+    });
+    expect(a.session.folder(folder)?.name).toBe('B name');
+  });
+
+  it('lets a retired Device record win whatever its HLC, and reports new and retired devices (D31, D47, D48, D53)', async () => {
+    const { a, b } = await twoDevices();
+    const keys = keysOf(a.store);
+    const keyring = new Keyring();
+    const fresh = generateDeviceIdentity(keyring);
+    const gone = generateDeviceIdentity(keyring);
+    const device = (publicKey: Uint8Array, displayName: string, retired: boolean) =>
+      deviceToCbor({ publicKey, displayName, retired, registeredAt: T0 });
+    plant(
+      a.store,
+      keys,
+      RecordType.device,
+      fresh.deviceId,
+      hlcAt(T0 + 10),
+      false,
+      device(fresh.publicKey, 'Phone', false),
+    );
+    plant(
+      a.store,
+      keys,
+      RecordType.device,
+      gone.deviceId,
+      hlcAt(T0 + 11),
+      false,
+      device(gone.publicKey, 'Old laptop', true),
+    );
+    // An older retired copy of A's own record: retirement wins anyway (D31).
+    plant(
+      a.store,
+      keys,
+      RecordType.device,
+      a.session.deviceId,
+      hlcAt(T0 - 1),
+      false,
+      device(must(a.session.devices()[0]).device.publicKey, 'Chrome on macOS', true),
+    );
+
+    const result = await b.session.mergeBackup(await rawBackup(a.store));
+    expect(result.newDevices.map((d) => [d.device.displayName, d.device.retired])).toEqual(
+      expect.arrayContaining([
+        ['Phone', false],
+        ['Old laptop', true],
+      ]),
+    );
+    expect(result.newDevices).toHaveLength(2);
+    expect(result.retiredDevices.map((d) => d.deviceId)).toEqual([a.session.deviceId]);
+    expect(b.session.retired).toBe(false);
+
+    // The same backup again announces nothing: everything in it is now seen.
+    const again = await b.session.mergeBackup(await rawBackup(a.store));
+    expect(again).toMatchObject({ added: 0, replaced: 0, newDevices: [], retiredDevices: [] });
+
+    // A's own record arrives retired: the D41 notice, not the D47 one.
+    const own = await a.session.mergeBackup(await rawBackup(a.store));
+    expect(own.retiredDevices).toEqual([]);
+    expect(a.session.retired).toBe(true);
+  });
+
+  it('records every device as seen without a notice when none was held before (D48, D53)', async () => {
+    const source = await create();
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const keys = keysOf(source.store);
+    const session = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: {
+        vaultId: keys.vaultId,
+        masterKey: keys.masterKey,
+        records: (await source.store.records()).filter((r) => r.recordType !== RecordType.device),
+      },
+      now: new Clock().now,
+    });
+    open.push(session);
+    expect(session.devices()).toEqual([]);
+    const result = await session.mergeBackup(await rawBackup(source.store));
+    expect(result.newDevices).toEqual([]);
+    expect(session.devices()).toHaveLength(1);
+  });
+
+  it('records seen devices and the last phraseId in Local Config: at fresh restore (D53) and at merge', async () => {
+    const { a, b } = await twoDevices();
+    const seen = (store: MemoryStore, seed: number) => {
+      const keys = keysOf(store, seed);
+      const config = parseLocalConfig(store.localConfig);
+      const opened = openLocalConfigPart(
+        new Keyring(),
+        keys.subkeys.localConfig,
+        localAad(LocalPurpose.localConfig, config.vaultId, config.localConfigId),
+        config.encrypted,
+      );
+      return readLocalConfigState(opened.content);
+    };
+    expect(seen(b.store, 2).seenDevices).toEqual([a.session.deviceId]);
+    expect(seen(b.store, 2).seenRetiredDevices).toBeUndefined();
+    expect(seen(a.store, 1).seenDevices).toBeUndefined();
+    await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(seen(a.store, 1).seenDevices).toEqual([a.session.deviceId]);
+    expect(seen(a.store, 1).lastPhraseId).toEqual(a.session.recovery?.phraseId);
+  });
+
+  it('takes a newer Recovery Envelope with another phraseId and reports the change (D43)', async () => {
+    const { a, b } = await twoDevices();
+    const keys = keysOf(a.store);
+    const keyring = new Keyring();
+    const recovery = deriveRecoveryKeys(keyring, generateRecoveryPhrase(keyring).entropy);
+    const phraseId = randomId();
+    const metadata = new Map<CborValue, CborValue>([
+      ['keyslotPublicKey', recovery.keyslotPublicKey],
+      ['phraseCreatedAt', T0 + 5000],
+      ['phraseId', phraseId],
+    ]);
+    plantEnvelope(a.store, keys, hlcAt(T0 + 5000), recovery.envelopeKey, metadata);
+
+    const result = await b.session.mergeBackup(await rawBackup(a.store));
+    expect(result.phraseChanged).toBe(true);
+    expect(result.replaced).toBe(1);
+    expect(b.session.recovery?.phraseId).toEqual(phraseId);
+    expect(b.session.lastPhraseId).toEqual(phraseId);
+    expect((await b.session.mergeBackup(await rawBackup(a.store))).phraseChanged).toBe(false);
+  });
+
+  it('rejects the whole merge for a Recovery Envelope changed under the held phraseId (D44)', async () => {
+    const { a, b } = await twoDevices();
+    const keys = keysOf(a.store);
+    const held = must(a.session.recovery);
+    const phrase = typed(a.words);
+    const metadata = new Map<CborValue, CborValue>([
+      ['keyslotPublicKey', held.keyslotPublicKey],
+      ['phraseCreatedAt', held.phraseCreatedAt],
+      ['phraseId', held.phraseId],
+    ]);
+    plantEnvelope(a.store, keys, hlcAt(T0 + 5000), phrase.envelopeKey, metadata);
+    await b.session.createItem(login('Kept'));
+    const commits = b.store.commits.length;
+
+    const error = await b.session.mergeBackup(await rawBackup(a.store)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(MergeRejectedError);
+    expect(error).toMatchObject({
+      reason: 'immutable-record',
+      record: {
+        recordType: RecordType.recoveryEnvelope,
+        recordId: recoveryEnvelopeRecordId(keys.vaultId),
+      },
+    });
+    expect(b.store.commits).toHaveLength(commits);
+    expect(b.session.recovery).toEqual(held);
+  });
+
+  it('rejects the whole merge for another version of a held Vault Key record (D42)', async () => {
+    const { a } = await twoDevices();
+    const keys = keysOf(a.store);
+    const keyring = new Keyring();
+    const header: RecordHeader = {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.vaultKey,
+      recordId: vaultKeyRecordId(1),
+      keyEpoch: 1,
+      hlc: hlcAt(T0 + 10),
+      deleted: false,
+    };
+    const forged = {
+      recordType: RecordType.vaultKey,
+      recordId: vaultKeyRecordId(1),
+      envelope: sealVaultKeyRecord(
+        header,
+        keys.vaultId,
+        keys.subkeys.vaultKeyWrap,
+        generateKey(keyring),
+      ),
+    };
+    const size = a.keyring.size;
+    const error = await a.session
+      .mergeBackup({ vaultId: keys.vaultId, masterKey: keys.masterKey, records: [forged] })
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({
+      reason: 'immutable-record',
+      record: { recordType: RecordType.vaultKey, recordId: vaultKeyRecordId(1) },
+    });
+    // The Vault Key it carried is not kept (CRYPTO-INV-010).
+    expect(a.keyring.size).toBe(size);
+  });
+
+  it('adds a Vault Key record of an epoch not held, and holds its key once committed (sync-protocol.md §1.3)', async () => {
+    const { a, clockA } = await twoDevices();
+    const keys = keysOf(a.store);
+    const keyring = new Keyring();
+    const header: RecordHeader = {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.vaultKey,
+      recordId: vaultKeyRecordId(2),
+      keyEpoch: 2,
+      hlc: hlcAt(T0 + 10),
+      deleted: false,
+    };
+    const record = {
+      recordType: RecordType.vaultKey,
+      recordId: vaultKeyRecordId(2),
+      envelope: sealVaultKeyRecord(
+        header,
+        keys.vaultId,
+        keys.subkeys.vaultKeyWrap,
+        generateKey(keyring),
+      ),
+    };
+    const result = await a.session.mergeBackup({
+      vaultId: keys.vaultId,
+      masterKey: keys.masterKey,
+      records: [record],
+    });
+    expect(result).toMatchObject({ added: 1, replaced: 0 });
+    expect(a.store.get({ recordType: RecordType.vaultKey, recordId: vaultKeyRecordId(2) })).toEqual(
+      record,
+    );
+    // New records go under the greatest epoch held, and still open after a new unlock.
+    const id = await a.session.createItem(login('Under epoch 2'));
+    const stored = must(a.store.get({ recordType: RecordType.item, recordId: id }));
+    expect(decodeEnvelope(stored.envelope).header.keyEpoch).toBe(2);
+    a.session.lock();
+    const again = await unlock(a.store, clockA);
+    expect(again.item(id)?.item?.title).toBe('Under epoch 2');
+  });
+
+  it('rejects another vault’s backup and a backup with another Master Key, writing nothing (D13, D57)', async () => {
+    const { a } = await twoDevices();
+    const other = await create();
+    const commits = a.store.commits.length;
+    await expect(a.session.mergeBackup(await rawBackup(other.store))).rejects.toMatchObject({
+      reason: 'different-vault',
+    });
+    const keyring = new Keyring();
+    await expect(
+      a.session.mergeBackup({
+        vaultId: a.session.vaultId,
+        masterKey: generateKey(keyring),
+        records: await other.store.records(),
+      }),
+    ).rejects.toMatchObject({ reason: 'master-key-mismatch' });
+    expect(a.store.commits).toHaveLength(commits);
+    expect(new MergeRejectedError('different-vault').message).toBe(
+      'merge rejected: different-vault',
+    );
+  });
+
+  it('rejects the whole merge for a record that fails verification or the content checks, naming it (D59, D64)', async () => {
+    const { a, b } = await twoDevices();
+    const keys = keysOf(a.store);
+    const folderId = randomId();
+    plant(
+      a.store,
+      keys,
+      RecordType.folder,
+      folderId,
+      hlcAt(T0),
+      false,
+      new Map<CborValue, CborValue>([['name', 7]]),
+    );
+    await expect(b.session.mergeBackup(await rawBackup(a.store))).rejects.toMatchObject({
+      reason: 'corrupt-record',
+      record: { recordType: RecordType.folder, recordId: folderId },
+    });
+    expect(b.session.folder(folderId)).toBeUndefined();
+  });
+
+  it('rejects the whole merge for a record beyond the future-clock bound, saying when to retry (D64, CRYPTO-INV-022)', async () => {
+    const { a, b, id } = await twoDevices();
+    const keys = keysOf(a.store);
+    const ahead = randomId();
+    plant(
+      a.store,
+      keys,
+      RecordType.item,
+      ahead,
+      hlcAt(T0 + 3 * DAY),
+      false,
+      itemToCbor(login('Ahead'), false),
+    );
+    await b.session.updateItem(id, login('Kept on B'));
+    const commits = b.store.commits.length;
+    const error = await b.session.mergeBackup(await rawBackup(a.store)).catch((e: unknown) => e);
+    expect(error).toMatchObject({
+      reason: 'future-clock',
+      retryAt: T0 + 3 * DAY - FUTURE_CLOCK_BOUND_MS,
+    });
+    expect(b.store.commits).toHaveLength(commits);
+    expect(b.session.item(ahead)).toBeUndefined();
+    expect(b.session.item(id)?.item?.title).toBe('Kept on B');
+  });
+
+  it('repairs a record kept aside as corrupt at unlock with the backup’s copy (D182)', async () => {
+    const { a, clockA, id } = await twoDevices();
+    clockA.t = T0 + 1000;
+    await a.session.updateItem(id, login('Edited'));
+    const backup = await backupOf(a.session, 1, a.words);
+    const key = { recordType: RecordType.item, recordId: id };
+    const versionKey = {
+      recordType: RecordType.itemVersion,
+      recordId: must(a.session.versions(id)[0]).versionId,
+    };
+    const stored = must(a.store.get(key));
+    for (const k of [key, versionKey]) {
+      const record = must(a.store.get(k));
+      const tampered = record.envelope.slice();
+      const last = tampered.length - 1;
+      tampered[last] = (tampered[last] ?? 0) ^ 1;
+      a.store.put({ ...record, envelope: tampered as typeof record.envelope });
+    }
+    a.session.lock();
+    const damaged = await unlock(a.store, clockA);
+    expect(damaged.corrupt()).toEqual(expect.arrayContaining([key, versionKey]));
+
+    const result = await damaged.mergeBackup(backup);
+    expect(result).toMatchObject({ added: 0, replaced: 2, versions: 1 });
+    expect(damaged.corrupt()).toEqual([]);
+    expect(damaged.item(id)?.item?.title).toBe('Edited');
+    expect(titles(damaged, id)).toEqual(['Original']);
+    expect(must(a.store.get(key)).envelope).toEqual(stored.envelope);
+  });
+
+  it('merges while the vault is read-only because the clock went back, issuing no HLC (D73)', async () => {
+    const { a, clockA, b, id } = await twoDevices();
+    b.clock.t = T0 + 1000;
+    await b.session.updateItem(id, login('Edited on B'));
+    clockA.t = T0 + 5 * DAY;
+    await a.session.createItem(login('Written ahead'));
+    clockA.t = T0 + 2000;
+    a.session.lock();
+    const behind = await unlock(a.store, clockA);
+    expect(behind.writable).toBe(false);
+
+    await behind.mergeBackup(await backupOf(b.session, 2, a.words));
+    expect(behind.item(id)?.item?.title).toBe('Edited on B');
+    expect(titles(behind, id)).toEqual(['Original']);
+    expect(behind.writable).toBe(false);
+  });
+
+  it('changes no record when merging a backup of the same state', async () => {
+    const { a } = await twoDevices();
+    const result = await a.session.mergeBackup(await backupOf(a.session, 1, a.words));
+    expect(result).toEqual({
+      added: 0,
+      replaced: 0,
+      versions: 0,
+      phraseChanged: false,
+      newDevices: [],
+      retiredDevices: [],
+      droppedLosers: [],
+    });
+    expect(a.store.commits.at(-1)?.put).toEqual([]);
+  });
+
+  it('refuses a merge once locked, and leaves no Vault Key of the backup behind', async () => {
+    const { a, b } = await twoDevices();
+    const backup = await backupOf(b.session, 2, a.words);
+    a.session.lock();
+    await expect(a.session.mergeBackup(backup)).rejects.toThrow(VaultLockedError);
+  });
+});
+
 describe('items and history (D6, D165)', () => {
   it('stores the previous state as an Item Version with its hlc and keyed versionId', async () => {
     const { session, store, clock } = await create();
@@ -2227,6 +2801,9 @@ describe('lock (CRYPTO-INV-010)', () => {
       moveFolder: () => session.moveFolder(folderId),
       trashFolder: () => session.trashFolder(folderId),
       restoreFolder: () => session.restoreFolder(folderId),
+      mergeBackup: () =>
+        session.mergeBackup({ vaultId: new Uint8Array(16), masterKey: kek(caller), records: [] }),
+      retired: () => session.retired,
     };
     // Every member but `lock` and `locked` is called: a new one fails here until it is listed.
     const members = Object.getOwnPropertyNames(VaultSession.prototype).filter(

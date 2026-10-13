@@ -89,8 +89,22 @@ every project through the references in the root `tsconfig.json`.
   is writable (D39, D109). `apps/web` reads the file with `<input type="file">`, keeps it and then
   the validated backup in memory, and asks for the local password last, as creation does; the
   commit opens the database lazily under the installation guard and the vault lock, and a lock
-  before it wipes the backup's Master Key and writes nothing (D104). Replacing a vault the device
-  holds (D89, D153) is not offered yet: restore is reached only with no vault.
+  before it wipes the backup's Master Key and writes nothing (D104). It records every restored
+  `deviceId` as seen, and every retired one as seen as retired, without a notice (D53). Replacing a
+  vault the device holds (D89, D153) is not offered yet: a fresh restore is reached only with no
+  vault.
+- **Backup merge (Phase 2, D182).** The merge rules of `sync-protocol.md` §1 live in
+  `packages/vault`: `merge.ts` holds the pure last-write-wins decisions, and
+  `VaultSession.mergeBackup` applies them, so sync calls the same path in Phase 5. The session
+  checks the `vaultId` and the Master Key, through `isMasterKeyOf` in `packages/crypto`, then reads
+  the backup's records with the same `load` as unlock, under the Vault Keys it holds, and rejects
+  the whole merge for a record kept aside, one beyond the bound or one that breaks D42 or D44,
+  before computing any write. Conflict losers become Item Versions sealed by this device with
+  their own HLC, the history cut runs once over the whole transfer (D137), and one commit writes
+  the result with the Local Config. Vault Keys the backup carried for held epochs are released at
+  once. `apps/web` opens the file with the same steps as a fresh restore, while unlocked, says a
+  backup of another vault is one before the confirmation, and shows the notices of the result
+  once; the own-retirement notice (D41) is read from the held Device record.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

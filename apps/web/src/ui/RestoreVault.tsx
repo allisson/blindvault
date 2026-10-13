@@ -86,7 +86,7 @@ export function RestoreVault({
   );
 }
 
-function ChooseFile({
+export function ChooseFile({
   controller,
   error,
   onFile,
@@ -123,7 +123,7 @@ function ChooseFile({
   );
 }
 
-function OpenBackup({
+export function OpenBackup({
   controller,
   header,
   onOpened,
@@ -265,7 +265,7 @@ function RestorePassword({
   );
 }
 
-function fileError(m: Messages, check: BackupFileCheck): string | undefined {
+export function fileError(m: Messages, check: BackupFileCheck): string | undefined {
   switch (check.kind) {
     case 'ok':
     case 'unavailable':
@@ -280,7 +280,7 @@ function fileError(m: Messages, check: BackupFileCheck): string | undefined {
 }
 
 /** Whether the file stays open for another try after this outcome. */
-function kept(opening: BackupOpening): boolean {
+export function kept(opening: BackupOpening): boolean {
   return (
     opening.kind === 'wrong-secret' ||
     opening.kind === 'invalid-phrase' ||
@@ -288,7 +288,7 @@ function kept(opening: BackupOpening): boolean {
   );
 }
 
-function openingError(
+export function openingError(
   m: Messages,
   opening: BackupOpening,
   method: 'phrase' | 'password',
@@ -320,6 +320,8 @@ function openingError(
       return r.inconsistent;
     case 'locked':
       return r.locked;
+    case 'different-vault':
+      return m.merge.differentVault;
     case 'corrupt-record':
       return opening.recordType !== undefined && opening.recordId !== undefined
         ? format(r.corruptRecord, {

@@ -219,6 +219,11 @@ export function VaultShell({
       <PreviewBanner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
       {session.writable ? null : <Notice>{m.vault.readOnlyVault}</Notice>}
+      {session.retired ? (
+        <div className="px-4 py-2" data-testid="own-retired">
+          <Notice>{m.merge.ownRetired}</Notice>
+        </div>
+      ) : null}
       {controller.afterRestore === 'check-phrase' ? (
         <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="after-restore">
           <Notice>{m.restore.checkPhrase}</Notice>

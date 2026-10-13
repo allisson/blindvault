@@ -214,7 +214,8 @@ rejection names its reason (in parentheses):
    fails the same way (`master-key-mismatch`). Then require its `keyslotPublicKey` to equal the
    one derived from the phrase (`public-key-mismatch`) (D43). Opened with an export password: the
    restore ends by recommending Check Recovery Phrase (D43).
-9. Apply it as a fresh restore or a backup merge (overview §10, D13, D33, D39, D57, D89, D153).
+9. Apply it as a fresh restore or a backup merge (overview §10, D13, D33, D39, D57, D89, D153); a
+   backup merge follows `sync-protocol.md` §1 (D182).
 10. Wipe the file key, the KEK, the phrase-derived keys, the Vault Keys and subkeys used in step 6
     and, unless the restore committed, the Master Key.
 

@@ -36,12 +36,14 @@ import {
   encodeCbor,
   generateDeviceIdentity,
   generateKey,
+  isMasterKeyOf,
   itemContentLength,
   localAad,
   openLocalConfigPart,
   parseRecoveryPhrase,
   randomId,
   recoveryEnvelopeRecordId,
+  sameKey,
   sealLocalConfigPart,
   sealPurgedTombstone,
   sealRecord,
@@ -58,6 +60,7 @@ import {
   type BlockedRecord,
   ContentInvalidError,
   ExportRejectedError,
+  MergeRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
   RestoreRejectedError,
@@ -74,7 +77,7 @@ import {
   readDevice,
   readFolder,
 } from './folder';
-import { HlcClock, compareHlc } from './hlc';
+import { FUTURE_CLOCK_BOUND_MS, HlcClock, compareHlc } from './hlc';
 import { idKey, sameBytes } from './ids';
 import {
   type Item,
@@ -94,6 +97,7 @@ import {
   preferencesValid,
   readLocalConfigState,
 } from './local-config';
+import { incomingDeviceWins, incomingWins, sameVersion } from './merge';
 import { type RecordKey, type RecordStore, type StoredRecord } from './store';
 import { codePointLength, compareBytes, isId } from './text';
 import { type TreeNode, buildTree, displayedParents, isWithin } from './tree';
@@ -225,13 +229,34 @@ export interface RestoreOptions {
   readonly kek: SymmetricKey;
   readonly salt: Uint8Array;
   readonly kdfParams: KdfParams;
-  /** A backup validated by `packages/backup` (backup-format.md §8 steps 1 to 8). */
-  readonly backup: {
-    readonly vaultId: Uint8Array;
-    readonly masterKey: SymmetricKey;
-    readonly records: readonly StoredRecord[];
-  };
+  readonly backup: BackupRecords;
   readonly now?: () => number;
+}
+
+/** A backup validated by `packages/backup` (backup-format.md §8 steps 1 to 8). */
+export interface BackupRecords {
+  readonly vaultId: Uint8Array;
+  /** In the caller's keyring, which the caller wipes. */
+  readonly masterKey: SymmetricKey;
+  readonly records: readonly StoredRecord[];
+}
+
+/** What a backup merge did and the notices it calls for, shown once (sync-protocol.md §1.6, D182). */
+export interface MergeResult {
+  /** Records this device did not hold. */
+  readonly added: number;
+  /** Held records the backup's copy replaced, a record kept aside as corrupt included. */
+  readonly replaced: number;
+  /** Item Versions written: received, or made from a conflict loser (D6). */
+  readonly versions: number;
+  /** The Recovery Envelope's `phraseId` differs from the last one seen (D43). */
+  readonly phraseChanged: boolean;
+  /** Device records never seen before, the own one excepted (D48, D53). */
+  readonly newDevices: readonly DeviceView[];
+  /** Device records seen before, now retired, the own one excepted (D47). */
+  readonly retiredDevices: readonly DeviceView[];
+  /** Conflict losers written by this device that the history kept no room for (D70). */
+  readonly droppedLosers: readonly { readonly itemId: Uint8Array; readonly title: string }[];
 }
 
 export interface UnlockOptions {
@@ -262,6 +287,8 @@ interface HeldVersion {
   readonly header: RecordHeader;
   readonly itemId: Uint8Array;
   readonly reading: ItemReading;
+  /** `{item, itemId}`, as written. */
+  readonly content: CborMap;
 }
 
 interface HeldFolder {
@@ -291,7 +318,22 @@ interface Write {
   /** The content written; `null` for a purged tombstone and for a Vault Key record. */
   readonly content: CborMap | null;
   readonly envelope: RecordEnvelope;
+  /** For a Vault Key record of an epoch not held before: its key, held once committed. */
+  readonly vaultKey?: SymmetricKey;
 }
+
+/** An Item Version a merge may keep: held, received, or made from a conflict loser (§1.4). */
+interface Candidate {
+  readonly header: RecordHeader;
+  readonly held: boolean;
+  /** Not held: written if the history cut keeps it. */
+  readonly write?: Write;
+  /** Made from a conflict loser: who wrote that state, for the D70 notice. */
+  readonly loser?: { readonly deviceId: Uint8Array; readonly title: string };
+}
+
+/** What a merge records in Local Config (sync-protocol.md §1.5, D43, D48). */
+type Seen = Pick<LocalConfigState, 'seenDevices' | 'seenRetiredDevices' | 'lastPhraseId'>;
 
 type Cleartext = Omit<LocalConfigCleartext, 'encrypted'>;
 
@@ -304,11 +346,14 @@ interface Plan<T> {
   readonly preferences?: Preferences;
   /** The date of the last backup made on this device (§13.4). */
   readonly lastBackupAt?: number;
+  readonly seen?: Seen;
 }
 
 /** The records held, decrypted at unlock. */
 interface State {
   readonly vaultKeys: Map<number, SymmetricKey>;
+  /** The Vault Key records' headers, by epoch: immutable once held (D42). */
+  readonly vaultKeyHeaders: Map<number, RecordHeader>;
   readonly items: Map<string, HeldItem>;
   /** By `itemId`, then by `versionId`. */
   readonly versions: Map<string, Map<string, HeldVersion>>;
@@ -322,6 +367,7 @@ interface State {
 function emptyState(): State {
   return {
     vaultKeys: new Map(),
+    vaultKeyHeaders: new Map(),
     items: new Map(),
     versions: new Map(),
     folders: new Map(),
@@ -367,7 +413,7 @@ function versionReading(content: CborMap): ItemReading {
 function versionOf(header: RecordHeader, content: CborMap | null): HeldVersion {
   const itemId = content?.get('itemId');
   if (!content || !(itemId instanceof Uint8Array)) throw new ContentInvalidError('item version');
-  return { header, itemId, reading: versionReading(content) };
+  return { header, itemId, reading: versionReading(content), content };
 }
 
 function addVersion(state: State, version: HeldVersion): void {
@@ -387,19 +433,21 @@ function readOnlyOf(reading: ItemReading, beyond: boolean) {
 /**
  * Decrypts every stored record with the `crypto-spec.md` §9.5 verification. A record that fails
  * it, holds an invalid Folder or Device value (D59), or sits under another key than its header's
- * is kept aside as corrupt: never shown and never written.
+ * is kept aside as corrupt: never shown and never written. `known` are Vault Keys already held, used
+ * first for their epochs, so a merged record verifies under the local Vault Key (D57).
  */
 function load(
   keyring: Keyring,
   stored: readonly StoredRecord[],
   vaultId: Uint8Array,
   subkeys: MasterSubkeys,
+  known?: ReadonlyMap<number, SymmetricKey>,
 ): { state: State; held: Hlc[] } {
   const state = emptyState();
   const held: Hlc[] = [];
   const keys = {
     vaultId,
-    vaultKey: (epoch: number) => state.vaultKeys.get(epoch),
+    vaultKey: (epoch: number) => known?.get(epoch) ?? state.vaultKeys.get(epoch),
     vaultKeyWrapKey: subkeys.vaultKeyWrap,
     versionIdKey: subkeys.versionId,
   };
@@ -430,6 +478,7 @@ function load(
     held.push(header.hlc);
     if (vaultKey) {
       state.vaultKeys.set(header.keyEpoch, vaultKey);
+      state.vaultKeyHeaders.set(header.keyEpoch, header);
       continue;
     }
     const key = idKey(header.recordId);
@@ -609,6 +658,9 @@ export class VaultSession {
       const start = HlcClock.create(identity.deviceId, now).state;
       const clock = HlcClock.resume(identity.deviceId, start, held, now);
       const phraseId = state.recovery?.content.get('phraseId');
+      // D53: every restored device is seen, every retired one seen as retired, without a notice.
+      const devices = [...state.devices.values()];
+      const retired = devices.filter((d) => d.device.value.retired);
       const session = new VaultSession({
         store,
         keyring,
@@ -623,6 +675,8 @@ export class VaultSession {
           preferences: DEFAULT_PREFERENCES,
           hlc: clock.state,
           ...(phraseId instanceof Uint8Array ? { lastPhraseId: phraseId } : {}),
+          ...(devices.length > 0 ? { seenDevices: sortedIds(devices.map(deviceIdOf)) } : {}),
+          ...(retired.length > 0 ? { seenRetiredDevices: sortedIds(retired.map(deviceIdOf)) } : {}),
         },
         clock,
         state,
@@ -1007,6 +1061,311 @@ export class VaultSession {
     }
   }
 
+  // --- backup merge ----------------------------------------------------------------------------
+
+  /**
+   * A backup merge (overview §10, sync-protocol.md §1, D13, D57, D182): the backup's records, verified
+   * under this vault's keys as on receipt, merged by the rules of sync and written with the Local
+   * Config in one commit. Another vault, another Master Key, a record that fails verification or the
+   * content checks, one beyond the future-clock bound or one that breaks the immutability of D42 or
+   * D44 throws `MergeRejectedError` and writes nothing. Asks for no local password and issues no HLC,
+   * so it runs while the vault is read-only for a clock gone back (D73). The caller wipes the
+   * backup's keyring.
+   */
+  mergeBackup(backup: BackupRecords): Promise<MergeResult> {
+    return this.#run(() => this.#merge(backup));
+  }
+
+  #merge(backup: BackupRecords): Plan<MergeResult> {
+    const { vaultId } = this.#cleartext;
+    if (!sameBytes(backup.vaultId, vaultId)) throw new MergeRejectedError('different-vault');
+    if (!isMasterKeyOf(backup.masterKey, this.#subkeys)) {
+      throw new MergeRejectedError('master-key-mismatch');
+    }
+    const incoming = load(
+      this.#keyring,
+      backup.records,
+      vaultId,
+      this.#subkeys,
+      this.#state.vaultKeys,
+    );
+    let planned = false;
+    try {
+      const [corrupt] = incoming.state.corrupt;
+      if (corrupt) throw new MergeRejectedError('corrupt-record', copyKey(corrupt));
+      const beyond = incoming.held.filter((h) => this.#clock.beyondBound(h));
+      if (beyond.length > 0) {
+        const latest = Math.max(...beyond.map((h) => h.physicalMs));
+        throw new MergeRejectedError('future-clock', undefined, latest - FUTURE_CLOCK_BOUND_MS);
+      }
+      this.#checkImmutable(incoming.state);
+      const plan = this.#mergePlan(incoming.state, backup.records);
+      for (const hlc of incoming.held) this.#clock.receive(hlc);
+      planned = true;
+      return plan;
+    } finally {
+      // A held epoch keeps its own key; a new one's key is kept only if the merge goes ahead.
+      for (const [epoch, key] of incoming.state.vaultKeys) {
+        if (!planned || this.#state.vaultKeys.has(epoch)) this.#keyring.release(key);
+      }
+    }
+  }
+
+  /** sync-protocol.md §1.3: a held Vault Key epoch, or a held `phraseId`, may not change (D42, D44). */
+  #checkImmutable(incoming: State): void {
+    for (const [epoch, header] of incoming.vaultKeyHeaders) {
+      const held = this.#state.vaultKeyHeaders.get(epoch);
+      const heldKey = this.#state.vaultKeys.get(epoch);
+      const key = incoming.vaultKeys.get(epoch);
+      if (!held || !heldKey || !key) continue;
+      if (compareHlc(held.hlc, header.hlc) !== 0 || !sameKey(key, heldKey)) {
+        throw new MergeRejectedError('immutable-record', headerKey(header));
+      }
+    }
+    const envelope = incoming.recovery;
+    const held = this.#state.recovery;
+    if (!envelope || !held) return;
+    if (!sameBytes(phraseIdOf(envelope), phraseIdOf(held))) return;
+    if (
+      compareHlc(envelope.header.hlc, held.header.hlc) !== 0 ||
+      !sameContent(envelope.content, held.content)
+    ) {
+      throw new MergeRejectedError('immutable-record', headerKey(envelope.header));
+    }
+  }
+
+  /** The writes of a merge that passed every check (sync-protocol.md §1.2 to §1.6). */
+  #mergePlan(incoming: State, records: readonly StoredRecord[]): Plan<MergeResult> {
+    const envelopes = new Map(records.map((r) => [recordKeyOf(r), r.envelope]));
+    const corrupt = new Set(this.#state.corrupt.map(recordKeyOf));
+    const writes: Write[] = [];
+    const deletes: RecordKey[] = [];
+    let added = 0;
+    let replaced = 0;
+    const now = this.#now();
+    const due = (h: RecordHeader) => h.deleted && now >= h.hlc.physicalMs + PURGE_DELAY_MS;
+    const vaultKeyOf = (epoch: number) =>
+      this.#state.vaultKeys.get(epoch) ?? incoming.vaultKeys.get(epoch);
+    /** The backup's record as it came, or purged on arrival when it is a tombstone past its date. */
+    const take = (header: RecordHeader, content: CborMap | null, held: boolean): Write => {
+      const key = recordKeyOf(header);
+      if (held || corrupt.has(key)) replaced += 1;
+      else added += 1;
+      const write: Write =
+        content && due(header)
+          ? {
+              header,
+              content: null,
+              envelope: sealPurgedTombstone(
+                header,
+                this.#cleartext.vaultId,
+                present(vaultKeyOf(header.keyEpoch)),
+              ),
+            }
+          : { header, content, envelope: present(envelopes.get(key)) };
+      writes.push(write);
+      return write;
+    };
+
+    // Vault Keys of an epoch not held (§1.3); a held one was checked unchanged.
+    for (const [epoch, header] of incoming.vaultKeyHeaders) {
+      if (this.#state.vaultKeyHeaders.has(epoch)) continue;
+      const write = take(header, null, false);
+      writes[writes.length - 1] = {
+        ...write,
+        vaultKey: present(incoming.vaultKeys.get(epoch)),
+      };
+    }
+
+    // Items, then their history (§1.3, §1.4).
+    const finalItems = new Map<string, HeldItem>();
+    const history = new Map<string, { itemId: Uint8Array; versions: Map<string, Candidate> }>();
+    const candidates = (itemId: Uint8Array) => {
+      const itemKey = idKey(itemId);
+      let entry = history.get(itemKey);
+      if (!entry) {
+        const versions = new Map<string, Candidate>();
+        for (const v of this.#state.versions.get(itemKey)?.values() ?? []) {
+          versions.set(idKey(v.header.recordId), { header: v.header, held: true });
+        }
+        entry = { itemId, versions };
+        history.set(itemKey, entry);
+      }
+      return entry.versions;
+    };
+    for (const [key, item] of incoming.items) {
+      const local = this.#state.items.get(key);
+      let loser: HeldItem | undefined;
+      if (local) {
+        if (sameVersion(local.header, item.header)) continue;
+        const wins = incomingWins(local.header, item.header);
+        // The same state in another format is a migration: it makes no version (D38).
+        const migration = compareHlc(local.header.hlc, item.header.hlc) === 0;
+        loser = migration ? undefined : wins ? local : item;
+        if (!wins) {
+          this.#addLoser(candidates(item.header.recordId), loser);
+          continue;
+        }
+      }
+      const write = take(item.header, item.content, local !== undefined);
+      finalItems.set(key, {
+        header: item.header,
+        content: write.content,
+        reading: write.content ? item.reading : null,
+      });
+      this.#addLoser(candidates(item.header.recordId), loser);
+    }
+    for (const versions of incoming.versions.values()) {
+      for (const [versionKey, version] of versions) {
+        const map = candidates(version.itemId);
+        if (map.has(versionKey)) continue;
+        const key = recordKeyOf(version.header);
+        if (corrupt.has(key)) replaced += 1;
+        map.set(versionKey, {
+          header: version.header,
+          held: false,
+          write: {
+            header: version.header,
+            content: version.content,
+            envelope: present(envelopes.get(key)),
+          },
+        });
+      }
+    }
+    let versionsWritten = 0;
+    const droppedLosers: { itemId: Uint8Array; title: string }[] = [];
+    for (const [itemKey, { itemId, versions }] of history) {
+      const item = finalItems.get(itemKey) ?? this.#state.items.get(itemKey);
+      const ranked = [...versions.values()].sort((a, b) => newestFirst(a.header, b.header));
+      // A purged item keeps no history once the whole transfer is merged (D137).
+      const cut = item && !item.content ? 0 : HISTORY_LIMIT;
+      for (const [i, c] of ranked.entries()) {
+        if (i < cut) {
+          if (c.write) {
+            writes.push(c.write);
+            versionsWritten += 1;
+          }
+          continue;
+        }
+        if (c.held)
+          deletes.push({ recordType: RecordType.itemVersion, recordId: c.header.recordId });
+        if (c.loser && sameBytes(c.loser.deviceId, this.#identity.deviceId)) {
+          droppedLosers.push({ itemId: itemId.slice(), title: c.loser.title });
+        }
+      }
+    }
+
+    // Folders: the loser is dropped (§1.3).
+    for (const [key, folder] of incoming.folders) {
+      const local = this.#state.folders.get(key);
+      if (
+        local &&
+        (sameVersion(local.header, folder.header) || !incomingWins(local.header, folder.header))
+      ) {
+        continue;
+      }
+      take(folder.header, folder.folder?.content ?? null, local !== undefined);
+    }
+
+    // Devices: retirement wins (D31), and the notices of D47 and D48.
+    const own = idKey(this.#identity.deviceId);
+    const seen = new Map<string, Uint8Array>();
+    const seenRetired = new Map<string, Uint8Array>();
+    for (const id of this.#localState.seenDevices ?? []) seen.set(idKey(id), id);
+    for (const id of this.#localState.seenRetiredDevices ?? []) seenRetired.set(idKey(id), id);
+    for (const [key, d] of this.#state.devices) {
+      seen.set(key, d.header.recordId);
+      if (d.device.value.retired) seenRetired.set(key, d.header.recordId);
+    }
+    const heldNone = this.#state.devices.size === 0;
+    const newDevices: DeviceView[] = [];
+    const retiredDevices: DeviceView[] = [];
+    for (const [key, device] of incoming.devices) {
+      const local = this.#state.devices.get(key);
+      if (local) {
+        const before = { header: local.header, retired: local.device.value.retired };
+        const after = { header: device.header, retired: device.device.value.retired };
+        if (sameVersion(local.header, device.header) || !incomingDeviceWins(before, after))
+          continue;
+      }
+      take(device.header, device.device.content, local !== undefined);
+      if (key !== own && !heldNone) {
+        if (!seen.has(key)) newDevices.push(deviceView(device));
+        else if (device.device.value.retired && !seenRetired.has(key)) {
+          retiredDevices.push(deviceView(device));
+        }
+      }
+    }
+    for (const device of incoming.devices.values()) {
+      const id = device.header.recordId;
+      seen.set(idKey(id), id);
+      if (device.device.value.retired) seenRetired.set(idKey(id), id);
+    }
+
+    // The Recovery Envelope: another phraseId merges by last-write-wins (§1.3, D43).
+    const envelope = incoming.recovery;
+    const heldEnvelope = this.#state.recovery;
+    let current = heldEnvelope;
+    if (
+      envelope &&
+      (!heldEnvelope ||
+        (!sameBytes(phraseIdOf(envelope), phraseIdOf(heldEnvelope)) &&
+          incomingWins(heldEnvelope.header, envelope.header)))
+    ) {
+      take(envelope.header, envelope.content, heldEnvelope !== null);
+      current = envelope;
+    }
+    const lastPhraseId = current ? phraseIdOf(current) : this.#localState.lastPhraseId;
+    const previous = this.#localState.lastPhraseId;
+    const phraseChanged =
+      previous !== undefined && lastPhraseId !== undefined && !sameBytes(previous, lastPhraseId);
+
+    const next: Seen = {
+      ...(seen.size > 0 ? { seenDevices: sortedIds([...seen.values()]) } : {}),
+      ...(seenRetired.size > 0 ? { seenRetiredDevices: sortedIds([...seenRetired.values()]) } : {}),
+      ...(lastPhraseId ? { lastPhraseId } : {}),
+    };
+    const state = this.#localState;
+    const unchanged =
+      sameIds(state.seenDevices, next.seenDevices) &&
+      sameIds(state.seenRetiredDevices, next.seenRetiredDevices) &&
+      sameIds(state.lastPhraseId && [state.lastPhraseId], next.lastPhraseId && [next.lastPhraseId]);
+    return {
+      writes,
+      deletes,
+      result: {
+        added,
+        replaced,
+        versions: versionsWritten,
+        phraseChanged,
+        newDevices,
+        retiredDevices,
+        droppedLosers,
+      },
+      ...(unchanged ? {} : { seen: next }),
+    };
+  }
+
+  /** A conflict loser as an Item Version of its own `hlc` (D6, D56); a purged tombstone adds none. */
+  #addLoser(map: Map<string, Candidate>, loser: HeldItem | undefined): void {
+    if (!loser?.content) return;
+    const itemId = loser.header.recordId;
+    const vid = versionId(this.#subkeys.versionId, itemId, loser.header.hlc);
+    if (map.has(idKey(vid))) return;
+    const content: CborMap = new Map<CborValue, CborValue>([
+      ['item', loser.content],
+      ['itemId', itemId],
+    ]);
+    const write = this.#seal(RecordType.itemVersion, vid, loser.header.hlc, false, content);
+    const title = loser.content.get('title');
+    map.set(idKey(vid), {
+      header: write.header,
+      held: false,
+      write,
+      loser: { deviceId: loser.header.hlc.deviceId, title: typeof title === 'string' ? title : '' },
+    });
+  }
+
   /** The credential ID of the passkey set up on this device, if any (§5.5). */
   get passkeyCredentialId(): Uint8Array | undefined {
     this.#unlocked();
@@ -1057,12 +1416,13 @@ export class VaultSession {
 
   devices(): DeviceView[] {
     this.#unlocked();
-    return [...this.#state.devices.values()].map((d) => ({
-      deviceId: d.header.recordId.slice(),
-      hlc: copyHlc(d.header.hlc),
-      device: d.device.value,
-      unknownKeys: d.device.unknownKeys,
-    }));
+    return [...this.#state.devices.values()].map(deviceView);
+  }
+
+  /** Whether this device's own Device record is retired: the persistent D41 notice. */
+  get retired(): boolean {
+    this.#unlocked();
+    return this.#state.devices.get(idKey(this.#identity.deviceId))?.device.value.retired === true;
   }
 
   /** Every folder but purged tombstones, in the trash or not. */
@@ -1639,9 +1999,11 @@ export class VaultSession {
     cleartext: Cleartext = this.#cleartext,
     preferences: Preferences = this.#localState.preferences,
     lastBackupAt: number | bigint | undefined = this.#localState.lastBackupAt,
+    seen: Seen = {},
   ): { bytes: Uint8Array; localState: LocalConfigState } {
     const localState: LocalConfigState = {
       ...this.#localState,
+      ...seen,
       preferences,
       hlc: this.#clock.state,
       ...(lastBackupAt !== undefined ? { lastBackupAt } : {}),
@@ -1677,9 +2039,15 @@ export class VaultSession {
       const local =
         plan.cleartext !== undefined ||
         plan.preferences !== undefined ||
-        plan.lastBackupAt !== undefined;
+        plan.lastBackupAt !== undefined ||
+        plan.seen !== undefined;
       if (plan.writes.length === 0 && plan.deletes.length === 0 && !local) return plan.result;
-      const localConfig = this.#localConfig(plan.cleartext, plan.preferences, plan.lastBackupAt);
+      const localConfig = this.#localConfig(
+        plan.cleartext,
+        plan.preferences,
+        plan.lastBackupAt,
+        plan.seen,
+      );
       await this.#store.commit({
         put: plan.writes.map((w) => ({
           recordType: w.header.recordType as RecordType,
@@ -1703,6 +2071,11 @@ export class VaultSession {
   #apply(w: Write): void {
     const { header: h, content } = w;
     const key = idKey(h.recordId);
+    // A record kept aside as corrupt is repaired by a merged copy (D182).
+    const corrupt = this.#state.corrupt.findIndex(
+      (k) => k.recordType === h.recordType && sameBytes(k.recordId, h.recordId),
+    );
+    if (corrupt >= 0) this.#state.corrupt.splice(corrupt, 1);
     switch (h.recordType) {
       case RecordType.item:
         this.#state.items.set(key, {
@@ -1726,8 +2099,12 @@ export class VaultSession {
       case RecordType.recoveryEnvelope:
         if (content) this.#state.recovery = { header: h, content, envelope: w.envelope };
         break;
+      case RecordType.vaultKey:
+        // A created vault's Vault Key is already held: it was generated before its record.
+        this.#state.vaultKeyHeaders.set(h.keyEpoch, h);
+        if (w.vaultKey) this.#state.vaultKeys.set(h.keyEpoch, w.vaultKey);
+        break;
       default:
-        // The Vault Key is already held: it was generated before its record was written.
         break;
     }
   }
@@ -1759,6 +2136,11 @@ function header(
   };
 }
 
+/** The identity of a verified header, whose `recordType` is a known one. */
+function headerKey(h: RecordHeader): RecordKey {
+  return { recordType: h.recordType as RecordType, recordId: h.recordId.slice() };
+}
+
 function copyKey(k: RecordKey): RecordKey {
   return { recordType: k.recordType, recordId: k.recordId.slice() };
 }
@@ -1766,4 +2148,53 @@ function copyKey(k: RecordKey): RecordKey {
 /** The item cap (D139): refused before any HLC is issued. */
 function checkCap(content: CborMap): void {
   if (itemContentLength(content) > ITEM_CAP) throw new ContentInvalidError('item cap');
+}
+
+function deviceView(d: HeldDevice): DeviceView {
+  return {
+    deviceId: d.header.recordId.slice(),
+    hlc: copyHlc(d.header.hlc),
+    device: d.device.value,
+    unknownKeys: d.device.unknownKeys,
+  };
+}
+
+function deviceIdOf(d: HeldDevice): Uint8Array {
+  return d.header.recordId;
+}
+
+function phraseIdOf(held: HeldRecovery): Uint8Array {
+  // Verification checked the metadata's three fields (crypto-spec.md §9.5 step 8).
+  return held.content.get('phraseId') as Uint8Array;
+}
+
+/** Distinct IDs in ascending byte order, as Local Config stores them (record-content.md §9). */
+function sortedIds(ids: readonly Uint8Array[]): Uint8Array[] {
+  const unique = new Map(ids.map((id) => [idKey(id), id.slice()]));
+  return [...unique.values()].sort(compareBytes);
+}
+
+function sameIds(
+  a: readonly Uint8Array[] | undefined,
+  b: readonly Uint8Array[] | undefined,
+): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.length === b.length &&
+    a.every((id, i) => {
+      const other = b[i];
+      return other !== undefined && sameBytes(id, other);
+    })
+  );
+}
+
+/** A record's identity as a map key (D158). */
+function recordKeyOf(k: { readonly recordType: number; readonly recordId: Uint8Array }): string {
+  return `${String(k.recordType)}:${idKey(k.recordId)}`;
+}
+
+/** A value the merge put there itself: every record and key it looks up comes from the backup. */
+function present<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('merge: missing record');
+  return value;
 }

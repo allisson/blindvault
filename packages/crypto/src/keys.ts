@@ -143,3 +143,11 @@ export function privateKeyBytes(key: PrivateKey): Uint8Array {
   if (!bytes) throw new KeyWipedError();
   return bytes;
 }
+
+/**
+ * Whether two keys hold the same bytes, compared in constant time with `sodium_memcmp`: an
+ * immutable Vault Key record received again (D42) or a backup's Master Key subkey (D57).
+ */
+export function sameKey(a: SymmetricKey, b: SymmetricKey): boolean {
+  return lib().memcmp(keyBytes(a), keyBytes(b));
+}

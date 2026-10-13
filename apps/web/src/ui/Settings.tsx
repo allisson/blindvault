@@ -14,6 +14,7 @@ import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice, TextArea } from './components';
 import { ExportPassword } from './ExportPassword';
+import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 
 export function Settings({
@@ -28,6 +29,7 @@ export function Settings({
     <div className="flex max-w-md flex-col gap-8 p-4">
       <h1 className="text-xl font-semibold">{m.settings.title}</h1>
       <BackupSettings controller={controller} session={session} />
+      <MergeBackup controller={controller} session={session} />
       <RecoveryPhraseSettings controller={controller} session={session} />
       <ChangePassword controller={controller} />
       <PasskeySettings controller={controller} session={session} />

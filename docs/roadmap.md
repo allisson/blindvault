@@ -204,7 +204,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] "Check Recovery Phrase" while unlocked
 - [x] Export and restore with version and integrity validation
 - [x] Fresh restore, committed in one storage transaction (D33); records beyond the future-clock bound are accepted and read-only until within the bound (D39)
-- [ ] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
+- [x] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [ ] Restoring a different vault requires explicitly replacing the local one, after a warning; the new database commits before the old one is deleted (D89)
 - [ ] Forgotten local password recovery via recovery phrase
 - [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2)
@@ -220,8 +220,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Wrong recovery phrase fails without leaking information
 - [x] The phrase never appears in IndexedDB, `localStorage` or logs (CRYPTO-INV-006)
 - [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
-- [ ] Backup merge preserves the losing version in history
-- [ ] Merging a backup with a different `vaultId` is rejected (D13)
+- [x] Backup merge preserves the losing version in history
+- [x] Merging a backup with a different `vaultId` is rejected (D13)
 - [x] Restore interrupted midway leaves storage untouched (D33)
 - [x] A fresh restore of a backup whose HLCs are beyond the future-clock bound keeps every record, read-only until within the bound (D39)
 - [ ] Re-founding interrupted midway, or locked before its commit, leaves the old vault intact; interrupted after the new database commits, startup keeps only the new vault; afterwards old backups and old devices cannot open or sync with the new vault (D28, D89, D93)

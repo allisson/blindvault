@@ -41,7 +41,7 @@ test('creates, locks, refuses a wrong password and unlocks, keeping the URL and 
   await expect(page.getByTestId('preview-banner')).toBeVisible();
   const before = await page.evaluate(() => window.history.length);
   await page.getByRole('button', { name: 'Settings' }).first().click();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('button', { name: 'Lock' }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
   await unlock(page, 'not the password at all');

@@ -2,7 +2,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { open, seal } from './aead';
 import { EncodingError, KeyWipedError } from './errors';
-import { KEY_LENGTH, Keyring, SymmetricKey, adoptKey, generateKey, keyBytes } from './keys';
+import {
+  KEY_LENGTH,
+  Keyring,
+  SymmetricKey,
+  adoptKey,
+  generateKey,
+  keyBytes,
+  sameKey,
+} from './keys';
 import { initCrypto } from './sodium';
 import { fromHex } from './test-helpers';
 
@@ -88,5 +96,26 @@ describe('SymmetricKey', () => {
 
   it('a handle with no key material cannot be used', () => {
     expect(() => keyBytes(SymmetricKey.create())).toThrow(KeyWipedError);
+  });
+});
+
+describe('sameKey (D42, D57)', () => {
+  it('is true for two handles of the same bytes, false for other bytes', () => {
+    const keyring = new Keyring();
+    const a = adoptKey(keyring, new Uint8Array(KEY_LENGTH).fill(3));
+    const b = adoptKey(keyring, new Uint8Array(KEY_LENGTH).fill(3));
+    const other = new Uint8Array(KEY_LENGTH).fill(3);
+    other[31] = 4;
+    expect(sameKey(a, b)).toBe(true);
+    expect(sameKey(a, adoptKey(keyring, other))).toBe(false);
+    expect(sameKey(a, generateKey(keyring))).toBe(false);
+  });
+
+  it('refuses a wiped key instead of answering', () => {
+    const keyring = new Keyring();
+    const a = generateKey(keyring);
+    const b = generateKey(keyring);
+    keyring.release(b);
+    expect(() => sameKey(a, b)).toThrow(KeyWipedError);
   });
 });
