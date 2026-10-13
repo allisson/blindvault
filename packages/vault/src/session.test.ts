@@ -1198,6 +1198,76 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     expect(keyring.size).toBe(0);
   });
 
+  it('records the vault it replaces in the cleartext part until told it is gone (D89, D96)', async () => {
+    const source = await backedUp();
+    const replaced = randomId();
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const session = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words),
+      replacesVaultId: replaced,
+      now: new Clock().now,
+    });
+    open.push(session);
+    expect(store.commits).toHaveLength(1);
+    expect(parseLocalConfig(store.localConfig).replacesVaultId).toEqual(replaced);
+    // A write before the old database is gone keeps it, so the startup cleanup still finds it.
+    await session.createItem(login('Before'));
+    expect(parseLocalConfig(store.localConfig).replacesVaultId).toEqual(replaced);
+
+    await session.forgetReplacedVault();
+    const commits = store.commits.length;
+    expect(parseLocalConfig(store.localConfig).replacesVaultId).toBeUndefined();
+    expect(store.commits.at(-1)).toMatchObject({ put: [], delete: [] });
+    await session.createItem(login('After'));
+    expect(parseLocalConfig(store.localConfig).replacesVaultId).toBeUndefined();
+    // Nothing more to forget: no write.
+    await session.forgetReplacedVault();
+    expect(store.commits).toHaveLength(commits + 1);
+  });
+
+  it('refuses a replaced vaultId that is not an ID, writing nothing', async () => {
+    const source = await backedUp();
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    await expect(
+      VaultSession.restore({
+        store,
+        keyring,
+        kek: kek(keyring, 2),
+        salt: SALT,
+        kdfParams: PARAMS,
+        backup: restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words),
+        replacesVaultId: new Uint8Array(15),
+      }),
+    ).rejects.toThrow(RangeError);
+    expect(store.commits).toEqual([]);
+    expect(keyring.wiped).toBe(true);
+  });
+
+  it('refuses to replace the vault it restores: the same vaultId commits in place (D153)', async () => {
+    const source = await backedUp();
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    await expect(
+      VaultSession.restore({
+        store,
+        keyring,
+        kek: kek(keyring, 2),
+        salt: SALT,
+        kdfParams: PARAMS,
+        backup: restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words),
+        replacesVaultId: source.session.vaultId,
+      }),
+    ).rejects.toThrow(RangeError);
+    expect(store.commits).toEqual([]);
+  });
+
   it('refuses KDF parameters outside the accepted range before deriving anything', async () => {
     const source = await backedUp();
     await expect(
@@ -2769,6 +2839,7 @@ describe('lock (CRYPTO-INV-010)', () => {
           prfInput: new Uint8Array(32),
         }),
       removePasskey: () => session.removePasskey(),
+      forgetReplacedVault: () => session.forgetReplacedVault(),
       setPreferences: () => session.setPreferences(session.preferences),
       vaultId: () => session.vaultId,
       deviceId: () => session.deviceId,

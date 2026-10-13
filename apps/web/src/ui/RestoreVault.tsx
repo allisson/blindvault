@@ -9,13 +9,14 @@ import {
 } from '../app/controller';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, Card, Field, TextArea } from './components';
+import { Button, Card, Field, Notice, TextArea } from './components';
 import { NewPassword } from './NewPassword';
 import { recordTypeName } from './Settings';
 
 // Restore from a backup (overview §10, backup-format.md §8): file → secret → local password. The
 // file is validated in full before the password step, and nothing is written before the commit
-// (D33, D104). The header is shown unverified until a keyslot opens it (D95).
+// (D33, D104). The header is shown unverified until a keyslot opens it (D95). With `replace`, the
+// same steps replace the locked vault, after the warning and an explicit confirmation (D183).
 
 type Step =
   | { readonly kind: 'file' }
@@ -25,10 +26,12 @@ type Step =
 export function RestoreVault({
   controller,
   working,
+  replace = false,
   onCancel,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
+  readonly replace?: boolean;
   readonly onCancel: () => void;
 }) {
   const { messages: m } = useLanguage();
@@ -43,7 +46,13 @@ export function RestoreVault({
     onCancel();
   };
   return (
-    <Card title={m.restore.title}>
+    <Card title={replace ? m.replace.title : m.restore.title}>
+      {replace ? (
+        <div className="flex flex-col gap-2" data-testid="replace-warning">
+          <Notice>{m.replace.warning}</Notice>
+          <p className="text-sm">{m.replace.retire}</p>
+        </div>
+      ) : null}
       {step.kind === 'file' ? (
         <ChooseFile
           error={error}
@@ -73,6 +82,7 @@ export function RestoreVault({
         <RestorePassword
           controller={controller}
           working={working}
+          replace={replace}
           exportedAt={step.exportedAt}
           onFailed={back}
         />
@@ -226,16 +236,19 @@ export function OpenBackup({
 function RestorePassword({
   controller,
   working,
+  replace,
   exportedAt,
   onFailed,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
+  readonly replace: boolean;
   readonly exportedAt: number;
   readonly onFailed: (message: string | undefined) => void;
 }) {
   const { messages: m, language } = useLanguage();
   const [password, setPassword] = useState<string | null>(null);
+  const [understood, setUnderstood] = useState(false);
   const onChange = useCallback((p: string | null) => {
     setPassword(p);
   }, []);
@@ -247,8 +260,8 @@ function RestorePassword({
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!password) return;
-        void controller.restore(password).then((outcome) => {
+        if (!password || (replace && !understood)) return;
+        void controller.restore(password, { replace }).then((outcome) => {
           if (outcome.kind !== 'ok') onFailed(restoreError(m, outcome));
         });
       }}
@@ -258,8 +271,27 @@ function RestorePassword({
       </p>
       <p className="text-sm">{m.restore.passwordIntro}</p>
       <NewPassword label={m.restore.local} confirmLabel={m.restore.confirm} onChange={onChange} />
-      <Button type="submit" disabled={!password || working}>
-        {working ? m.restore.restoring : m.restore.submit}
+      {replace ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={understood}
+            onChange={(e) => {
+              setUnderstood(e.target.checked);
+            }}
+            data-testid="replace-understood"
+          />
+          {m.replace.understand}
+        </label>
+      ) : null}
+      <Button type="submit" disabled={!password || (replace && !understood) || working}>
+        {replace
+          ? working
+            ? m.replace.replacing
+            : m.replace.submit
+          : working
+            ? m.restore.restoring
+            : m.restore.submit}
       </Button>
     </form>
   );
@@ -339,6 +371,8 @@ function restoreError(m: Messages, outcome: RestoreOutcome): string | undefined 
     case 'locked':
     case 'no-backup':
       return m.restore.locked;
+    case 'busy':
+      return m.start.busy;
     case 'corrupt-record':
       return format(m.restore.corruptRecord, {
         type: recordTypeName(m, outcome.recordType),

@@ -35,6 +35,8 @@ import {
   acquireInstallationGuard,
   acquireVaultLock,
   cleanupDatabases,
+  databaseName,
+  deleteDatabase,
   requestPersistence,
 } from '@blindvault/storage';
 import {
@@ -72,6 +74,8 @@ export type Status =
   | { readonly kind: 'creating' }
   /** A fresh restore committing (D33). */
   | { readonly kind: 'restoring' }
+  /** The locked vault being replaced by a backup, until the commit (D89, D153, D183). */
+  | { readonly kind: 'replacing' }
   /** Another app window holds the vault's Web Lock (D51). */
   | { readonly kind: 'elsewhere' }
   | { readonly kind: 'locked' }
@@ -180,9 +184,12 @@ export type BackupOpening =
       readonly recordId?: string;
     };
 
-/** A fresh restore's commit: `no-backup` when none was opened, or a lock dropped it. */
+/**
+ * A fresh restore's commit, or a replacement's: `no-backup` when none was opened, or a lock dropped
+ * it; `busy` when another app window holds the installation guard during a replacement (D97).
+ */
 export type RestoreOutcome =
-  | { readonly kind: 'ok' | 'locked' | 'no-backup' }
+  | { readonly kind: 'ok' | 'locked' | 'no-backup' | 'busy' }
   | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
 
 /** A backup merge (sync-protocol.md §1, D182): `no-backup` when none was opened. */
@@ -252,6 +259,8 @@ export class VaultController {
     | undefined;
   /** After a restore opened with an export password: recommend Check Recovery Phrase (D43). */
   #afterRestore: 'check-phrase' | undefined;
+  /** The replaced vault's passkey, which the authenticator could not be asked to forget (D120). */
+  #leftoverPasskey = false;
 
   constructor(deps: ControllerDeps) {
     this.#deps = deps;
@@ -468,10 +477,13 @@ export class VaultController {
 
   // --- fresh restore and backup merge -----------------------------------------------------------
 
-  /** Whether a backup can be opened now: for a fresh restore or, while unlocked, a merge. */
+  /**
+   * Whether a backup can be opened now: for a fresh restore, for a replacement of the locked vault
+   * (D183) or, while unlocked, for a merge.
+   */
   #restoring(): boolean {
     const { kind } = this.#status;
-    return kind === 'no-vault' || kind === 'unlocked';
+    return kind === 'no-vault' || kind === 'locked' || kind === 'unlocked';
   }
 
   /** Reads a `.bvault` file for a restore (backup-format.md §8 steps 1 and 2). */
@@ -558,23 +570,43 @@ export class VaultController {
    * (D71), as this device's local password: one commit writes its records and the new Local Config
    * (D33). Holds the installation guard until then; a lock before the commit aborts it with nothing
    * persisted (D104). A record that fails the content checks rejects it as a whole (D59, D61).
+   *
+   * With `replace`, the locked vault is replaced, after the confirmation the UI asked for (D183).
+   * This app window already holds its Web Lock (D154). A backup of another vault commits a database
+   * of its own that records the replaced `vaultId`, then the old database is deleted (D89, D96);
+   * one of the same vault commits in the existing database, clearing it in the same transaction
+   * (D153). Either way the old vault stays intact until the commit, and its passkey is forgotten
+   * afterwards (D120).
    */
-  async restore(password: string): Promise<RestoreOutcome> {
+  async restore(
+    password: string,
+    options: { readonly replace?: boolean } = {},
+  ): Promise<RestoreOutcome> {
     const held = this.#restore;
-    if (this.#status.kind !== 'no-vault' || !held?.keyring || !held.backup) {
+    const replacing = this.#status.kind === 'locked' && options.replace === true;
+    const old =
+      replacing && this.#db && this.#vaultId && this.#lock
+        ? { db: this.#db, vaultId: this.#vaultId, lock: this.#lock, passkey: this.#passkey }
+        : undefined;
+    if ((this.#status.kind !== 'no-vault' && !old) || !held?.keyring || !held.backup) {
       return { kind: 'no-backup' };
     }
     const { keyring, backup } = held;
     this.#restore = undefined;
     const epoch = this.#epoch;
-    this.#set({ kind: 'restoring' });
+    this.#set({ kind: old ? 'replacing' : 'restoring' });
     const { factory, locks } = this.#deps;
     const guard = await acquireInstallationGuard(locks);
     if (!guard) {
       keyring.wipeAll();
+      if (old) {
+        if (epoch === this.#epoch) this.#set({ kind: 'locked' });
+        return { kind: 'busy' };
+      }
       this.#set({ kind: 'busy' });
       return { kind: 'locked' };
     }
+    const same = old !== undefined && sameBytes(old.vaultId, backup.vaultId);
     let db: VaultDatabase | undefined;
     let lock: HeldLock | undefined;
     try {
@@ -587,16 +619,24 @@ export class VaultController {
         salt,
       );
       if (epoch !== this.#epoch) throw new Aborted();
+      let clear = same;
       const store: RecordStore = {
         records: () => (db ? db.records() : Promise.resolve([])),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
-            lock = (await acquireVaultLock(backup.vaultId, {}, locks)) ?? undefined;
-            if (!lock) throw new Aborted();
-            db = await VaultDatabase.open(backup.vaultId, factory);
+            if (same) {
+              db = old.db;
+              lock = old.lock;
+            } else {
+              lock = (await acquireVaultLock(backup.vaultId, {}, locks)) ?? undefined;
+              if (!lock) throw new Aborted();
+              db = await VaultDatabase.open(backup.vaultId, factory);
+            }
           }
-          await db.commit(commit);
+          // D153: the first commit clears the old vault in the transaction that writes the new one.
+          await db.commit(clear ? { ...commit, clear } : commit);
+          clear = false;
         },
       };
       const session = await VaultSession.restore({
@@ -606,21 +646,44 @@ export class VaultController {
         salt,
         kdfParams: params,
         backup,
+        ...(old && !same ? { replacesVaultId: old.vaultId } : {}),
         now: this.#now,
       });
       if (!db || !lock) throw new Aborted();
+      if (old && !same) {
+        old.db.close();
+        try {
+          await deleteDatabase(factory, databaseName(old.vaultId));
+          await session.forgetReplacedVault();
+        } catch {
+          // The new vault has committed: the startup cleanup deletes the old one (D89, D96).
+        }
+        this.#hold(lock);
+        await old.lock.release();
+      } else if (!same) {
+        this.#hold(lock);
+      }
       this.#db = db;
       this.#vaultId = session.vaultId;
-      this.#hold(lock);
+      this.#passkey = undefined;
+      if (old?.passkey) {
+        const forgotten = await this.#deps.passkeys?.forget(old.passkey.credentialId);
+        this.#leftoverPasskey = forgotten !== true;
+      }
       this.#afterRestore = backup.openedWith === 'password' ? 'check-phrase' : undefined;
       this.#set({ kind: 'unlocked', session });
       void requestPersistence(this.#deps.storage);
       return { kind: 'ok' };
     } catch (error) {
       keyring.wipeAll();
-      db?.close();
-      await lock?.release();
-      this.#set({ kind: 'no-vault' });
+      if (db !== old?.db) db?.close();
+      if (lock !== old?.lock) await lock?.release();
+      if (old) {
+        // The old vault is intact; a take-over during the replacement already said so (D154).
+        if (this.#lock === old.lock) this.#set({ kind: 'locked' });
+      } else {
+        this.#set({ kind: 'no-vault' });
+      }
       if (error instanceof Aborted || epoch !== this.#epoch) return { kind: 'locked' };
       if (error instanceof RestoreRejectedError) {
         const { record } = error;
@@ -688,6 +751,19 @@ export class VaultController {
 
   dismissAfterRestore(): void {
     this.#afterRestore = undefined;
+    this.#set({ ...this.#status });
+  }
+
+  /**
+   * Whether the replaced vault's passkey is left in the authenticator, for the user to delete by
+   * hand (D120), until dismissed.
+   */
+  get leftoverPasskey(): boolean {
+    return this.#leftoverPasskey;
+  }
+
+  dismissLeftoverPasskey(): void {
+    this.#leftoverPasskey = false;
     this.#set({ ...this.#status });
   }
 
@@ -828,6 +904,7 @@ export class VaultController {
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
     if (status.kind === 'creating' || status.kind === 'restoring') this.#set({ kind: 'no-vault' });
+    if (status.kind === 'replacing') this.#set({ kind: 'locked' });
   }
 
   /** Locks, releases the vault's Web Lock and closes the database (the app window is closing). */

@@ -42,6 +42,11 @@ export interface StorageCommit {
   readonly put: readonly EncryptedRecord[];
   readonly delete: readonly StorageKey[];
   readonly localConfig: Uint8Array;
+  /**
+   * Clears every record and the Local Config first, in the same transaction: a vault replaced by
+   * one of the same `vaultId`, which cannot be built in a second database of the same name (D153).
+   */
+  readonly clear?: boolean;
 }
 
 function hex(bytes: Uint8Array): string {
@@ -226,7 +231,8 @@ export class VaultDatabase {
 
   /**
    * Applies `commit` in one transaction: all of it or none of it. Every record put must be a
-   * sealed envelope whose header matches its key, checked before anything is written.
+   * sealed envelope whose header matches its key, checked before anything is written. With
+   * `clear`, the old vault stays whole until the transaction commits (D153).
    */
   async commit(commit: StorageCommit): Promise<void> {
     commit.put.forEach(checkRecord);
@@ -237,6 +243,10 @@ export class VaultDatabase {
     const result = settled(tx);
     try {
       const records = tx.objectStore(RECORDS);
+      if (commit.clear) {
+        records.clear();
+        tx.objectStore(LOCAL_CONFIG).clear();
+      }
       for (const d of commit.delete) records.delete([d.recordType, own(d.recordId)]);
       for (const p of commit.put) records.put(own(p.envelope), [p.recordType, own(p.recordId)]);
       tx.objectStore(LOCAL_CONFIG).put(own(commit.localConfig), LOCAL_CONFIG_KEY);

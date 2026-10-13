@@ -7,7 +7,13 @@ import {
   deriveRecoveryKeys,
   parseRecoveryPhrase,
 } from '@blindvault/crypto';
-import { VaultDatabase, acquireInstallationGuard, acquireVaultLock } from '@blindvault/storage';
+import {
+  VaultDatabase,
+  acquireInstallationGuard,
+  acquireVaultLock,
+  databaseName,
+} from '@blindvault/storage';
+import { parseLocalConfig } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -501,7 +507,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
   });
 
-  it('restores nothing while a vault exists, and opens no backup while it is locked', async () => {
+  it('restores nothing while a vault exists, unless it is locked and replaced explicitly (D183)', async () => {
     const source = await backup();
     const c = await created();
     // Unlocked, a backup opens for a merge (D182), never for a fresh restore.
@@ -510,11 +516,215 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
       kind: 'different-vault',
     });
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+    expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'no-backup' });
+    // Locked, a backup opens to replace the vault, and only an explicit replacement restores it.
     c.lock();
-    expect(c.openBackupFile(source.bytes)).toEqual({ kind: 'unavailable' });
-    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
-      kind: 'no-file',
+    expect(c.openBackupFile(source.bytes).kind).toBe('ok');
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toMatchObject({
+      kind: 'ok',
     });
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+    expect(c.status.kind).toBe('locked');
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+  });
+});
+
+describe('replacing the vault by a backup (§10, D89, D96, D120, D153, D154, D183)', () => {
+  const NEW_PASSWORD = 'a new local password for this device';
+
+  function login(title: string) {
+    return { templateId: 'login', templateVersion: 1, title, fields: [], tags: [] };
+  }
+
+  /** A vault with one item and its backup by the phrase, made in an installation of its own. */
+  async function backupOf(title: string) {
+    const c = controller();
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'Source');
+    await session(c).createItem(login(title));
+    const made = await c.exportBackup({ kind: 'password', password: PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    const vaultId = session(c).vaultId;
+    await c.close();
+    return { words, bytes: made.bytes, vaultId };
+  }
+
+  /** The installation's vault, locked, with one item. */
+  async function lockedVault(factory = new IDBFactory(), passkeys?: FakeAuthenticator) {
+    const c = controller(factory, undefined, passkeys);
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'This device');
+    await session(c).createItem(login('Held'));
+    if (passkeys) expect(await c.setUpPasskey(PASSWORD)).toMatchObject({ kind: 'ok' });
+    const vaultId = session(c).vaultId;
+    c.lock();
+    return { c, words, vaultId };
+  }
+
+  async function open(c: VaultController, file: { bytes: Uint8Array; words: string }) {
+    expect(c.openBackupFile(file.bytes).kind).toBe('ok');
+    expect(await c.openBackup({ kind: 'phrase', words: file.words })).toMatchObject({
+      kind: 'ok',
+    });
+  }
+
+  function titles(c: VaultController) {
+    return session(c)
+      .items()
+      .map((i) => i.item?.title);
+  }
+
+  async function names(factory: IDBFactory) {
+    return (await factory.databases()).map((d) => d.name).sort();
+  }
+
+  async function localConfigOf(factory: IDBFactory, vaultId: Uint8Array) {
+    const db = await VaultDatabase.open(vaultId, factory);
+    try {
+      return parseLocalConfig(must(await db.localConfig()));
+    } finally {
+      db.close();
+    }
+  }
+
+  it('replaces the locked vault by a backup of another vault, deleting the old database after the commit (D89, D96)', async () => {
+    const other = await backupOf('Other');
+    const factory = new IDBFactory();
+    const { c, vaultId } = await lockedVault(factory);
+    await open(c, other);
+    const pending = c.restore(NEW_PASSWORD, { replace: true });
+    expect(c.status.kind).toBe('replacing');
+    expect(await pending).toEqual({ kind: 'ok' });
+    expect(session(c).vaultId).toEqual(other.vaultId);
+    expect(titles(c)).toEqual(['Other']);
+    expect(await names(factory)).toEqual([databaseName(other.vaultId)]);
+    // D96: the replaced vaultId left the cleartext part with the old database.
+    expect((await localConfigOf(factory, other.vaultId)).replacesVaultId).toBeUndefined();
+    expect(c.leftoverPasskey).toBe(false);
+
+    await c.close();
+    const again = controller(factory);
+    await again.start();
+    expect(again.status.kind).toBe('locked');
+    expect(await again.unlock(PASSWORD)).toBe('wrong-password');
+    expect(await again.unlock(NEW_PASSWORD)).toBe('ok');
+    expect(session(again).vaultId).toEqual(other.vaultId);
+    expect(session(again).vaultId).not.toEqual(vaultId);
+  });
+
+  it('replaces a vault whose password is forgotten by a backup of the same vault, in its own database (D153)', async () => {
+    const factory = new IDBFactory();
+    const c = controller(factory);
+    await c.start();
+    const words = must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'This device');
+    await session(c).createItem(login('Backed up'));
+    const made = await c.exportBackup({ kind: 'password', password: PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    await session(c).createItem(login('Only here'));
+    const vaultId = session(c).vaultId;
+    const before = await localConfigOf(factory, vaultId);
+    c.lock();
+
+    await open(c, { bytes: made.bytes, words });
+    expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'ok' });
+    // The changes made only on this device since the backup are gone, as the warning says.
+    expect(titles(c)).toEqual(['Backed up']);
+    expect(await names(factory)).toEqual([databaseName(vaultId)]);
+    const after = await localConfigOf(factory, vaultId);
+    expect(after.localConfigId).not.toEqual(before.localConfigId);
+    expect(after.replacesVaultId).toBeUndefined();
+
+    c.lock();
+    expect(await c.unlock(PASSWORD)).toBe('wrong-password');
+    expect(await c.unlock(NEW_PASSWORD)).toBe('ok');
+    expect(titles(c)).toEqual(['Backed up']);
+  });
+
+  it('leaves the old vault intact when locked before the commit (D104, D153)', async () => {
+    for (const same of [false, true]) {
+      const factory = new IDBFactory();
+      const { c, words, vaultId } = await lockedVault(factory);
+      if (same) {
+        expect(await c.unlock(PASSWORD)).toBe('ok');
+        const made = await c.exportBackup({ kind: 'password', password: PASSWORD });
+        if (made.kind !== 'ok') throw new Error(made.kind);
+        c.lock();
+        await open(c, { bytes: made.bytes, words });
+      } else {
+        await open(c, await backupOf('Other'));
+      }
+      const pending = c.restore(NEW_PASSWORD, { replace: true });
+      c.lock();
+      expect(await pending).toEqual({ kind: 'locked' });
+      expect(c.status.kind).toBe('locked');
+      // The opened backup went with the lock.
+      expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'no-backup' });
+      expect(await c.unlock(PASSWORD)).toBe('ok');
+      expect(session(c).vaultId).toEqual(vaultId);
+      expect(titles(c)).toEqual(['Held']);
+      await c.close();
+      const again = controller(factory);
+      await again.start();
+      expect(await names(factory)).toEqual([databaseName(vaultId)]);
+    }
+  });
+
+  it('replaces nothing while another app window holds the installation guard (D97)', async () => {
+    const factory = new IDBFactory();
+    const { c, vaultId } = await lockedVault(factory);
+    await open(c, await backupOf('Other'));
+    const guard = must((await acquireInstallationGuard(navigator.locks)) ?? undefined);
+    try {
+      expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'busy' });
+    } finally {
+      await guard.release();
+    }
+    expect(c.status.kind).toBe('locked');
+    expect(await names(factory)).toEqual([databaseName(vaultId)]);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+  });
+
+  it('keeps the new vault when the old database cannot be deleted: startup deletes it (D89, D96)', async () => {
+    const other = await backupOf('Other');
+    const factory = new IDBFactory();
+    const { c, vaultId } = await lockedVault(factory);
+    await open(c, other);
+    const remove = vi.spyOn(factory, 'deleteDatabase').mockImplementationOnce(() => {
+      throw new Error('interrupted');
+    });
+    expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'ok' });
+    remove.mockRestore();
+    expect(session(c).vaultId).toEqual(other.vaultId);
+    expect(await names(factory)).toEqual(
+      [databaseName(vaultId), databaseName(other.vaultId)].sort(),
+    );
+    expect((await localConfigOf(factory, other.vaultId)).replacesVaultId).toEqual(vaultId);
+
+    await c.close();
+    const again = controller(factory);
+    await again.start();
+    expect(await names(factory)).toEqual([databaseName(other.vaultId)]);
+    expect((await localConfigOf(factory, other.vaultId)).replacesVaultId).toBeUndefined();
+    expect(await again.unlock(NEW_PASSWORD)).toBe('ok');
+  });
+
+  it('asks the authenticator to forget the old vault’s passkey, or says to do it by hand (D120, D153)', async () => {
+    for (const signal of [true, false]) {
+      const authenticator = new FakeAuthenticator();
+      authenticator.signal = signal;
+      const { c } = await lockedVault(new IDBFactory(), authenticator);
+      expect(c.hasPasskey).toBe(true);
+      await open(c, await backupOf('Other'));
+      expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'ok' });
+      expect(authenticator.forgotten).toEqual([new Uint8Array([1])]);
+      expect(c.hasPasskey).toBe(false);
+      expect(c.leftoverPasskey).toBe(!signal);
+      c.dismissLeftoverPasskey();
+      expect(c.leftoverPasskey).toBe(false);
+    }
   });
 });
 
