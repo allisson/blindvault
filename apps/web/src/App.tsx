@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { clipboard } from './app/clipboard';
 import { type VaultController } from './app/controller';
@@ -6,6 +6,7 @@ import { LockTimers } from './app/lock-timers';
 import { Navigation } from './app/nav';
 import { type UpdateMonitor } from './app/updates';
 import { LanguageProvider } from './i18n/context';
+import { AboutContext } from './ui/about-context';
 import { ChangedWorker } from './ui/ChangedWorker';
 import { Start } from './ui/Start';
 import { UpdatesContext } from './ui/update-context';
@@ -91,10 +92,22 @@ function Root({ controller, monitor }: RootProps) {
 
 export function App({ controller, monitor }: RootProps) {
   const updates = useMemo(() => ({ controller, monitor }), [controller, monitor]);
+  const about = useState(false);
+  const [, setAbout] = about;
+  // Unlocking leaves the About card: Settings shows it from then on (D192).
+  const unlocked = useSyncExternalStore(
+    controller.subscribe,
+    () => controller.status.kind === 'unlocked',
+  );
+  useEffect(() => {
+    if (unlocked) setAbout(false);
+  }, [unlocked, setAbout]);
   return (
     <LanguageProvider>
       <UpdatesContext.Provider value={updates}>
-        <Root controller={controller} monitor={monitor} />
+        <AboutContext.Provider value={about}>
+          <Root controller={controller} monitor={monitor} />
+        </AboutContext.Provider>
       </UpdatesContext.Provider>
     </LanguageProvider>
   );

@@ -14,6 +14,7 @@ import {
 } from '../app/controller';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Messages, format } from '../i18n/messages';
+import { AboutBuild } from './About';
 import { Button, Field, Notice, TextArea } from './components';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
@@ -48,6 +49,10 @@ export function Settings({
       <PasskeySettings controller={controller} session={session} />
       <LockSettings controller={controller} preferences={session.preferences} />
       <RefoundVault controller={controller} session={session} nav={nav} />
+      <section className="flex flex-col gap-4">
+        <h2 className="font-semibold">{m.about.title}</h2>
+        <AboutBuild />
+      </section>
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.settings.language}
         <select

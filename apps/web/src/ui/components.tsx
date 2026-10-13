@@ -10,6 +10,8 @@ import {
 import { sharedOrigin } from '../app/origin';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
+import { AboutBuild } from './About';
+import { useAbout } from './about-context';
 import { useUpdates } from './update-context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
@@ -224,6 +226,13 @@ export function Card({
   readonly children: ReactNode;
 }) {
   const m = useMessages();
+  // Before unlock is where verifying the build matters most (D192).
+  const [about, setAbout] = useAbout();
+  const updates = useUpdates();
+  const holdsPhrase = useSyncExternalStore(
+    updates?.controller.subscribe ?? noUpdates,
+    () => updates?.controller.holdsPhrase ?? false,
+  );
   return (
     <div className="flex min-h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <SharedOriginWarning />
@@ -235,9 +244,36 @@ export function Card({
             <span className="text-sm font-semibold">{m.app.name}</span>
             <LockState unlocked={false} />
           </header>
-          <h1 className="text-xl font-semibold">{title}</h1>
-          {children}
-          <p className="text-xs text-zinc-500">v{__APP_VERSION__}</p>
+          <h1 className="text-xl font-semibold">{about ? m.about.title : title}</h1>
+          {about ? (
+            <>
+              <AboutBuild />
+              <Button
+                variant="quiet"
+                className="self-start"
+                onClick={() => {
+                  setAbout(false);
+                }}
+              >
+                {m.app.back}
+              </Button>
+            </>
+          ) : null}
+          {/* Hidden, not unmounted: a flow in progress keeps what was typed (D192). */}
+          <div className={about ? 'hidden' : 'contents'}>{children}</div>
+          <footer className="flex items-center justify-between">
+            <p className="text-xs text-zinc-500">v{__APP_VERSION__}</p>
+            {about || holdsPhrase ? null : (
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setAbout(true);
+                }}
+              >
+                {m.about.open}
+              </Button>
+            )}
+          </footer>
         </section>
       </main>
     </div>

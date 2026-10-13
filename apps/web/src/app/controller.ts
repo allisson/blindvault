@@ -487,7 +487,16 @@ export class VaultController {
     const keyring = new Keyring();
     const { words, entropy } = generateRecoveryPhrase(keyring);
     this.#phrase = { keyring, entropy };
+    this.#set({ ...this.#status });
     return words;
+  }
+
+  /**
+   * Whether a Recovery Phrase is held, shown or being confirmed (creation, regeneration,
+   * re-founding): its screens keep their single control, with no About button (D179, D192).
+   */
+  get holdsPhrase(): boolean {
+    return this.#phrase !== undefined;
   }
 
   /**

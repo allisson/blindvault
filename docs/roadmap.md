@@ -243,7 +243,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages under the dedicated custom domain only (D90)
 - [x] Startup warning when served under a sub-path of a `github.io` host (D90)
 - [ ] Strict CSP by `<meta>` starting from `default-src 'none'`, Trusted Types where supported, unlock refused while framed (D83, D91)
-- [ ] "About" screen with the version and hash of the running build
+- [x] "About" screen with the version and hash of the running build (D192)
 - [ ] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90)
 - [ ] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts
 - [ ] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15)

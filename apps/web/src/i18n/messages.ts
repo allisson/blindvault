@@ -14,6 +14,18 @@ const en = {
     retry: 'Try again',
     reload: 'Reload',
   },
+  about: {
+    open: 'About',
+    title: 'About BlindVault',
+    version: 'Version',
+    hash: 'SHA-256 of the asset manifest',
+    unavailable: 'Not available in this build.',
+    informational:
+      'The app shows these values about itself, and a modified app can show any value. They do not prove which code runs.',
+    verify:
+      'Verify a release outside the app: compare this hash with the one published in the release, then check the served files against its manifest with',
+    releases: 'Releases on GitHub',
+  },
   update: {
     available: 'An update is available: version {current} → {next}.',
     hash: 'SHA-256 of its asset manifest:',
@@ -596,6 +608,18 @@ const ptBR: Messages = {
     back: 'Voltar',
     retry: 'Tentar de novo',
     reload: 'Recarregar',
+  },
+  about: {
+    open: 'Sobre',
+    title: 'Sobre o BlindVault',
+    version: 'Versão',
+    hash: 'SHA-256 do manifesto de assets',
+    unavailable: 'Indisponível neste build.',
+    informational:
+      'O app mostra esses valores sobre si mesmo, e um app alterado pode mostrar qualquer valor. Eles não provam qual código está rodando.',
+    verify:
+      'Verifique uma versão fora do app: compare este hash com o publicado na versão e confira os arquivos servidos contra o manifesto dela com',
+    releases: 'Versões no GitHub',
   },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',
