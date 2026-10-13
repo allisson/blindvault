@@ -95,7 +95,12 @@ losers, the deletion of dropped versions and the new Local Config (D62). The Loc
 
 A merge reports, for the UI to show once (D182):
 
-- **Recovery Phrase changed (D43):** the held envelope's `phraseId` differs from the last one seen.
+- **Recovery Phrase superseded (D145, D185):** an envelope of another `phraseId` replaced the held
+  one, and the held one was written by this device (its `hlc` carries this device's `deviceId`).
+  The notice names the replaced phrase by `phraseId` and creation date, and takes the place of the
+  D43 notice.
+- **Recovery Phrase changed (D43):** otherwise, the held envelope's `phraseId` differs from the last
+  one seen.
 - **New devices (D48):** Device records whose `deviceId` this device had never seen, neither in
   Local Config nor among the Device records it held, its own excepted; one that arrives retired is
   marked so (D53). No notice when the device held no Device record before the merge.

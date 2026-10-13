@@ -1,10 +1,12 @@
-import { type MergeResult, type VaultSession } from '@blindvault/vault';
+import { type MergeResult, type RecoveryView, type VaultSession } from '@blindvault/vault';
 import { useState } from 'react';
 
+import { phraseLabel } from '../app/backup-file';
 import { type BackupHeaderInfo, type MergeOutcome, type VaultController } from '../app/controller';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Notice } from './components';
+import { focusBackup } from './RegeneratePhrase';
 import { ChooseFile, OpenBackup, fileError } from './RestoreVault';
 import { recordTypeName } from './Settings';
 
@@ -111,7 +113,7 @@ export function MergeBackup({
       {step.kind === 'done' ? (
         <MergeNotices
           result={step.result}
-          phraseCreatedAt={session.recovery?.phraseCreatedAt}
+          recovery={session.recovery}
           date={(at) => date(at, false)}
         />
       ) : null}
@@ -127,11 +129,11 @@ export function MergeBackup({
 /** The merge's result and the notices it calls for, shown once (sync-protocol.md §1.6). */
 function MergeNotices({
   result,
-  phraseCreatedAt,
+  recovery,
   date,
 }: {
   readonly result: MergeResult;
-  readonly phraseCreatedAt: number | undefined;
+  readonly recovery: RecoveryView | undefined;
   readonly date: (at: number) => string;
 }) {
   const m = useLanguage().messages;
@@ -151,8 +153,26 @@ function MergeNotices({
           replaced: String(result.replaced),
         })}
       </p>
-      {result.phraseChanged && phraseCreatedAt !== undefined ? (
-        <Notice>{format(m.merge.phraseChanged, { date: date(phraseCreatedAt) })}</Notice>
+      {result.phraseSuperseded ? (
+        <div className="flex flex-col gap-2" data-testid="phrase-superseded">
+          <Notice>
+            {format(m.merge.phraseSuperseded, {
+              id: phraseLabel(result.phraseSuperseded.phraseId),
+              date: date(result.phraseSuperseded.phraseCreatedAt),
+            })}
+          </Notice>
+          <Button className="self-start" onClick={focusBackup}>
+            {m.merge.backupNow}
+          </Button>
+        </div>
+      ) : null}
+      {result.phraseChanged && recovery ? (
+        <Notice>
+          {format(m.merge.phraseChanged, {
+            id: phraseLabel(recovery.phraseId),
+            date: date(recovery.phraseCreatedAt),
+          })}
+        </Notice>
       ) : null}
       {result.newDevices.length > 0 ? (
         <Notice>{format(m.merge.newDevices, { names: names(result.newDevices, true) })}</Notice>

@@ -122,6 +122,18 @@ every project through the references in the root `tsconfig.json`.
   once. `apps/web` opens the file with the same steps as a fresh restore, while unlocked, says a
   backup of another vault is one before the confirmation, and shows the notices of the result
   once; the own-retirement notice (D41) is read from the held Device record.
+- **Recovery Phrase regeneration (Phase 2, D185).** `VaultSession.regenerateRecoveryPhrase` takes
+  the KEK the caller derived again, as an export does, and the new phrase's entropy: it opens the
+  Master Key wrap, derives the recovery keys and seals the new Recovery Envelope in a keyring of its
+  own, wiped before it returns, and commits only that envelope with the new `phraseId` as the last
+  seen. `regenerationBlock` reports D73, D74, D98 and a vault without an envelope before anything
+  is opened; an envelope kept aside as corrupt is replaced. `VaultController` reuses its creation
+  phrase slot for the regeneration's entropy, which a lock, a cancel or the commit wipes, and
+  shares the re-authentication of the export (`#reauthenticate`). `showingPhrase` tells `App` to
+  pause the inactivity timer (`LockTimers.pause`) while the phrase is held (D104). A backup merge
+  reports `phraseSuperseded` when it replaces an envelope whose `hlc` carries this device's
+  `deviceId` (D145). The UI names a phrase by the first 8 hex digits of its `phraseId`
+  (`phraseLabel`), next to its creation date.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

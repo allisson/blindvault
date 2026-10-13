@@ -207,7 +207,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Restore with merge into an existing vault (LWW by HLC; reused later by sync), only when `vaultId` matches (D13)
 - [x] Restoring a different vault requires explicitly replacing the local one, after a warning; the new database commits before the old one is deleted (D89)
 - [x] Forgotten local password recovery via recovery phrase
-- [ ] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2)
+- [x] Recovery phrase regeneration replaces the envelope; UI shows it is not yet on other devices, prompts for a new backup, and backups show their `phraseId` (D2, D185)
 - [ ] Restored device writes no Device record; UI recommends re-admission with a non-retired device and offers to retire devices that no longer exist (D30)
 - [ ] Re-founding: new keys, phrase and identity, live items and folders re-encrypted, new vault committed to its own database before the old one is deleted (D28, D89); warning that trash and history are emptied, with an offer to restore from the trash first (D72)
 - [ ] UI: phrase display during onboarding, confirmation it was written down, last backup date, reminder every 30 days
@@ -219,7 +219,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Truncated (no final tag, or data after it), tampered or unknown-version `.bvault` is rejected with a clear error (D95); header values shown before a keyslot opens are marked unverified
 - [x] Wrong recovery phrase fails without leaking information
 - [x] The phrase never appears in IndexedDB, `localStorage` or logs (CRYPTO-INV-006)
-- [ ] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
+- [x] Regenerating the phrase does not change vault contents, and the new phrase restores the new backup
 - [x] Backup merge preserves the losing version in history
 - [x] Merging a backup with a different `vaultId` is rejected (D13)
 - [x] Restore interrupted midway leaves storage untouched (D33)

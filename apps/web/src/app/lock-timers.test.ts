@@ -73,4 +73,37 @@ describe('lock timers (overview §7, D54, D151)', () => {
     vi.advanceTimersByTime(3_600_000);
     expect(lock).toHaveBeenCalledTimes(1);
   });
+
+  it('pauses the inactivity lock while a Recovery Phrase is shown, never the hidden-app lock (D104)', () => {
+    const { lock, t } = timers();
+    t.start(PREFS, false);
+    t.pause();
+    t.activity();
+    vi.advanceTimersByTime(60 * 60_000);
+    expect(lock).not.toHaveBeenCalled();
+    // A restart with new preferences keeps the pause.
+    t.start(PREFS, false);
+    vi.advanceTimersByTime(60 * 60_000);
+    expect(lock).not.toHaveBeenCalled();
+    t.visibility(true);
+    vi.advanceTimersByTime(60_000);
+    expect(lock).toHaveBeenCalledTimes(1);
+  });
+
+  it('restarts the inactivity time on resume, and a stop ends the pause', () => {
+    const { lock, t } = timers();
+    t.start(PREFS, false);
+    t.pause();
+    vi.advanceTimersByTime(10 * 60_000);
+    t.resume();
+    vi.advanceTimersByTime(5 * 60_000 - 1);
+    expect(lock).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(lock).toHaveBeenCalledTimes(1);
+    t.pause();
+    t.stop();
+    t.start(PREFS, false);
+    vi.advanceTimersByTime(5 * 60_000);
+    expect(lock).toHaveBeenCalledTimes(2);
+  });
 });
