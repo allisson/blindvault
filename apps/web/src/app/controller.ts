@@ -65,6 +65,7 @@ import {
 } from '@blindvault/vault';
 
 import { backupFileName, recordIdPrefix } from './backup-file';
+import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { devicesOf } from './devices';
 import {
   PasskeyCancelledError,
@@ -335,6 +336,11 @@ export class VaultController {
   #readmission = false;
   /** The replaced vault's passkey, which the authenticator could not be asked to forget (D120). */
   #leftoverPasskey = false;
+  /**
+   * The session whose backup reminder was dismissed: until the next lock, and not for a vault that
+   * replaces it (D188).
+   */
+  #reminderDismissed: VaultSession | undefined;
 
   constructor(deps: ControllerDeps) {
     this.#deps = deps;
@@ -844,6 +850,22 @@ export class VaultController {
   }
 
   /**
+   * Whether a backup is due, and why (§13.4, D188): none made on this device, the last one older
+   * than the current Recovery Phrase, or 30 days old. A dismissal lasts until the next lock.
+   */
+  get backupReminder(): BackupReminder | undefined {
+    const status = this.#status;
+    if (status.kind !== 'unlocked' || this.#reminderDismissed === status.session) return undefined;
+    return backupReminderOf(status.session, this.#now());
+  }
+
+  dismissBackupReminder(): void {
+    const status = this.#status;
+    if (status.kind === 'unlocked') this.#reminderDismissed = status.session;
+    this.#set({ ...this.#status });
+  }
+
+  /**
    * Whether the replaced vault's passkey is left in the authenticator, for the user to delete by
    * hand (D120), until dismissed.
    */
@@ -1060,6 +1082,7 @@ export class VaultController {
     this.#readmission = false;
     this.#dropRefounding();
     this.#refounded = false;
+    this.#reminderDismissed = undefined;
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });

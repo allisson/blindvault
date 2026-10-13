@@ -9,7 +9,8 @@ export type ListScreen =
 
 export type Screen =
   | ListScreen
-  | { readonly name: 'settings' }
+  /** `focus: 'backup'` puts the cursor in the export's password field (D185, D188). */
+  | { readonly name: 'settings'; readonly focus?: 'backup' }
   | { readonly name: 'item'; readonly id: Uint8Array }
   | { readonly name: 'edit'; readonly id: Uint8Array }
   | { readonly name: 'history'; readonly id: Uint8Array }
