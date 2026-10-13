@@ -194,6 +194,11 @@ every project through the references in the root `tsconfig.json`.
   the `updatefound` handler itself. `main.tsx` builds the controller and the monitor before the first
   render and registers the service worker at once. `e2e/update.spec.ts` serves deployments derived
   from `dist` from a host of its own, switched by the test.
+- **About screen (Phase 3, D192).** `src/app/build-info.ts` reads `/asset-manifest.txt` once at
+  startup (`manifestHash`) and hashes it with `crypto.subtle`, refusing a body that is not a
+  manifest, such as the dev server's fallback page. `src/ui/About.tsx` (`AboutBuild`) shows it with
+  the version, at the end of Settings and from the footer of every card before unlock. Whether that
+  card is open lives in `AboutContext` above the screens, since each status renders its own card.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App, supported } from './App';
+import { manifestHash } from './app/build-info';
 import { VaultController } from './app/controller';
 import { startKdfWorker } from './app/kdf';
 import { browserPasskeys } from './app/passkey';
@@ -17,6 +18,8 @@ if (!root) {
 // Every piece of code the app may need after the first unlock loads now: the one Argon2id worker of
 // this window and the strength dictionaries. The start screen waits for both (D142, D191).
 const kdf = supported() ? startKdfWorker() : undefined;
+// The About screen names the bundle this window loaded: its manifest is read now (D192).
+void manifestHash();
 const controller = new VaultController({
   factory: indexedDB,
   locks: navigator.locks,

@@ -1811,14 +1811,24 @@ describe('asset update offered only between flows (D152, D191)', () => {
     expect(c.updateAllowed).toBe(false);
     await c.start();
     expect(c.updateAllowed).toBe(true);
+    expect(c.holdsPhrase).toBe(false);
+    const seen: boolean[] = [];
+    const stop = c.subscribe(() => seen.push(c.holdsPhrase));
     c.newRecoveryPhrase();
+    stop();
+    // The phrase screen keeps its single control: no About button while a phrase is held (D179, D192).
+    expect(seen).toEqual([true]);
+    expect(c.holdsPhrase).toBe(true);
     expect(c.updateAllowed).toBe(false);
     await c.create(PASSWORD, 'Test device');
     expect(c.status.kind).toBe('unlocked');
+    expect(c.holdsPhrase).toBe(false);
     expect(c.updateAllowed).toBe(true);
     c.newRegenerationPhrase();
+    expect(c.holdsPhrase).toBe(true);
     expect(c.updateAllowed).toBe(false);
     c.cancelRegeneration();
+    expect(c.holdsPhrase).toBe(false);
     expect(c.updateAllowed).toBe(true);
     c.lock();
     expect(c.updateAllowed).toBe(true);
