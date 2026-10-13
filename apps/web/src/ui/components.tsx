@@ -138,16 +138,16 @@ export function LockState({ unlocked }: { readonly unlocked: boolean }) {
   );
 }
 
-/** Phase 1 has no Recovery Phrase: the vault is lost with its password or its storage. */
-export function Phase1Banner() {
+/** Vaults and backups of the preview build are throwaway, with no migration owed (D177). */
+export function PreviewBanner() {
   const m = useMessages();
   return (
     <p
       role="note"
-      data-testid="phase1-banner"
+      data-testid="preview-banner"
       className="bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
     >
-      {m.phase1.banner}
+      {m.preview.banner}
     </p>
   );
 }
@@ -179,7 +179,7 @@ export function Card({
   return (
     <div className="flex min-h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <SharedOriginWarning />
-      <Phase1Banner />
+      <PreviewBanner />
       <main className="flex flex-1 items-center justify-center p-4">
         <section className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-white p-6 shadow-sm dark:bg-zinc-900">
           <header className="flex items-center justify-between">
