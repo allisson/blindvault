@@ -230,6 +230,11 @@ export interface RestoreOptions {
   readonly salt: Uint8Array;
   readonly kdfParams: KdfParams;
   readonly backup: BackupRecords;
+  /**
+   * The `vaultId` of the vault this restore replaces, another one (D89): kept in the cleartext part
+   * of Local Config until `forgetReplacedVault` (D96).
+   */
+  readonly replacesVaultId?: Uint8Array;
   readonly now?: () => number;
 }
 
@@ -638,11 +643,15 @@ export class VaultSession {
    * vault stays writable and only that record is read-only until within the bound (D39, D109).
    */
   static async restore(options: RestoreOptions): Promise<VaultSession> {
-    const { store, keyring, kek, salt, kdfParams, backup } = options;
+    const { store, keyring, kek, salt, kdfParams, backup, replacesVaultId } = options;
     const now = options.now ?? Date.now;
     const { vaultId, masterKey, records } = backup;
     try {
       checkKdfParams(kdfParams);
+      if (replacesVaultId && (!isId(replacesVaultId) || sameBytes(replacesVaultId, vaultId))) {
+        // The same vault is replaced in its own database (D153), never through this field.
+        throw new RangeError('replacesVaultId is the ID of another vault');
+      }
       const localConfigId = randomId();
       const mkWrap = wrapKey(
         kek,
@@ -670,6 +679,7 @@ export class VaultSession {
           vaultId,
           localConfigId,
           kek: { salt, opslimit: kdfParams.opslimit, memlimit: kdfParams.memlimit, mkWrap },
+          ...(replacesVaultId ? { replacesVaultId: replacesVaultId.slice() } : {}),
         },
         localState: {
           preferences: DEFAULT_PREFERENCES,
@@ -850,6 +860,22 @@ export class VaultSession {
     await this.#run(() => {
       const { prf, ...cleartext } = this.#cleartext;
       return { writes: [], deletes: [], result: undefined, ...(prf ? { cleartext } : {}) };
+    });
+  }
+
+  /**
+   * Drops the replaced `vaultId` from the cleartext part of Local Config, once the caller deleted
+   * that vault's database (D89, D96). Nothing to drop writes nothing.
+   */
+  async forgetReplacedVault(): Promise<void> {
+    await this.#run(() => {
+      const { replacesVaultId, ...cleartext } = this.#cleartext;
+      return {
+        writes: [],
+        deletes: [],
+        result: undefined,
+        ...(replacesVaultId ? { cleartext } : {}),
+      };
     });
   }
 

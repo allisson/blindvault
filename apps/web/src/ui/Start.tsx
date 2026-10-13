@@ -45,18 +45,53 @@ export function Start({
       return <NoVault controller={controller} status={status.kind} />;
     case 'locked':
     case 'unlocking':
-      return <Unlock controller={controller} working={status.kind === 'unlocking'} />;
+    case 'replacing':
+      return <Locked controller={controller} status={status.kind} />;
     case 'unlocked':
       return null;
   }
 }
 
+/** The locked vault: unlock it, or replace it by a backup without unlocking (§10, D153, D183). */
+function Locked({
+  controller,
+  status,
+}: {
+  readonly controller: VaultController;
+  readonly status: 'locked' | 'unlocking' | 'replacing';
+}) {
+  const [replace, setReplace] = useState(false);
+  if (replace || status === 'replacing') {
+    return (
+      <RestoreVault
+        controller={controller}
+        working={status === 'replacing'}
+        replace
+        onCancel={() => {
+          setReplace(false);
+        }}
+      />
+    );
+  }
+  return (
+    <Unlock
+      controller={controller}
+      working={status === 'unlocking'}
+      onReplace={() => {
+        setReplace(true);
+      }}
+    />
+  );
+}
+
 function Unlock({
   controller,
   working,
+  onReplace,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
+  readonly onReplace: () => void;
 }) {
   const m = useMessages();
   const [password, setPassword] = useState('');
@@ -129,6 +164,9 @@ function Unlock({
           {working ? m.unlock.working : m.unlock.submit}
         </Button>
       </form>
+      <Button variant="quiet" className="self-start" disabled={working} onClick={onReplace}>
+        {m.replace.choose}
+      </Button>
     </Card>
   );
 }

@@ -237,6 +237,19 @@ export function VaultShell({
           </Button>
         </div>
       ) : null}
+      {controller.leftoverPasskey ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="leftover-passkey">
+          <Notice>{m.replace.leftoverPasskey}</Notice>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissLeftoverPasskey();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
       <main className="flex flex-1 flex-col">{body}</main>
       {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
         <footer className="flex justify-around border-t border-zinc-200 p-2 dark:border-zinc-800">

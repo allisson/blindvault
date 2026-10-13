@@ -74,6 +74,19 @@ const en = {
       'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
     dismiss: 'Dismiss',
   },
+  replace: {
+    choose: 'Replace with a backup…',
+    title: 'Replace this vault with a backup',
+    warning:
+      'The vault on this device is deleted and replaced by the backup, whether it is of this vault or of another one. Changes that exist only on this device are lost. If you can still unlock the vault, make a backup first, in Settings.',
+    retire:
+      "Afterwards, retire this device's Device record from another device of the replaced vault: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.",
+    understand: 'I understand that the vault on this device will be replaced',
+    submit: 'Replace',
+    replacing: 'Replacing the vault…',
+    leftoverPasskey:
+      'The passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+  },
   merge: {
     title: 'Merge a backup',
     intro:
@@ -83,7 +96,8 @@ const en = {
     submit: 'Merge',
     merging: 'Merging…',
     done: 'Merged: {added} added, {replaced} replaced.',
-    differentVault: 'This backup is of another vault. It cannot be merged into this one.',
+    differentVault:
+      'This backup is of another vault. It cannot be merged into this one. To replace this vault with it, lock and choose Replace with a backup.',
     masterKey: 'This backup has the ID of this vault but another Master Key. It cannot be merged.',
     corruptRecord:
       'This backup holds a record that does not verify: {type} {id}. It cannot be merged.',
@@ -509,6 +523,19 @@ const ptBR: Messages = {
       'Este cofre foi restaurado com uma senha de exportação. Em Configurações, confira se a sua Frase de Recuperação ainda o abre.',
     dismiss: 'Dispensar',
   },
+  replace: {
+    choose: 'Substituir por um backup…',
+    title: 'Substituir este cofre por um backup',
+    warning:
+      'O cofre deste dispositivo é apagado e substituído pelo backup, seja ele deste cofre ou de outro. As mudanças que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
+    retire:
+      'Depois, aposente o registro de dispositivo deste dispositivo a partir de outro dispositivo do cofre substituído: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
+    understand: 'Entendo que o cofre deste dispositivo será substituído',
+    submit: 'Substituir',
+    replacing: 'Substituindo o cofre…',
+    leftoverPasskey:
+      'A passkey do cofre substituído não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
+  },
   merge: {
     title: 'Mesclar um backup',
     intro:
@@ -518,7 +545,8 @@ const ptBR: Messages = {
     submit: 'Mesclar',
     merging: 'Mesclando…',
     done: 'Mesclado: {added} adicionados, {replaced} substituídos.',
-    differentVault: 'Este backup é de outro cofre. Ele não pode ser mesclado neste.',
+    differentVault:
+      'Este backup é de outro cofre. Ele não pode ser mesclado neste. Para substituir este cofre por ele, bloqueie e escolha Substituir por um backup.',
     masterKey:
       'Este backup tem o ID deste cofre, mas outra Chave Mestra. Ele não pode ser mesclado.',
     corruptRecord:

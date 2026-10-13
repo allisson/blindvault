@@ -90,9 +90,18 @@ every project through the references in the root `tsconfig.json`.
   the validated backup in memory, and asks for the local password last, as creation does; the
   commit opens the database lazily under the installation guard and the vault lock, and a lock
   before it wipes the backup's Master Key and writes nothing (D104). It records every restored
-  `deviceId` as seen, and every retired one as seen as retired, without a notice (D53). Replacing a
-  vault the device holds (D89, D153) is not offered yet: a fresh restore is reached only with no
-  vault.
+  `deviceId` as seen, and every retired one as seen as retired, without a notice (D53).
+- **Replacing the vault by a backup (Phase 2, D89, D153, D183).** The unlock screen offers it
+  without unlocking: the same steps as a fresh restore, the erase warning, and a confirmation
+  checkbox before the commit. `VaultController.restore(password, { replace: true })` runs in the
+  app window that holds the vault's Web Lock (D154), under the installation guard. A backup of
+  another vault commits a database of its own, whose Local Config records the replaced `vaultId`
+  (`RestoreOptions.replacesVaultId`, D96); the controller then deletes the old database and calls
+  `VaultSession.forgetReplacedVault`, and a failure there is left to the startup cleanup. A backup
+  of the same vault commits in the existing database with `StorageCommit.clear`, which empties
+  both object stores in the transaction that writes the new ones. A lock before the commit leaves
+  the old vault intact and locked. The old vault's passkey is then forgotten through
+  `signalUnknownCredential`, or the shell says to delete it by hand (D120).
 - **Backup merge (Phase 2, D182).** The merge rules of `sync-protocol.md` §1 live in
   `packages/vault`: `merge.ts` holds the pure last-write-wins decisions, and
   `VaultSession.mergeBackup` applies them, so sync calls the same path in Phase 5. The session

@@ -11,6 +11,7 @@ export {
   type StorageKey,
   VaultDatabase,
   databaseName,
+  deleteDatabase,
   isDatabaseName,
 } from './database';
 export {

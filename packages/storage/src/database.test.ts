@@ -164,6 +164,39 @@ describe('vault database (D79, D82, D158)', () => {
     db.close();
   });
 
+  it('clears every record and the Local Config in the commit that writes the new ones (D153)', async () => {
+    const db = await VaultDatabase.open(vaultId, factory);
+    const a = folder('a');
+    const b = folder('b');
+    await db.commit({ put: [a, b], delete: [], localConfig: LOCAL_CONFIG });
+    const c = folder('c');
+    const next = new Uint8Array([1, 2, 3]);
+    await db.commit({ put: [c], delete: [], localConfig: next, clear: true });
+    expect((await db.records()).map((r) => r.envelope)).toEqual([c.envelope]);
+    expect(await db.localConfig()).toEqual(next);
+    const { config } = await raw(databaseName(vaultId));
+    expect(config).toEqual([next]);
+    db.close();
+  });
+
+  it('keeps the old vault whole when a clearing commit fails', async () => {
+    const db = await VaultDatabase.open(vaultId, factory);
+    const a = folder('a');
+    await db.commit({ put: [a], delete: [], localConfig: LOCAL_CONFIG });
+    const before = await raw(databaseName(vaultId));
+    // The put is refused before the transaction starts, and an invalid key throws within it.
+    const unsealed = { ...folder('b'), envelope: new Uint8Array([1]) as RecordEnvelope };
+    await expect(
+      db.commit({ put: [unsealed], delete: [], localConfig: new Uint8Array([9]), clear: true }),
+    ).rejects.toThrow(StorageRejectedError);
+    const bad = { ...folder('b'), recordType: Number.NaN as RecordType };
+    await expect(
+      db.commit({ put: [], delete: [bad], localConfig: new Uint8Array([9]), clear: true }),
+    ).rejects.toThrow();
+    expect(await raw(databaseName(vaultId))).toEqual(before);
+    db.close();
+  });
+
   it('stores exactly the bytes of each value, never the rest of its buffer', async () => {
     const db = await VaultDatabase.open(vaultId, factory);
     const record = folder('a');
