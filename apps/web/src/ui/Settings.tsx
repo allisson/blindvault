@@ -1,10 +1,19 @@
+import { RecordType } from '@blindvault/crypto';
 import { type Preferences, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState } from 'react';
 
-import { type PasskeySetup, type PhraseCheck, type VaultController } from '../app/controller';
+import { download } from '../app/backup-file';
+import {
+  type BackupExport,
+  type ExportAuth,
+  type PasskeySetup,
+  type PhraseCheck,
+  type VaultController,
+} from '../app/controller';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice, TextArea } from './components';
+import { ExportPassword } from './ExportPassword';
 import { NewPassword } from './NewPassword';
 
 export function Settings({
@@ -18,6 +27,7 @@ export function Settings({
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">
       <h1 className="text-xl font-semibold">{m.settings.title}</h1>
+      <BackupSettings controller={controller} session={session} />
       <RecoveryPhraseSettings controller={controller} session={session} />
       <ChangePassword controller={controller} />
       <PasskeySettings controller={controller} session={session} />
@@ -371,5 +381,172 @@ function RecoveryPhraseSettings({
         </form>
       ) : null}
     </section>
+  );
+}
+
+/** The name of a record type for the UI, by its registry number (crypto-spec.md §9.1). */
+function recordTypeName(m: Messages, recordType: number): string {
+  const names = m.settings.recordTypes;
+  const entry = Object.entries(RecordType).find(([, value]) => value === recordType);
+  return entry ? names[entry[0] as keyof typeof names] : String(recordType);
+}
+
+/** What an export that made no file says (backup-format.md §8, D64, D179, D181). */
+function exportError(m: Messages, outcome: BackupExport): string | undefined {
+  const s = m.settings;
+  switch (outcome.kind) {
+    case 'ok':
+    case 'locked':
+      return undefined;
+    case 'wrong-password':
+      return s.backupWrong;
+    case 'no-envelope':
+      return s.backupNone;
+    case 'cancelled':
+      return s.backupPasskeyCancelled;
+    case 'rejected':
+      return s.backupPasskeyRejected;
+    case 'no-user-verification':
+      return s.backupPasskeyNoVerification;
+    case 'unavailable':
+      return s.backupPasskeyUnavailable;
+    case 'corrupt-record':
+      return format(s.backupCorrupt, {
+        type: recordTypeName(m, outcome.recordType),
+        id: outcome.recordId,
+      });
+  }
+}
+
+/**
+ * Export (§10, D36, D134, D155, D181): the Recovery Phrase always opens the file; an export
+ * password is optional, with the warning that it yields the Master Key. The local password, or the
+ * passkey, is asked for again. Shows the last backup made on this device (§13.4).
+ */
+function BackupSettings({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const { messages: m, language } = useLanguage();
+  const [protect, setProtect] = useState(false);
+  const [exportPassword, setExportPassword] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [working, setWorking] = useState(false);
+  const [outcome, setOutcome] = useState<BackupExport>();
+  const [form, setForm] = useState(0);
+  const onExportPassword = useCallback((p: string | null) => {
+    setExportPassword(p);
+  }, []);
+  if (!session.recovery) {
+    return (
+      <section className="flex flex-col gap-4">
+        <h2 className="font-semibold">{m.settings.backup}</h2>
+        <Notice>{m.settings.backupNone}</Notice>
+      </section>
+    );
+  }
+  const last = session.lastBackupAt;
+  const run = (auth: ExportAuth) => {
+    setWorking(true);
+    setOutcome(undefined);
+    // Called in the click itself: a passkey assertion needs the user activation.
+    void controller
+      .exportBackup(auth, protect ? (exportPassword ?? undefined) : undefined)
+      .then((result) => {
+        setPassword('');
+        setWorking(false);
+        setOutcome(result);
+        if (result.kind === 'ok') {
+          download(result.bytes, result.name);
+          setProtect(false);
+          setExportPassword(null);
+          setForm((f) => f + 1);
+        }
+      });
+  };
+  const ready = !working && (!protect || exportPassword !== null);
+  const error = outcome ? exportError(m, outcome) : undefined;
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run({ kind: 'password', password });
+      }}
+    >
+      <h2 className="font-semibold">{m.settings.backup}</h2>
+      <p className="text-sm">{m.settings.backupIntro}</p>
+      <p className="text-sm" data-testid="last-backup">
+        {last === undefined
+          ? m.settings.backupNever
+          : format(m.settings.backupLast, {
+              date: new Intl.DateTimeFormat(language, {
+                dateStyle: 'long',
+                timeStyle: 'short',
+              }).format(last),
+            })}
+      </p>
+      {session.backupMayBeIncomplete ? <Notice>{m.settings.backupIncomplete}</Notice> : null}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={protect}
+          onChange={(e) => {
+            setProtect(e.target.checked);
+          }}
+          data-testid="backup-protect"
+        />
+        {m.settings.backupProtect}
+      </label>
+      {protect ? (
+        <>
+          <Notice>
+            <span data-testid="backup-master-key">{m.settings.backupMasterKey}</span>
+          </Notice>
+          <ExportPassword key={form} onChange={onExportPassword} />
+        </>
+      ) : null}
+      <p className="text-sm">{m.settings.backupAuthIntro}</p>
+      <Field
+        label={m.settings.backupAuth}
+        type="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={(e) => {
+          setPassword(e.target.value);
+          setOutcome(undefined);
+        }}
+        data-testid="backup-password"
+      />
+      {session.preferences.hiddenLockSeconds === 0 ? (
+        <p className="text-sm text-zinc-500">{m.settings.backupHidden}</p>
+      ) : null}
+      <Button type="submit" disabled={!ready || password === ''}>
+        {working ? m.settings.backupExporting : m.settings.backupExport}
+      </Button>
+      {controller.hasPasskey ? (
+        <Button
+          variant="quiet"
+          className="self-start"
+          disabled={!ready}
+          onClick={() => {
+            run({ kind: 'passkey' });
+          }}
+        >
+          {m.settings.backupPasskey}
+        </Button>
+      ) : null}
+      {outcome?.kind === 'ok' ? (
+        <p role="status">{format(m.settings.backupDone, { name: outcome.name })}</p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
 }

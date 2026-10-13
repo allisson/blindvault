@@ -273,6 +273,52 @@ const en = {
       'This vault has no Recovery Phrase: the preview build created it, and it cannot be recovered. Create a new vault to get one.',
     recoveryCorrupt:
       'The Recovery Envelope on this device is damaged, so the Recovery Phrase cannot be checked. Regenerate the Recovery Phrase to replace it.',
+    backup: 'Backup',
+    backupIntro:
+      'A backup is an encrypted file with a full copy of this vault. Your Recovery Phrase always opens it. Keep copies away from this device, so you can restore if you lose it.',
+    backupLast: 'Last backup made on this device: {date}.',
+    backupNever: 'No backup has been made on this device yet.',
+    backupIncomplete:
+      'Some records from other devices were rejected because they need a newer app version, so this backup may be incomplete. Update the app and sync with them first.',
+    backupNone:
+      'This vault has no Recovery Phrase: the preview build created it, so no backup of it could be opened. Create a new vault to get one.',
+    backupProtect: 'Also protect it with an export password',
+    backupMasterKey:
+      "Whoever opens this backup with its export password holds the vault's Master Key for good. If the export password and a copy of the backup are ever exposed together, the vault must be re-founded.",
+    exportPassword: 'Export password',
+    exportConfirm: 'Repeat the export password',
+    exportGenerate: 'Generate a passphrase',
+    exportGenerated:
+      'Write this passphrase down: it opens the backup without the Recovery Phrase, and BlindVault does not keep it.',
+    exportWeak:
+      'Too easy to guess for a file that can be attacked offline. Use a longer password, or generate a passphrase.',
+    exportStrong: 'Strong enough for a backup.',
+    backupAuth: 'Local password',
+    backupAuthIntro:
+      "A backup holds the vault's Master Key, so exporting asks for your local password again.",
+    backupExport: 'Export',
+    backupExporting: 'Exporting…',
+    backupPasskey: 'Export with the passkey instead',
+    backupDone: 'Backup exported as {name}. Keep it somewhere other than this device.',
+    backupWrong: 'Wrong password. No backup was made.',
+    backupCorrupt:
+      'A record failed verification, so no backup was made: {type} {id}. Nothing on this device was changed.',
+    backupPasskeyCancelled: 'The passkey prompt was closed. No backup was made.',
+    backupPasskeyRejected: 'This passkey does not open this vault. Use the password.',
+    backupPasskeyNoVerification:
+      'The authenticator did not verify you with a PIN, fingerprint or face. Use the password.',
+    backupPasskeyUnavailable:
+      'The authenticator did not give what BlindVault needs. Use the password.',
+    backupHidden:
+      'The vault locks as soon as the app is hidden: if the browser hides it while it saves the file, the vault locks, and the export must be repeated.',
+    recordTypes: {
+      item: 'Item',
+      folder: 'Folder',
+      itemVersion: 'Item Version',
+      vaultKey: 'Vault Key',
+      recoveryEnvelope: 'Recovery Envelope',
+      device: 'Device record',
+    },
   },
   templates: {
     login: 'Login',
@@ -587,6 +633,52 @@ const ptBR: Messages = {
       'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, e ele não pode ser recuperado. Crie um novo cofre para ter uma.',
     recoveryCorrupt:
       'O Envelope de Recuperação neste dispositivo está danificado, então a Frase de Recuperação não pode ser verificada. Gere uma nova Frase de Recuperação para substituí-lo.',
+    backup: 'Backup',
+    backupIntro:
+      'Um backup é um arquivo criptografado com uma cópia completa deste cofre. A sua Frase de Recuperação sempre o abre. Guarde cópias fora deste dispositivo, para poder restaurar se perdê-lo.',
+    backupLast: 'Último backup feito neste dispositivo: {date}.',
+    backupNever: 'Nenhum backup foi feito neste dispositivo ainda.',
+    backupIncomplete:
+      'Alguns registros de outros dispositivos foram rejeitados porque precisam de uma versão mais nova do app, então este backup pode estar incompleto. Atualize o app e sincronize com eles antes.',
+    backupNone:
+      'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, então nenhum backup dele poderia ser aberto. Crie um novo cofre para ter uma.',
+    backupProtect: 'Proteger também com uma senha de exportação',
+    backupMasterKey:
+      'Quem abrir este backup com a senha de exportação passa a ter a Chave Mestra do cofre para sempre. Se a senha de exportação e uma cópia do backup forem expostas juntas, o cofre precisará ser refundado.',
+    exportPassword: 'Senha de exportação',
+    exportConfirm: 'Repita a senha de exportação',
+    exportGenerate: 'Gerar uma frase-senha',
+    exportGenerated:
+      'Anote esta frase-senha: ela abre o backup sem a Frase de Recuperação, e o BlindVault não a guarda.',
+    exportWeak:
+      'Fácil demais de adivinhar para um arquivo que pode ser atacado offline. Use uma senha mais longa ou gere uma frase-senha.',
+    exportStrong: 'Forte o bastante para um backup.',
+    backupAuth: 'Senha local',
+    backupAuthIntro:
+      'Um backup contém a Chave Mestra do cofre, então exportar pede a sua senha local de novo.',
+    backupExport: 'Exportar',
+    backupExporting: 'Exportando…',
+    backupPasskey: 'Exportar com a passkey',
+    backupDone: 'Backup exportado como {name}. Guarde-o em outro lugar além deste dispositivo.',
+    backupWrong: 'Senha incorreta. Nenhum backup foi feito.',
+    backupCorrupt:
+      'Um registro falhou na verificação, então nenhum backup foi feito: {type} {id}. Nada foi alterado neste dispositivo.',
+    backupPasskeyCancelled: 'O pedido de passkey foi fechado. Nenhum backup foi feito.',
+    backupPasskeyRejected: 'Esta passkey não abre este cofre. Use a senha.',
+    backupPasskeyNoVerification:
+      'O autenticador não verificou você com PIN, digital ou rosto. Use a senha.',
+    backupPasskeyUnavailable:
+      'O autenticador não forneceu o que o BlindVault precisa. Use a senha.',
+    backupHidden:
+      'O cofre bloqueia assim que o app fica oculto: se o navegador o ocultar enquanto salva o arquivo, o cofre bloqueia e a exportação precisa ser repetida.',
+    recordTypes: {
+      item: 'Item',
+      folder: 'Pasta',
+      itemVersion: 'Versão do item',
+      vaultKey: 'Chave do Cofre',
+      recoveryEnvelope: 'Envelope de Recuperação',
+      device: 'Registro de dispositivo',
+    },
   },
   templates: {
     login: 'Login',

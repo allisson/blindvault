@@ -4,6 +4,7 @@
 export {
   type BlockedReason,
   ContentInvalidError,
+  ExportRejectedError,
   HlcReadOnlyError,
   RecordBlockedError,
   RecordNotFoundError,
@@ -71,6 +72,8 @@ export {
 } from './local-config';
 export { type Commit, type RecordKey, type RecordStore, type StoredRecord } from './store';
 export {
+  type BackupFile,
+  type BackupOptions,
   type CreateOptions,
   type DeviceView,
   type FolderTree,

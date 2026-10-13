@@ -150,6 +150,9 @@ importers:
 
   packages/vault:
     dependencies:
+      '@blindvault/backup':
+        specifier: workspace:*
+        version: link:../backup
       '@blindvault/crypto':
         specifier: workspace:*
         version: link:../crypto

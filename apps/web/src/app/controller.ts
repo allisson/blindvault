@@ -31,6 +31,7 @@ import {
 } from '@blindvault/storage';
 import {
   ContentInvalidError,
+  ExportRejectedError,
   type LocalConfigCleartext,
   type Preferences,
   type RecordStore,
@@ -42,6 +43,7 @@ import {
   parseLocalConfig,
 } from '@blindvault/vault';
 
+import { backupFileName, recordIdPrefix } from './backup-file';
 import {
   PasskeyCancelledError,
   type PasskeyPort,
@@ -89,6 +91,26 @@ export type PhraseCheck =
       /** For `unknown-word`: the 1-based position of the first word not in the list. */
       readonly position?: number;
     };
+
+/** How the user opens the Master Key wrap again before an export (D181). */
+export type ExportAuth =
+  { readonly kind: 'password'; readonly password: string } | { readonly kind: 'passkey' };
+
+/** A backup export (backup-format.md §8, D64, D179, D181). */
+export type BackupExport =
+  | { readonly kind: 'ok'; readonly bytes: Uint8Array; readonly name: string }
+  | {
+      readonly kind:
+        | 'wrong-password'
+        | 'locked'
+        | 'no-envelope'
+        | 'cancelled'
+        | 'rejected'
+        | 'no-user-verification'
+        | 'unavailable';
+    }
+  /** A record that fails verification, named by its type and the start of its `recordId`. */
+  | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
 
 export interface ControllerDeps {
   readonly factory: IDBFactory;
@@ -306,7 +328,8 @@ export class VaultController {
       );
       if (epoch !== this.#epoch) throw new Aborted();
       const store: RecordStore = {
-        records: () => Promise.resolve([]),
+        // Empty until the founding commit opens the database; read from it afterwards (export).
+        records: () => (db ? db.records() : Promise.resolve([])),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -646,6 +669,88 @@ export class VaultController {
       }
       if (error instanceof VaultLockedError) return { kind: 'locked' };
       throw error;
+    }
+  }
+
+  // --- backup ------------------------------------------------------------------------------------
+
+  /**
+   * Makes a backup (§10, D181): the local password, or a passkey assertion asked for first while
+   * the click's user activation lasts, opens the Master Key wrap again. `exportPassword`, already
+   * checked for strength by the caller (D134, D155), adds the password keyslot. The caller hands
+   * the file to the browser.
+   */
+  async exportBackup(auth: ExportAuth, exportPassword?: string): Promise<BackupExport> {
+    const status = this.#status;
+    const db = this.#db;
+    if (status.kind !== 'unlocked' || !db) return { kind: 'locked' };
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    let assertion: PasskeyResult | undefined;
+    try {
+      let kek: SymmetricKey;
+      if (auth.kind === 'passkey') {
+        const passkeys = this.#deps.passkeys;
+        const held = this.#passkey;
+        if (!passkeys || !held) return { kind: 'unavailable' };
+        try {
+          assertion = await passkeys.get(held.credentialId, held.prfInput);
+        } catch (error) {
+          return { kind: ceremonyFailure(error) };
+        }
+        if (!sameBytes(assertion.credentialId, held.credentialId)) throw new UnlockRejectedError();
+        if (!assertion.prfOutput) throw new PrfUnavailableError();
+        kek = derivePrfKek(keyring, {
+          authenticatorData: assertion.authenticatorData,
+          prfOutput: assertion.prfOutput,
+        });
+      } else {
+        const config = await this.#readConfig(db);
+        if (!config) return { kind: 'locked' };
+        const { salt, opslimit, memlimit } = config.kek;
+        kek = await deriveDeviceKek(
+          keyring,
+          this.#deps.kdf(),
+          normalizePassword(auth.password),
+          salt,
+          { opslimit, memlimit },
+        );
+      }
+      if (epoch !== this.#epoch) return { kind: 'locked' };
+      const file = await status.session.exportBackup({
+        kek,
+        method: auth.kind,
+        ...(exportPassword !== undefined
+          ? {
+              exportPassword: {
+                password: normalizePassword(exportPassword),
+                port: this.#deps.kdf(),
+              },
+            }
+          : {}),
+      });
+      this.#set({ ...status });
+      return { kind: 'ok', bytes: file.bytes, name: backupFileName(file.exportedAt) };
+    } catch (error) {
+      if (error instanceof UnlockRejectedError) {
+        return { kind: auth.kind === 'password' ? 'wrong-password' : 'rejected' };
+      }
+      if (error instanceof VaultLockedError) return { kind: 'locked' };
+      if (error instanceof UserVerificationError) return { kind: 'no-user-verification' };
+      if (error instanceof PrfUnavailableError) return { kind: 'unavailable' };
+      if (error instanceof ExportRejectedError) {
+        const { record } = error;
+        if (!record) return { kind: 'no-envelope' };
+        return {
+          kind: 'corrupt-record',
+          recordType: record.recordType,
+          recordId: recordIdPrefix(record.recordId),
+        };
+      }
+      throw error;
+    } finally {
+      keyring.wipeAll();
+      assertion?.prfOutput?.fill(0);
     }
   }
 

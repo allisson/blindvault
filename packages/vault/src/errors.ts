@@ -76,3 +76,18 @@ export class SubtreeBlockedError extends VaultError {
     super(`action blocked: ${String(records.length)} read-only records`);
   }
 }
+
+/**
+ * Why a backup was not made (backup-format.md §8, D64, D179, D181): a record that fails
+ * verification, stored now or kept aside at unlock, named by `record`; or no Recovery Envelope to
+ * seal the recovery keyslot to (a D177 preview vault). No file was made and nothing was written.
+ */
+export class ExportRejectedError extends VaultError {
+  override name = 'ExportRejectedError';
+  constructor(
+    readonly reason: 'corrupt-record' | 'no-envelope',
+    readonly record?: { readonly recordType: number; readonly recordId: Uint8Array },
+  ) {
+    super(`export refused: ${reason}`);
+  }
+}
