@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"],
+    "allowJs": true,
+    "checkJs": true,
+    "rootDir": ".",
+    "outDir": ".tsbuild/sw",
+    "tsBuildInfoFile": ".tsbuild/sw.tsbuildinfo"
+  },
+  "include": ["public/sw.js"]
+}

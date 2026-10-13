@@ -31,6 +31,11 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
   },
   {
+    // The service worker ships as written (D190): no bundler, the service-worker globals only.
+    files: ['apps/web/public/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
     // packages/crypto is the root of the dependency graph: no other workspace package, no UI.
     // A relative import that leaves the package is also rejected by tsc (composite project).
     files: ['packages/crypto/**'],
