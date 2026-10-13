@@ -42,6 +42,7 @@ import {
   openLocalConfigPart,
   parseRecoveryPhrase,
   randomId,
+  openRecoveryEnvelope,
   recoveryEnvelopeRecordId,
   sameKey,
   sealLocalConfigPart,
@@ -61,6 +62,7 @@ import {
   ContentInvalidError,
   ExportRejectedError,
   MergeRejectedError,
+  PasswordResetRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
   RestoreRejectedError,
@@ -273,6 +275,24 @@ export interface UnlockOptions {
   /** The Device KEK (`password`) or the PRF KEK (`passkey`); released once used. */
   readonly kek: SymmetricKey;
   readonly method: UnlockMethod;
+  readonly now?: () => number;
+}
+
+export interface ResetPasswordOptions {
+  readonly store: RecordStore;
+  /** The cleartext Local Config, read before the KEK was derived. */
+  readonly localConfig: LocalConfigCleartext;
+  /**
+   * A new keyring holding only `entropy` and `kek`; the session owns it from now on, and wipes it on
+   * failure.
+   */
+  readonly keyring: Keyring;
+  /** The entropy of the Recovery Phrase as typed; released once the envelope is opened. */
+  readonly entropy: SymmetricKey;
+  /** The Device KEK of the new local password; released once the Master Key is wrapped. */
+  readonly kek: SymmetricKey;
+  readonly salt: Uint8Array;
+  readonly kdfParams: KdfParams;
   readonly now?: () => number;
 }
 
@@ -764,6 +784,105 @@ export class VaultSession {
         now,
       });
       await session.#run(() => session.#maintenance());
+      session.#startMaintenance();
+      return session;
+    } catch (error) {
+      keyring.wipeAll();
+      throw error;
+    }
+  }
+
+  /**
+   * Resets a forgotten local password with the Recovery Phrase (§14, D173, D184), the vault locked.
+   * The phrase opens the `mk` of the Recovery Envelope this device holds; the Master Key it yields
+   * is proved by opening the encrypted part of this device's Local Config, then every record is
+   * read as at unlock. Only Local Config is written: the Master Key wrapped under `kek`, with its
+   * salt and calibrated parameters; the PRF wrap is kept. No HLC is issued, so it runs while the
+   * vault is read-only for a clock gone back (D73). `PasswordResetRejectedError` writes nothing.
+   */
+  static async resetPassword(options: ResetPasswordOptions): Promise<VaultSession> {
+    const { store, localConfig, keyring, entropy, kek, salt, kdfParams } = options;
+    const now = options.now ?? Date.now;
+    const { vaultId, localConfigId } = localConfig;
+    try {
+      checkKdfParams(kdfParams);
+      if (salt.length !== SALT_LENGTH) throw new RangeError('salt is 16 bytes');
+      const records = await store.records();
+      const envelopeId = recoveryEnvelopeRecordId(vaultId);
+      const held = records.find(
+        (r) => r.recordType === RecordType.recoveryEnvelope && sameBytes(r.recordId, envelopeId),
+      );
+      if (!held) throw new PasswordResetRejectedError('no-envelope');
+      const recovery = deriveRecoveryKeys(keyring, entropy);
+      keyring.release(entropy);
+      keyring.release(recovery.keyslotPrivateKey);
+      let masterKey: SymmetricKey;
+      try {
+        masterKey = openRecoveryEnvelope(keyring, held.envelope, vaultId, recovery.envelopeKey);
+      } catch (error) {
+        if (error instanceof DecryptionError) throw new PasswordResetRejectedError('wrong-phrase');
+        throw error;
+      } finally {
+        keyring.release(recovery.envelopeKey);
+      }
+      const mkWrap = wrapKey(
+        kek,
+        localAad(LocalPurpose.mkWrapDeviceKek, vaultId, localConfigId),
+        masterKey,
+      );
+      keyring.release(kek);
+      const subkeys = deriveMasterSubkeys(keyring, masterKey);
+      keyring.release(masterKey);
+      let identity: DeviceIdentity;
+      let localState: LocalConfigState;
+      try {
+        const opened = openLocalConfigPart(
+          keyring,
+          subkeys.localConfig,
+          localAad(LocalPurpose.localConfig, vaultId, localConfigId),
+          localConfig.encrypted,
+        );
+        identity = opened.identity;
+        localState = readLocalConfigState(opened.content);
+      } catch (error) {
+        // An envelope only a Master Key holder could write, or a damaged Local Config (D184).
+        if (error instanceof CryptoError)
+          throw new PasswordResetRejectedError('master-key-mismatch');
+        throw error;
+      }
+      const { state, held: heldHlcs } = load(keyring, records, vaultId, subkeys);
+      const cleartext: Cleartext = {
+        vaultId,
+        localConfigId,
+        kek: localConfig.kek,
+        ...(localConfig.prf ? { prf: localConfig.prf } : {}),
+        ...(localConfig.replacesVaultId ? { replacesVaultId: localConfig.replacesVaultId } : {}),
+      };
+      const session = new VaultSession({
+        store,
+        keyring,
+        subkeys,
+        identity,
+        cleartext,
+        localState,
+        clock: HlcClock.resume(identity.deviceId, localState.hlc, heldHlcs, now),
+        state,
+        now,
+      });
+      const next = { salt: salt.slice(), ...kdfParams, mkWrap };
+      try {
+        await session.#run(() => ({
+          writes: [],
+          deletes: [],
+          result: undefined,
+          cleartext: { ...cleartext, kek: next },
+        }));
+      } catch (error) {
+        session.lock();
+        throw error;
+      }
+      // The reset has committed: a failed purge pass leaves it as it is, as on the timer.
+      await session.#run(() => session.#maintenance()).catch(() => undefined);
       session.#startMaintenance();
       return session;
     } catch (error) {

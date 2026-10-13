@@ -118,6 +118,20 @@ export type MergeRejection =
   | 'future-clock'
   | 'immutable-record';
 
+/**
+ * Why a forgotten password reset with the Recovery Phrase was refused (D184): no Recovery Envelope
+ * held, a phrase that does not open it, or one that opens it to a Master Key that is not this
+ * vault's, as this device's Local Config proves.
+ */
+export type PasswordResetRejection = 'no-envelope' | 'wrong-phrase' | 'master-key-mismatch';
+
+export class PasswordResetRejectedError extends VaultError {
+  override name = 'PasswordResetRejectedError';
+  constructor(readonly reason: PasswordResetRejection) {
+    super(`password reset rejected: ${reason}`);
+  }
+}
+
 export class MergeRejectedError extends VaultError {
   override name = 'MergeRejectedError';
   constructor(

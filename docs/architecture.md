@@ -91,6 +91,14 @@ every project through the references in the root `tsconfig.json`.
   commit opens the database lazily under the installation guard and the vault lock, and a lock
   before it wipes the backup's Master Key and writes nothing (D104). It records every restored
   `deviceId` as seen, and every retired one as seen as retired, without a notice (D53).
+- **Forgotten password reset (Phase 2, D173, D184).** `VaultSession.resetPassword` takes the
+  Local Config, the phrase's entropy and the new Device KEK: it opens the held Recovery Envelope's
+  `mk` with `openRecoveryEnvelope`, proves the Master Key by opening the encrypted part of Local
+  Config, reads every record with the same `load` as unlock, and commits only the new Master Key
+  wrap, keeping the PRF wrap. It rejects with `PasswordResetRejectedError` (`no-envelope`,
+  `wrong-phrase`, `master-key-mismatch`) and wipes its keyring. `apps/web` offers "Forgot the
+  password?" on the unlock screen: the phrase, then the new password, checked for strength (D71);
+  a lock during the derivation writes nothing (D104).
 - **Replacing the vault by a backup (Phase 2, D89, D153, D183).** The unlock screen offers it
   without unlocking: the same steps as a fresh restore, the erase warning, and a confirmation
   checkbox before the commit. `VaultController.restore(password, { replace: true })` runs in the

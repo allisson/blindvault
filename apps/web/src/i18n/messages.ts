@@ -74,6 +74,22 @@ const en = {
       'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
     dismiss: 'Dismiss',
   },
+  reset: {
+    forgot: 'Forgot the password?',
+    title: 'Reset the local password',
+    intro:
+      'Your Recovery Phrase sets a new local password on this device, keeping everything the vault holds here.',
+    hint: 'Use the phrase this device knows: if it was regenerated on another device and this one has not synced since, it is the old one.',
+    next: 'Next',
+    passwordIntro: 'Now choose the new local password for this device.',
+    submit: 'Reset the password',
+    working: 'Resetting the password…',
+    wrongPhrase: "This phrase does not open this vault's Recovery Envelope.",
+    masterKey:
+      'This phrase opens the Recovery Envelope held here, but not this vault: the storage is damaged, or someone holding the Master Key changed it. Replace the vault with a backup.',
+    noEnvelope: 'This vault has no Recovery Envelope to open. Replace it with a backup.',
+    locked: 'The reset stopped before anything was saved. Try again.',
+  },
   replace: {
     choose: 'Replace with a backup…',
     title: 'Replace this vault with a backup',
@@ -522,6 +538,22 @@ const ptBR: Messages = {
     checkPhrase:
       'Este cofre foi restaurado com uma senha de exportação. Em Configurações, confira se a sua Frase de Recuperação ainda o abre.',
     dismiss: 'Dispensar',
+  },
+  reset: {
+    forgot: 'Esqueceu a senha?',
+    title: 'Redefinir a senha local',
+    intro:
+      'A sua Frase de Recuperação define uma nova senha local neste dispositivo, mantendo tudo o que o cofre guarda aqui.',
+    hint: 'Use a frase que este dispositivo conhece: se ela foi gerada de novo em outro dispositivo e este não sincronizou desde então, é a antiga.',
+    next: 'Avançar',
+    passwordIntro: 'Agora escolha a nova senha local deste dispositivo.',
+    submit: 'Redefinir a senha',
+    working: 'Redefinindo a senha…',
+    wrongPhrase: 'Esta frase não abre o Envelope de Recuperação deste cofre.',
+    masterKey:
+      'Esta frase abre o Envelope de Recuperação guardado aqui, mas não este cofre: o armazenamento está danificado, ou alguém com a Chave Mestra o alterou. Substitua o cofre por um backup.',
+    noEnvelope: 'Este cofre não tem Envelope de Recuperação para abrir. Substitua-o por um backup.',
+    locked: 'A redefinição parou antes de salvar qualquer coisa. Tente de novo.',
   },
   replace: {
     choose: 'Substituir por um backup…',
