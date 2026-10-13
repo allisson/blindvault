@@ -6,6 +6,8 @@ export {
   ContentInvalidError,
   ExportRejectedError,
   HlcReadOnlyError,
+  MergeRejectedError,
+  type MergeRejection,
   RecordBlockedError,
   RecordNotFoundError,
   SubtreeBlockedError,
@@ -16,6 +18,7 @@ export {
   VaultLockedError,
 } from './errors';
 export { FUTURE_CLOCK_BOUND_MS, HlcClock, checkHlc, compareHlc } from './hlc';
+export { incomingDeviceWins, incomingWins, sameVersion } from './merge';
 export {
   FIELD_TYPES,
   type FieldType,
@@ -75,6 +78,7 @@ export { type Commit, type RecordKey, type RecordStore, type StoredRecord } from
 export {
   type BackupFile,
   type BackupOptions,
+  type BackupRecords,
   type CreateOptions,
   type RestoreOptions,
   type DeviceView,
@@ -84,6 +88,7 @@ export {
   type ItemInput,
   type ItemView,
   MAINTENANCE_INTERVAL_MS,
+  type MergeResult,
   PURGE_DELAY_MS,
   type ReadOnlyReason,
   type RecoveryCheck,

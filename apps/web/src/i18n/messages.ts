@@ -74,6 +74,36 @@ const en = {
       'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
     dismiss: 'Dismiss',
   },
+  merge: {
+    title: 'Merge a backup',
+    intro:
+      'Brings the records of a backup of this vault into it, as a sync would: the newer copy of each record wins, and the older version of an item goes to its history. A merge cannot be undone.',
+    choose: 'Merge a backup…',
+    confirm: 'Backup made on {date}, verified. Merge it into this vault?',
+    submit: 'Merge',
+    merging: 'Merging…',
+    done: 'Merged: {added} added, {replaced} replaced.',
+    differentVault: 'This backup is of another vault. It cannot be merged into this one.',
+    masterKey: 'This backup has the ID of this vault but another Master Key. It cannot be merged.',
+    corruptRecord:
+      'This backup holds a record that does not verify: {type} {id}. It cannot be merged.',
+    immutable:
+      'This backup holds a changed copy of a record that never changes: {type} {id}. It cannot be merged: only someone holding the Master Key, or a bug, makes one.',
+    futureClock:
+      "This backup holds records dated ahead of this device's clock. It can be merged from {date}.",
+    locked: 'The merge stopped before anything was saved. Open the file again.',
+    phraseChanged:
+      'The Recovery Phrase was regenerated on another device on {date}. New backups open only with the new phrase: check yours with Check Recovery Phrase below.',
+    newDevices:
+      'Devices this device had never seen: {names}. A device you did not pair means someone holding the Master Key added it.',
+    alreadyRetired: '{name} (already retired)',
+    retiredDevices:
+      'Devices now retired: {names}. If you did not retire them, someone holding the Master Key did.',
+    droppedLosers:
+      'An older edit made on this device no longer fits the history of: {titles}. It was dropped.',
+    ownRetired:
+      'This device was retired from the vault. To sync again, replace it by pairing with another device. If you did not retire it, someone holding the Master Key did: re-found the vault.',
+  },
   create: {
     title: 'Create a vault',
     intro:
@@ -478,6 +508,37 @@ const ptBR: Messages = {
     checkPhrase:
       'Este cofre foi restaurado com uma senha de exportação. Em Configurações, confira se a sua Frase de Recuperação ainda o abre.',
     dismiss: 'Dispensar',
+  },
+  merge: {
+    title: 'Mesclar um backup',
+    intro:
+      'Traz para este cofre os registros de um backup dele, como uma sincronização faria: a cópia mais nova de cada registro vence, e a versão mais antiga de um item vai para o histórico dele. Uma mesclagem não pode ser desfeita.',
+    choose: 'Mesclar um backup…',
+    confirm: 'Backup feito em {date}, verificado. Mesclá-lo neste cofre?',
+    submit: 'Mesclar',
+    merging: 'Mesclando…',
+    done: 'Mesclado: {added} adicionados, {replaced} substituídos.',
+    differentVault: 'Este backup é de outro cofre. Ele não pode ser mesclado neste.',
+    masterKey:
+      'Este backup tem o ID deste cofre, mas outra Chave Mestra. Ele não pode ser mesclado.',
+    corruptRecord:
+      'Este backup contém um registro que não é verificado: {type} {id}. Ele não pode ser mesclado.',
+    immutable:
+      'Este backup contém uma cópia alterada de um registro que nunca muda: {type} {id}. Ele não pode ser mesclado: só alguém com a Chave Mestra, ou um defeito, cria uma assim.',
+    futureClock:
+      'Este backup contém registros com data à frente do relógio deste dispositivo. Ele pode ser mesclado a partir de {date}.',
+    locked: 'A mesclagem parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
+    phraseChanged:
+      'A Frase de Recuperação foi gerada de novo em outro dispositivo em {date}. Os novos backups só abrem com a frase nova: confira a sua em Verificar a Frase de Recuperação, abaixo.',
+    newDevices:
+      'Dispositivos que este dispositivo nunca tinha visto: {names}. Um dispositivo que você não pareou significa que alguém com a Chave Mestra o adicionou.',
+    alreadyRetired: '{name} (já aposentado)',
+    retiredDevices:
+      'Dispositivos agora aposentados: {names}. Se não foi você quem os aposentou, foi alguém com a Chave Mestra.',
+    droppedLosers:
+      'Uma edição mais antiga feita neste dispositivo não cabe mais no histórico de: {titles}. Ela foi descartada.',
+    ownRetired:
+      'Este dispositivo foi aposentado do cofre. Para sincronizar de novo, substitua-o pareando com outro dispositivo. Se não foi você quem o aposentou, foi alguém com a Chave Mestra: refunde o cofre.',
   },
   create: {
     title: 'Criar um cofre',

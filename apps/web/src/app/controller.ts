@@ -41,6 +41,8 @@ import {
   ContentInvalidError,
   ExportRejectedError,
   type LocalConfigCleartext,
+  MergeRejectedError,
+  type MergeResult,
   type Preferences,
   type RecordStore,
   RestoreRejectedError,
@@ -129,7 +131,10 @@ export interface BackupHeaderInfo {
   readonly hasExportPassword: boolean;
 }
 
-/** A `.bvault` file read for a restore: `unavailable` unless there is no vault yet. */
+/**
+ * A `.bvault` file read for a restore: a fresh restore while there is no vault, or a backup merge
+ * while unlocked (D182); `unavailable` otherwise.
+ */
 export type BackupFileCheck =
   | { readonly kind: 'ok'; readonly header: BackupHeaderInfo }
   | { readonly kind: 'not-a-backup' | 'newer-version' | 'malformed' | 'unavailable' };
@@ -164,7 +169,9 @@ export type BackupOpening =
         | 'master-key-mismatch'
         | 'public-key-mismatch'
         | 'locked'
-        | 'no-file';
+        | 'no-file'
+        /** Opened for a merge, but a backup of another vault (D13). */
+        | 'different-vault';
     }
   /** Named when the record decodes (D64). */
   | {
@@ -177,6 +184,18 @@ export type BackupOpening =
 export type RestoreOutcome =
   | { readonly kind: 'ok' | 'locked' | 'no-backup' }
   | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
+
+/** A backup merge (sync-protocol.md §1, D182): `no-backup` when none was opened. */
+export type MergeOutcome =
+  | { readonly kind: 'ok'; readonly result: MergeResult }
+  | { readonly kind: 'no-backup' | 'locked' | 'different-vault' | 'master-key-mismatch' }
+  /** The merge can be retried from `retryAt` (Unix ms, D64). */
+  | { readonly kind: 'future-clock'; readonly retryAt: number }
+  | {
+      readonly kind: 'corrupt-record' | 'immutable-record';
+      readonly recordType: number;
+      readonly recordId: string;
+    };
 
 export interface ControllerDeps {
   readonly factory: IDBFactory;
@@ -447,11 +466,17 @@ export class VaultController {
     }
   }
 
-  // --- fresh restore -----------------------------------------------------------------------------
+  // --- fresh restore and backup merge -----------------------------------------------------------
+
+  /** Whether a backup can be opened now: for a fresh restore or, while unlocked, a merge. */
+  #restoring(): boolean {
+    const { kind } = this.#status;
+    return kind === 'no-vault' || kind === 'unlocked';
+  }
 
   /** Reads a `.bvault` file for a restore (backup-format.md §8 steps 1 and 2). */
   openBackupFile(bytes: Uint8Array): BackupFileCheck {
-    if (this.#status.kind !== 'no-vault') return { kind: 'unavailable' };
+    if (!this.#restoring()) return { kind: 'unavailable' };
     this.#dropRestore();
     try {
       const parsed = parseBackup(bytes.slice());
@@ -481,7 +506,7 @@ export class VaultController {
    */
   async openBackup(secret: BackupSecret): Promise<BackupOpening> {
     const held = this.#restore;
-    if (this.#status.kind !== 'no-vault' || !held) return { kind: 'no-file' };
+    if (!this.#restoring() || !held) return { kind: 'no-file' };
     held.keyring?.wipeAll();
     const epoch = this.#epoch;
     const keyring = new Keyring();
@@ -498,6 +523,13 @@ export class VaultController {
               normalizePassword(secret.password),
             );
       if (epoch !== this.#epoch) throw new Aborted();
+      const status = this.#status;
+      // A merge takes only a backup of this vault (D13): say so before asking to confirm.
+      if (status.kind === 'unlocked' && !sameBytes(backup.vaultId, status.session.vaultId)) {
+        keyring.wipeAll();
+        this.#restore = undefined;
+        return { kind: 'different-vault' };
+      }
       this.#restore = { parsed: held.parsed, keyring, backup };
       return { kind: 'ok', openedWith: backup.openedWith, exportedAt: backup.exportedAt };
     } catch (error) {
@@ -601,6 +633,41 @@ export class VaultController {
       throw error;
     } finally {
       await guard.release();
+    }
+  }
+
+  /**
+   * Merges the backup last opened into the unlocked vault (§10, sync-protocol.md §1, D13, D57,
+   * D182): one commit, or nothing written when it is refused. The backup's Master Key is wiped
+   * either way. After a backup opened with an export password, recommends Check Recovery Phrase
+   * (D43).
+   */
+  async mergeBackup(): Promise<MergeOutcome> {
+    const status = this.#status;
+    const held = this.#restore;
+    if (status.kind !== 'unlocked' || !held?.keyring || !held.backup) return { kind: 'no-backup' };
+    const { keyring, backup } = held;
+    this.#restore = undefined;
+    try {
+      const result = await status.session.mergeBackup(backup);
+      if (backup.openedWith === 'password') this.#afterRestore = 'check-phrase';
+      this.#set({ ...status });
+      return { kind: 'ok', result };
+    } catch (error) {
+      if (error instanceof VaultLockedError) return { kind: 'locked' };
+      if (!(error instanceof MergeRejectedError)) throw error;
+      const { reason, record, retryAt } = error;
+      if (reason === 'future-clock') return { kind: reason, retryAt: retryAt ?? 0 };
+      if (reason === 'corrupt-record' || reason === 'immutable-record') {
+        return {
+          kind: reason,
+          recordType: record?.recordType ?? 0,
+          recordId: record ? recordIdPrefix(record.recordId) : '',
+        };
+      }
+      return { kind: reason };
+    } finally {
+      keyring.wipeAll();
     }
   }
 

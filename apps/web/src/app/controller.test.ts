@@ -501,13 +501,124 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
   });
 
-  it('opens no backup while a vault exists', async () => {
+  it('restores nothing while a vault exists, and opens no backup while it is locked', async () => {
     const source = await backup();
     const c = await created();
+    // Unlocked, a backup opens for a merge (D182), never for a fresh restore.
+    expect(c.openBackupFile(source.bytes).kind).toBe('ok');
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
+      kind: 'different-vault',
+    });
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
+    c.lock();
     expect(c.openBackupFile(source.bytes)).toEqual({ kind: 'unavailable' });
     expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
       kind: 'no-file',
     });
+  });
+});
+
+describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
+  const EXPORT_PASSWORD = 'orbit-tulip-granite-ferry-cedar-pixel';
+  const NEW_PASSWORD = 'a new local password for this device';
+  const T0 = Date.UTC(2026, 9, 1);
+  const DAY = 24 * 60 * 60 * 1000;
+
+  function login(title: string) {
+    return { templateId: 'login', templateVersion: 1, title, fields: [], tags: [] };
+  }
+
+  /**
+   * Installation A creates the vault and backs it up; installation B restores that backup, adds an
+   * item and backs it up in turn. Each lets go of the vault's Web Lock before the next starts.
+   */
+  async function twoInstallations(options: { exportPassword?: string; bNow?: number } = {}) {
+    const factoryA = new IDBFactory();
+    const a = controller(factoryA, undefined, undefined, () => T0);
+    await a.start();
+    const words = must(a.newRecoveryPhrase());
+    await a.create(PASSWORD, 'Device A');
+    const id = await session(a).createItem(login('ACME'));
+    const first = await a.exportBackup({ kind: 'password', password: PASSWORD });
+    if (first.kind !== 'ok') throw new Error(first.kind);
+    await a.close();
+
+    const b = controller(new IDBFactory(), undefined, undefined, () => options.bNow ?? T0 + 1000);
+    await b.start();
+    b.openBackupFile(first.bytes);
+    await b.openBackup({ kind: 'phrase', words });
+    await b.restore(NEW_PASSWORD);
+    const fromB = await session(b).createItem(login('From B'));
+    const made = await b.exportBackup(
+      { kind: 'password', password: NEW_PASSWORD },
+      options.exportPassword,
+    );
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    await b.close();
+
+    const again = controller(factoryA, undefined, undefined, () => T0 + 2000);
+    await again.start();
+    expect(await again.unlock(PASSWORD)).toBe('ok');
+    return { a: again, words, bytes: made.bytes, id, fromB };
+  }
+
+  it('merges a backup of the same vault by the Recovery Phrase, in one commit', async () => {
+    const { a, words, bytes, fromB } = await twoInstallations();
+    expect(a.openBackupFile(bytes).kind).toBe('ok');
+    expect(await a.openBackup({ kind: 'phrase', words })).toMatchObject({ kind: 'ok' });
+    const merged = await a.mergeBackup();
+    if (merged.kind !== 'ok') throw new Error(merged.kind);
+    expect(merged.result).toMatchObject({ added: 1, replaced: 0, phraseChanged: false });
+    expect(session(a).item(fromB)?.item?.title).toBe('From B');
+    expect(a.afterRestore).toBeUndefined();
+    // The opened backup went with the merge.
+    expect(await a.mergeBackup()).toEqual({ kind: 'no-backup' });
+
+    a.lock();
+    expect(await a.unlock(PASSWORD)).toBe('ok');
+    expect(session(a).item(fromB)?.item?.title).toBe('From B');
+  });
+
+  it('recommends Check Recovery Phrase after a merge opened with an export password (D43)', async () => {
+    const { a, bytes } = await twoInstallations({ exportPassword: EXPORT_PASSWORD });
+    a.openBackupFile(bytes);
+    await a.openBackup({ kind: 'password', password: EXPORT_PASSWORD });
+    expect((await a.mergeBackup()).kind).toBe('ok');
+    expect(a.afterRestore).toBe('check-phrase');
+  });
+
+  it('says a backup of another vault is one before asking to merge it, and drops it (D13)', async () => {
+    const { a } = await twoInstallations();
+    const other = controller();
+    await other.start();
+    const words = must(other.newRecoveryPhrase());
+    await other.create(PASSWORD, 'Other');
+    const made = await other.exportBackup({ kind: 'password', password: PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    a.openBackupFile(made.bytes);
+    expect(await a.openBackup({ kind: 'phrase', words })).toEqual({ kind: 'different-vault' });
+    expect(await a.mergeBackup()).toEqual({ kind: 'no-backup' });
+  });
+
+  it('refuses a backup with records beyond the future-clock bound, saying when to retry (D64)', async () => {
+    const { a, words, bytes, fromB } = await twoInstallations({ bNow: T0 + 3 * DAY });
+    a.openBackupFile(bytes);
+    await a.openBackup({ kind: 'phrase', words });
+    const merged = await a.mergeBackup();
+    expect(merged.kind).toBe('future-clock');
+    expect(merged).toMatchObject({ retryAt: expect.any(Number) as number });
+    expect((merged as { retryAt: number }).retryAt).toBeGreaterThan(T0 + DAY);
+    expect(session(a).item(fromB)).toBeUndefined();
+  });
+
+  it('merges nothing once locked: the opened backup goes with the lock', async () => {
+    const { a, words, bytes } = await twoInstallations();
+    a.openBackupFile(bytes);
+    await a.openBackup({ kind: 'phrase', words });
+    a.lock();
+    expect(await a.mergeBackup()).toEqual({ kind: 'no-backup' });
+    expect(await a.unlock(PASSWORD)).toBe('ok');
+    expect(await a.mergeBackup()).toEqual({ kind: 'no-backup' });
   });
 });
 

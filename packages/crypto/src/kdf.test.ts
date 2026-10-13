@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { KdfContext, deriveMasterSubkeys, deriveSubkey } from './kdf';
-import { Keyring, adoptKey, keyBytes } from './keys';
+import { KdfContext, deriveMasterSubkeys, deriveSubkey, isMasterKeyOf } from './kdf';
+import { Keyring, adoptKey, generateKey, keyBytes } from './keys';
 import { initCrypto } from './sodium';
 import { fromHex, toHex, vectors } from './test-helpers';
 
@@ -44,5 +44,19 @@ describe('crypto_kdf subkeys (crypto-spec.md §5)', () => {
     const a = toHex(keyBytes(deriveSubkey(keyring, parent, KdfContext.master, 1)));
     expect(toHex(keyBytes(deriveSubkey(keyring, parent, KdfContext.master, 5)))).not.toBe(a);
     expect(toHex(keyBytes(deriveSubkey(keyring, parent, KdfContext.prf, 1)))).not.toBe(a);
+  });
+});
+
+describe('isMasterKeyOf (D57, D182)', () => {
+  it('recognizes the Master Key of the subkeys, and no other, wiping what it derives', () => {
+    const keyring = new Keyring();
+    const masterKey = adoptKey(keyring, fromHex(kdf.masterKey));
+    const subkeys = deriveMasterSubkeys(keyring, masterKey);
+    const same = adoptKey(keyring, fromHex(kdf.masterKey));
+    const size = keyring.size;
+    expect(isMasterKeyOf(same, subkeys)).toBe(true);
+    expect(isMasterKeyOf(generateKey(keyring), subkeys)).toBe(false);
+    // Only the key generated above was added: every derived subkey is gone.
+    expect(keyring.size).toBe(size + 1);
   });
 });

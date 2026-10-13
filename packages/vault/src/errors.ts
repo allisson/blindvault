@@ -104,3 +104,27 @@ export class RestoreRejectedError extends VaultError {
     super('restore rejected: a record does not verify');
   }
 }
+
+/**
+ * Why a backup merge was refused as a whole, writing nothing (sync-protocol.md §1.1, D13, D57, D64,
+ * D182): another vault, another Master Key, a record that fails verification or the content checks
+ * (`record`), a record beyond the future-clock bound (`retryAt`, Unix ms), or a record that breaks
+ * the immutability of the Vault Key record or the Recovery Envelope (`record`).
+ */
+export type MergeRejection =
+  | 'different-vault'
+  | 'master-key-mismatch'
+  | 'corrupt-record'
+  | 'future-clock'
+  | 'immutable-record';
+
+export class MergeRejectedError extends VaultError {
+  override name = 'MergeRejectedError';
+  constructor(
+    readonly reason: MergeRejection,
+    readonly record?: RecordKey,
+    readonly retryAt?: number,
+  ) {
+    super(`merge rejected: ${reason}`);
+  }
+}
