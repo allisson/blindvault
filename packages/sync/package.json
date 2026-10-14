@@ -9,10 +9,13 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@vitest/coverage-v8": "5.0.2",
+    "vite": "8.3.1",
     "vitest": "5.0.2"
   }
 }

@@ -260,10 +260,33 @@ every project through the references in the root `tsconfig.json`.
   that tampers with, drops, duplicates, reorders or injects messages for the Gate C tests, and
   `breakLink`. `src/webrtc.ts` (`dataChannelTransport`) wraps an already open `RTCDataChannel`
   through the structural `DataChannelLike`, accepts only `ArrayBuffer` data, and makes `send` wait
-  while more than 1 MiB is buffered, until `bufferedamountlow` at 256 KiB; opening the connection
-  belongs to the payload and SDP task. Its tests run in Node against a stand-in channel; real
-  WebRTC between two pages comes with that task. An ESLint rule keeps `packages/sync` to
-  `@blindvault/crypto` and away from UI code.
+  while more than 1 MiB is buffered, until `bufferedamountlow` at 256 KiB. Its tests run in Node
+  against a stand-in channel. An ESLint rule keeps `packages/sync` to `@blindvault/crypto` and away
+  from UI code.
+- **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
+  strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
+  as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`
+  or `wrong-session`; encoding runs the decoder's checks, so an invalid payload is never shown, and
+  the text decoder removes only line breaks and tabs, because the space is a base45 character.
+  `src/sdp.ts` reads the payload fields from the gathered local description (UDP host and srflx
+  candidates of component 1, srflx first, at most 8) and rebuilds the peer's description from its
+  payload. `src/connection.ts` (`startInitiator`, `startResponder`) generates an ECDSA P-256
+  certificate per session, stops gathering at `complete`, the first srflx candidate or 10 s, and
+  resolves with a `Transport` once the initiator's DataChannel is open; closing the transport waits
+  up to 2 s for the channel's own close before closing the connection, because Firefox and WebKit
+  otherwise report the close to the peer as an error. The payload's other fields (session ID,
+  commitment, "holds a vault", formats) come from the caller. The vectors are in
+  `test-vectors/pairing-v1.json`, from `tests/vectors/generate.py`. `connection.ts` needs a
+  browser, so it is outside the Vitest coverage and covered by `e2e/connection.spec.ts`: Playwright
+  on a page served by Vite from the package source (`playwright.config.ts`, on `127.0.0.1` because
+  Playwright's Firefox gathers no candidate on `localhost`), two browser contexts pairing LAN-only by
+  the base45 texts in Chromium, Firefox and WebKit, including a fingerprint changed in either
+  payload, which never connects. The responder holds a fake camera before it gathers, as the
+  scanning device does in QR pairing (D161), so its host candidate is a raw IP address: without
+  it, in the Playwright Linux image both sides sent only mDNS names, and WebKit never connected
+  while Chromium and Firefox did; the mDNS-only case stays the roadmap's real-device measurement. `@playwright/test` and `vite` are devDependencies of
+  `packages/sync` at the versions `apps/web` already uses; the root `test:e2e` runs this suite
+  before the app's.
 - **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
   has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
   landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it

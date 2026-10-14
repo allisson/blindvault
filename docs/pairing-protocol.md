@@ -78,13 +78,16 @@ I's `setup` is `actpass`; R's is `active` or `passive`, whichever its browser ch
 | 4 | srflx, IPv6 | 16 bytes |
 
 `port` is 1 to 65535. Only UDP candidates of component 1 are carried; the sender drops TCP, relay
-and peer-reflexive candidates, and duplicates. An mDNS name is carried only when it is a UUID; its
+and peer-reflexive candidates, and duplicates. When more than 8 remain, the sender keeps the srflx
+candidates first and then the host candidates in the browser's order, so host addresses never push
+out the srflx candidate a connection across networks needs; with none left it shows no payload. An mDNS name is carried only when it is a UUID; its
 text form on rebuilding is the lowercase, hyphenated UUID followed by `.local`. LAN-only mode uses
 no STUN server and so has no srflx candidate (§9.2).
 
-ICE gathering is not trickled (D4). When the payload is built (at `complete`, or earlier once a
-srflx candidate arrived, which the spike asked to measure) is set by the implementation; it does
-not change the bytes.
+ICE gathering is not trickled (D4). When the payload is built is set by the implementation and does
+not change the bytes: it stops at `complete`, at the first srflx candidate, or after 10 seconds,
+whichever comes first (`packages/sync/src/connection.ts`). The 10 seconds are the Phase 0 spike's
+cap, not a measured optimum; when the srflx candidate arrives on mobile data is still to measure.
 
 ### 3.3 Decoding
 
@@ -104,9 +107,12 @@ The decoding is strict: one payload has exactly one encoding.
 
 ### 3.4 Encoding and channel
 
-The payload is encoded in base45 (QR alphanumeric mode), for QR and for copy/paste alike. In
-copy/paste mode it may travel through any channel (D117); the UI states that the channel sees the
-device's network addresses.
+The payload is encoded in base45 (QR alphanumeric mode), for QR and for copy/paste alike, and
+decoded strictly (RFC 9285: a character outside the alphabet, a length of 3k + 1 or a group above
+its range is rejected). The receiver of a pasted text removes line breaks and tabs, which a text
+field or a chat may add, and nothing else: the space is a base45 character, and a payload may
+start or end with one. In copy/paste mode it may travel through any channel (D117); the UI states
+that the channel sees the device's network addresses.
 
 The payload holds no Noise key and no vault data (§8.3). It reveals the network addresses, the
 `holdsVault` flag and the supported format range.
@@ -117,7 +123,8 @@ Each side rebuilds the other's SDP from its payload: one `m=application 9 UDP/DT
 webrtc-datachannel` section with `a=mid:0`, `a=ice-ufrag`, `a=ice-pwd`, `a=fingerprint:sha-256`,
 `a=setup`, `a=sctp-port:5000`, the candidates and `a=end-of-candidates`. The browser then refuses a
 DTLS certificate whose fingerprint differs from the one in the payload, which is the check
-`crypto-spec.md` §13 requires. I sets R's rebuilt answer as its remote description; R sets I's
+`crypto-spec.md` §13 requires. Each session generates its own certificate (ECDSA P-256) rather than
+using one the browser might reuse (section 11). I sets R's rebuilt answer as its remote description; R sets I's
 rebuilt offer before creating its answer.
 
 I creates one DataChannel, reliable and ordered, before its offer. DTLS is transport only and is
@@ -377,6 +384,6 @@ prologue label, so two devices of different versions never reach a SAS that look
 - CRYPTO-INV-011: no Master Key or MAC before both confirmations (section 6.4).
 - CRYPTO-INV-014: no Device record before both key-confirmation MACs match (section 9 step 2).
 
-The tests of overview §16 (pairing tests) and of Gate C cover this document. Test vectors for the
-commitment, the SAS and the payload encoding are added to `crypto-spec.md` §15 with their
-implementation.
+The tests of overview §16 (pairing tests) and of Gate C cover this document. The payload and
+base45 vectors are in `packages/sync/test-vectors/pairing-v1.json` (`crypto-spec.md` §15); the
+vectors for the commitment and the SAS are added with their implementation.
