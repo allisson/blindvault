@@ -315,7 +315,26 @@ every project through the references in the root `tsconfig.json`.
   again and verified, as an export) and `completed` (`lastSyncByPeer`, D34). `VaultSession.join`
   shares `restore`'s body (`#fresh`) with B's identity and the checks of §8 step 5, each a
   `JoinRejectedError` whose reason is the abort reason. `tests/pairing.test.ts` runs the whole
-  pairing through IndexedDB, mapping vault errors to abort reasons as the app will.
+  pairing through IndexedDB, mapping vault errors to abort reasons as the app does (`apps/web/src/app/pairing.ts`, `refusal`).
+- **Pairing screens (Phase 4, §8.4, D203).** `apps/web` now depends on `@blindvault/sync`, a
+  workspace package, so no new dependency. `src/app/pairing.ts` runs one device's side of one
+  session: `Inviting` (A) gathers and shows its payload, takes B's answer, runs the handshake, the
+  nonces and the user's answer to the SAS, then `sendVault`; `Joining` (B) takes A's payload,
+  shows its answer and receives the vault, whose commit the controller runs. WebRTC sits behind a
+  `PairingPort` in `ControllerDeps`, so `controller-pairing.test.ts` pairs two controllers, each
+  with its own IndexedDB and Web Locks, over the in-memory transport. A flow ends on a cancel or a
+  lock by wiping its secrets at once and sending `abort`; the connection closes only once that
+  message is out, within 3 s, since closing it at once dropped the `abort` and the peer saw a
+  closed link (found by Playwright, now a unit test). A pasted payload is checked before anything
+  else (`PayloadCheck`): role, session, version, "holds a vault", and B's formats and types
+  against this version's (D122). The controller adds the `joining` status (B, from its password
+  step to its commit, holding the installation guard) and keeps A's stage until it is closed;
+  `updateAllowed` is false meanwhile (D152). B's hidden-app lock, with no preference of its own,
+  is an effect in `App.tsx` with the default delay. `src/app/devices.ts` adds the last sync and
+  the pairing not completed (the record's `hlc` written by this device, no sync with it, D34). The
+  Playwright spec `e2e/pairing.spec.ts` runs on a second preview server bound to `127.0.0.1`
+  (`playwright.config.ts`), because Playwright's Firefox gathers no candidate on `localhost`, and
+  skips WebKit on Linux only.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

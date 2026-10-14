@@ -13,6 +13,7 @@ import {
   calibrateDeviceKek,
   deriveDeviceKek,
   derivePrfKek,
+  generateDeviceIdentity,
   generatePrfInput,
   generateRecoveryPhrase,
   generateSalt,
@@ -46,6 +47,8 @@ import {
   type LocalConfigCleartext,
   MergeRejectedError,
   type MergeResult,
+  type PairingGrant,
+  PairingRefusedError,
   PasswordResetRejectedError,
   type Preferences,
   RecordNotFoundError,
@@ -67,6 +70,13 @@ import {
 import { backupFileName, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { devicesOf } from './devices';
+import {
+  Inviting,
+  Joining,
+  type PairingPort,
+  type PairingStage,
+  type PayloadCheck,
+} from './pairing';
 import { type Ready } from './ready';
 import { StorageMonitor } from './storage-state';
 import {
@@ -88,6 +98,8 @@ export type Status =
   | { readonly kind: 'restoring' }
   /** The locked vault being replaced by a backup, until the commit (D89, D153, D183). */
   | { readonly kind: 'replacing' }
+  /** No vault yet: joining a pairing, from its password step until the commit (§8.4, D33, D203). */
+  | { readonly kind: 'joining' }
   /** A forgotten local password being reset with the Recovery Phrase (D173, D184). */
   | { readonly kind: 'resetting' }
   /** Another app window holds the vault's Web Lock (D51). */
@@ -260,6 +272,22 @@ export type PasswordReset =
       readonly position?: number;
     };
 
+/**
+ * Starting a pairing on the device holding the vault (§8.4, D202): why it could not start, after the
+ * local password or the passkey opened the Master Key wrap again.
+ */
+export type PairingStart =
+  | 'ok'
+  | ReauthFailure
+  | Exclude<PairingRefusedError['reason'], 'known-device'>
+  /** No WebRTC in this browser. */
+  | 'no-webrtc';
+
+/** How a pairing runs: `sameNetwork` uses no STUN server (§9.2, D203). */
+export interface PairingOptions {
+  readonly sameNetwork: boolean;
+}
+
 export interface ControllerDeps {
   readonly factory: IDBFactory;
   readonly locks: LockManager;
@@ -274,6 +302,8 @@ export interface ControllerDeps {
   readonly storage?: StorageManager;
   /** WebAuthn, for passkey unlock (§5.5); absent where the browser has none. */
   readonly passkeys?: PasskeyPort;
+  /** WebRTC, for pairing (§8.4); absent where the browser has none. */
+  readonly pairing?: PairingPort;
 }
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
@@ -352,6 +382,8 @@ export class VaultController {
    * replaces it (D188).
    */
   #reminderDismissed: VaultSession | undefined;
+  /** The pairing in progress, inviting (A) or joining (B), until closed or locked (§8.4, D93). */
+  #pairing: Inviting | Joining | undefined;
 
   /** Whether the browser keeps this origin's storage, and how much is used (D196). */
   readonly storage: StorageMonitor;
@@ -1142,10 +1174,15 @@ export class VaultController {
     this.#dropRefounding();
     this.#refounded = false;
     this.#reminderDismissed = undefined;
+    // Before the session locks: the peer learns why the pairing ended (D93).
+    this.#pairing?.end('locked');
+    this.#pairing = undefined;
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
-    if (status.kind === 'creating' || status.kind === 'restoring') this.#set({ kind: 'no-vault' });
+    if (status.kind === 'creating' || status.kind === 'restoring' || status.kind === 'joining') {
+      this.#set({ kind: 'no-vault' });
+    }
     if (status.kind === 'replacing' || status.kind === 'resetting') this.#set({ kind: 'locked' });
   }
 
@@ -1435,7 +1472,8 @@ export class VaultController {
 
   /**
    * Whether an asset update may be offered now (D152, D191): with no vault, locked or unlocked, and
-   * no restore, merge, re-founding, shown Recovery Phrase or step that follows one in progress.
+   * no restore, merge, re-founding, pairing, shown Recovery Phrase or step that follows one in
+   * progress.
    */
   get updateAllowed(): boolean {
     const { kind } = this.#status;
@@ -1446,7 +1484,8 @@ export class VaultController {
       this.#afterRestore === undefined &&
       !this.#readmission &&
       this.#refounding === undefined &&
-      !this.#refounded
+      !this.#refounded &&
+      this.#pairing === undefined
     );
   }
 
@@ -1507,6 +1546,224 @@ export class VaultController {
     } finally {
       keyring.wipeAll();
     }
+  }
+
+  // --- pairing -----------------------------------------------------------------------------------
+
+  /** The pairing in progress on this device, as its screens show it (§8.4, D203). */
+  get pairing(): PairingStage | undefined {
+    return this.#pairing?.stage;
+  }
+
+  #pairingChanged = (): void => {
+    this.#set({ ...this.#status });
+  };
+
+  /**
+   * A starts a pairing (§8.4, D202): the local password, or a passkey assertion asked for first
+   * while the click's user activation lasts, opens the Master Key wrap again for this pairing alone,
+   * then the connection is gathered and A's payload shown. An unregistered device names its own
+   * Device record `defaultName` (D141, D203).
+   */
+  async startPairing(
+    auth: ExportAuth,
+    options: PairingOptions & { readonly defaultName: string },
+  ): Promise<PairingStart> {
+    const status = this.#status;
+    const db = this.#db;
+    const port = this.#deps.pairing;
+    if (status.kind !== 'unlocked' || !db) return 'locked';
+    if (!port) return 'no-webrtc';
+    this.#dropPairing();
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    let grant: PairingGrant;
+    let readmit: boolean;
+    try {
+      const kek = await this.#reauthenticate(auth, keyring, db);
+      if (typeof kek === 'string') return kek;
+      if (epoch !== this.#epoch) return 'locked';
+      const { session } = status;
+      const registered = session.registered;
+      readmit = !registered && devicesOf(session).listed.some((d) => !d.own);
+      grant = session.openPairing({
+        kek,
+        method: auth.kind,
+        ...(registered ? {} : { displayName: options.defaultName }),
+      });
+    } catch (error) {
+      if (epoch !== this.#epoch) return 'locked';
+      const failure = reauthFailure(error, auth);
+      if (failure) return failure;
+      if (error instanceof PairingRefusedError && error.reason !== 'known-device') {
+        return error.reason;
+      }
+      throw error;
+    } finally {
+      keyring.wipeAll();
+    }
+    const flow = new Inviting({
+      port,
+      sameNetwork: options.sameNetwork,
+      grant,
+      readmit,
+      onChange: this.#pairingChanged,
+    });
+    this.#pairing = flow;
+    this.#set({ ...status });
+    await flow.begin();
+    return 'ok';
+  }
+
+  /** A takes B's answer, pasted (§3.4). */
+  pairingAnswer(text: string): PayloadCheck {
+    const flow = this.#pairing;
+    return flow instanceof Inviting ? flow.answer(text) : 'unavailable';
+  }
+
+  /**
+   * B starts joining a pairing from an installation with no vault (§8.4, D33): `password`, already
+   * checked for strength by the caller (D71), becomes its local password; the Device KEK and the
+   * identity exist in memory only until the commit. Holds the installation guard until then (D97);
+   * any lock before it ends the pairing with nothing persisted (D93, D104).
+   */
+  async beginJoin(
+    password: string,
+    options: PairingOptions & { readonly name: string },
+  ): Promise<'ok' | 'busy' | 'locked' | 'unavailable'> {
+    const port = this.#deps.pairing;
+    if (this.#status.kind !== 'no-vault' || !port) return 'unavailable';
+    const epoch = this.#epoch;
+    this.#set({ kind: 'joining' });
+    const guard = await acquireInstallationGuard(this.#deps.locks);
+    if (!guard) {
+      if (epoch === this.#epoch) this.#set({ kind: 'busy' });
+      return 'busy';
+    }
+    const keyring = new Keyring();
+    try {
+      if (epoch !== this.#epoch) throw new Aborted();
+      const salt = generateSalt();
+      const { kek, params } = await calibrateDeviceKek(
+        keyring,
+        this.#deps.kdf(),
+        normalizePassword(password),
+        salt,
+      );
+      if (epoch !== this.#epoch) throw new Aborted();
+      const identity = generateDeviceIdentity(keyring);
+      this.#pairing = new Joining({
+        port,
+        sameNetwork: options.sameNetwork,
+        identity,
+        name: options.name,
+        keyring,
+        onChange: this.#pairingChanged,
+        commit: (received, peerPublicKey) =>
+          this.#join(epoch, {
+            keyring,
+            kek,
+            salt,
+            kdfParams: params,
+            identity,
+            vaultId: received.vaultId,
+            masterKey: received.masterKey,
+            records: received.records,
+            peerPublicKey,
+          }),
+        released: () => void guard.release(),
+      });
+      this.#set({ kind: 'joining' });
+      return 'ok';
+    } catch (error) {
+      keyring.wipeAll();
+      await guard.release();
+      if (this.getStatus().kind === 'joining') this.#set({ kind: 'no-vault' });
+      if (error instanceof Aborted || epoch !== this.#epoch) return 'locked';
+      throw error;
+    }
+  }
+
+  /** B takes A's payload, pasted (§3.4), and shows its answer once gathered. */
+  async joinOffer(text: string): Promise<PayloadCheck> {
+    const flow = this.#pairing;
+    return flow instanceof Joining ? flow.offer(text) : 'unavailable';
+  }
+
+  /**
+   * B's single commit (§8 step 6, D33): the vault is this window's from then on. A lock after the
+   * commit leaves it committed and locked; one before aborts it with nothing persisted.
+   */
+  async #join(
+    epoch: number,
+    options: Omit<Parameters<typeof VaultSession.join>[0], 'store' | 'now'>,
+  ): Promise<VaultSession> {
+    const { factory, locks } = this.#deps;
+    let db: VaultDatabase | undefined;
+    let lock: HeldLock | undefined;
+    const store: RecordStore = {
+      records: () => (db ? db.records() : Promise.resolve([])),
+      commit: async (commit) => {
+        if (epoch !== this.#epoch) throw new Aborted();
+        if (!db) {
+          const { vaultId } = parseLocalConfig(commit.localConfig);
+          lock = (await acquireVaultLock(vaultId, {}, locks)) ?? undefined;
+          if (!lock) throw new Aborted();
+          db = await VaultDatabase.open(vaultId, factory);
+        }
+        await db.commit(commit);
+      },
+    };
+    let session: VaultSession;
+    try {
+      session = await VaultSession.join({ ...options, store, now: this.#now });
+      if (!db || !lock) throw new Aborted();
+    } catch (error) {
+      db?.close();
+      await lock?.release();
+      if (error instanceof Aborted) throw new VaultLockedError();
+      throw error;
+    }
+    this.#db = db;
+    this.#vaultId = session.vaultId;
+    this.#passkey = undefined;
+    this.#hold(lock);
+    if (epoch !== this.#epoch) {
+      // Committed: the vault exists, and the lock stands.
+      session.lock();
+      this.#set({ kind: 'locked' });
+      return session;
+    }
+    this.#pairing = undefined;
+    this.#ready = { start: 'paired' };
+    this.#set({ kind: 'unlocked', session });
+    void this.#requestPersistence();
+    return session;
+  }
+
+  /** The user said the SAS matches the other device's (§6.4). */
+  confirmSas(): void {
+    this.#pairing?.confirm();
+  }
+
+  /** The user said the SAS differs from the other device's: the pairing aborts (§6.4). */
+  rejectSas(): void {
+    this.#pairing?.reject();
+  }
+
+  /**
+   * Cancels the pairing, or closes one that ended: B goes back to having no vault. Any secret of the
+   * session is wiped.
+   */
+  cancelPairing(): void {
+    this.#dropPairing();
+    if (this.#status.kind === 'joining') this.#set({ kind: 'no-vault' });
+    else this.#set({ ...this.#status });
+  }
+
+  #dropPairing(): void {
+    this.#pairing?.end('cancelled');
+    this.#pairing = undefined;
   }
 
   // --- re-founding --------------------------------------------------------------------------------

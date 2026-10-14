@@ -5,20 +5,26 @@ import { devicesOf } from './devices';
 
 const OWN = new Uint8Array(16).fill(1);
 
-function view(id: number, retired: boolean, displayName = `Device ${String(id)}`): DeviceView {
+function view(
+  id: number,
+  retired: boolean,
+  displayName = `Device ${String(id)}`,
+  writer = new Uint8Array(16),
+): DeviceView {
   return {
     deviceId: new Uint8Array(16).fill(id),
-    hlc: { physicalMs: 0, counter: 0, deviceId: new Uint8Array(16) },
+    hlc: { physicalMs: 0, counter: 0, deviceId: writer },
     device: { publicKey: new Uint8Array(32), displayName, retired, registeredAt: 0 },
     unknownKeys: [],
   };
 }
 
-function session(devices: DeviceView[]) {
+function session(devices: DeviceView[], lastSyncByPeer: [Uint8Array, number][] = []) {
   return {
     deviceId: OWN,
     registered: devices.some((d) => d.deviceId[0] === 1),
     devices: () => devices,
+    lastSyncByPeer,
   };
 }
 
@@ -48,5 +54,33 @@ describe('devices for the UI (§8.4, D30, D119, D186)', () => {
     expect(devicesOf(session([view(2, true)])).advice).toBe('only-device');
     expect(devicesOf(session([])).advice).toBe('only-device');
     expect(devicesOf(session([view(1, false), view(2, true)])).advice).toBe('only-device');
+  });
+
+  it('gives the last completed sync with each other device, none for this one (D34)', () => {
+    const s = devicesOf(
+      session([view(1, false), view(2, false), view(3, false)], [[new Uint8Array(16).fill(2), 42]]),
+    );
+    expect(s.listed.map((d) => [d.deviceId[0], d.lastSyncAt])).toEqual([
+      [1, undefined],
+      [2, 42],
+      [3, undefined],
+    ]);
+  });
+
+  it('marks a record this device wrote, with no sync since, as a pairing not completed (D34, D203)', () => {
+    const s = devicesOf(
+      session(
+        [view(1, false), view(2, false, 'B', OWN), view(3, false, 'C', OWN), view(4, false)],
+        [[new Uint8Array(16).fill(3), 42]],
+      ),
+    );
+    expect(s.listed.map((d) => [d.deviceId[0], d.pending])).toEqual([
+      [1, false],
+      [2, true],
+      [3, false],
+      [4, false],
+    ]);
+    // This device's own record, written by itself at creation, is never pending.
+    expect(devicesOf(session([view(1, false, 'A', OWN)])).listed[0]?.pending).toBe(false);
   });
 });

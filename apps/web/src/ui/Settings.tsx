@@ -19,6 +19,7 @@ import { Button, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
+import { InviteDevice } from './Pairing';
 import { RefoundVault } from './RefoundVault';
 import { RegeneratePhrase, focusBackup } from './RegeneratePhrase';
 import { DeviceStorage } from './StorageState';
@@ -446,8 +447,9 @@ type RetireState =
   | { readonly kind: 'refused' };
 
 /**
- * Devices (§8.4, D30, D119, D186): the non-retired Device records, this device's first, and the
- * count of retired ones. An unregistered device is told to get re-admitted; the only device, to
+ * Devices (§8.4, D30, D34, D119, D186, D203): the non-retired Device records, this device's first,
+ * with the last completed sync with each other one and the pairings not completed, the count of
+ * retired ones, and pairing a new device. An unregistered device is told to get re-admitted; the only device, to
  * make a backup and pair another. Retiring another device asks for a confirmation that states it
  * cannot be undone, is not revocation, and points to re-founding; no password (D186).
  */
@@ -496,6 +498,18 @@ function DeviceSettings({
                     date: date.format(Number(d.device.registeredAt)),
                   })}
                 </span>
+                {d.own ? null : (
+                  <span className="text-zinc-500" data-testid="device-last-sync">
+                    {d.lastSyncAt === undefined
+                      ? m.settings.devicesNeverSynced
+                      : format(m.settings.devicesLastSync, { date: date.format(d.lastSyncAt) })}
+                  </span>
+                )}
+                {d.pending ? (
+                  <span className="text-amber-700 dark:text-amber-400" data-testid="device-pending">
+                    {m.settings.devicesPending}
+                  </span>
+                ) : null}
               </span>
               {d.own ? null : (
                 <Button
@@ -520,6 +534,9 @@ function DeviceSettings({
       ) : null}
       {retire.kind === 'confirm' || retire.kind === 'working' ? (
         <div className="flex flex-col gap-2" data-testid="retire-confirm">
+          {devices.listed.some((d) => d.pending && hex(d.deviceId) === retire.id) ? (
+            <Notice>{format(m.settings.devicesPendingRetire, { name: retire.name })}</Notice>
+          ) : null}
           <Notice>{format(m.settings.devicesRetireWarning, { name: retire.name })}</Notice>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -558,6 +575,7 @@ function DeviceSettings({
           {m.settings.devicesRefused}
         </p>
       ) : null}
+      <InviteDevice controller={controller} session={session} />
     </section>
   );
 }

@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 const port = 4173;
 
+/** Where the pairing spec runs (e2e/pairing.spec.ts). */
+export const PAIRING_PORT = 4174;
+export const PAIRING_URL = `http://127.0.0.1:${String(PAIRING_PORT)}`;
+
 export default defineConfig({
   testDir: './e2e',
   // Needs a server with the headers of deploy/ (playwright.self-hosting.config.ts).
@@ -18,9 +22,18 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
-  webServer: {
-    command: `pnpm build && pnpm preview --port ${String(port)} --strictPort`,
-    port,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command: `pnpm build && pnpm preview --port ${String(port)} --strictPort`,
+      port,
+      reuseExistingServer: !process.env.CI,
+    },
+    // The same build on 127.0.0.1, for pairing: Playwright's Firefox gathers no ICE candidate on
+    // localhost (packages/sync). Started once the first one is up, so after the build.
+    {
+      command: `pnpm preview --host 127.0.0.1 --port ${String(PAIRING_PORT)} --strictPort`,
+      url: PAIRING_URL,
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

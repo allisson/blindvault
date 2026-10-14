@@ -21,6 +21,9 @@
     },
     {
       "path": "../../packages/storage"
+    },
+    {
+      "path": "../../packages/sync/tsconfig.lib.json"
     }
   ]
 }

@@ -60,4 +60,10 @@ describe('Vault ready recommendations (§13.3, D198)', () => {
       }),
     ).toEqual(['check-phrase', 'readmit']);
   });
+
+  it('after a pairing: passkey, then a backup, as the pair start of section 13.3 lists (D203)', () => {
+    const paired: ReadyInput = { ...CREATED, ready: { start: 'paired' }, devices: undefined };
+    expect(readyAdvice(paired)).toEqual(['passkey', 'backup']);
+    expect(readyAdvice({ ...paired, passkeys: false, exportable: false })).toEqual([]);
+  });
 });

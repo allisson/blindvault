@@ -8,8 +8,9 @@ import { type Ready as ReadyState, type ReadyAdvice, readyAdvice } from '../app/
 import { useMessages } from '../i18n/context';
 import { Button } from './components';
 
-// "Vault ready" after a creation or a restore (overview §13.3, D198): the recommendations in order,
-// each opening Settings at its section. Back from Settings returns here; "Open the vault" closes it.
+// "Vault ready" after a creation, a restore or a pairing (overview §13.3, D198, D203): the
+// recommendations in order, each opening Settings at its section. Back from Settings returns here;
+// "Open the vault" closes it.
 
 export function Ready({
   controller,
@@ -50,8 +51,7 @@ export function Ready({
     passkey: { label: m.ready.passkeyAction, focus: 'passkey' },
     'check-phrase': { label: m.ready.checkPhraseAction, focus: 'recovery' },
     readmit: { label: m.ready.readmitAction, focus: 'devices' },
-    // Pairing comes with Phase 4: nothing to open yet.
-    pair: undefined,
+    pair: { label: m.ready.pairAction, focus: 'devices' },
     backup: { label: m.ready.backupAction, focus: 'backup' },
   };
   return (

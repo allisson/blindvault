@@ -52,14 +52,14 @@ test('says that no server can reset the vault, then offers the three starts (§1
   await expect(page.getByRole('heading', { name: 'Install BlindVault first' })).toHaveCount(0);
   await expect(page.getByTestId('storage-warning')).toHaveCount(0);
 
-  // Pairing comes with Phase 4: its start says so, and leads to today's path.
+  // The pair start joins a pairing: this device's local password first (§13.3, D203).
   await button(page, 'Pair with an existing device').click();
   await expect(page.getByRole('heading', { name: 'Pair with an existing device' })).toBeVisible();
-  await expect(page.getByText('Pairing arrives in a later version of BlindVault.')).toBeVisible();
-  await expect(page.getByText(/make a backup in Settings, then restore it here/)).toBeVisible();
+  await expect(page.getByText(/First create this device’s local password/)).toBeVisible();
+  await expect(page.getByTestId('new-password')).toBeVisible();
+  await expect(page.getByTestId('pairing-same-network')).not.toBeChecked();
   await button(page, 'Back').click();
   await expect(button(page, 'Pair with an existing device')).toBeVisible();
-  await button(page, 'Pair with an existing device').click();
   await button(page, 'Restore from a backup').click();
   await expect(page.getByRole('heading', { name: 'Restore from a backup' })).toBeVisible();
   await expect(page.getByTestId('restore-file')).toBeAttached();
@@ -78,11 +78,11 @@ for (const width of [390, 1280] as const) {
     // In place of the panes, and of the backup reminder it lists.
     await expect(page.getByTestId('panes')).toBeHidden();
     await expect(page.getByTestId('backup-reminder')).toHaveCount(0);
-    // A backup, then pairing, which waits for Phase 4; nothing that belongs to a restore.
+    // A backup, then pairing (D203); nothing that belongs to a restore.
     await expect(ready.getByTestId('ready-backup')).toContainText('keep it off this device');
     await expect(ready.getByRole('listitem').last()).toHaveAttribute('data-testid', 'ready-pair');
-    await expect(ready.getByTestId('ready-pair')).toContainText('later version');
-    await expect(ready.getByTestId('ready-pair').getByRole('button')).toHaveCount(0);
+    await expect(ready.getByTestId('ready-pair')).toContainText('second copy');
+    await expect(ready.getByTestId('ready-pair').getByRole('button')).toHaveText('Pair a device');
     await expect(ready.getByTestId('ready-check-phrase')).toHaveCount(0);
     await expect(ready.getByTestId('ready-readmit')).toHaveCount(0);
 
