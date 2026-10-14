@@ -2,8 +2,8 @@
 # requires-python = ">=3.12"
 # dependencies = ["pynacl==1.6.2", "mnemonic==0.21"]
 # ///
-"""Independent generator for docs/crypto-spec.md, docs/record-content.md and docs/backup-format.md
-test vectors (v1).
+"""Independent generator for docs/crypto-spec.md, docs/record-content.md, docs/backup-format.md and
+docs/pairing-protocol.md test vectors (v1).
 
 Uses hashlib (BLAKE2b, crypto_kdf) and PyNaCl (AEAD, Argon2id, seed key pair, padding, sealed box,
 secretstream), never the
@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "packages/crypto/test-vectors/crypto-v1.json"
 OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
 OUT_BACKUP = ROOT / "packages/backup/test-vectors/backup-v1.json"
+OUT_PAIRING = ROOT / "packages/sync/test-vectors/pairing-v1.json"
 
 RECORD_FORMAT_VERSION = 1
 RT_ITEM, RT_FOLDER, RT_ITEM_VERSION, RT_VAULT_KEY, RT_RECOVERY_ENVELOPE, RT_DEVICE = 1, 2, 3, 4, 5, 6
@@ -1583,6 +1584,276 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     }
 
 
+# --- pairing-protocol.md section 3: pairing payload and base45 ----------------------------------
+
+B45 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
+
+
+def b45encode(data: bytes) -> str:
+    out = []
+    for i in range(0, len(data), 2):
+        chunk = data[i:i + 2]
+        if len(chunk) == 2:
+            n = chunk[0] * 256 + chunk[1]
+            c, n = n % 45, n // 45
+            d, e = n % 45, n // 45
+            out += [B45[c], B45[d], B45[e]]
+        else:
+            out += [B45[chunk[0] % 45], B45[chunk[0] // 45]]
+    return "".join(out)
+
+
+def b45decode(text: str) -> bytes:
+    """RFC 9285, strict: an unknown character, a length of 3k + 1 or a group above its range fails."""
+    values = [B45.index(ch) for ch in text]  # ValueError on an unknown character
+    if len(values) % 3 == 1:
+        raise ValueError("base45 length")
+    out = bytearray()
+    for i in range(0, len(values), 3):
+        g = values[i:i + 3]
+        if len(g) == 3:
+            n = g[0] + g[1] * 45 + g[2] * 2025
+            if n > 0xFFFF:
+                raise ValueError("base45 triplet")
+            out += n.to_bytes(2, "big")
+        else:
+            n = g[0] + g[1] * 45
+            if n > 0xFF:
+                raise ValueError("base45 pair")
+            out.append(n)
+    return bytes(out)
+
+
+SETUPS = ["actpass", "active", "passive"]
+KINDS = {"host-ipv4": 4, "host-ipv6": 16, "host-mdns": 16, "srflx-ipv4": 4, "srflx-ipv6": 16}
+ICE_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+
+
+class PayloadReject(Exception):
+    def __init__(self, reason: str, detail: str):
+        super().__init__(f"{reason}: {detail}")
+        self.reason = reason
+
+
+def encode_payload(p: dict) -> bytes:
+    """Encodes without checking, so the negative vectors can break one rule at a time."""
+    flags = (0 if p["role"] == "initiator" else 1) | (p["setupBits"] << 1) | (8 if p["holdsVault"] else 0)
+    flags |= p.get("reservedBits", 0)
+    out = bytearray([p.get("version", 1), flags])
+    out += p["sessionId"] + p["fingerprint"]
+    for s in (p["ufrag"], p["pwd"]):
+        out += u8(len(s)) + s.encode("ascii")
+    out += u8(len(p["candidates"]))
+    for c in p["candidates"]:
+        out += u8(c["kindByte"]) + c["address"] + u16(c["port"])
+    for name in ("formatVersions", "recordTypes"):
+        out += u8(len(p[name])) + b"".join(u16(x) for x in p[name])
+    if p["commitment"] is not None:
+        out += p["commitment"]
+    return bytes(out) + p.get("trailing", b"")
+
+
+def decode_payload(b: bytes, expect_role: str, expect_session: bytes | None) -> dict:
+    """Reference decoder of section 3.3: version, then structure, then role, then session."""
+    if len(b) == 0:
+        raise PayloadReject("malformed", "empty")
+    if b[0] != 1:
+        raise PayloadReject("version", f"version {b[0]}")
+    i = 1
+
+    def take(n: int) -> bytes:
+        nonlocal i
+        if i + n > len(b):
+            raise PayloadReject("malformed", "truncated")
+        out = b[i:i + n]
+        i += n
+        return out
+
+    def byte() -> int:
+        return take(1)[0]
+
+    def ice(lo: int) -> str:
+        s = take(byte())
+        if len(s) < lo or any(chr(x) not in ICE_CHARS for x in s):
+            raise PayloadReject("malformed", "ICE credential")
+        return s.decode("ascii")
+
+    def ascending() -> list:
+        n = byte()
+        if n == 0:
+            raise PayloadReject("malformed", "empty list")
+        xs = [int.from_bytes(take(2), "big") for _ in range(n)]
+        if any(a >= b for a, b in zip(xs, xs[1:])):
+            raise PayloadReject("malformed", "not strictly ascending")
+        return xs
+
+    flags = byte()
+    if flags & 0xF0:
+        raise PayloadReject("malformed", "reserved flag bit")
+    role = "responder" if flags & 1 else "initiator"
+    setup_bits = (flags >> 1) & 3
+    if setup_bits == 3:
+        raise PayloadReject("malformed", "setup 3")
+    setup = SETUPS[setup_bits]
+    if (role == "initiator") != (setup == "actpass"):
+        raise PayloadReject("malformed", "setup does not match the role")
+    session_id, fingerprint = take(16), take(32)
+    ufrag, pwd = ice(4), ice(22)
+    n = byte()
+    if not 1 <= n <= 8:
+        raise PayloadReject("malformed", "candidate count")
+    candidates = []
+    kinds = list(KINDS)
+    for _ in range(n):
+        k = byte()
+        if k >= len(kinds):
+            raise PayloadReject("malformed", "candidate kind")
+        address = take(KINDS[kinds[k]])
+        port = int.from_bytes(take(2), "big")
+        if port == 0:
+            raise PayloadReject("malformed", "port 0")
+        candidates.append({"kind": kinds[k], "address": h(address), "port": port})
+    format_versions, record_types = ascending(), ascending()
+    commitment = take(32) if role == "initiator" else None
+    if i != len(b):
+        raise PayloadReject("malformed", "trailing bytes")
+    if role != expect_role:
+        raise PayloadReject("wrong-role", role)
+    if expect_session is not None and session_id != expect_session:
+        raise PayloadReject("wrong-session", "sessionId")
+    return {
+        "role": role, "setup": setup, "holdsVault": bool(flags & 8), "sessionId": h(session_id),
+        "fingerprint": h(fingerprint), "ufrag": ufrag, "pwd": pwd, "candidates": candidates,
+        "formatVersions": format_versions, "recordTypes": record_types,
+        "commitment": h(commitment) if commitment is not None else None,
+    }
+
+
+def pairing_vectors() -> dict:
+    session = seq(0x40, 16)
+    def cand(kind: str, address: bytes, port: int) -> dict:
+        return {"kind": kind, "kindByte": list(KINDS).index(kind), "address": address, "port": port}
+    offer = {
+        "role": "initiator", "setupBits": 0, "holdsVault": True, "sessionId": session,
+        "fingerprint": seq(0x80, 32), "ufrag": "Lh7R", "pwd": "aB3+/cD4eF5gH6iJ7kL8mN9o",
+        "candidates": [
+            cand("srflx-ipv4", bytes([203, 0, 113, 7]), 61000),
+            cand("srflx-ipv6", bytes.fromhex("20010db8000100000000000000020003"), 3478),
+            cand("host-ipv4", bytes([192, 168, 1, 20]), 54321),
+            cand("host-ipv6", bytes.fromhex("20010db8000000000000000000000001"), 50000),
+            cand("host-mdns", bytes.fromhex("0f1e2d3c4b5a69788796a5b4c3d2e1f0"), 1),
+            cand("host-ipv4", bytes([10, 0, 0, 2]), 65535),
+        ],
+        "formatVersions": [1], "recordTypes": [1, 2, 3, 4, 5, 6],
+        # Opaque here: the commitment's derivation is tested with the SAS (section 6).
+        "commitment": seq(0xC0, 32),
+    }
+    answer = {
+        "role": "responder", "setupBits": 2, "holdsVault": False, "sessionId": session,
+        "fingerprint": seq(0xA0, 32), "ufrag": "1a2b3c4d", "pwd": "0123456789abcdef0123456789abcdef",
+        "candidates": [cand("host-ipv4", bytes([192, 168, 1, 30]), 50123)],
+        "formatVersions": [1], "recordTypes": [1, 2, 3, 4, 5, 6], "commitment": None,
+    }
+    answer_active = {**answer, "setupBits": 1, "holdsVault": True,
+                     "ufrag": "A" * 255, "pwd": "/" * 255,
+                     "candidates": [cand("host-ipv4", bytes([192, 168, 1, i]), 1000 + i) for i in range(8)],
+                     "formatVersions": list(range(1, 256)), "recordTypes": [0, 65535]}
+    expect_i = {"role": "initiator"}
+    expect_r = {"role": "responder", "sessionId": h(session)}
+
+    def check(b: bytes, expect: dict) -> dict:
+        es = bytes.fromhex(expect["sessionId"]) if "sessionId" in expect else None
+        return decode_payload(b, expect["role"], es)
+
+    valid = []
+    for case, p, expect in (
+        ("initiator holding a vault, every candidate kind", offer, expect_i),
+        ("responder, setup passive, no vault: the text starts with a space", answer, expect_r),
+        ("responder, setup active, longest credentials, 8 candidates, 255 format versions", answer_active, expect_r),
+    ):
+        b = encode_payload(p)
+        text = b45encode(b)
+        assert b45decode(text) == b
+        valid.append({"case": case, "expect": expect, "payload": check(b, expect), "bytes": h(b), "text": text})
+    assert valid[1]["text"].startswith(" ")
+
+    neg = []
+    def add(reason: str, case: str, p: dict | bytes, expect: dict) -> None:
+        b = p if isinstance(p, bytes) else encode_payload(p)
+        try:
+            check(b, expect)
+        except PayloadReject as r:
+            assert r.reason == reason, f"{case}: {r}"
+            neg.append({"case": case, "reason": reason, "expect": expect, "bytes": h(b)})
+            return
+        raise AssertionError(f"accepted: {case}")
+
+    first = offer["candidates"][2]
+    add("malformed", "empty", b"", expect_i)
+    add("version", "version 0", {**offer, "version": 0}, expect_i)
+    add("version", "version 2", {**offer, "version": 2}, expect_i)
+    add("malformed", "reserved flag bit 4", {**offer, "reservedBits": 0x10}, expect_i)
+    add("malformed", "reserved flag bit 7", {**offer, "reservedBits": 0x80}, expect_i)
+    add("malformed", "setup 3", {**answer, "setupBits": 3}, expect_r)
+    add("malformed", "initiator with setup active", {**offer, "setupBits": 1}, expect_i)
+    add("malformed", "responder with setup actpass", {**answer, "setupBits": 0}, expect_r)
+    add("malformed", "ufrag of 3 characters", {**offer, "ufrag": "Lh7"}, expect_i)
+    add("malformed", "ufrag with a character outside the ICE set", {**offer, "ufrag": "Lh7-"}, expect_i)
+    add("malformed", "pwd of 21 characters", {**offer, "pwd": offer["pwd"][:21]}, expect_i)
+    add("malformed", "pwd with a space", {**offer, "pwd": "aB3+/cD4eF5gH6iJ7kL8m o"}, expect_i)
+    add("malformed", "no candidate", {**offer, "candidates": []}, expect_i)
+    add("malformed", "9 candidates", {**offer, "candidates": [first] * 9}, expect_i)
+    add("malformed", "candidate kind 5", {**offer, "candidates": [{**first, "kindByte": 5}]}, expect_i)
+    add("malformed", "port 0", {**offer, "candidates": [{**first, "port": 0}]}, expect_i)
+    add("malformed", "no format version", {**offer, "formatVersions": []}, expect_i)
+    add("malformed", "format versions not ascending", {**offer, "formatVersions": [2, 1]}, expect_i)
+    add("malformed", "format versions repeated", {**offer, "formatVersions": [1, 1]}, expect_i)
+    add("malformed", "no record type", {**offer, "recordTypes": []}, expect_i)
+    add("malformed", "record types not ascending", {**offer, "recordTypes": [1, 3, 2]}, expect_i)
+    add("malformed", "initiator without its commitment", {**offer, "commitment": None}, expect_i)
+    add("malformed", "initiator with a commitment of 31 bytes", {**offer, "commitment": seq(0xC0, 31)}, expect_i)
+    add("malformed", "responder with a commitment", {**answer, "commitment": seq(0xC0, 32)}, expect_r)
+    add("malformed", "a byte after the last field", {**offer, "trailing": b"\x00"}, expect_i)
+    add("malformed", "truncated inside the fingerprint", encode_payload(offer)[: 2 + 16 + 20], expect_i)
+    add("wrong-role", "a responder payload where an initiator is expected", answer, expect_i)
+    add("wrong-role", "an initiator payload where a responder is expected", offer, expect_r)
+    add("wrong-session", "an answer for another session", {**answer, "sessionId": seq(0x41, 16)}, expect_r)
+    base45 = {
+        # RFC 9285 section 4.3 examples.
+        "valid": [
+            {"bytes": h(b"AB"), "text": "BB8"},
+            {"bytes": h(b"Hello!!"), "text": "%69 VD92EX0"},
+            {"bytes": h(b"base-45"), "text": "UJCLQE7W581"},
+            {"bytes": h(b"ietf!"), "text": "QED8WEX0"},
+            {"bytes": "", "text": ""},
+            {"bytes": "ff", "text": b45encode(b"\xff")},
+            {"bytes": "ffff", "text": b45encode(b"\xff\xff")},
+        ],
+        "invalid": [
+            {"case": "lowercase letter", "text": "bb8"},
+            {"case": "character outside the alphabet", "text": "BB#"},
+            {"case": "length 3k + 1", "text": "BB8A"},
+            {"case": "triplet above 0xffff", "text": "GGW"},
+            {"case": "pair above 0xff", "text": "V5"},
+            {"case": "line break inside", "text": "BB\n8"},
+        ],
+    }
+    for v in base45["valid"]:
+        assert b45encode(bytes.fromhex(v["bytes"])) == v["text"] and b45decode(v["text"]).hex() == v["bytes"]
+    for v in base45["invalid"]:
+        try:
+            b45decode(v["text"])
+            raise AssertionError(f"accepted: {v['case']}")
+        except ValueError:
+            pass
+
+    return {
+        "description": "pairing-protocol.md section 3: payload v1 and base45 (RFC 9285)",
+        "base45": base45,
+        "payloads": {"valid": valid, "invalid": neg},
+    }
+
+
 def main() -> None:
     v: dict = {"recordFormatVersion": RECORD_FORMAT_VERSION, "generator": "tests/vectors/generate.py"}
 
@@ -1949,7 +2220,8 @@ def main() -> None:
     backup = backup_vectors(
         [cbor(vk_env), cbor(rec_env), cbor(item_env)], keyslot_pk, metadata["phraseCreatedAt"]
     )
-    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup)):
+    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup),
+                       (OUT_PAIRING, pairing_vectors())):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {path}")

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".tsbuild/e2e",
+    "tsBuildInfoFile": ".tsbuild/e2e.tsbuildinfo",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    }
+  ],
+  "include": ["e2e", "playwright.config.ts"]
+}

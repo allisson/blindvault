@@ -74,7 +74,7 @@ pnpm format:check                         # Prettier (pnpm format to fix)
 pnpm test                                 # Vitest in every workspace
 pnpm test:coverage                        # same, enforcing 95% coverage on packages/*
 pnpm --filter @blindvault/crypto exec vitest run src/foo.test.ts   # a single test file
-pnpm test:e2e                             # Playwright: Chromium, Firefox, WebKit
+pnpm test:e2e                             # Playwright: Chromium, Firefox, WebKit (packages/sync, then apps/web)
 BLINDVAULT_URL=$(apps/web/e2e/self-hosting/serve.sh nginx) pnpm --filter @blindvault/web test:self-hosting   # deploy/ configs, Docker (also caddy)
 pnpm run ci                               # what CI runs, except Playwright
 ```

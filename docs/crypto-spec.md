@@ -437,7 +437,11 @@ in `pairing-protocol.md` and `sync-protocol.md`, using the layout encoding.
 ## 15. Test vectors
 
 The same generator writes the `record-content.md` vectors to
-`packages/vault/test-vectors/content-v1.json` (`record-content.md` §10).
+`packages/vault/test-vectors/content-v1.json` (`record-content.md` §10), and the
+`pairing-protocol.md` §3 vectors to `packages/sync/test-vectors/pairing-v1.json`: base45 (the RFC
+9285 examples and rejected texts), valid payloads with their bytes and text, and one invalid payload
+per rule of §3.3, tagged with the reason it is refused (`version`, `malformed`, `wrong-role`,
+`wrong-session`). `packages/sync` MUST reproduce and reject them the same way.
 
 `tests/vectors/generate.py` computes every vector with Python's `hashlib` (BLAKE2b, `crypto_kdf`)
 and PyNaCl (AEAD, Argon2id, `crypto_box_seed_keypair`, padding), independently of the TypeScript

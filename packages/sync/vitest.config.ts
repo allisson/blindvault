@@ -7,7 +7,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/index.ts'],
+      // connection.ts needs a browser's WebRTC: the Playwright tests in e2e/ cover it.
+      exclude: ['src/**/*.test.ts', 'src/index.ts', 'src/connection.ts'],
       thresholds: { lines: 95, functions: 95, branches: 95, statements: 95 },
     },
   },

@@ -15,7 +15,7 @@
     "format:check": "prettier --check .",
     "test": "pnpm -r --if-present test",
     "test:coverage": "pnpm -r --if-present test:coverage",
-    "test:e2e": "pnpm --filter @blindvault/web test:e2e",
+    "test:e2e": "pnpm --filter @blindvault/sync test:e2e && pnpm --filter @blindvault/web test:e2e",
     "ci": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test:coverage"
   },
   "devDependencies": {

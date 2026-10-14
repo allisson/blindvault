@@ -12,3 +12,4 @@ pnpm-lock.yaml
 packages/crypto/test-vectors/
 
 packages/vault/test-vectors/
+packages/sync/test-vectors/
