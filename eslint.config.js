@@ -103,4 +103,26 @@ export default defineConfig(
       ],
     },
   },
+  {
+    // packages/sync runs the pairing and sync protocols over a transport: crypto only. The vault
+    // session merges what it receives (D182), so sync never imports the vault, storage or the UI.
+    files: ['packages/sync/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@blindvault/*', '!@blindvault/crypto'],
+              message: 'packages/sync imports no workspace package but @blindvault/crypto.',
+            },
+            {
+              group: ['react', 'react/*', 'react-dom', 'react-dom/*'],
+              message: 'packages/sync must not contain UI code.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

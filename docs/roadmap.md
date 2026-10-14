@@ -269,7 +269,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Tasks
 
 - [x] `docs/pairing-protocol.md`: messages, prologue, SAS derivation and length, brute-force analysis and commitment in copy/paste mode, versioning (D199)
-- [ ] Transport abstraction in `packages/sync` (real WebRTC and an in-memory transport for tests)
+- [x] Transport abstraction in `packages/sync` (real WebRTC and an in-memory transport for tests)
 - [ ] QR payload encoding/decoding in base45 and SDP reconstruction (D4)
 - [ ] `Noise_XX` handshake integration with the defined prologue (D1)
 - [ ] SAS derivation and display on both devices, with explicit confirmation

@@ -251,6 +251,19 @@ every project through the references in the root `tsconfig.json`.
   inside the Noise channel, timeouts and versions; `docs/sync-protocol.md` §2 adds the full
   transfer both flows run. `packages/sync` implements them in the next Phase 4 tasks, behind the
   transport abstraction, so the protocol tests run without WebRTC.
+- **Transport (Phase 4, `packages/sync`).** `src/transport.ts` defines `Transport`: ordered binary
+  messages of at most 65,535 bytes (`MAX_MESSAGE_LENGTH`, one Noise transport message), refused on
+  sending and closing the transport on receipt; `send` resolves once taken, `receive` returns the
+  next message, and `close` is idempotent. After a remote close or an error the messages that
+  arrived stay readable, so an `abort` sent just before a close is read; a local close discards
+  them. `src/memory.ts` (`memoryPair`) connects two transports in memory, with an `intercept` hook
+  that tampers with, drops, duplicates, reorders or injects messages for the Gate C tests, and
+  `breakLink`. `src/webrtc.ts` (`dataChannelTransport`) wraps an already open `RTCDataChannel`
+  through the structural `DataChannelLike`, accepts only `ArrayBuffer` data, and makes `send` wait
+  while more than 1 MiB is buffered, until `bufferedamountlow` at 256 KiB; opening the connection
+  belongs to the payload and SDP task. Its tests run in Node against a stand-in channel; real
+  WebRTC between two pages comes with that task. An ESLint rule keeps `packages/sync` to
+  `@blindvault/crypto` and away from UI code.
 - **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
   has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
   landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it
