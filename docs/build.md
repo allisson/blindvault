@@ -58,3 +58,32 @@ The `reproducible` job in `.github/workflows/ci.yml` builds the same commit twic
 two different paths, the second under another time zone, locale, umask and `SOURCE_DATE_EPOCH`. It
 fails unless both `asset-manifest.txt` files are identical, and writes the manifest hash to the job
 summary. The reference build is CI's (Ubuntu); a build on another OS is not yet known to match.
+
+## Releases
+
+A tag `v<version>` runs `.github/workflows/release.yml` (D194). It builds the tag once, with
+`SOURCE_DATE_EPOCH` set to the commit time, and that build is both the GitHub Release and the
+deployment at `https://blindvault.allisson.dev`.
+
+- The tag must be `v` followed by the version in `version.txt`, from `apps/web/package.json`.
+- The release notes are `docs/releases/<tag>.md`. When `apps/web/public/sw.js` differs from the
+  previous tag's, they need a `## Service worker` section saying why (D191).
+- The release attaches `asset-manifest.txt`, `sw.js` and `blindvault-<tag>.tar.gz`, the build
+  archived with sorted names, the commit time and no owner, each with a build provenance
+  attestation. Its body ends with the version, both hashes and whether `sw.js` changed.
+- After the deployment, the workflow requires the served `asset-manifest.txt` and `sw.js` to equal
+  the release's, and checks every listed file with `sha256sum -c`.
+
+To check a release's files:
+
+```sh
+gh release download <tag> -R allisson/blindvault -p asset-manifest.txt -p sw.js
+gh attestation verify asset-manifest.txt -R allisson/blindvault
+gh attestation verify sw.js -R allisson/blindvault
+shasum -a 256 asset-manifest.txt sw.js
+```
+
+Then compare the manifest hash with the one the About screen shows and with your own rebuild.
+
+To publish a release: set the version in `apps/web/package.json` and the root `package.json`,
+write `docs/releases/v<version>.md`, merge, then tag the merge commit and push the tag.

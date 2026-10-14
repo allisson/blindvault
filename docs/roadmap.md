@@ -239,8 +239,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Update flow: asset bundles switched by the running service worker only after confirmation, version and manifest hash shown; changed `sw.js` detected and warned, locking the vault synchronously in the `updatefound` handler, with `registration.update()` whenever the app becomes visible (D63, D142, D162); all code and WebAssembly loaded before the first unlock, none afterwards (D142)
 - [x] Reproducible build: `SOURCE_DATE_EPOCH`, deterministic Vite output, pinned Node and lockfile (D189, `docs/build.md`)
 - [x] CI job that builds twice and compares the asset manifest hash (D189)
-- [ ] Choose and configure the dedicated custom domain for the official build (D90)
-- [ ] Version and hash published on GitHub Releases; deployed to GitHub Pages under the dedicated custom domain only (D90)
+- [x] Choose and configure the dedicated custom domain for the official build (D90, D194)
+- [x] Version and hash published on GitHub Releases; deployed to GitHub Pages under the dedicated custom domain only (D90, D194)
 - [x] Startup warning when served under a sub-path of a `github.io` host (D90)
 - [x] Strict CSP by `<meta>` starting from `default-src 'none'`, Trusted Types where supported, unlock refused while framed: the app does not open inside a frame (D83, D91, D193)
 - [x] "About" screen with the version and hash of the running build (D192)
@@ -255,7 +255,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Two builds of the same commit produce the same hash in CI
 - [x] App works offline after installation (Playwright offline in Chromium and Firefox; WebKit through the cache test, since its offline emulation fails before the service worker, D190)
 - [x] A new deploy does not replace the code without user confirmation (Playwright test, D191)
-- [ ] The hash shown in the app matches the one published in the release
+- [x] The hash shown in the app matches the one published in the release (the release workflow checks the served manifest against the release, and `about.spec.ts` the shown hash against the served manifest, D192, D194)
 - [ ] Self-hosting tested on another static host
 - [ ] Visual and flow tests pass at all three layout widths, including resizing across breakpoints without losing state
 - [ ] Secrets are masked by default and lock state is visible in every layout

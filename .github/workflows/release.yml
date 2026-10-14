@@ -1,0 +1,137 @@
+name: Release
+
+# A tag v<version> builds once. That build becomes the GitHub Release and the deployment at the
+# dedicated origin (D90), and the served files are then checked against the release (D194). No push
+# to main deploys anything: an installed copy takes an update only after confirmation (D63, D191).
+# The github-pages environment must allow deployments from v* tags.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  ORIGIN: https://blindvault.allisson.dev
+
+jobs:
+  release:
+    name: Build and publish the release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      # No dependency cache: the release installs from the lockfile alone.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        run: SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/web build
+      - name: Compare sw.js with the previous release
+        id: worker
+        run: |
+          previous=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          if [ -z "$previous" ]; then
+            change=first
+          elif git diff --quiet "$previous" "$GITHUB_REF_NAME" -- apps/web/public/sw.js; then
+            change=unchanged
+          else
+            change=changed
+          fi
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          echo "change=$change" >> "$GITHUB_OUTPUT"
+      - name: Check the tag and the notes, and write the release body
+        id: body
+        env:
+          CHANGE: ${{ steps.worker.outputs.change }}
+          PREVIOUS: ${{ steps.worker.outputs.previous }}
+        run: >-
+          node apps/web/build/release.ts "$GITHUB_REF_NAME" apps/web/dist docs/releases "$CHANGE"
+          "$PREVIOUS" > "$RUNNER_TEMP/release-body.md"
+      - name: Collect the release files
+        run: |
+          mkdir "$RUNNER_TEMP/release"
+          cp apps/web/dist/asset-manifest.txt apps/web/dist/sw.js "$RUNNER_TEMP/release/"
+          tar --sort=name --mtime="@$(git log -1 --format=%ct)" --owner=0 --group=0 --numeric-owner \
+            --mode=u=rwX,go=rX \
+            -C apps/web/dist -cf - . | gzip -n > "$RUNNER_TEMP/release/blindvault-${GITHUB_REF_NAME}.tar.gz"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/release/*
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.body.outputs.prerelease }}
+          VERSION: ${{ steps.body.outputs.version }}
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "BlindVault $VERSION" --notes-file "$RUNNER_TEMP/release-body.md" "${flags[@]}" \
+            "$RUNNER_TEMP"/release/*
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: Deploy
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  verify:
+    # The hash the About screen shows is the served manifest's (D192); this checks that the served
+    # manifest, sw.js and every listed file are the release's.
+    name: Check the served files against the release
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the release's manifest and sw.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir released
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir released \
+            --pattern asset-manifest.txt --pattern sw.js
+      - name: Compare the served files
+        run: |
+          mkdir served
+          cd served
+          # The CDN may serve the previous deployment for a while.
+          for attempt in $(seq 1 20); do
+            curl -fsS --proto '=https' "$ORIGIN/asset-manifest.txt?run=$GITHUB_RUN_ID-$attempt" \
+              -o asset-manifest.txt || true
+            if cmp -s asset-manifest.txt ../released/asset-manifest.txt; then break; fi
+            sleep 30
+          done
+          cmp asset-manifest.txt ../released/asset-manifest.txt
+          curl -fsS --proto '=https' "$ORIGIN/sw.js?run=$GITHUB_RUN_ID" -o sw.js
+          cmp sw.js ../released/sw.js
+          # The manifest is the release's, so its paths are trusted.
+          while read -r _ path; do
+            mkdir -p "$(dirname "$path")"
+            curl -fsS --proto '=https' "$ORIGIN/$path?run=$GITHUB_RUN_ID" -o "$path"
+          done < asset-manifest.txt
+          sha256sum -c --quiet asset-manifest.txt
+          echo "Served at $ORIGIN: asset manifest sha256 \`$(sha256sum asset-manifest.txt | cut -d' ' -f1)\`" >> "$GITHUB_STEP_SUMMARY"

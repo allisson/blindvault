@@ -203,6 +203,11 @@ every project through the references in the root `tsconfig.json`.
   `window.self !== window.top`). Inside a frame it renders only `src/ui/Framed.tsx`, a notice with a
   link to the app in its own tab, and builds no controller, Argon2id worker, update monitor or
   service worker registration, and reads no asset manifest.
+- **Releases (Phase 3, D194).** `.github/workflows/release.yml` runs on a tag `v<version>`: one
+  build, `build/release.ts` (tag against `version.txt`, notes in `docs/releases/<tag>.md`, a
+  `## Service worker` section when `sw.js` changed since the previous tag, the release body), the
+  attested files, the GitHub Release, the Pages deployment, then a check of the served files
+  against the release. It replaces the hand-started preview workflow.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
@@ -382,6 +387,14 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `tailwindcss`, `@tailwindcss/vite` | `apps/web` | Styling (stack). |
 | `@types/react`, `@types/react-dom` | `apps/web` | Types for React. |
 | `fake-indexeddb` 6.2.5 | `packages/storage`, `tests`, `apps/web` | An in-memory IndexedDB for Vitest in Node, which has none; the storage tests and the vault-over-IndexedDB test run on it, and Playwright covers real browsers. No runtime dependencies, no install scripts. Test only, never bundled. Phase 1. |
+
+### CI and release
+
+Every GitHub Action is pinned to a commit, with its version in a comment.
+
+| Dependency | Where | Justification |
+| --- | --- | --- |
+| `actions/attest-build-provenance` v4.2.2 | `.github/workflows/release.yml` | Signs the release files with a build provenance attestation (Sigstore, through GitHub), the signing of overview §12 (D194). Anyone can check a file with `gh attestation verify`, with no key of the project to distribute. Phase 3. |
 
 ### Runtime
 

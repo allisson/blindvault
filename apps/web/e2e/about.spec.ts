@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import { type Page, expect, test } from '@playwright/test';
 
@@ -9,9 +10,16 @@ test.setTimeout(120_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
 
+// The version the build writes to version.txt (D191).
+const VERSION = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    version: string;
+  }
+).version;
+
 async function expectAbout(page: Page, hash: string): Promise<void> {
   const about = page.getByTestId('about');
-  await expect(about.getByTestId('about-version')).toHaveText('0.0.0');
+  await expect(about.getByTestId('about-version')).toHaveText(VERSION);
   await expect(about.getByTestId('about-hash')).toHaveText(hash);
   await expect(about).toContainText('shasum -a 256 -c asset-manifest.txt');
   const releases = about.getByRole('link', { name: 'Releases on GitHub' });
