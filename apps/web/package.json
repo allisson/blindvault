@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:self-hosting": "playwright test -c playwright.self-hosting.config.ts"
   },
   "dependencies": {
     "@blindvault/backup": "workspace:*",

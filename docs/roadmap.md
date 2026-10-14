@@ -244,7 +244,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Startup warning when served under a sub-path of a `github.io` host (D90)
 - [x] Strict CSP by `<meta>` starting from `default-src 'none'`, Trusted Types where supported, unlock refused while framed: the app does not open inside a frame (D83, D91, D193)
 - [x] "About" screen with the version and hash of the running build (D192)
-- [ ] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90)
+- [x] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90, D195)
 - [ ] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts
 - [ ] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15)
 - [ ] Input adaptation via `pointer`/`hover` media queries (44 px touch targets)
@@ -256,7 +256,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] App works offline after installation (Playwright offline in Chromium and Firefox; WebKit through the cache test, since its offline emulation fails before the service worker, D190)
 - [x] A new deploy does not replace the code without user confirmation (Playwright test, D191)
 - [x] The hash shown in the app matches the one published in the release (the release workflow checks the served manifest against the release, and `about.spec.ts` the shown hash against the served manifest, D192, D194)
-- [ ] Self-hosting tested on another static host
+- [x] Self-hosting tested on another static host (nginx and Caddy in CI, with the configurations of `deploy/`, D195)
 - [ ] Visual and flow tests pass at all three layout widths, including resizing across breakpoints without losing state
 - [ ] Secrets are masked by default and lock state is visible in every layout
 

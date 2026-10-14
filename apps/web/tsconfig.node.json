@@ -7,5 +7,12 @@
     "outDir": ".tsbuild/node",
     "tsBuildInfoFile": ".tsbuild/node.tsbuildinfo"
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e", "build"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "playwright.self-hosting.config.ts",
+    "e2e",
+    "build"
+  ]
 }
