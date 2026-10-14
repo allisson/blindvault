@@ -1,5 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { formAlert } from './alerts';
 import { answerConfirmation, createVault, readPhrase } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
@@ -132,16 +133,14 @@ test('checks the Recovery Phrase while unlocked, keeping the typed words nowhere
   const unknown = [...words];
   unknown[4] = 'blindvault';
   await check(unknown.join(' '));
-  await expect(page.getByRole('alert')).toHaveText('Word 5 is not a Recovery Phrase word.');
+  await expect(formAlert(page)).toHaveText('Word 5 is not a Recovery Phrase word.');
   await check(words.slice(1).join(' '));
-  await expect(page.getByRole('alert')).toHaveText('A Recovery Phrase has 24 words.');
+  await expect(formAlert(page)).toHaveText('A Recovery Phrase has 24 words.');
   // 24 × "abandon" fails the checksum; 23 × "abandon" + "art" is another valid phrase.
   await check(Array(24).fill('abandon').join(' '));
-  await expect(page.getByRole('alert')).toHaveText(/not a valid Recovery Phrase/);
+  await expect(formAlert(page)).toHaveText(/not a valid Recovery Phrase/);
   await check(`${Array(23).fill('abandon').join(' ')} art`);
-  await expect(page.getByRole('alert')).toHaveText(
-    "This is not this vault's current Recovery Phrase.",
-  );
+  await expect(formAlert(page)).toHaveText("This is not this vault's current Recovery Phrase.");
 
   const found = traces(words).filter((t) => logged.some((v) => v.includes(t)));
   expect(found).toEqual([]);

@@ -214,6 +214,16 @@ every project through the references in the root `tsconfig.json`.
   also uses. `e2e/self-hosting/serve.sh` serves `dist/` with either in Docker, and
   `playwright.self-hosting.config.ts` runs `self-hosting.spec.ts` (excluded from the main suite)
   with the smoke, PWA and About specs against it, in the CI job `self-hosting`.
+- **State UI (Phase 3, D196).** `src/app/storage-state.ts` holds the rules: Safari by user agent,
+  a plain tab by `display-mode: standalone` and `navigator.standalone`, nearly full at 80% of the
+  quota, and the warnings in their order. Its `StorageMonitor`, owned by the controller as
+  `controller.storage`, keeps the last `storageStatus()` read for the UI, discards an older read
+  that answers last, and asks for persistence only through `keep()`, on a click. The controller
+  reads again after each automatic request; `src/ui/StorageState.tsx` reads at unlock and on every
+  return to visible, shows the first warning below the vault's header and the "This device"
+  section of Settings. The Safari warning before unlock, and the alert both use, live in
+  `components.tsx`, with the cards. `e2e/storage-state.spec.ts` replaces `navigator.storage`'s
+  answers, the user agent and `matchMedia` before the app loads.
 - **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
   has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
   landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it

@@ -21,6 +21,7 @@ import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { RefoundVault } from './RefoundVault';
 import { RegeneratePhrase, focusBackup } from './RegeneratePhrase';
+import { DeviceStorage } from './StorageState';
 
 export function Settings({
   controller,
@@ -41,6 +42,7 @@ export function Settings({
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">
       <h1 className="text-xl font-semibold">{m.settings.title}</h1>
+      <DeviceStorage controller={controller} session={session} />
       <BackupSettings controller={controller} session={session} />
       <MergeBackup controller={controller} session={session} />
       <RecoveryPhraseSettings controller={controller} session={session} />

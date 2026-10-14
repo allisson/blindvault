@@ -32,6 +32,7 @@ import { FolderPane } from './Folders';
 import { ItemList } from './ItemList';
 import { focusBackup } from './RegeneratePhrase';
 import { Settings } from './Settings';
+import { StorageWarningBanner } from './StorageState';
 
 // One set of panes, three shells (overview §13.1, D15): the shells place the panes and hold no
 // vault or security logic.
@@ -244,6 +245,7 @@ export function VaultShell({
       <PreviewBanner />
       <UpdateBanner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
+      <StorageWarningBanner controller={controller} session={session} />
       {session.writable ? null : <Notice>{m.vault.readOnlyVault}</Notice>}
       {session.retired ? (
         <div className="px-4 py-2" data-testid="own-retired">

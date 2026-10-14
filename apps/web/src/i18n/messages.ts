@@ -49,6 +49,24 @@ const en = {
     shared:
       'This copy of BlindVault runs under a sub-path of a github.io address, which other sites share: they can read and delete its storage. Do not keep anything here; use a copy served from its own address.',
   },
+  storage: {
+    title: 'This device',
+    kept: 'The browser keeps this vault’s storage, even when space runs low.',
+    notKept:
+      'The browser may delete this vault’s storage when space runs low. Browser storage is never permanent: keep a recent backup.',
+    unknown: 'This browser does not say whether it keeps this vault’s storage.',
+    usage: 'Storage used by BlindVault on this device: {used} of {quota} available ({percent}).',
+    usageUnknown: 'This browser does not report how much storage BlindVault uses.',
+    ask: 'Ask the browser to keep the storage',
+    refused:
+      'The browser did not agree to keep the storage. Browsers decide this by their own rules, such as an installed app or a site used often.',
+    safariTab:
+      'Safari may delete this vault after seven days of Safari use without opening BlindVault. Install the app (Share → Add to Home Screen on iPhone and iPad, File → Add to Dock on a Mac) and move the vault to it: installing does not take this vault along, so pair the installed app with this tab, or restore a backup in it.',
+    notKeptOnly:
+      'The browser may delete this vault’s storage, and this is the only device of the vault: if it does, only a backup and the Recovery Phrase bring the vault back. Make a backup, and pair another device.',
+    nearlyFull:
+      'Storage on this device is nearly full: BlindVault uses {percent} of what the browser allows. Free some space, or the browser may refuse to save changes.',
+  },
   framed: {
     title: 'Open in its own tab',
     body: 'BlindVault does not open inside another page, which could hide or imitate parts of it.',
@@ -648,6 +666,25 @@ const ptBR: Messages = {
   origin: {
     shared:
       'Esta cópia do BlindVault roda num subcaminho de um endereço github.io, que outros sites compartilham: eles podem ler e apagar os dados dela. Não guarde nada aqui; use uma cópia servida no próprio endereço.',
+  },
+  storage: {
+    title: 'Este dispositivo',
+    kept: 'O navegador mantém o armazenamento deste cofre, mesmo quando falta espaço.',
+    notKept:
+      'O navegador pode apagar o armazenamento deste cofre quando faltar espaço. O armazenamento do navegador nunca é permanente: tenha um backup recente.',
+    unknown: 'Este navegador não informa se mantém o armazenamento deste cofre.',
+    usage:
+      'Espaço usado pelo BlindVault neste dispositivo: {used} de {quota} disponíveis ({percent}).',
+    usageUnknown: 'Este navegador não informa quanto espaço o BlindVault usa.',
+    ask: 'Pedir ao navegador para manter o armazenamento',
+    refused:
+      'O navegador não aceitou manter o armazenamento. Os navegadores decidem isso por regras próprias, como uma app instalada ou um site usado com frequência.',
+    safariTab:
+      'O Safari pode apagar este cofre depois de sete dias de uso do Safari sem abrir o BlindVault. Instale a app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e passe o cofre para ela: instalar não leva este cofre junto, então pareie a app instalada com esta aba ou restaure um backup nela.',
+    notKeptOnly:
+      'O navegador pode apagar o armazenamento deste cofre, e este é o único dispositivo do cofre: se isso acontecer, só um backup e a Frase de Recuperação trazem o cofre de volta. Faça um backup e pareie outro dispositivo.',
+    nearlyFull:
+      'O espaço neste dispositivo está quase cheio: o BlindVault usa {percent} do que o navegador permite. Libere espaço, ou o navegador pode recusar salvar alterações.',
   },
   framed: {
     title: 'Abra numa aba própria',

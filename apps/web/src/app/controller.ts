@@ -67,6 +67,7 @@ import {
 import { backupFileName, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { devicesOf } from './devices';
+import { StorageMonitor } from './storage-state';
 import {
   PasskeyCancelledError,
   type PasskeyPort,
@@ -349,8 +350,12 @@ export class VaultController {
    */
   #reminderDismissed: VaultSession | undefined;
 
+  /** Whether the browser keeps this origin's storage, and how much is used (D196). */
+  readonly storage: StorageMonitor;
+
   constructor(deps: ControllerDeps) {
     this.#deps = deps;
+    this.storage = new StorageMonitor(deps.storage);
   }
 
   get status(): Status {
@@ -367,6 +372,12 @@ export class VaultController {
   #set(status: Status): void {
     this.#status = status;
     for (const l of this.#listeners) l();
+  }
+
+  /** At creation, restore and re-founding (section 7), then the status is read again (D196). */
+  async #requestPersistence(): Promise<void> {
+    await requestPersistence(this.#deps.storage);
+    await this.storage.refresh();
   }
 
   get #now(): () => number {
@@ -565,7 +576,7 @@ export class VaultController {
       this.#vaultId = session.vaultId;
       this.#hold(lock);
       this.#set({ kind: 'unlocked', session });
-      void requestPersistence(this.#deps.storage);
+      void this.#requestPersistence();
     } catch (error) {
       keyring.wipeAll();
       db?.close();
@@ -777,7 +788,7 @@ export class VaultController {
       this.#afterRestore = backup.openedWith === 'password' ? 'check-phrase' : undefined;
       this.#readmission = devicesOf(session).advice === 'readmit';
       this.#set({ kind: 'unlocked', session });
-      void requestPersistence(this.#deps.storage);
+      void this.#requestPersistence();
       return { kind: 'ok' };
     } catch (error) {
       keyring.wipeAll();
@@ -1621,7 +1632,7 @@ export class VaultController {
       }
       this.#refounded = true;
       this.#set({ kind: 'unlocked', session });
-      void requestPersistence(this.#deps.storage);
+      void this.#requestPersistence();
       return { kind: 'ok' };
     } catch (error) {
       phrase.keyring.wipeAll();

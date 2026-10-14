@@ -1248,6 +1248,30 @@ describe('re-founding (§14, D28, D89, D93, D96, D120, D187)', () => {
 });
 
 describe('vault controller', () => {
+  it('reads the storage status again once the persistence request at creation answered (D196)', async () => {
+    let kept = false;
+    const c = new VaultController({
+      factory: new IDBFactory(),
+      locks: navigator.locks,
+      kdf: fakeKdf(),
+      storage: {
+        persist: () => {
+          kept = true;
+          return Promise.resolve(true);
+        },
+        persisted: () => Promise.resolve(kept),
+        estimate: () => Promise.resolve({ usage: 5, quota: 50 }),
+      } as unknown as StorageManager,
+    });
+    controllers.push(c);
+    await c.start();
+    expect(c.storage.getState()).toBeUndefined();
+    await createIn(c);
+    await vi.waitFor(() => {
+      expect(c.storage.getState()).toEqual({ persisted: true, usage: 5, quota: 50 });
+    });
+  });
+
   it('starts with no vault, creates one and requests persistence', async () => {
     const factory = new IDBFactory();
     const persist: boolean[] = [];

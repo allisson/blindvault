@@ -245,7 +245,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Strict CSP by `<meta>` starting from `default-src 'none'`, Trusted Types where supported, unlock refused while framed: the app does not open inside a frame (D83, D91, D193)
 - [x] "About" screen with the version and hash of the running build (D192)
 - [x] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90, D195)
-- [ ] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts
+- [x] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts (D196)
 - [ ] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15)
 - [ ] Input adaptation via `pointer`/`hover` media queries (44 px touch targets)
 - [ ] Full onboarding with three starts (create, pair, restore), making clear that no server can reset the vault
