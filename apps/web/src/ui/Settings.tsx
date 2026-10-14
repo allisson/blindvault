@@ -15,7 +15,7 @@ import {
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Messages, format } from '../i18n/messages';
 import { AboutBuild } from './About';
-import { Button, Field, Notice, TextArea } from './components';
+import { Button, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
@@ -58,7 +58,7 @@ export function Settings({
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.settings.language}
         <select
-          className="min-h-10 rounded-md border border-zinc-300 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-900"
+          className={INPUT}
           value={language}
           onChange={(e) => {
             const next = LANGUAGES.find((l) => l === e.target.value);
@@ -647,7 +647,7 @@ function BackupSettings({
             })}
       </p>
       {session.backupMayBeIncomplete ? <Notice>{m.settings.backupIncomplete}</Notice> : null}
-      <label className="flex items-center gap-2 text-sm">
+      <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
           checked={protect}

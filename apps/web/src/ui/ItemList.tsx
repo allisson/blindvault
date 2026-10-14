@@ -103,6 +103,8 @@ export function ItemList({
         <h2 className="truncate text-sm font-semibold">{heading}</h2>
         {list.name !== 'trash' && session.writable ? (
           <Button
+            title={`${m.items.new} (N)`}
+            aria-keyshortcuts="N"
             onClick={() => {
               nav.select({ name: 'new' });
             }}
@@ -118,6 +120,7 @@ export function ItemList({
           aria-label={m.vault.search}
           title={m.vault.searchHint}
           placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
+          aria-keyshortcuts="Control+K Meta+K"
           autoComplete="off"
           spellCheck={false}
           className={INPUT}

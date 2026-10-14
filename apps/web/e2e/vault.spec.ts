@@ -49,10 +49,12 @@ test('creates, locks, refuses a wrong password and unlocks, keeping the URL and 
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
   await unlock(page, PASSWORD);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
-  // D167: no vault identifier or screen in the URL or the history.
+  // D167: no vault identifier or screen in the URL or the history. The one entry the app
+  // pushed for the system's back carries no state (D197).
   expect(new URL(page.url()).pathname).toBe('/');
   expect(new URL(page.url()).search + new URL(page.url()).hash).toBe('');
-  expect(await page.evaluate(() => window.history.length)).toBe(before);
+  expect(await page.evaluate(() => window.history.length)).toBe(before + 1);
+  expect(await page.evaluate(() => window.history.state as unknown)).toBeNull();
 });
 
 /** The stored Local Config bytes, read straight from IndexedDB. */

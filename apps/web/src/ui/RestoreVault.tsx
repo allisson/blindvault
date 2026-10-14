@@ -10,7 +10,7 @@ import {
 } from '../app/controller';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, Card, Field, Notice, TextArea } from './components';
+import { Button, Card, Field, Notice, TARGET, TextArea } from './components';
 import { NewPassword } from './NewPassword';
 import { recordTypeName } from './Settings';
 
@@ -185,7 +185,7 @@ export function OpenBackup({
         <fieldset className="flex gap-4 text-sm">
           <legend className="sr-only">{m.restore.method}</legend>
           {(['phrase', 'password'] as const).map((value) => (
-            <label key={value} className="flex items-center gap-2">
+            <label key={value} className={`${TARGET} flex items-center gap-2`}>
               <input
                 type="radio"
                 name="restore-method"
@@ -273,7 +273,7 @@ function RestorePassword({
       <p className="text-sm">{m.restore.passwordIntro}</p>
       <NewPassword label={m.restore.local} confirmLabel={m.restore.confirm} onChange={onChange} />
       {replace ? (
-        <label className="flex items-center gap-2 text-sm">
+        <label className={`${TARGET} flex items-center gap-2 text-sm`}>
           <input
             type="checkbox"
             checked={understood}

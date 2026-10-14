@@ -8,7 +8,7 @@ import { type Navigation } from '../app/nav';
 import { drawPositions } from '../app/phrase-check';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, Field, Notice } from './components';
+import { Button, Field, Notice, TARGET } from './components';
 import { NewPassword } from './NewPassword';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
 
@@ -159,7 +159,7 @@ export function RefoundVault({
             </Notice>
           ) : null}
           <p className="text-sm">{r.warnCopied}</p>
-          <label className="flex items-start gap-2 text-sm">
+          <label className={`${TARGET} flex items-start gap-2 text-sm`}>
             <input
               type="checkbox"
               checked={understood}
@@ -171,7 +171,7 @@ export function RefoundVault({
             {r.understand}
           </label>
           {rejected ? (
-            <label className="flex items-start gap-2 text-sm">
+            <label className={`${TARGET} flex items-start gap-2 text-sm`}>
               <input
                 type="checkbox"
                 checked={understoodRejected}

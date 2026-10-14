@@ -1,18 +1,11 @@
 import { type VaultSession } from '@blindvault/vault';
-import {
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 
 import { type BackupReminder } from '../app/backup-reminder';
 import { type VaultController } from '../app/controller';
 import { type Navigation, isDetail } from '../app/nav';
 import { SearchIndex } from '../app/search';
+import { newItemShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import {
@@ -119,10 +112,22 @@ function Header({
           controller.lock();
         }}
         title="Ctrl/⌘ + Shift + L"
+        aria-keyshortcuts="Control+Shift+L Meta+Shift+L"
       >
         {m.app.lock}
       </Button>
     </header>
+  );
+}
+
+/** A text field types the key instead of taking it as a shortcut. */
+function editable(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT')
   );
 }
 
@@ -168,18 +173,29 @@ export function VaultShell({
     [index],
   );
   useEffect(() => {
-    // Ctrl/⌘ + K focuses search (overview §13.1).
-    const focus = (e: KeyboardEvent) => {
+    // Ctrl/⌘ + K focuses search; N alone starts a new item (overview §13.1, D197).
+    const keys = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         searchRef.current?.focus();
+      } else if (
+        newItemShortcut(e, {
+          editing: editable(e.target),
+          screen: nav.current(),
+          list: nav.list(),
+          writable: session.writable,
+        })
+      ) {
+        e.preventDefault();
+        nav.select({ name: 'new' });
       }
     };
-    window.addEventListener('keydown', focus);
+    window.addEventListener('keydown', keys);
     return () => {
-      window.removeEventListener('keydown', focus);
+      window.removeEventListener('keydown', keys);
     };
-  }, []);
+  }, [nav, session]);
   const list = (
     <ItemList
       session={session}
@@ -193,48 +209,101 @@ export function VaultShell({
   );
   const folders = <FolderPane session={session} nav={nav} onChange={refresh} />;
 
-  let body: ReactNode;
-  if (screen.name === 'settings') {
-    body = <Settings controller={controller} session={session} nav={nav} focus={screen.focus} />;
-  } else if (layout === 'desktop') {
-    body = (
-      <div className="grid flex-1 grid-cols-[16rem_20rem_1fr] divide-x divide-zinc-200 dark:divide-zinc-800">
-        {folders}
-        {list}
-        {detail}
-      </div>
-    );
-  } else if (layout === 'tablet') {
-    body = (
-      <div className="relative grid flex-1 grid-cols-[18rem_1fr] divide-x divide-zinc-200 dark:divide-zinc-800">
-        <div className="flex flex-col">
-          <Button
-            variant="quiet"
-            className="m-2 self-start"
-            aria-expanded={drawer}
+  // The tablet drawer closes on any navigation, and when the layout is no longer tablet (D197).
+  const tablet = layout === 'tablet';
+  useEffect(() => {
+    setDrawer(false);
+  }, [screen, layout]);
+  const open = tablet && drawer;
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    // Opening moves the focus into the drawer; closing returns it to its button.
+    if (open) drawerRef.current?.querySelector('button')?.focus();
+    else if (wasOpen.current) toggleRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    // Escape closes the drawer and nothing else.
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawer(false);
+    };
+    window.addEventListener('keydown', escape);
+    return () => {
+      window.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+
+  // One tree for every layout, so a resize remounts nothing (D197): each pane keeps its place and
+  // the layout only styles or hides it. Settings hides the panes without unmounting them.
+  const settings = screen.name === 'settings';
+  const detailShown = isDetail(screen);
+  // Mobile drills down: folders and all items, then a folder or the trash, then the detail.
+  const shown = {
+    folders: layout === 'desktop' || open || (layout === 'mobile' && screen.name === 'vault'),
+    list: layout !== 'mobile' || !detailShown,
+    detail: layout !== 'mobile' || detailShown,
+  };
+  const panes = {
+    desktop: 'grid grid-cols-[16rem_20rem_1fr]',
+    tablet: 'relative grid grid-cols-[18rem_1fr]',
+    mobile: 'flex flex-col',
+  }[layout];
+  const folderPlace = {
+    desktop: 'border-r border-zinc-200 dark:border-zinc-800',
+    tablet:
+      'absolute inset-y-0 left-0 z-20 w-72 overflow-y-auto border-r border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950',
+    mobile: '',
+  }[layout];
+  const listPlace =
+    layout === 'mobile' ? 'flex-1' : 'border-r border-zinc-200 dark:border-zinc-800';
+  const body = (
+    <>
+      <div className={`flex-1 ${panes} ${settings ? 'hidden' : ''}`} data-testid="panes">
+        {open ? (
+          // Escape and the button close it too: the backdrop is for the pointer only.
+          <div
+            aria-hidden="true"
+            data-testid="drawer-backdrop"
+            className="absolute inset-0 z-10 bg-zinc-950/30"
             onClick={() => {
-              setDrawer(!drawer);
+              setDrawer(false);
             }}
-          >
-            {m.vault.folders}
-          </Button>
-          {drawer ? folders : null}
+          />
+        ) : null}
+        <div
+          ref={drawerRef}
+          id="folder-drawer"
+          className={`${folderPlace} ${shown.folders ? '' : 'hidden'}`}
+        >
+          {folders}
+        </div>
+        <div className={`flex min-w-0 flex-col ${listPlace} ${shown.list ? '' : 'hidden'}`}>
+          {tablet ? (
+            <Button
+              ref={toggleRef}
+              variant="quiet"
+              className="m-2 self-start"
+              aria-expanded={drawer}
+              aria-controls="folder-drawer"
+              onClick={() => {
+                setDrawer(!drawer);
+              }}
+            >
+              {m.vault.folders}
+            </Button>
+          ) : null}
           {list}
         </div>
-        {detail}
+        <div className={`flex min-w-0 flex-1 ${shown.detail ? '' : 'hidden'}`}>{detail}</div>
       </div>
-    );
-  } else if (isDetail(screen)) {
-    body = detail;
-  } else {
-    // Mobile drills down: folders and all items, then a folder or the trash, then the detail.
-    body = (
-      <div className="flex flex-1 flex-col">
-        {screen.name === 'vault' ? folders : null}
-        {list}
-      </div>
-    );
-  }
+      {settings ? (
+        <Settings controller={controller} session={session} nav={nav} focus={screen.focus} />
+      ) : null}
+    </>
+  );
 
   return (
     <div

@@ -50,6 +50,9 @@ export class Navigation {
 
   current = (): Screen => this.#stack.at(-1) ?? ROOT_SCREEN;
 
+  /** Whether a screen sits above the vault root, which the system's back can leave (D197). */
+  deeper = (): boolean => this.#stack.length > 1;
+
   /** The list shown, or that the current detail was selected from. */
   list = (): ListScreen => {
     const top = this.#listStack().at(-1);

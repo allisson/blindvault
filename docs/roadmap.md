@@ -246,8 +246,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] "About" screen with the version and hash of the running build (D192)
 - [x] Self-hosting instructions, including the dedicated-origin requirement and that changing origin means backup and restore (D90, D195)
 - [x] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts (D196)
-- [ ] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15)
-- [ ] Input adaptation via `pointer`/`hover` media queries (44 px touch targets)
+- [x] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15, D197)
+- [x] Input adaptation via `pointer`/`hover` media queries (44 px touch targets, D197)
 - [ ] Full onboarding with three starts (create, pair, restore), making clear that no server can reset the vault
 
 ### PWA Gate
@@ -257,8 +257,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] A new deploy does not replace the code without user confirmation (Playwright test, D191)
 - [x] The hash shown in the app matches the one published in the release (the release workflow checks the served manifest against the release, and `about.spec.ts` the shown hash against the served manifest, D192, D194)
 - [x] Self-hosting tested on another static host (nginx and Caddy in CI, with the configurations of `deploy/`, D195)
-- [ ] Visual and flow tests pass at all three layout widths, including resizing across breakpoints without losing state
-- [ ] Secrets are masked by default and lock state is visible in every layout
+- [x] Visual and flow tests pass at all three layout widths, including resizing across breakpoints without losing state (structural checks in `layout.spec.ts`, D197)
+- [x] Secrets are masked by default and lock state is visible in every layout (`layout.spec.ts`, D197)
 
 ---
 

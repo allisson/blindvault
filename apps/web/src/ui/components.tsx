@@ -1,5 +1,5 @@
 import {
-  type ButtonHTMLAttributes,
+  type ComponentProps,
   type InputHTMLAttributes,
   type ReactNode,
   type TextareaHTMLAttributes,
@@ -23,7 +23,7 @@ export function Button({
   variant = 'primary',
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { readonly variant?: 'primary' | 'quiet' }) {
+}: ComponentProps<'button'> & { readonly variant?: 'primary' | 'quiet' }) {
   const look =
     variant === 'primary'
       ? 'bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300'
