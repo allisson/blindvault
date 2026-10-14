@@ -1,6 +1,7 @@
 // @blindvault/sync: Pairing, Noise handshake, WebRTC transport, sync protocol, HLC and merge.
 
 export { Base45Error, decodeBase45, encodeBase45 } from './base45';
+export { MAX_CHANNEL_MESSAGE_LENGTH, noiseChannel } from './channel';
 export {
   type ConnectionOptions,
   GATHER_TIMEOUT_MS,
@@ -11,6 +12,13 @@ export {
   startInitiator,
   startResponder,
 } from './connection';
+export {
+  HandshakeError,
+  type HandshakeFailure,
+  type PairingHandshake,
+  type PairingHandshakeOptions,
+  pairingHandshake,
+} from './handshake';
 export { type Direction, type MemoryPair, type MemoryPairOptions, memoryPair } from './memory';
 export {
   type Candidate,

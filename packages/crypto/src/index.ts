@@ -45,6 +45,19 @@ export {
 } from './recovery';
 export { type DeviceIdentity, generateDeviceIdentity, loadDeviceIdentity } from './identity';
 export {
+  HANDSHAKE_HASH_LENGTH,
+  NOISE_MAX_HANDSHAKE_PAYLOAD_LENGTH,
+  NOISE_MAX_MESSAGE_LENGTH,
+  NOISE_MAX_PLAINTEXT_LENGTH,
+  NOISE_TAG_LENGTH,
+  NoiseError,
+  type NoiseHandshake,
+  type NoiseResult,
+  type NoiseTransport,
+  startNoiseXX,
+} from './noise';
+export { DTLS_FINGERPRINT_LENGTH, pairingPrologue } from './transcripts';
+export {
   PRF_INPUT_LENGTH,
   type PrfAssertion,
   derivePrfKek,

@@ -384,7 +384,10 @@ parts, as CBOR maps, are in `record-content.md` §9.
 
 **Noise.** `Noise_XX_25519_ChaChaPoly_BLAKE2b` for admission, `Noise_KK_25519_ChaChaPoly_BLAKE2b`
 for sync, `Noise_K_25519_ChaChaPoly_BLAKE2b` for the reconnection payload (D17), from the copied
-implementation gated by the official vectors (D157). The handshake hash is 64 bytes.
+implementation gated by the official vectors (D157), which lives in `packages/crypto/src/noise/`
+with one fix to `split` (D200). The handshake hash is 64 bytes. `packages/crypto` computes the
+prologues (`transcripts.ts`) and runs the handshakes (`noise.ts`); `packages/sync` drives them over
+the transport.
 
 **Prologues**, in fixed role order (initiator first):
 
@@ -442,6 +445,14 @@ The same generator writes the `record-content.md` vectors to
 9285 examples and rejected texts), valid payloads with their bytes and text, and one invalid payload
 per rule of §3.3, tagged with the reason it is refused (`version`, `malformed`, `wrong-role`,
 `wrong-session`). `packages/sync` MUST reproduce and reject them the same way.
+
+`tests/vectors/noise.py` extracts the official Noise vectors (D157, D200): the cacophony and snow
+vectors of `Noise_XX`, `Noise_KK` and `Noise_K` in `25519_ChaChaPoly_BLAKE2b`, downloaded at
+pinned commits, checked against their SHA-256 and written unchanged, with their source and license,
+to `packages/crypto/test-vectors/noise-v1.json` (`uv run tests/vectors/noise.py`). `packages/crypto`
+MUST reproduce every handshake and transport message of each, and the handshake hash wherever the
+vector gives one (cacophony); snow gives none, and binds it through the handshake payload
+ciphertexts, whose associated data it is.
 
 `tests/vectors/generate.py` computes every vector with Python's `hashlib` (BLAKE2b, `crypto_kdf`)
 and PyNaCl (AEAD, Argon2id, `crypto_box_seed_keypair`, padding), independently of the TypeScript

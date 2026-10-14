@@ -42,10 +42,10 @@ Phase 4 — Pairing. Update this line when a gate passes.
 
 ```
 apps/web/            PWA, UI (mobile/tablet/desktop layouts), service worker, onboarding (no direct crypto)
-packages/crypto/     libsodium wrappers, key hierarchy, AEAD, AAD serialization
+packages/crypto/     libsodium wrappers, key hierarchy, AEAD, AAD serialization, copied Noise state machine
 packages/vault/      domain model: items, fields, templates, versions, tombstones
 packages/storage/    IndexedDB schema, encrypted record persistence, migrations
-packages/sync/       pairing, Noise handshake, WebRTC, QR, sync protocol, HLC, merge
+packages/sync/       pairing, Noise handshakes over the transport, WebRTC, QR, sync protocol, HLC, merge
 packages/backup/     .bvault format, keyslots, export/restore
 docs/                specs and decisions
 tests/               cross-package, protocol and recovery tests

@@ -7,5 +7,10 @@
     "lib": ["ES2022", "DOM"],
     "resolveJsonModule": true
   },
-  "include": ["src", "test-vectors/*.json", "vitest.config.ts"]
+  "include": ["src", "test-vectors/*.json", "vitest.config.ts"],
+  "references": [
+    {
+      "path": "../crypto"
+    }
+  ]
 }
