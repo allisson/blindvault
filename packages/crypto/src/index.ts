@@ -56,7 +56,16 @@ export {
   type NoiseTransport,
   startNoiseXX,
 } from './noise';
-export { DTLS_FINGERPRINT_LENGTH, pairingPrologue } from './transcripts';
+export {
+  DTLS_FINGERPRINT_LENGTH,
+  PAIRING_COMMITMENT_LENGTH,
+  PAIRING_NONCE_LENGTH,
+  checkPairingCommitment,
+  pairingCommitment,
+  pairingNonce,
+  pairingPrologue,
+  pairingSas,
+} from './transcripts';
 export {
   PRF_INPUT_LENGTH,
   type PrfAssertion,

@@ -441,10 +441,12 @@ in `pairing-protocol.md` and `sync-protocol.md`, using the layout encoding.
 
 The same generator writes the `record-content.md` vectors to
 `packages/vault/test-vectors/content-v1.json` (`record-content.md` §10), and the
-`pairing-protocol.md` §3 vectors to `packages/sync/test-vectors/pairing-v1.json`: base45 (the RFC
+`pairing-protocol.md` vectors to `packages/sync/test-vectors/pairing-v1.json`: base45 (the RFC
 9285 examples and rejected texts), valid payloads with their bytes and text, and one invalid payload
 per rule of §3.3, tagged with the reason it is refused (`version`, `malformed`, `wrong-role`,
-`wrong-session`). `packages/sync` MUST reproduce and reject them the same way.
+`wrong-session`); every message type of §10.2 but the transfer's with its bytes, and invalid
+messages tagged `version` or `protocol-error`; framings given by frame lengths, valid (up to the
+largest message) and invalid (D201). `packages/sync` MUST reproduce and reject them the same way.
 
 `tests/vectors/noise.py` extracts the official Noise vectors (D157, D200): the cacophony and snow
 vectors of `Noise_XX`, `Noise_KK` and `Noise_K` in `25519_ChaChaPoly_BLAKE2b`, downloaded at
@@ -478,7 +480,7 @@ with.
 | `pad` | `sodium_pad` at lengths 0, 1, 255, 256, 257 |
 | `records` | full v1 envelopes (Item, purged tombstone, Vault Key, Recovery Envelope, Item Version, Item with unknown float and negative-integer content, Item sharing the Vault Key `recordId`), each with a fresh record key; caps; `mustNotOpen` (wrong AAD field, flipped tag and ciphertext, `mk`/`wk` confusion) |
 | `local` | Master Key wraps, Local Config wrap of a valid `record-content.md` §9 encrypted part, `mustNotOpen` (other `localConfigId`, `vaultId`, purpose) |
-| `transcripts` | XX and KK prologues, re-admission MACs |
+| `transcripts` | XX and KK prologues, re-admission MACs, pairing commitment, SAS (one with leading zeros) |
 | `negative` | envelopes that MUST be rejected, each violating one rule and tagged with the section 9.5 step that rejects it; size cases given by length |
 
 ## 16. TOTP and the password generator (D127, D128, D138)

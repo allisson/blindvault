@@ -1,17 +1,21 @@
 // A page for the Playwright tests: one device's side of the WebRTC connection of a pairing, driven
 // through `window.harness`. Two pages, in two browser contexts, pair by passing the base45 texts.
 
-import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
+import { Keyring, generateDeviceIdentity, initCrypto, pairingNonce } from '@blindvault/crypto';
 
 import {
   type Initiator,
+  PairingError,
+  PairingSession,
   PayloadError,
   type Role,
   type Transport,
+  type SasStage,
   TransportClosedError,
   decodeBase45,
   decodePayloadText,
   encodePayloadText,
+  exchangeNonces,
   pairingHandshake,
   startInitiator,
   startResponder,
@@ -23,6 +27,10 @@ const options = { iceServers: [] };
 let initiator: Initiator | undefined;
 let transport: Promise<Transport> | undefined;
 let channel: Transport | undefined;
+let session: PairingSession | undefined;
+let stage: SasStage | undefined;
+// The initiator's nonce and the commitment its payload carries (`pairing-protocol.md` §6.1).
+let drawn: { nonce: Uint8Array; commitment: Uint8Array } | undefined;
 // The texts as exchanged, for the prologue: the initiator's, then the responder's.
 const texts: { role?: Role; initiator?: string; responder?: string } = {};
 const ready = initCrypto();
@@ -33,6 +41,11 @@ const abort = new AbortController();
 function outcome(error: unknown): string {
   if (error instanceof PayloadError) return error.reason;
   if (error instanceof TransportClosedError) return `closed:${error.by}`;
+  throw error;
+}
+
+function ended(error: unknown): string {
+  if (error instanceof PairingError) return `${error.reason}:${error.by}`;
   throw error;
 }
 
@@ -68,11 +81,13 @@ export const harness = {
 
   /** Starts as the initiator; returns its payload text. */
   async startInitiator(): Promise<string> {
+    await ready;
+    drawn = pairingNonce();
     initiator = await startInitiator(
       {
         ...context,
         sessionId: crypto.getRandomValues(new Uint8Array(16)),
-        commitment: crypto.getRandomValues(new Uint8Array(32)),
+        commitment: drawn.commitment,
       },
       { ...options, signal: abort.signal },
     );
@@ -155,6 +170,57 @@ export const harness = {
       self: hex(identity.publicKey),
       peer: hex(result.peerPublicKey),
     };
+  },
+
+  /**
+   * Runs the handshake, then the nonces of §6 over the Noise channel; returns the SAS to show.
+   */
+  async sas(): Promise<string> {
+    if (!transport || !texts.role || !texts.initiator || !texts.responder) {
+      throw new Error('no connection');
+    }
+    await ready;
+    const result = await pairingHandshake(await transport, {
+      role: texts.role,
+      identity: generateDeviceIdentity(new Keyring()),
+      payloadInitiator: decodeBase45(texts.initiator),
+      payloadResponder: decodeBase45(texts.responder),
+    });
+    session = new PairingSession(result.channel);
+    const commitment = decodePayloadText(texts.initiator, { role: 'initiator' }).commitment;
+    stage = await exchangeNonces(
+      session,
+      texts.role === 'initiator'
+        ? {
+            role: 'initiator',
+            handshakeHash: result.handshakeHash,
+            nonce: drawn?.nonce ?? new Uint8Array(),
+          }
+        : {
+            role: 'responder',
+            handshakeHash: result.handshakeHash,
+            commitment: commitment ?? new Uint8Array(),
+          },
+    );
+    return stage.sas;
+  },
+
+  /** The user says the SAS matches: "confirmed" once both did, or how the session ended. */
+  async confirmSas(): Promise<string> {
+    if (!stage) throw new Error('no SAS');
+    return stage.confirm().then(() => 'confirmed', ended);
+  },
+
+  /** The user says the SAS does not match. */
+  async rejectSas(): Promise<void> {
+    if (!stage) throw new Error('no SAS');
+    await stage.reject('sas-mismatch');
+  },
+
+  /** How the session ended, as "reason:by". */
+  async sessionEnded(): Promise<string> {
+    if (!session) throw new Error('no session');
+    return ended(await session.ended);
   },
 
   async channelSend(length: number, seed: number): Promise<void> {

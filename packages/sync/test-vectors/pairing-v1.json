@@ -1,5 +1,5 @@
 {
-  "description": "pairing-protocol.md section 3: payload v1 and base45 (RFC 9285)",
+  "description": "pairing-protocol.md section 3: payload v1 and base45 (RFC 9285); section 10: messages and framing",
   "base45": {
     "valid": [
       {
@@ -718,6 +718,740 @@
           "sessionId": "404142434445464748494a4b4c4d4e4f"
         },
         "bytes": "01054142434445464748494a4b4c4d4e4f50a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf0831613262336334642030313233343536373839616263646566303132333435363738396162636465660100c0a8011ec3cb01000106000100020003000400050006"
+      }
+    ]
+  },
+  "messages": {
+    "valid": [
+      {
+        "case": "nonce",
+        "bytes": "a3616e5820606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f6174656e6f6e6365617601",
+        "message": {
+          "v": 1,
+          "t": "nonce",
+          "n": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+        }
+      },
+      {
+        "case": "confirmed",
+        "bytes": "a2617469636f6e6669726d6564617601",
+        "message": {
+          "v": 1,
+          "t": "confirmed"
+        }
+      },
+      {
+        "case": "master-key",
+        "bytes": "a461746a6d61737465722d6b6579617601626d6b58201112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30637669645022232425262728292a2b2c2d2e2f3031",
+        "message": {
+          "v": 1,
+          "t": "master-key",
+          "mk": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+          "vid": "22232425262728292a2b2c2d2e2f3031"
+        }
+      },
+      {
+        "case": "received",
+        "bytes": "a36174687265636569766564617601646e616d657046697265666f78206f6e204c696e7578",
+        "message": {
+          "v": 1,
+          "t": "received",
+          "name": "Firefox on Linux"
+        }
+      },
+      {
+        "case": "received, a name of 64 code points outside the BMP",
+        "bytes": "a36174687265636569766564617601646e616d65790100f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491f09f9491",
+        "message": {
+          "v": 1,
+          "t": "received",
+          "name": "🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑"
+        }
+      },
+      {
+        "case": "key-confirmation",
+        "bytes": "a36174706b65792d636f6e6669726d6174696f6e617601636d61635820333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152",
+        "message": {
+          "v": 1,
+          "t": "key-confirmation",
+          "mac": "333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152"
+        }
+      },
+      {
+        "case": "devices",
+        "bytes": "a561746764657669636573617601636f776ef5646e616d656f4368726f6d65206f6e206d61634f536470656572f4",
+        "message": {
+          "v": 1,
+          "t": "devices",
+          "own": true,
+          "peer": false,
+          "name": "Chrome on macOS"
+        }
+      },
+      {
+        "case": "committed",
+        "bytes": "a2617469636f6d6d6974746564617601",
+        "message": {
+          "v": 1,
+          "t": "committed"
+        }
+      },
+      {
+        "case": "abort, cancelled",
+        "bytes": "a361746561626f727461760166726561736f6e6963616e63656c6c6564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "cancelled"
+        }
+      },
+      {
+        "case": "abort, sas-mismatch",
+        "bytes": "a361746561626f727461760166726561736f6e6c7361732d6d69736d61746368",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "sas-mismatch"
+        }
+      },
+      {
+        "case": "abort, locked",
+        "bytes": "a361746561626f727461760166726561736f6e666c6f636b6564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "locked"
+        }
+      },
+      {
+        "case": "abort, expired",
+        "bytes": "a361746561626f727461760166726561736f6e6765787069726564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "expired"
+        }
+      },
+      {
+        "case": "abort, retired-peer",
+        "bytes": "a361746561626f727461760166726561736f6e6c726574697265642d70656572",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "retired-peer"
+        }
+      },
+      {
+        "case": "abort, different-vaults",
+        "bytes": "a361746561626f727461760166726561736f6e70646966666572656e742d7661756c7473",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "different-vaults"
+        }
+      },
+      {
+        "case": "abort, unsupported-format",
+        "bytes": "a361746561626f727461760166726561736f6e72756e737570706f727465642d666f726d6174",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "unsupported-format"
+        }
+      },
+      {
+        "case": "abort, verification-failed",
+        "bytes": "a361746561626f727461760166726561736f6e73766572696669636174696f6e2d6661696c6564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "verification-failed"
+        }
+      },
+      {
+        "case": "abort, version",
+        "bytes": "a361746561626f727461760166726561736f6e6776657273696f6e",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "version"
+        }
+      },
+      {
+        "case": "abort, protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e6e70726f746f636f6c2d6572726f72",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "protocol-error"
+        }
+      },
+      {
+        "case": "abort with an unknown reason, read as protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e6d6f75742d6f662d636f66666565",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "protocol-error"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "case": "v 2",
+        "reason": "version",
+        "bytes": "a3616e5820606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f6174656e6f6e6365617602"
+      },
+      {
+        "case": "v 0",
+        "reason": "version",
+        "bytes": "a3616e5820606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f6174656e6f6e6365617600"
+      },
+      {
+        "case": "v 2 with an unknown type and other keys",
+        "reason": "version",
+        "bytes": "a361746568656c6c6f617602617801"
+      },
+      {
+        "case": "not a map",
+        "reason": "protocol-error",
+        "bytes": "8201656e6f6e6365"
+      },
+      {
+        "case": "no v",
+        "reason": "protocol-error",
+        "bytes": "a1617469636f6e6669726d6564"
+      },
+      {
+        "case": "v as text",
+        "reason": "protocol-error",
+        "bytes": "a2617469636f6e6669726d656461766131"
+      },
+      {
+        "case": "v negative",
+        "reason": "protocol-error",
+        "bytes": "a2617469636f6e6669726d6564617620"
+      },
+      {
+        "case": "v true",
+        "reason": "protocol-error",
+        "bytes": "a2617469636f6e6669726d65646176f5"
+      },
+      {
+        "case": "no t",
+        "reason": "protocol-error",
+        "bytes": "a1617601"
+      },
+      {
+        "case": "unknown t",
+        "reason": "protocol-error",
+        "bytes": "a261746568656c6c6f617601"
+      },
+      {
+        "case": "t as bytes",
+        "reason": "protocol-error",
+        "bytes": "a2617449636f6e6669726d6564617601"
+      },
+      {
+        "case": "records-begin, not part of this version of the codec",
+        "reason": "protocol-error",
+        "bytes": "a261746d7265636f7264732d626567696e617601"
+      },
+      {
+        "case": "an extra key",
+        "reason": "protocol-error",
+        "bytes": "a3617469636f6e6669726d6564617601617800"
+      },
+      {
+        "case": "an integer key",
+        "reason": "protocol-error",
+        "bytes": "a30100617469636f6e6669726d6564617601"
+      },
+      {
+        "case": "nonce without n",
+        "reason": "protocol-error",
+        "bytes": "a26174656e6f6e6365617601"
+      },
+      {
+        "case": "nonce of 31 bytes",
+        "reason": "protocol-error",
+        "bytes": "a3616e581f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e6174656e6f6e6365617601"
+      },
+      {
+        "case": "nonce of 33 bytes",
+        "reason": "protocol-error",
+        "bytes": "a3616e5821606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f806174656e6f6e6365617601"
+      },
+      {
+        "case": "nonce as text",
+        "reason": "protocol-error",
+        "bytes": "a3616e7840303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030306174656e6f6e6365617601"
+      },
+      {
+        "case": "master-key of 31 bytes",
+        "reason": "protocol-error",
+        "bytes": "a461746a6d61737465722d6b6579617601626d6b581f1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f637669645022232425262728292a2b2c2d2e2f3031"
+      },
+      {
+        "case": "master-key with a vaultId of 15 bytes",
+        "reason": "protocol-error",
+        "bytes": "a461746a6d61737465722d6b6579617601626d6b58201112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30637669644f22232425262728292a2b2c2d2e2f30"
+      },
+      {
+        "case": "key-confirmation of 31 bytes",
+        "reason": "protocol-error",
+        "bytes": "a36174706b65792d636f6e6669726d6174696f6e617601636d6163581f333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051"
+      },
+      {
+        "case": "received with an empty name",
+        "reason": "protocol-error",
+        "bytes": "a36174687265636569766564617601646e616d6560"
+      },
+      {
+        "case": "received with a name of 65 code points",
+        "reason": "protocol-error",
+        "bytes": "a36174687265636569766564617601646e616d6578416161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+      },
+      {
+        "case": "received with a name of two lines",
+        "reason": "protocol-error",
+        "bytes": "a36174687265636569766564617601646e616d657046697265666f780a6f6e204c696e7578"
+      },
+      {
+        "case": "received with a name ending in a space",
+        "reason": "protocol-error",
+        "bytes": "a36174687265636569766564617601646e616d656846697265666f7820"
+      },
+      {
+        "case": "received with a name as bytes",
+        "reason": "protocol-error",
+        "bytes": "a36174687265636569766564617601646e616d654746697265666f78"
+      },
+      {
+        "case": "devices with own as 1",
+        "reason": "protocol-error",
+        "bytes": "a561746764657669636573617601636f776e01646e616d65664368726f6d656470656572f4"
+      },
+      {
+        "case": "devices without peer",
+        "reason": "protocol-error",
+        "bytes": "a461746764657669636573617601636f776ef5646e616d65664368726f6d65"
+      },
+      {
+        "case": "abort with a reason as an integer",
+        "reason": "protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e01"
+      },
+      {
+        "case": "abort without a reason",
+        "reason": "protocol-error",
+        "bytes": "a261746561626f7274617601"
+      },
+      {
+        "case": "not CBOR",
+        "reason": "protocol-error",
+        "bytes": "ff"
+      },
+      {
+        "case": "a byte after the map",
+        "reason": "protocol-error",
+        "bytes": "a2617469636f6e6669726d656461760100"
+      },
+      {
+        "case": "v in a non-shortest integer",
+        "reason": "protocol-error",
+        "bytes": "a2617469636f6e6669726d656461761801"
+      },
+      {
+        "case": "keys not in deterministic order",
+        "reason": "protocol-error",
+        "bytes": "a2617601617469636f6e6669726d6564"
+      },
+      {
+        "case": "a duplicate key",
+        "reason": "protocol-error",
+        "bytes": "a3617469636f6e6669726d6564617601617601"
+      },
+      {
+        "case": "an indefinite-length map",
+        "reason": "protocol-error",
+        "bytes": "bf617469636f6e6669726d6564617601ff"
+      },
+      {
+        "case": "a tagged nonce",
+        "reason": "protocol-error",
+        "bytes": "a3616ed8405820606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f6174656e6f6e6365617601"
+      }
+    ],
+    "abortReasons": [
+      "cancelled",
+      "sas-mismatch",
+      "locked",
+      "expired",
+      "retired-peer",
+      "different-vaults",
+      "unsupported-format",
+      "verification-failed",
+      "version",
+      "protocol-error"
+    ],
+    "maxMessageLength": 1049194
+  },
+  "framing": {
+    "frameDataLength": 65518,
+    "valid": [
+      {
+        "messageLength": 1,
+        "frames": [
+          {
+            "last": 1,
+            "length": 1
+          }
+        ]
+      },
+      {
+        "messageLength": 2,
+        "frames": [
+          {
+            "last": 1,
+            "length": 2
+          }
+        ]
+      },
+      {
+        "messageLength": 65518,
+        "frames": [
+          {
+            "last": 1,
+            "length": 65518
+          }
+        ]
+      },
+      {
+        "messageLength": 65519,
+        "frames": [
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 1,
+            "length": 1
+          }
+        ]
+      },
+      {
+        "messageLength": 131036,
+        "frames": [
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 1,
+            "length": 65518
+          }
+        ]
+      },
+      {
+        "messageLength": 1049194,
+        "frames": [
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 1,
+            "length": 906
+          }
+        ]
+      }
+    ],
+    "invalid": [
+      {
+        "case": "an empty frame, with no last byte",
+        "frames": [
+          {
+            "last": null,
+            "length": 0
+          }
+        ]
+      },
+      {
+        "case": "last 2",
+        "frames": [
+          {
+            "last": 2,
+            "length": 10
+          }
+        ]
+      },
+      {
+        "case": "last 255",
+        "frames": [
+          {
+            "last": 255,
+            "length": 10
+          }
+        ]
+      },
+      {
+        "case": "an empty final frame",
+        "frames": [
+          {
+            "last": 1,
+            "length": 0
+          }
+        ]
+      },
+      {
+        "case": "an empty final frame after a full one",
+        "frames": [
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 1,
+            "length": 0
+          }
+        ]
+      },
+      {
+        "case": "a non-final frame one byte short",
+        "frames": [
+          {
+            "last": 0,
+            "length": 65517
+          },
+          {
+            "last": 1,
+            "length": 2
+          }
+        ]
+      },
+      {
+        "case": "a non-final frame of one byte",
+        "frames": [
+          {
+            "last": 0,
+            "length": 1
+          },
+          {
+            "last": 1,
+            "length": 1
+          }
+        ]
+      },
+      {
+        "case": "one byte over the maximum message length",
+        "frames": [
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 1,
+            "length": 907
+          }
+        ]
+      },
+      {
+        "case": "a 17th full frame, over the maximum before the final one",
+        "frames": [
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 0,
+            "length": 65518
+          },
+          {
+            "last": 1,
+            "length": 1
+          }
+        ]
       }
     ]
   }

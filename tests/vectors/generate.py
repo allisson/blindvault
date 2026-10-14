@@ -169,6 +169,12 @@ def _max_envelope_length() -> int:
     return len(cbor(env))
 
 
+def sas_of(handshake_hash: bytes, nonce_i: bytes, nonce_r: bytes) -> tuple[bytes, int]:
+    """pairing-protocol.md section 6.2: sasHash and the six-digit SAS."""
+    sas_hash = blake2b(layout(label("bv.sas.v1"), handshake_hash, nonce_i, nonce_r), 32)
+    return sas_hash, int.from_bytes(sas_hash[:8], "big") % 1_000_000
+
+
 def pad(b: bytes) -> bytes:
     return bindings.sodium_pad(b, PAD_BLOCK)
 
@@ -1848,10 +1854,182 @@ def pairing_vectors() -> dict:
             pass
 
     return {
-        "description": "pairing-protocol.md section 3: payload v1 and base45 (RFC 9285)",
+        "description": "pairing-protocol.md section 3: payload v1 and base45 (RFC 9285); "
+                       "section 10: messages and framing",
         "base45": base45,
         "payloads": {"valid": valid, "invalid": neg},
+        "messages": message_vectors(),
+        "framing": framing_vectors(),
     }
+
+
+# --- pairing-protocol.md section 10 ----------------------------------------------------------
+
+MESSAGE_KEYS = {
+    "nonce": {"n": ("bstr", 32)},
+    "confirmed": {},
+    "master-key": {"mk": ("bstr", 32), "vid": ("bstr", 16)},
+    "received": {"name": ("name",)},
+    "key-confirmation": {"mac": ("bstr", 32)},
+    "devices": {"own": ("bool",), "peer": ("bool",), "name": ("name",)},
+    "committed": {},
+    "abort": {"reason": ("text",)},
+}
+ABORT_REASONS = ["cancelled", "sas-mismatch", "locked", "expired", "retired-peer", "different-vaults",
+                 "unsupported-format", "verification-failed", "version", "protocol-error"]
+MAX_PROTOCOL_MESSAGE = 1_049_194
+FRAME_DATA = 65_518
+
+
+class MessageReject(Exception):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def check_message(m) -> dict:
+    """Reference decoder of section 10.2 over the value before encoding: `v` first (a uint other
+    than 1 is `version`), then the type, the exact keys, and each key's type and length."""
+    if not isinstance(m, dict):
+        raise MessageReject("protocol-error")
+    v = m.get("v")
+    if isinstance(v, int) and not isinstance(v, bool) and v >= 0 and v != 1:
+        raise MessageReject("version")
+    if v != 1 or isinstance(v, bool) or not all(isinstance(k, str) for k in m):
+        raise MessageReject("protocol-error")
+    t = m.get("t")
+    if not isinstance(t, str) or t not in MESSAGE_KEYS:
+        raise MessageReject("protocol-error")
+    keys = MESSAGE_KEYS[t]
+    if set(m) != {"v", "t", *keys}:
+        raise MessageReject("protocol-error")
+    for k, (kind, *rest) in keys.items():
+        x = m[k]
+        ok = {
+            "bstr": lambda: isinstance(x, bytes) and len(x) == rest[0],
+            "bool": lambda: isinstance(x, bool),
+            "text": lambda: isinstance(x, str),
+            "name": lambda: isinstance(x, str) and 1 <= len(x) <= 64 and "\n" not in x and "\r" not in x
+                            and not x[0].isspace() and not x[-1].isspace(),
+        }[kind]()
+        if not ok:
+            raise MessageReject("protocol-error")
+    out = dict(m)
+    if t == "abort" and out["reason"] not in ABORT_REASONS:
+        out["reason"] = "protocol-error"
+    return out
+
+
+def message_json(m: dict) -> dict:
+    return {k: h(x) if isinstance(x, bytes) else x for k, x in m.items()}
+
+
+def message_vectors() -> dict:
+    assert _max_envelope_length() + 64 == MAX_PROTOCOL_MESSAGE
+    msg = lambda t, **kw: {"v": 1, "t": t, **kw}  # noqa: E731
+    valid = [
+        ("nonce", msg("nonce", n=seq(0x60, 32))),
+        ("confirmed", msg("confirmed")),
+        ("master-key", msg("master-key", mk=seq(0x11, 32), vid=seq(0x22, 16))),
+        ("received", msg("received", name="Firefox on Linux")),
+        ("received, a name of 64 code points outside the BMP", msg("received", name="\U0001F511" * 64)),
+        ("key-confirmation", msg("key-confirmation", mac=seq(0x33, 32))),
+        ("devices", msg("devices", own=True, peer=False, name="Chrome on macOS")),
+        ("committed", msg("committed")),
+        *((f"abort, {r}", msg("abort", reason=r)) for r in ABORT_REASONS),
+        ("abort with an unknown reason, read as protocol-error", msg("abort", reason="out-of-coffee")),
+    ]
+    out_valid = []
+    for case, m in valid:
+        out_valid.append({"case": case, "bytes": h(cbor(m)), "message": message_json(check_message(m))})
+
+    base = msg("nonce", n=seq(0x60, 32))
+    invalid = [
+        ("version", "v 2", {**base, "v": 2}),
+        ("version", "v 0", {**base, "v": 0}),
+        ("version", "v 2 with an unknown type and other keys", {"v": 2, "t": "hello", "x": 1}),
+        ("protocol-error", "not a map", [1, "nonce"]),
+        ("protocol-error", "no v", {"t": "confirmed"}),
+        ("protocol-error", "v as text", {"v": "1", "t": "confirmed"}),
+        ("protocol-error", "v negative", {"v": -1, "t": "confirmed"}),
+        ("protocol-error", "v true", {"v": True, "t": "confirmed"}),
+        ("protocol-error", "no t", {"v": 1}),
+        ("protocol-error", "unknown t", msg("hello")),
+        ("protocol-error", "t as bytes", {"v": 1, "t": b"confirmed"}),
+        ("protocol-error", "records-begin, not part of this version of the codec", msg("records-begin")),
+        ("protocol-error", "an extra key", {**msg("confirmed"), "x": 0}),
+        ("protocol-error", "an integer key", {**msg("confirmed"), 1: 0}),
+        ("protocol-error", "nonce without n", msg("nonce")),
+        ("protocol-error", "nonce of 31 bytes", msg("nonce", n=seq(0x60, 31))),
+        ("protocol-error", "nonce of 33 bytes", msg("nonce", n=seq(0x60, 33))),
+        ("protocol-error", "nonce as text", msg("nonce", n="00" * 32)),
+        ("protocol-error", "master-key of 31 bytes", msg("master-key", mk=seq(0x11, 31), vid=seq(0x22, 16))),
+        ("protocol-error", "master-key with a vaultId of 15 bytes", msg("master-key", mk=seq(0x11, 32), vid=seq(0x22, 15))),
+        ("protocol-error", "key-confirmation of 31 bytes", msg("key-confirmation", mac=seq(0x33, 31))),
+        ("protocol-error", "received with an empty name", msg("received", name="")),
+        ("protocol-error", "received with a name of 65 code points", msg("received", name="a" * 65)),
+        ("protocol-error", "received with a name of two lines", msg("received", name="Firefox\non Linux")),
+        ("protocol-error", "received with a name ending in a space", msg("received", name="Firefox ")),
+        ("protocol-error", "received with a name as bytes", msg("received", name=b"Firefox")),
+        ("protocol-error", "devices with own as 1", msg("devices", own=1, peer=False, name="Chrome")),
+        ("protocol-error", "devices without peer", msg("devices", own=True, name="Chrome")),
+        ("protocol-error", "abort with a reason as an integer", msg("abort", reason=1)),
+        ("protocol-error", "abort without a reason", msg("abort")),
+    ]
+    out_invalid = []
+    for reason, case, m in invalid:
+        try:
+            check_message(m)
+        except MessageReject as r:
+            assert r.reason == reason, f"{case}: {r.reason}"
+            out_invalid.append({"case": case, "reason": reason, "bytes": h(cbor(m))})
+            continue
+        raise AssertionError(f"accepted: {case}")
+    confirmed = cbor(msg("confirmed"))
+    for case, b in (
+        ("not CBOR", b"\xff"),
+        ("a byte after the map", confirmed + b"\x00"),
+        ("v in a non-shortest integer", b"\xa2\x61t\x69confirmed\x61v\x18\x01"),
+        ("keys not in deterministic order", b"\xa2\x61v\x01\x61t\x69confirmed"),
+        ("a duplicate key", b"\xa3\x61t\x69confirmed\x61v\x01\x61v\x01"),
+        ("an indefinite-length map", b"\xbf\x61t\x69confirmed\x61v\x01\xff"),
+        # Tag 64 (a typed array) around the nonce.
+        ("a tagged nonce", b"\xa3" + cbor("n") + b"\xd8\x40" + cbor(seq(0x60, 32)) + cbor("t") + cbor("nonce")
+         + cbor("v") + cbor(1)),
+    ):
+        out_invalid.append({"case": case, "reason": "protocol-error", "bytes": h(b)})
+    assert confirmed == b"\xa2\x61t\x69confirmed\x61v\x01"
+    return {"valid": out_valid, "invalid": out_invalid, "abortReasons": ABORT_REASONS,
+            "maxMessageLength": MAX_PROTOCOL_MESSAGE}
+
+
+def frames_of(length: int) -> list[dict]:
+    """Canonical framing (D201): full frames of FRAME_DATA bytes, the remainder in the last."""
+    sizes = [FRAME_DATA] * ((length - 1) // FRAME_DATA) + [length - FRAME_DATA * ((length - 1) // FRAME_DATA)]
+    return [{"last": int(i == len(sizes) - 1), "length": n} for i, n in enumerate(sizes)]
+
+
+def framing_vectors() -> dict:
+    """Frames are given by their `last` byte and data length; the data is the message bytes
+    `i mod 251` in order, so no frame needs to be written out."""
+    full = {"last": 0, "length": FRAME_DATA}
+    valid = [{"messageLength": n, "frames": frames_of(n)}
+             for n in (1, 2, FRAME_DATA, FRAME_DATA + 1, 2 * FRAME_DATA, MAX_PROTOCOL_MESSAGE)]
+    assert len(valid[-1]["frames"]) == 17 and valid[-1]["frames"][-1]["length"] == 906
+    over = frames_of(MAX_PROTOCOL_MESSAGE)
+    over[-1] = {"last": 1, "length": over[-1]["length"] + 1}
+    invalid = [
+        {"case": "an empty frame, with no last byte", "frames": [{"last": None, "length": 0}]},
+        {"case": "last 2", "frames": [{"last": 2, "length": 10}]},
+        {"case": "last 255", "frames": [{"last": 255, "length": 10}]},
+        {"case": "an empty final frame", "frames": [{"last": 1, "length": 0}]},
+        {"case": "an empty final frame after a full one", "frames": [full, {"last": 1, "length": 0}]},
+        {"case": "a non-final frame one byte short", "frames": [{"last": 0, "length": FRAME_DATA - 1}, {"last": 1, "length": 2}]},
+        {"case": "a non-final frame of one byte", "frames": [{"last": 0, "length": 1}, {"last": 1, "length": 1}]},
+        {"case": "one byte over the maximum message length", "frames": over},
+        {"case": "a 17th full frame, over the maximum before the final one", "frames": [full] * 17 + [{"last": 1, "length": 1}]},
+    ]
+    return {"frameDataLength": FRAME_DATA, "valid": valid, "invalid": invalid}
 
 
 def main() -> None:
@@ -2088,6 +2266,20 @@ def main() -> None:
             for role in ("initiator", "responder")
         ],
     }
+    # pairing-protocol.md section 6: the commitment to nonce_I and the SAS.
+    nonce_i, nonce_r = seq(0x60, 32), seq(0x70, 32)
+    # The first responder nonce of a fixed sequence whose SAS is below 1,000: three leading zeros.
+    nonce_r_low = next(n for n in (blake2b(u32(k), 32) for k in range(100_000))
+                       if sas_of(handshake_hash, nonce_i, n)[1] < 1000)
+    v["transcripts"]["pairingCommitment"] = {
+        "nonce": h(nonce_i), "commitment": h(blake2b(layout(label("bv.pairing.commit.v1"), nonce_i), 32)),
+    }
+    v["transcripts"]["sas"] = [
+        {"handshakeHash": h(handshake_hash), "nonceInitiator": h(nonce_i), "nonceResponder": h(nr),
+         "sasHash": h(sas_of(handshake_hash, nonce_i, nr)[0]), "sas": f"{sas_of(handshake_hash, nonce_i, nr)[1]:06d}"}
+        for nr in (nonce_r, nonce_r_low)
+    ]
+    assert v["transcripts"]["sas"][1]["sas"].startswith("000")
 
     # negative: each vector violates exactly one rule; every other part is valid, sealed under the
     # AAD of its own (mutated) header, so only the rule at expectedStep (crypto-spec §9.5) rejects it.

@@ -272,12 +272,31 @@ every project through the references in the root `tsconfig.json`.
   again (role and session), derives the prologue from their bytes and fingerprints, sends the three
   messages with empty payloads (32, 96 and 64 bytes), refuses any payload and the device's own
   static key, and closes the transport on any failure, as `HandshakeError` `closed`, `invalid` or
-  `same-identity`. The `abort` message of §10.3 needs the framing of §10.1, which comes with the SAS
-  task, so until then a refused handshake only closes the transport. `src/channel.ts`
+  `same-identity`; the same-identity refusal comes after the handshake, so it sends `abort`
+  (`protocol-error`) through the channel first, while a failure during the handshake only closes
+  the transport. `src/channel.ts`
   (`noiseChannel`) is a `Transport` of plaintext messages of at most 65,519 bytes, one Noise
   transport message each; it decrypts as messages arrive, so those before a remote close stay
   readable, and any decryption failure closes it with an error. `e2e/connection.spec.ts` runs the
   handshake and the channel over a real DataChannel in the three browsers.
+- **Pairing messages, nonces and SAS (Phase 4, D199, D201).** `packages/crypto/src/transcripts.ts`
+  draws the initiator's nonce with its commitment (`pairingNonce`), checks a revealed nonce with
+  `sodium_memcmp` (`checkPairingCommitment`) and derives the six-digit SAS (`pairingSas`, a string
+  with its leading zeros; grouping it is the UI's). In `packages/sync`, `src/frames.ts` cuts a
+  message into canonical frames and `FrameReader` joins them, rejecting any other framing and any
+  message over 1,049,194 bytes, and wiping the frames it joined; `src/messages.ts` encodes and
+  decodes the messages of §10.2 but the transfer's, with `MessageError.reason` `version` or
+  `protocol-error`, an unknown abort reason read as `protocol-error`. `src/session.ts`
+  (`PairingSession`) carries them over the Noise channel: one reader at a time; a local failure
+  sends `abort` and closes, a received `abort` closes, a closed link ends it as `closed`, and every
+  later call rejects with the same `PairingError` (`reason`, `by`), also published as `ended`. It
+  watches the link, so a close while no stage reads still ends the session, with the reason of an
+  `abort` left unread. The session timer (`expiresAt`) and, once `bothConfirmed()`, the 60-second
+  wait per frame abort with `expired`. `src/sas.ts`: `exchangeNonces` runs §6.1 (R first; I reveals
+  only after; R checks the commitment) and wipes both nonces; `SasStage` reads the peer's
+  `confirmed` as soon as it arrives, so anything else before both confirmations, or an `abort`,
+  ends the session while the SAS is on screen, and `confirm()` resolves only with both. The
+  screens, and a lock aborting with `locked`, come with the key transfer (D201).
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

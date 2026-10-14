@@ -4,6 +4,8 @@ import {
   deviceId,
   generateDeviceIdentity,
   initCrypto,
+  pairingPrologue,
+  startNoiseXX,
 } from '@blindvault/crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -13,8 +15,10 @@ import {
   type PairingHandshake,
   pairingHandshake,
 } from './handshake';
+import { noiseChannel } from './channel';
 import { type MemoryPairOptions, memoryPair } from './memory';
 import { type Payload, encodePayload } from './payload';
+import { PairingSession } from './session';
 import { TransportClosedError } from './transport';
 
 beforeAll(initCrypto);
@@ -215,6 +219,37 @@ describe('pairing handshake (pairing-protocol.md §5)', () => {
       const { initiator, responder } = await run({ identities: [same, same] });
       expect(failure(initiator)).toBe('same-identity');
       expect(failure(responder)).toBe('same-identity');
+    });
+
+    it('tells the peer with abort (protocol-error) when it has the same static key', async () => {
+      const keyring = new Keyring();
+      const same = generateDeviceIdentity(keyring);
+      const link = memoryPair();
+      // The peer runs the bare Noise_XX, which has no check of its own on the static key.
+      const peer = startNoiseXX({
+        initiator: false,
+        prologue: pairingPrologue(
+          payloadInitiator,
+          payloadResponder,
+          new Uint8Array(32).fill(0x10),
+          new Uint8Array(32).fill(0x30),
+        ),
+        identity: same,
+      });
+      const refused = pairingHandshake(link.a, {
+        role: 'initiator',
+        identity: same,
+        payloadInitiator,
+        payloadResponder,
+      }).catch((error: unknown) => error);
+      peer.readMessage(await link.b.receive());
+      await link.b.send(peer.writeMessage());
+      peer.readMessage(await link.b.receive());
+      const result = peer.result;
+      if (!result) throw new Error('the peer did not finish');
+      const session = new PairingSession(noiseChannel(link.b, result.transport));
+      expect(await session.ended).toMatchObject({ reason: 'protocol-error', by: 'remote' });
+      expect(await refused).toMatchObject({ reason: 'same-identity' });
     });
 
     it('when the link breaks or the transport closes during the handshake', async () => {
