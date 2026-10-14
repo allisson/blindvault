@@ -400,7 +400,7 @@ Inputs, pinned so both sides hash the same bytes:
 - **Initiator** is the Noise handshake initiator; `pairing-protocol.md` and `sync-protocol.md`
   assign the role (in pairing, device A, which shows the first QR).
 - **Pairing payload:** the binary payload exactly as exchanged, after base45 decoding, including
-  the commitment when the copy/paste mode carries one.
+  the commitment the initiator's payload carries in every pairing (D199).
 - **Reconnection payload:** the `Noise_K` message exactly as transmitted (its ciphertext), not its
   plaintext.
 - **DTLS fingerprint:** the 32-byte SHA-256 certificate fingerprint carried in each payload (§8.3).
@@ -416,7 +416,7 @@ role      = "initiator" | "responder"
 
 Each side sends its own MAC and verifies the other's with `sodium_memcmp`.
 
-The SAS derivation, payload formats, copy/paste commitment and the `Noise_K` prologue are specified
+The SAS derivation, payload formats, the commitment and the `Noise_K` prologue are specified
 in `pairing-protocol.md` and `sync-protocol.md`, using the layout encoding.
 
 ## 14. CBOR (D10)

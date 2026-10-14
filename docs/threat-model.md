@@ -54,6 +54,7 @@ encrypted backups and synchronized records (§3).
 | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- |
 | MITM during pairing | Protected | SAS from the handshake hash, confirmed on both devices (D148); prologue binds both payloads and DTLS fingerprints | `crypto-spec.md` §13, `pairing-protocol.md` |
+| Searches offline for matching SAS values, replacing copy/paste payloads | Protected | The initiator's commitment and nonces revealed after the handshake: one guess in 10⁶ per pairing (D199) | `pairing-protocol.md` §6 |
 | Receives the Master Key before confirmation | Protected | No key before SAS confirmation on both devices (CRYPTO-INV-011) | `pairing-protocol.md` |
 | Replays an old authentication | Protected | `Noise_KK` bound to the session (CRYPTO-INV-008, 009) | `sync-protocol.md` |
 | Sends corrupted, oversized or foreign records | Protected | Verification on receipt before merge (D57, D64, D66, D129, D144) | `crypto-spec.md` §9.5 |

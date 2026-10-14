@@ -245,6 +245,12 @@ every project through the references in the root `tsconfig.json`.
   `e2e/create.ts` `startScreen()` passes the install advice, since Playwright's WebKit is Safari in
   a plain tab, and `openVault()` closes "Vault ready"; `e2e/onboarding.spec.ts` covers the first
   screen, the pair start, "Vault ready" after a creation and the Safari advice.
+- **Pairing protocol (Phase 4, §8, D199).** `docs/pairing-protocol.md` specifies the payload
+  bytes, the connection rebuilt from them, the `Noise_XX` handshake, the commitment, nonces and
+  six-digit SAS, the confirmation on both devices, pairing, re-admission, the framed CBOR messages
+  inside the Noise channel, timeouts and versions; `docs/sync-protocol.md` §2 adds the full
+  transfer both flows run. `packages/sync` implements them in the next Phase 4 tasks, behind the
+  transport abstraction, so the protocol tests run without WebRTC.
 - **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
   has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
   landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it
