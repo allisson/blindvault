@@ -15,6 +15,7 @@ import {
 
 import { noiseChannel } from './channel';
 import { PayloadError, type Role, decodePayload } from './payload';
+import { PairingSession } from './session';
 import { type Transport, TransportClosedError } from './transport';
 
 /**
@@ -55,8 +56,9 @@ export interface PairingHandshake {
 
 /**
  * Runs the handshake over `transport`. On any failure the transport is closed, the handshake state
- * is wiped and a `HandshakeError` is thrown; nothing is sent to explain it, since the peer learns
- * of the refusal from the close (§1).
+ * is wiped and a `HandshakeError` is thrown. A failure during the handshake sends nothing, since
+ * there is no channel yet and the peer learns of it from the close (§1); the peer's static key
+ * equal to this device's own is found after it, and sends `abort` (`protocol-error`).
  */
 export async function pairingHandshake(
   transport: Transport,
@@ -99,15 +101,17 @@ export async function pairingHandshake(
 
     const result = noise.result;
     if (!result) throw new HandshakeError('invalid');
+    const channel = noiseChannel(transport, result.transport);
     if (sameBytes(result.remoteStaticKey, options.identity.publicKey)) {
-      result.transport.wipe();
+      // The channel is open: the peer learns why (§5, §10.3). Closing it wipes its keys.
+      await new PairingSession(channel).abort('protocol-error');
       throw new HandshakeError('same-identity');
     }
     return {
       handshakeHash: result.handshakeHash,
       peerPublicKey: result.remoteStaticKey,
       peerDeviceId: deviceId(result.remoteStaticKey),
-      channel: noiseChannel(transport, result.transport),
+      channel,
     };
   } catch (error) {
     handshake?.destroy();

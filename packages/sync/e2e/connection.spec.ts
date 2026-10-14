@@ -100,6 +100,41 @@ test('the two devices run Noise_XX over the connection and talk through the Nois
   expect(await a.page.evaluate(() => window.harness.channelClosed())).toBe('remote');
 });
 
+// Nonces, SAS and confirmation over the real DataChannel (`pairing-protocol.md` §6, §10).
+test('the two devices show the same SAS and both confirm it', async ({ browser }) => {
+  const { a, b, answer } = await pair(browser);
+  expect(await a.page.evaluate((text) => window.harness.accept(text), answer)).toBe('open');
+  expect(await b.page.evaluate(() => window.harness.connected())).toBe('open');
+
+  const [sasA, sasB] = await Promise.all([
+    a.page.evaluate(() => window.harness.sas()),
+    b.page.evaluate(() => window.harness.sas()),
+  ]);
+  expect(sasA).toMatch(/^\d{6}$/);
+  expect(sasA).toBe(sasB);
+  expect(
+    await Promise.all([
+      a.page.evaluate(() => window.harness.confirmSas()),
+      b.page.evaluate(() => window.harness.confirmSas()),
+    ]),
+  ).toEqual(['confirmed', 'confirmed']);
+});
+
+test('a SAS rejected on one device aborts the session on the other', async ({ browser }) => {
+  const { a, b, answer } = await pair(browser);
+  expect(await a.page.evaluate((text) => window.harness.accept(text), answer)).toBe('open');
+  expect(await b.page.evaluate(() => window.harness.connected())).toBe('open');
+  await Promise.all([
+    a.page.evaluate(() => window.harness.sas()),
+    b.page.evaluate(() => window.harness.sas()),
+  ]);
+
+  const waiting = a.page.evaluate(() => window.harness.confirmSas());
+  await b.page.evaluate(() => window.harness.rejectSas());
+  expect(await waiting).toBe('sas-mismatch:remote');
+  expect(await b.page.evaluate(() => window.harness.sessionEnded())).toBe('sas-mismatch:local');
+});
+
 test('an answer for another session is refused, and the right one still connects once', async ({
   browser,
 }) => {

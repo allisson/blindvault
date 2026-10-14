@@ -2,7 +2,7 @@
 
 > Normative for the bytes and the order of pairing and re-admission; `overview.md` prevails on
 > design. Implements overview §8 and D1, D4, D22, D29, D30, D33, D34, D35, D45, D49, D50, D93,
-> D101, D117, D122, D136, D148, D150, D153, D157, D161 and D199, using the conventions, primitives
+> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199 and D201, using the conventions, primitives
 > and encodings of `crypto-spec.md` (§1, §2, §3, §13, §14). The full transfer that follows the
 > handshake is in `sync-protocol.md` §2.
 
@@ -300,8 +300,10 @@ After the handshake, every message is a deterministic CBOR map (`crypto-spec.md`
 strictly with the re-encode check. A message is cut into frames; each frame is
 `u8 last ‖ bytes`, `last` = 1 on the final frame and 0 otherwise (any other value aborts), at most
 65,519 bytes, and is encrypted as one Noise transport message (65,535 bytes with its tag) and sent
-as one DataChannel message. The receiver joins frames until `last` = 1, and aborts
-(`protocol-error`) when a message would exceed **1,049,194 bytes**: the largest record envelope
+as one DataChannel message. The framing is canonical (D201): every frame but the final one carries
+exactly 65,518 bytes of the message, and the final one 1 to 65,518. The receiver joins frames until
+`last` = 1, and aborts (`protocol-error`) on a non-final frame that is not full, on an empty final
+frame, and when a message would exceed **1,049,194 bytes**: the largest record envelope
 (`crypto-spec.md` §9.2) plus 64 bytes for the message map.
 
 The Noise transport nonces make every frame authenticated, in order, and bound to the session; a
@@ -386,8 +388,13 @@ prologue label, so two devices of different versions never reach a SAS that look
 - CRYPTO-INV-014: no Device record before both key-confirmation MACs match (section 9 step 2).
 
 The tests of overview §16 (pairing tests) and of Gate C cover this document. The payload and
-base45 vectors are in `packages/sync/test-vectors/pairing-v1.json` (`crypto-spec.md` §15); the
-vectors for the commitment and the SAS are added with their implementation. The official Noise
+base45 vectors, and the message and framing vectors of section 10, are in
+`packages/sync/test-vectors/pairing-v1.json`; the commitment and SAS vectors are in the
+`transcripts` section of `packages/crypto/test-vectors/crypto-v1.json` (`crypto-spec.md` §15). The
+nonces, the SAS and the confirmations are tested over the in-memory transport with a nonce that
+does not open the commitment, messages out of order (a key or MAC before both confirmations), a
+rejected SAS, an abort or a close while the SAS is shown, and the timeouts of section 11, and over
+a real DataChannel in Playwright. The official Noise
 vectors are in `packages/crypto/test-vectors/noise-v1.json` (`crypto-spec.md` §15); the handshake
 and the Noise channel are tested over the in-memory transport with tampered, truncated, extended,
 duplicated and foreign messages, a low-order ephemeral key, payloads that differ between the two

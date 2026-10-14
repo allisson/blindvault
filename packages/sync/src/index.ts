@@ -19,7 +19,25 @@ export {
   type PairingHandshakeOptions,
   pairingHandshake,
 } from './handshake';
+export {
+  FRAME_DATA_LENGTH,
+  FrameError,
+  FrameReader,
+  MAX_PROTOCOL_MESSAGE_LENGTH,
+  toFrames,
+} from './frames';
 export { type Direction, type MemoryPair, type MemoryPairOptions, memoryPair } from './memory';
+export {
+  ABORT_REASONS,
+  type AbortReason,
+  MESSAGE_VERSION,
+  type Message,
+  MessageError,
+  type MessageRejection,
+  type MessageType,
+  decodeMessage,
+  encodeMessage,
+} from './messages';
 export {
   type Candidate,
   type CandidateKind,
@@ -35,7 +53,16 @@ export {
   encodePayload,
   encodePayloadText,
 } from './payload';
+export { type NonceExchangeOptions, type SasRejection, SasStage, exchangeNonces } from './sas';
 export { type LocalDescription, SdpError, buildRemoteSdp, parseLocalSdp } from './sdp';
+export {
+  IDLE_TIMEOUT_MS,
+  PairingError,
+  type PairingFailure,
+  PairingSession,
+  type PairingSessionOptions,
+  SESSION_TIMEOUT_MS,
+} from './session';
 export {
   type ClosedBy,
   MAX_MESSAGE_LENGTH,
