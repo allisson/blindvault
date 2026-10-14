@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { type Server, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -14,6 +15,12 @@ test.setTimeout(180_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
 const DIST = new URL('../dist/', import.meta.url).pathname;
+// The version the build writes to version.txt (D191).
+const VERSION = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    version: string;
+  }
+).version;
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -140,7 +147,7 @@ test('offers a new deploy without switching to it, and switches only once confir
   host.root = next.root;
   await becomeVisible(page);
   const banner = page.getByTestId('update-banner');
-  await expect(banner).toContainText('An update is available: version 0.0.0 → 0.0.1-next.', {
+  await expect(banner).toContainText(`An update is available: version ${VERSION} → 0.0.1-next.`, {
     timeout: 30_000,
   });
   await expect(page.getByTestId('update-hash')).toHaveText(next.hash);
@@ -152,7 +159,9 @@ test('offers a new deploy without switching to it, and switches only once confir
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Unlock the vault' })).toBeVisible();
     expect(await servedDeploy(page)).toBeNull();
-    expect(await page.evaluate(async () => (await fetch('/version.txt')).text())).toBe('0.0.0\n');
+    expect(await page.evaluate(async () => (await fetch('/version.txt')).text())).toBe(
+      `${VERSION}\n`,
+    );
   }
   await expect(page.getByTestId('update-hash')).toHaveText(next.hash, { timeout: 30_000 });
 
