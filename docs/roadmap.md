@@ -274,7 +274,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `Noise_XX` handshake integration with the defined prologue (D1, D200)
 - [x] SAS derivation and confirmation protocol: commitment, nonces, `confirmed`, `abort` and the timeouts of `pairing-protocol.md` §11 (D199, D201)
 - [ ] SAS display on both devices, with explicit confirmation, and a lock aborting the session (D201)
-- [ ] Vault key material transferred over the Noise channel only after confirmation
+- [x] Vault key material transferred over the Noise channel only after confirmation (D202)
 - [ ] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
 - [ ] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [x] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)

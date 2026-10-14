@@ -1872,9 +1872,13 @@ MESSAGE_KEYS = {
     "received": {"name": ("name",)},
     "key-confirmation": {"mac": ("bstr", 32)},
     "devices": {"own": ("bool",), "peer": ("bool",), "name": ("name",)},
+    "records-begin": {"count": ("uint",)},
+    "record": {"r": ("envelope",)},
+    "records-end": {},
     "committed": {},
     "abort": {"reason": ("text",)},
 }
+MAX_COUNT = 2**53 - 1
 ABORT_REASONS = ["cancelled", "sas-mismatch", "locked", "expired", "retired-peer", "different-vaults",
                  "unsupported-format", "verification-failed", "version", "protocol-error"]
 MAX_PROTOCOL_MESSAGE = 1_049_194
@@ -1909,6 +1913,9 @@ def check_message(m) -> dict:
             "bstr": lambda: isinstance(x, bytes) and len(x) == rest[0],
             "bool": lambda: isinstance(x, bool),
             "text": lambda: isinstance(x, str),
+            "uint": lambda: isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= MAX_COUNT,
+            # sync-protocol.md section 2.1: longer than the largest envelope, refused before decoding.
+            "envelope": lambda: isinstance(x, bytes) and len(x) <= _max_envelope_length(),
             "name": lambda: isinstance(x, str) and 1 <= len(x) <= 64 and "\n" not in x and "\r" not in x
                             and not x[0].isspace() and not x[-1].isspace(),
         }[kind]()
@@ -1935,6 +1942,11 @@ def message_vectors() -> dict:
         ("received, a name of 64 code points outside the BMP", msg("received", name="\U0001F511" * 64)),
         ("key-confirmation", msg("key-confirmation", mac=seq(0x33, 32))),
         ("devices", msg("devices", own=True, peer=False, name="Chrome on macOS")),
+        ("records-begin", msg("records-begin", count=3)),
+        ("records-begin with no record", msg("records-begin", count=0)),
+        ("records-begin with the largest count", msg("records-begin", count=MAX_COUNT)),
+        ("record", msg("record", r=seq(0x44, 40))),
+        ("records-end", msg("records-end")),
         ("committed", msg("committed")),
         *((f"abort, {r}", msg("abort", reason=r)) for r in ABORT_REASONS),
         ("abort with an unknown reason, read as protocol-error", msg("abort", reason="out-of-coffee")),
@@ -1956,7 +1968,14 @@ def message_vectors() -> dict:
         ("protocol-error", "no t", {"v": 1}),
         ("protocol-error", "unknown t", msg("hello")),
         ("protocol-error", "t as bytes", {"v": 1, "t": b"confirmed"}),
-        ("protocol-error", "records-begin, not part of this version of the codec", msg("records-begin")),
+        ("protocol-error", "records-begin without count", msg("records-begin")),
+        ("protocol-error", "records-begin with a negative count", msg("records-begin", count=-1)),
+        ("protocol-error", "records-begin with a count over 2^53 - 1", msg("records-begin", count=MAX_COUNT + 1)),
+        ("protocol-error", "records-begin with a count as text", msg("records-begin", count="3")),
+        ("protocol-error", "records-begin with a count as a float", msg("records-begin", count=3.0)),
+        ("protocol-error", "record without r", msg("record")),
+        ("protocol-error", "record with r as text", msg("record", r="44" * 40)),
+        ("protocol-error", "records-end with an extra key", {**msg("records-end"), "count": 0}),
         ("protocol-error", "an extra key", {**msg("confirmed"), "x": 0}),
         ("protocol-error", "an integer key", {**msg("confirmed"), 1: 0}),
         ("protocol-error", "nonce without n", msg("nonce")),
@@ -2000,7 +2019,8 @@ def message_vectors() -> dict:
         out_invalid.append({"case": case, "reason": "protocol-error", "bytes": h(b)})
     assert confirmed == b"\xa2\x61t\x69confirmed\x61v\x01"
     return {"valid": out_valid, "invalid": out_invalid, "abortReasons": ABORT_REASONS,
-            "maxMessageLength": MAX_PROTOCOL_MESSAGE}
+            "maxMessageLength": MAX_PROTOCOL_MESSAGE, "maxRecordCount": MAX_COUNT,
+            "maxRecordLength": _max_envelope_length()}
 
 
 def frames_of(length: int) -> list[dict]:

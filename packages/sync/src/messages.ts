@@ -1,18 +1,22 @@
 // The pairing messages of `pairing-protocol.md` §10.2: deterministic CBOR maps `{v, t, …}` with
 // exactly the keys of their type. Decoding is strict (`crypto-spec.md` §14, with the re-encode
 // check): a `v` other than 1 is refused as `version`, anything else wrong as `protocol-error`, and
-// the session aborts with that reason. `records-begin`, `record` and `records-end` come with the
+// the session aborts with that reason. `records-begin`, `record` and `records-end` are those of the
 // full transfer (`sync-protocol.md` §2.1).
 
 import {
   type CborMap,
   type CborValue,
   EncodingError,
+  MAX_ENVELOPE_LENGTH,
   decodeCbor,
   encodeCbor,
 } from '@blindvault/crypto';
 
 export const MESSAGE_VERSION = 1;
+
+/** The largest `count` of `records-begin`: a CBOR uint the decoder reads as a safe integer. */
+export const MAX_RECORD_COUNT = Number.MAX_SAFE_INTEGER;
 
 /** The reasons of §10.3, in its order. */
 export const ABORT_REASONS = [
@@ -37,6 +41,9 @@ export type Message =
   | { readonly t: 'received'; readonly name: string }
   | { readonly t: 'key-confirmation'; readonly mac: Uint8Array }
   | { readonly t: 'devices'; readonly own: boolean; readonly peer: boolean; readonly name: string }
+  | { readonly t: 'records-begin'; readonly count: number }
+  | { readonly t: 'record'; readonly r: Uint8Array }
+  | { readonly t: 'records-end' }
   | { readonly t: 'committed' }
   | { readonly t: 'abort'; readonly reason: AbortReason };
 
@@ -55,9 +62,12 @@ export class MessageError extends Error {
   }
 }
 
-type Kind = 'bool' | 'text' | 'name' | number;
+type Kind = 'bool' | 'text' | 'name' | 'count' | 'envelope' | number;
 
-/** Each type's keys besides `v` and `t`; a number is a byte string of that length. */
+/**
+ * Each type's keys besides `v` and `t`; a number is a byte string of that length, `envelope` one of
+ * at most `MAX_ENVELOPE_LENGTH` bytes, refused before any decoding (`sync-protocol.md` §2.1, D129).
+ */
 const SCHEMA: Readonly<Record<MessageType, Readonly<Record<string, Kind>>>> = {
   nonce: { n: 32 },
   confirmed: {},
@@ -65,6 +75,9 @@ const SCHEMA: Readonly<Record<MessageType, Readonly<Record<string, Kind>>>> = {
   received: { name: 'name' },
   'key-confirmation': { mac: 32 },
   devices: { own: 'bool', peer: 'bool', name: 'name' },
+  'records-begin': { count: 'count' },
+  record: { r: 'envelope' },
+  'records-end': {},
   committed: {},
   abort: { reason: 'text' },
 };
@@ -88,6 +101,12 @@ function fits(value: CborValue | undefined, kind: Kind): boolean {
   if (typeof kind === 'number') return value instanceof Uint8Array && value.length === kind;
   if (kind === 'bool') return typeof value === 'boolean';
   if (kind === 'text') return typeof value === 'string';
+  if (kind === 'count') {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  }
+  if (kind === 'envelope') {
+    return value instanceof Uint8Array && value.length <= MAX_ENVELOPE_LENGTH;
+  }
   return isName(value);
 }
 
@@ -116,7 +135,10 @@ export function encodeMessage(message: Message): Uint8Array {
   return bytes;
 }
 
-/** Decodes a message under the rules of §10.2. Throws `MessageError`. */
+/**
+ * Decodes a message under the rules of §10.2. Throws `MessageError`. Its byte strings are copies:
+ * `bytes` can be wiped once decoded.
+ */
 export function decodeMessage(bytes: Uint8Array): Message {
   let value: CborValue;
   try {
@@ -141,7 +163,8 @@ export function decodeMessage(bytes: Uint8Array): Message {
   for (const key of keys) {
     const field = value.get(key);
     if (!fits(field, schema[key] ?? 'text')) throw invalid(`key ${key}`);
-    out[key] = field as CborValue;
+    // The decoder's byte strings are views of `bytes`: copies, so the caller can wipe `bytes`.
+    out[key] = field instanceof Uint8Array ? field.slice() : (field as CborValue);
   }
   if (t === 'abort' && !(ABORT_REASONS as readonly string[]).includes(out.reason as string)) {
     // An unknown reason is shown as protocol-error (§10.3): the session aborts either way.

@@ -20,10 +20,13 @@ import {
   Keyring,
   LocalPurpose,
   type MasterSubkeys,
+  NewerRecordError,
   PRF_INPUT_LENGTH,
+  PUBLIC_KEY_LENGTH,
   RECORD_FORMAT_VERSION,
   type RecordEnvelope,
   type RecordHeader,
+  RecordRejectedError,
   type RecoveryCheckResult,
   RecordType,
   SALT_LENGTH,
@@ -31,9 +34,13 @@ import {
   type SymmetricKey,
   checkKdfParams,
   checkRecoveryEnvelope,
+  decodeEnvelope,
   deriveMasterSubkeys,
   deriveRecoveryKeys,
+  deviceId,
+  type Envelope,
   encodeCbor,
+  encodeEnvelope,
   generateDeviceIdentity,
   generateKey,
   isMasterKeyOf,
@@ -61,7 +68,9 @@ import {
   type BlockedRecord,
   ContentInvalidError,
   ExportRejectedError,
+  JoinRejectedError,
   MergeRejectedError,
+  PairingRefusedError,
   PasswordResetRejectedError,
   RecordBlockedError,
   type RegenerationBlock,
@@ -317,6 +326,63 @@ export interface UnlockOptions {
   readonly now?: () => number;
 }
 
+/** B's commit of a pairing (pairing-protocol.md §8 steps 5, 6, D33, D202). */
+export interface JoinOptions {
+  /** An empty store: B joins only into an empty storage here (D202). */
+  readonly store: RecordStore;
+  /**
+   * B's keyring, holding `kek`, the identity's private key and `masterKey`; the session owns it
+   * from now on, and wipes it on failure.
+   */
+  readonly keyring: Keyring;
+  /** The Device KEK of the local password created before the handshake; released once used. */
+  readonly kek: SymmetricKey;
+  readonly salt: Uint8Array;
+  readonly kdfParams: KdfParams;
+  /** The identity B generated before the handshake, whose static key A authenticated (D33). */
+  readonly identity: DeviceIdentity;
+  readonly vaultId: Uint8Array;
+  /** As `master-key` delivered it, in `keyring`. */
+  readonly masterKey: SymmetricKey;
+  /** The record envelopes of the full transfer, unverified (sync-protocol.md §2.2). */
+  readonly records: readonly Uint8Array[];
+  /** A's static key, authenticated in the handshake. */
+  readonly peerPublicKey: Uint8Array;
+  readonly now?: () => number;
+}
+
+/** A's password or passkey, given again to start a pairing (D202). */
+export interface OpenPairingOptions {
+  /** The Device KEK (`password`) or the PRF KEK of a passkey assertion with user verification; left to the caller. */
+  readonly kek: SymmetricKey;
+  readonly method: UnlockMethod;
+  /** This device's Device record name, required when it holds no Device record of its own (D141). */
+  readonly displayName?: string;
+}
+
+/**
+ * A pairing started on A (pairing-protocol.md §8, D202): the Master Key, opened for it alone, and
+ * A's writes. The Master Key is wiped by `wipe()`, which the caller runs when the session ends, and
+ * by a lock (D93).
+ */
+export interface PairingGrant {
+  readonly vaultId: Uint8Array;
+  readonly masterKey: SymmetricKey;
+  /** This device's identity, for the `Noise_XX` handshake (pairing-protocol.md §5); wiped on lock. */
+  readonly identity: DeviceIdentity;
+  /**
+   * Writes, in one commit, the Device record of `publicKey` with `displayName`, and this device's
+   * own when it holds none (D30, D141). `PairingRefusedError` (`known-device`) when that key already
+   * has a Device record, this device's included.
+   */
+  admit(publicKey: Uint8Array, displayName: string): Promise<void>;
+  /** Every stored record envelope, read again and verified (D181): `PairingRefusedError` otherwise. */
+  records(): Promise<Uint8Array[]>;
+  /** Records the completed sync with the device `peerId` (D34). */
+  completed(peerId: Uint8Array): Promise<void>;
+  wipe(): void;
+}
+
 export interface ResetPasswordOptions {
   readonly store: RecordStore;
   /** The cleartext Local Config, read before the KEK was derived. */
@@ -417,6 +483,8 @@ interface Plan<T> {
   /** The date of the last backup made on this device (§13.4). */
   readonly lastBackupAt?: number;
   readonly seen?: Seen;
+  /** A completed sync with a peer (D34): `[deviceId, date]`. */
+  readonly lastSync?: readonly [Uint8Array, number];
 }
 
 /** The records held, decrypted at unlock. */
@@ -615,6 +683,8 @@ export class VaultSession {
   #queue: Promise<unknown> = Promise.resolve();
   #timer: ReturnType<typeof setInterval> | undefined;
   #locked = false;
+  /** The keyrings of pairings started on this device, wiped on lock (D93, D202). */
+  readonly #grants = new Set<Keyring>();
 
   private constructor(parts: SessionParts) {
     this.#store = parts.store;
@@ -784,15 +854,101 @@ export class VaultSession {
    * vault stays writable and only that record is read-only until within the bound (D39, D109).
    */
   static async restore(options: RestoreOptions): Promise<VaultSession> {
-    const { store, keyring, kek, salt, kdfParams, backup, replacesVaultId } = options;
+    const { keyring, backup, replacesVaultId } = options;
+    if (replacesVaultId && (!isId(replacesVaultId) || sameBytes(replacesVaultId, backup.vaultId))) {
+      keyring.wipeAll();
+      // The same vault is replaced in its own database (D153), never through this field.
+      throw new RangeError('replacesVaultId is the ID of another vault');
+    }
+    return VaultSession.#fresh({
+      ...options,
+      ...backup,
+      identity: () => generateDeviceIdentity(keyring),
+      check: (state) => {
+        const [corrupt] = state.corrupt;
+        if (corrupt) throw new RestoreRejectedError(corrupt);
+      },
+    });
+  }
+
+  /**
+   * B's commit of a pairing (pairing-protocol.md §8 steps 5 and 6, sync-protocol.md §2.2, D33,
+   * D202): the received records, verified as a fresh restore verifies them, written as they came
+   * with a new Local Config in one commit, under the identity B generated before the handshake. It
+   * throws `JoinRejectedError` with the abort reason to send, writing nothing: `unsupported-format`
+   * for a newer record whatever else fails (D68, D81), `protocol-error` for two records of one
+   * identity (D158), `verification-failed` for a record that fails verification or the content
+   * checks, `protocol-error` when B's own Device record or A's is missing or holds another key, and
+   * `retired-peer` when A's own is retired (D45). A record beyond the future-clock bound is read-only
+   * until within it (D101). The commit records every device as seen (D53) and the completed sync
+   * with A (D34). A store that already holds records throws `RangeError`.
+   */
+  static async join(options: JoinOptions): Promise<VaultSession> {
+    const { keyring, identity, peerPublicKey } = options;
     const now = options.now ?? Date.now;
-    const { vaultId, masterKey, records } = backup;
+    let records: StoredRecord[];
+    try {
+      if ((await options.store.records()).length > 0) {
+        throw new RangeError('a pairing joins only into an empty storage');
+      }
+      if (peerPublicKey.length !== PUBLIC_KEY_LENGTH) throw new RangeError('peerPublicKey');
+      records = receivedRecords(options.records);
+    } catch (error) {
+      keyring.wipeAll();
+      throw error;
+    }
+    const peerId = deviceId(peerPublicKey);
+    return VaultSession.#fresh({
+      ...options,
+      records,
+      now,
+      identity: () => identity,
+      lastSyncByPeer: [[peerId, Math.floor(now())]],
+      check: (state) => {
+        const [corrupt] = state.corrupt;
+        if (corrupt) throw new JoinRejectedError('verification-failed', corrupt);
+        const own = state.devices.get(idKey(identity.deviceId));
+        const peer = state.devices.get(idKey(peerId));
+        if (
+          !own ||
+          !peer ||
+          !sameBytes(own.device.value.publicKey, identity.publicKey) ||
+          !sameBytes(peer.device.value.publicKey, peerPublicKey)
+        ) {
+          throw new JoinRejectedError('protocol-error');
+        }
+        if (peer.device.value.retired) throw new JoinRejectedError('retired-peer');
+      },
+    });
+  }
+
+  /**
+   * A vault received whole, by a fresh restore or a pairing (overview §10, D33): every record
+   * verified and read as unlock reads them, `check` run on them, then written as they came with a
+   * new Local Config in one commit. The device writes no Device record (D30). A record beyond the
+   * future-clock bound does not advance the HLC, so the vault stays writable and only that record is
+   * read-only until within the bound (D39, D109).
+   */
+  static async #fresh(options: {
+    readonly store: RecordStore;
+    readonly keyring: Keyring;
+    readonly kek: SymmetricKey;
+    readonly salt: Uint8Array;
+    readonly kdfParams: KdfParams;
+    readonly vaultId: Uint8Array;
+    readonly masterKey: SymmetricKey;
+    readonly records: readonly StoredRecord[];
+    readonly identity: () => DeviceIdentity;
+    readonly check: (state: State) => void;
+    readonly replacesVaultId?: Uint8Array;
+    readonly lastSyncByPeer?: LocalConfigState['lastSyncByPeer'];
+    readonly now?: () => number;
+  }): Promise<VaultSession> {
+    const { store, keyring, kek, salt, kdfParams, vaultId, masterKey, records, replacesVaultId } =
+      options;
+    const now = options.now ?? Date.now;
     try {
       checkKdfParams(kdfParams);
-      if (replacesVaultId && (!isId(replacesVaultId) || sameBytes(replacesVaultId, vaultId))) {
-        // The same vault is replaced in its own database (D153), never through this field.
-        throw new RangeError('replacesVaultId is the ID of another vault');
-      }
       const localConfigId = randomId();
       const mkWrap = wrapKey(
         kek,
@@ -802,13 +958,12 @@ export class VaultSession {
       keyring.release(kek);
       const subkeys = deriveMasterSubkeys(keyring, masterKey);
       const { state, held } = load(keyring, records, vaultId, subkeys);
-      const [corrupt] = state.corrupt;
-      if (corrupt) throw new RestoreRejectedError(corrupt);
-      const identity = generateDeviceIdentity(keyring);
+      options.check(state);
+      const identity = options.identity();
       const start = HlcClock.create(identity.deviceId, now).state;
       const clock = HlcClock.resume(identity.deviceId, start, held, now);
       const phraseId = state.recovery?.content.get('phraseId');
-      // D53: every restored device is seen, every retired one seen as retired, without a notice.
+      // D53: every device received is seen, every retired one seen as retired, without a notice.
       const devices = [...state.devices.values()];
       const retired = devices.filter((d) => d.device.value.retired);
       const session = new VaultSession({
@@ -826,6 +981,7 @@ export class VaultSession {
           preferences: DEFAULT_PREFERENCES,
           hlc: clock.state,
           ...(phraseId instanceof Uint8Array ? { lastPhraseId: phraseId } : {}),
+          ...(options.lastSyncByPeer ? { lastSyncByPeer: options.lastSyncByPeer } : {}),
           ...(devices.length > 0 ? { seenDevices: sortedIds(devices.map(deviceIdOf)) } : {}),
           ...(retired.length > 0 ? { seenRetiredDevices: sortedIds(retired.map(deviceIdOf)) } : {}),
         },
@@ -837,7 +993,7 @@ export class VaultSession {
       const localConfig = session.#localConfig();
       await store.commit({ put: records, delete: [], localConfig: localConfig.bytes });
       session.#localState = localConfig.localState;
-      // The restore has committed: a failed purge pass leaves it as it is, as on the timer.
+      // The vault has committed: a failed purge pass leaves it as it is, as on the timer.
       await session.#run(() => session.#maintenance()).catch(() => undefined);
       session.#startMaintenance();
       return session;
@@ -1154,6 +1310,8 @@ export class VaultSession {
     clearInterval(this.#timer);
     this.#timer = undefined;
     this.#keyring.wipeAll();
+    for (const grant of this.#grants) grant.wipeAll();
+    this.#grants.clear();
     this.#state = emptyState();
   }
 
@@ -1383,7 +1541,11 @@ export class VaultSession {
   }
 
   /** Verifies every stored record as `load` does (crypto-spec.md §9.5, D64); keys go to `keyring`. */
-  #verifyAll(keyring: Keyring, stored: readonly StoredRecord[]): void {
+  #verifyAll(
+    keyring: Keyring,
+    stored: readonly StoredRecord[],
+    refusal: (record: RecordKey) => Error = (k) => new ExportRejectedError('corrupt-record', k),
+  ): void {
     const keys = {
       vaultId: this.#cleartext.vaultId,
       vaultKey: (epoch: number) => this.#state.vaultKeys.get(epoch),
@@ -1391,7 +1553,7 @@ export class VaultSession {
       versionIdKey: this.#subkeys.versionId,
     };
     for (const s of stored) {
-      const refuse = () => new ExportRejectedError('corrupt-record', copyKey(s));
+      const refuse = () => refusal(copyKey(s));
       let header: RecordHeader;
       try {
         header = verifyRecord(keyring, s.envelope, keys).envelope.header;
@@ -1811,6 +1973,114 @@ export class VaultSession {
         deletes: [],
         result: undefined,
         seen: { seenDevices: sortedIds(seen), seenRetiredDevices: sortedIds(seenRetired) },
+      };
+    });
+  }
+
+  /** The date of the last completed sync with each peer, ascending by `deviceId` (D34). */
+  get lastSyncByPeer(): [Uint8Array, number][] {
+    this.#unlocked();
+    return (this.#localState.lastSyncByPeer ?? []).map(([id, at]) => [id.slice(), Number(at)]);
+  }
+
+  /**
+   * Starts a pairing on A (pairing-protocol.md §2, §8, D202): `current` must open its Master Key
+   * wrap (`UnlockRejectedError` otherwise), since a pairing hands the Master Key out for good as a
+   * backup does (D181). The Master Key goes to a keyring of the pairing alone. Refused with
+   * `PairingRefusedError` while the vault is read-only (D102), its own Device record is retired
+   * (D45) or a record is kept aside as corrupt; a device without its own Device record needs
+   * `displayName` (D141), `RangeError` otherwise. `current.kek` is left to the caller.
+   */
+  openPairing(current: OpenPairingOptions): PairingGrant {
+    this.#unlocked();
+    const [corrupt] = this.#state.corrupt;
+    if (corrupt) throw new PairingRefusedError('corrupt-record', copyKey(corrupt));
+    if (!this.#clock.writable) throw new PairingRefusedError('read-only');
+    if (this.retired) throw new PairingRefusedError('retired');
+    const ownName = current.displayName;
+    if (!this.registered && ownName === undefined) {
+      throw new RangeError('a device without its own Device record needs its name');
+    }
+    const keyring = new Keyring();
+    let masterKey: SymmetricKey;
+    try {
+      masterKey = this.#openMasterKey(keyring, current.kek, current.method);
+    } catch (error) {
+      keyring.wipeAll();
+      throw error;
+    }
+    this.#grants.add(keyring);
+    return {
+      vaultId: this.#cleartext.vaultId.slice(),
+      masterKey,
+      identity: this.#identity,
+      admit: (publicKey, displayName) => this.#admit(publicKey, displayName, ownName),
+      records: () =>
+        this.#run(async () => {
+          const stored = await this.#store.records();
+          this.#unlocked();
+          const scratch = new Keyring();
+          try {
+            this.#verifyAll(scratch, stored, (k) => new PairingRefusedError('corrupt-record', k));
+          } finally {
+            scratch.wipeAll();
+          }
+          return { writes: [], deletes: [], result: stored.map((r) => r.envelope) };
+        }),
+      completed: (peerId) =>
+        this.#run(() => ({
+          writes: [],
+          deletes: [],
+          result: undefined,
+          lastSync: [peerId, Math.floor(this.#now())] as const,
+        })),
+      wipe: () => {
+        keyring.wipeAll();
+        this.#grants.delete(keyring);
+      },
+    };
+  }
+
+  /** pairing-protocol.md §8 step 4 (D30, D141): B's Device record, and A's own when it has none. */
+  #admit(publicKey: Uint8Array, displayName: string, ownName: string | undefined): Promise<void> {
+    return this.#run(() => {
+      if (publicKey.length !== PUBLIC_KEY_LENGTH) throw new RangeError('publicKey');
+      const id = deviceId(publicKey);
+      if (sameBytes(id, this.#identity.deviceId) || this.#state.devices.has(idKey(id))) {
+        throw new PairingRefusedError('known-device');
+      }
+      if (!this.#clock.writable) throw new PairingRefusedError('read-only');
+      const registeredAt = Math.floor(this.#now());
+      const writes: Write[] = [];
+      if (!this.registered) {
+        if (ownName === undefined) throw new RangeError('ownName');
+        const own = deviceToCbor({
+          publicKey: this.#identity.publicKey,
+          displayName: ownName,
+          retired: false,
+          registeredAt,
+        });
+        writes.push(
+          this.#seal(RecordType.device, this.#identity.deviceId, this.#clock.issue(), false, own),
+        );
+      }
+      const device = deviceToCbor({
+        publicKey: publicKey.slice(),
+        displayName,
+        retired: false,
+        registeredAt,
+      });
+      writes.push(this.#seal(RecordType.device, id, this.#clock.issue(), false, device));
+      const seen = [
+        ...(this.#localState.seenDevices ?? []),
+        ...writes.map((w) => w.header.recordId),
+      ];
+      return {
+        writes,
+        deletes: [],
+        result: undefined,
+        // Written here: no new-device notice follows (D48).
+        seen: { seenDevices: sortedIds(seen) },
       };
     });
   }
@@ -2425,10 +2695,12 @@ export class VaultSession {
     preferences: Preferences = this.#localState.preferences,
     lastBackupAt: number | bigint | undefined = this.#localState.lastBackupAt,
     seen: Seen = {},
+    lastSync?: readonly [Uint8Array, number],
   ): { bytes: Uint8Array; localState: LocalConfigState } {
     const localState: LocalConfigState = {
       ...this.#localState,
       ...seen,
+      ...(lastSync ? { lastSyncByPeer: withSync(this.#localState.lastSyncByPeer, lastSync) } : {}),
       preferences,
       hlc: this.#clock.state,
       ...(lastBackupAt !== undefined ? { lastBackupAt } : {}),
@@ -2465,13 +2737,15 @@ export class VaultSession {
         plan.cleartext !== undefined ||
         plan.preferences !== undefined ||
         plan.lastBackupAt !== undefined ||
-        plan.seen !== undefined;
+        plan.seen !== undefined ||
+        plan.lastSync !== undefined;
       if (plan.writes.length === 0 && plan.deletes.length === 0 && !local) return plan.result;
       const localConfig = this.#localConfig(
         plan.cleartext,
         plan.preferences,
         plan.lastBackupAt,
         plan.seen,
+        plan.lastSync,
       );
       await this.#store.commit({
         put: plan.writes.map((w) => ({
@@ -2544,6 +2818,37 @@ export class VaultSession {
   }
 }
 
+/**
+ * The records of a full transfer as stored records, keyed by their decoded header
+ * (sync-protocol.md §2.2, D202): a newer record refuses the whole transfer first
+ * (`unsupported-format`), then two records of one identity (`protocol-error`, D158), then one that
+ * does not decode (`verification-failed`). Verification proper is `load`'s.
+ */
+function receivedRecords(envelopes: readonly Uint8Array[]): StoredRecord[] {
+  const decoded = envelopes.map((envelope): Envelope | undefined => {
+    try {
+      return decodeEnvelope(envelope);
+    } catch (error) {
+      if (error instanceof NewerRecordError) throw new JoinRejectedError('unsupported-format');
+      if (error instanceof RecordRejectedError) return undefined;
+      throw error;
+    }
+  });
+  const seen = new Set<string>();
+  for (const e of decoded) {
+    if (!e) continue;
+    const key = recordKeyOf(e.header);
+    if (seen.has(key)) throw new JoinRejectedError('protocol-error');
+    seen.add(key);
+  }
+  return decoded.map((e) => {
+    if (!e) throw new JoinRejectedError('verification-failed');
+    // The strict decoder's re-encode check makes these the bytes received.
+    const { recordType, recordId } = e.header;
+    return { recordType: recordType as RecordType, recordId, envelope: encodeEnvelope(e) };
+  });
+}
+
 function header(
   recordType: RecordType,
   recordId: Uint8Array,
@@ -2591,6 +2896,15 @@ function deviceIdOf(d: HeldDevice): Uint8Array {
 function phraseIdOf(held: HeldRecovery): Uint8Array {
   // Verification checked the metadata's three fields (crypto-spec.md §9.5 step 8).
   return held.content.get('phraseId') as Uint8Array;
+}
+
+/** `lastSyncByPeer` with the sync `[id, at]` in place of any earlier one, ascending by `deviceId` (D34). */
+function withSync(
+  pairs: LocalConfigState['lastSyncByPeer'],
+  [id, at]: readonly [Uint8Array, number],
+): NonNullable<LocalConfigState['lastSyncByPeer']> {
+  const others = (pairs ?? []).filter(([peer]) => !sameBytes(peer, id));
+  return [...others, [id.slice(), at] as const].sort(([a], [b]) => compareBytes(a, b));
 }
 
 /** Distinct IDs in ascending byte order, as Local Config stores them (record-content.md §9). */

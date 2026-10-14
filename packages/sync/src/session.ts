@@ -82,12 +82,21 @@ export class PairingSession {
     return this.failure;
   }
 
+  /**
+   * Sends `message`. Its encoding and frames are wiped once sent, since a message may hold a key
+   * (D202); `message` itself stays the caller's to wipe.
+   */
   async send(message: Message): Promise<void> {
     if (this.failure) throw this.failure;
+    const bytes = encodeMessage(message);
+    const frames = toFrames(bytes);
     try {
-      for (const frame of toFrames(encodeMessage(message))) await this.channel.send(frame);
+      for (const frame of frames) await this.channel.send(frame);
     } catch (error) {
       throw this.lost(error);
+    } finally {
+      bytes.fill(0);
+      for (const frame of frames) frame.fill(0);
     }
   }
 
@@ -128,9 +137,12 @@ export class PairingSession {
       try {
         message = decodeMessage(bytes);
       } catch (error) {
-        if (error instanceof MessageError) return this.refuse(error.reason, error);
+        if (error instanceof MessageError) return await this.refuse(error.reason, error);
         /* v8 ignore next */
         throw error;
+      } finally {
+        // The decoded message holds copies: the joined bytes may hold a key (D202).
+        bytes.fill(0);
       }
       if (message.t === 'abort') {
         const error = this.end(new PairingError(message.reason, 'remote'));

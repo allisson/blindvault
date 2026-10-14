@@ -789,6 +789,50 @@
         }
       },
       {
+        "case": "records-begin",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e7403",
+        "message": {
+          "v": 1,
+          "t": "records-begin",
+          "count": 3
+        }
+      },
+      {
+        "case": "records-begin with no record",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e7400",
+        "message": {
+          "v": 1,
+          "t": "records-begin",
+          "count": 0
+        }
+      },
+      {
+        "case": "records-begin with the largest count",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e741b001fffffffffffff",
+        "message": {
+          "v": 1,
+          "t": "records-begin",
+          "count": 9007199254740991
+        }
+      },
+      {
+        "case": "record",
+        "bytes": "a3617258284445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6174667265636f7264617601",
+        "message": {
+          "v": 1,
+          "t": "record",
+          "r": "4445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b"
+        }
+      },
+      {
+        "case": "records-end",
+        "bytes": "a261746b7265636f7264732d656e64617601",
+        "message": {
+          "v": 1,
+          "t": "records-end"
+        }
+      },
+      {
         "case": "committed",
         "bytes": "a2617469636f6d6d6974746564617601",
         "message": {
@@ -953,9 +997,44 @@
         "bytes": "a2617449636f6e6669726d6564617601"
       },
       {
-        "case": "records-begin, not part of this version of the codec",
+        "case": "records-begin without count",
         "reason": "protocol-error",
         "bytes": "a261746d7265636f7264732d626567696e617601"
+      },
+      {
+        "case": "records-begin with a negative count",
+        "reason": "protocol-error",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e7420"
+      },
+      {
+        "case": "records-begin with a count over 2^53 - 1",
+        "reason": "protocol-error",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e741b0020000000000000"
+      },
+      {
+        "case": "records-begin with a count as text",
+        "reason": "protocol-error",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e746133"
+      },
+      {
+        "case": "records-begin with a count as a float",
+        "reason": "protocol-error",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e74f94200"
+      },
+      {
+        "case": "record without r",
+        "reason": "protocol-error",
+        "bytes": "a26174667265636f7264617601"
+      },
+      {
+        "case": "record with r as text",
+        "reason": "protocol-error",
+        "bytes": "a36172785034343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434346174667265636f7264617601"
+      },
+      {
+        "case": "records-end with an extra key",
+        "reason": "protocol-error",
+        "bytes": "a361746b7265636f7264732d656e6461760165636f756e7400"
       },
       {
         "case": "an extra key",
@@ -1095,7 +1174,9 @@
       "version",
       "protocol-error"
     ],
-    "maxMessageLength": 1049194
+    "maxMessageLength": 1049194,
+    "maxRecordCount": 9007199254740991,
+    "maxRecordLength": 1049130
   },
   "framing": {
     "frameDataLength": 65518,

@@ -24,8 +24,10 @@ import {
   deriveRecoveryKeys,
   deviceId,
   encodeCbor,
+  exportTransferKey,
   generateDeviceIdentity,
   generateRecoveryPhrase,
+  importTransferKey,
   initCrypto,
   itemContentLength,
   localAad,
@@ -39,6 +41,7 @@ import {
   sealLocalConfigPart,
   sealRecord,
   sealRecoveryEnvelope,
+  sameKey,
   sealVaultKeyRecord,
   unwrapKey,
   vaultKeyRecordId,
@@ -62,7 +65,9 @@ import {
   ContentInvalidError,
   ExportRejectedError,
   HlcReadOnlyError,
+  JoinRejectedError,
   MergeRejectedError,
+  PairingRefusedError,
   PasswordResetRejectedError,
   RecordBlockedError,
   RecordNotFoundError,
@@ -3895,6 +3900,8 @@ describe('lock (CRYPTO-INV-010)', () => {
       retired: () => session.retired,
       registered: () => session.registered,
       retireDevice: () => session.retireDevice(new Uint8Array(16)),
+      lastSyncByPeer: () => session.lastSyncByPeer,
+      openPairing: () => session.openPairing({ kek: kek(caller), method: 'password' }),
       confirmUser: () => {
         session.confirmUser({ kek: kek(caller), method: 'password' });
       },
@@ -4352,5 +4359,395 @@ describe('content rules through the session (record-content.md §2, Gate A)', ()
     expect(encodeCbor(must(contentOf(store, keys, RecordType.device, id) ?? undefined))).toEqual(
       fromHex(must(row).cbor),
     );
+  });
+});
+
+describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
+  const B_NAME = 'Firefox on Linux';
+
+  /** A Device record of `publicKey`, planted as another device's sync would write it. */
+  function plantDevice(
+    store: MemoryStore,
+    keys: Keys,
+    publicKey: Uint8Array,
+    hlc: Hlc,
+    retired = false,
+    displayName = 'Phone',
+  ) {
+    plant(
+      store,
+      keys,
+      RecordType.device,
+      deviceId(publicKey),
+      hlc,
+      false,
+      deviceToCbor({ publicKey, displayName, retired, registeredAt: T0 }),
+    );
+  }
+
+  function localState(store: MemoryStore, seed = 1) {
+    const keys = keysOf(store, seed);
+    const config = parseLocalConfig(store.localConfig);
+    const opened = openLocalConfigPart(
+      new Keyring(),
+      keys.subkeys.localConfig,
+      localAad(LocalPurpose.localConfig, config.vaultId, config.localConfigId),
+      config.encrypted,
+    );
+    return readLocalConfigState(opened.content);
+  }
+
+  /** A's vault, a grant opened with its password, and B's identity in B's keyring. */
+  async function started(clock = new Clock()) {
+    const a = await create(clock);
+    await a.session.createItem(login());
+    await a.session.createFolder('Work');
+    const caller = new Keyring();
+    const grant = a.session.openPairing({ kek: kek(caller), method: 'password' });
+    caller.wipeAll();
+    const keyringB = new Keyring();
+    const identityB = generateDeviceIdentity(keyringB);
+    return { a, grant, keyringB, identityB, clock };
+  }
+
+  /** B's side of the transfer: the Master Key as `importTransferKey` gives it, and the records. */
+  async function transferred(clock = new Clock()) {
+    const s = await started(clock);
+    await s.grant.admit(s.identityB.publicKey, B_NAME);
+    const records = await s.grant.records();
+    const masterKey = importTransferKey(s.keyringB, exportTransferKey(s.grant.masterKey));
+    return { ...s, records, masterKey };
+  }
+
+  async function join(
+    t: Awaited<ReturnType<typeof transferred>>,
+    records: readonly Uint8Array[] = t.records,
+    store = new MemoryStore(),
+  ) {
+    const session = await VaultSession.join({
+      store,
+      keyring: t.keyringB,
+      kek: kek(t.keyringB, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      identity: t.identityB,
+      vaultId: t.grant.vaultId,
+      masterKey: t.masterKey,
+      records,
+      peerPublicKey: must(t.a.session.devices()[0]).device.publicKey,
+      now: t.clock.now,
+    });
+    open.push(session);
+    return { session, store };
+  }
+
+  async function rejection(promise: Promise<unknown>): Promise<string> {
+    const error = await promise.catch((e: unknown) => e);
+    if (error instanceof JoinRejectedError) return error.reason;
+    throw error;
+  }
+
+  describe('on A, the device holding the vault', () => {
+    it('opens the Master Key with the password again, for this pairing only (D202)', async () => {
+      const { a, grant } = await started();
+      const keys = keysOf(a.store);
+      expect(sameKey(grant.masterKey, keys.masterKey)).toBe(true);
+      expect(grant.vaultId).toEqual(a.session.vaultId);
+      expect(deviceId(grant.identity.publicKey)).toEqual(a.session.deviceId);
+      grant.wipe();
+      expect(() => sameKey(grant.masterKey, keys.masterKey)).toThrow(KeyWipedError);
+      // The session itself still holds no Master Key and goes on working.
+      await a.session.createItem(login('After'));
+    });
+
+    it('refuses a password or passkey that does not open the vault', async () => {
+      const { session } = await create();
+      const caller = new Keyring();
+      expect(() => session.openPairing({ kek: kek(caller, 9), method: 'password' })).toThrow(
+        UnlockRejectedError,
+      );
+      expect(() => session.openPairing({ kek: kek(caller), method: 'passkey' })).toThrow(
+        UnlockRejectedError,
+      );
+    });
+
+    it('is refused while read-only, retired, or holding a corrupt record (D45, D102, D202)', async () => {
+      const behind = await create();
+      behind.session.lock();
+      behind.clock.t = T0 - FUTURE_CLOCK_BOUND_MS - DAY;
+      const readOnly = await unlock(behind.store, behind.clock);
+      const caller = new Keyring();
+      const refusal = (session: VaultSession) => {
+        try {
+          session.openPairing({ kek: kek(caller), method: 'password' });
+        } catch (error) {
+          if (error instanceof PairingRefusedError) return error.reason;
+          throw error;
+        }
+        return 'opened';
+      };
+      expect(refusal(readOnly)).toBe('read-only');
+
+      const retired = await create();
+      const own = must(retired.session.devices()[0]).device.publicKey;
+      plantDevice(retired.store, keysOf(retired.store), own, hlcAt(T0 + DAY), true);
+      retired.session.lock();
+      const again = await unlock(retired.store);
+      expect(again.retired).toBe(true);
+      expect(refusal(again)).toBe('retired');
+
+      const damaged = await create();
+      damaged.store.put({
+        recordType: RecordType.item,
+        recordId: randomId(),
+        envelope: Uint8Array.of(0xa0) as RecordEnvelope,
+      });
+      damaged.session.lock();
+      expect(refusal(await unlock(damaged.store))).toBe('corrupt-record');
+    });
+
+    it("writes B's Device record in one commit, with the key and name given (D30)", async () => {
+      const { a, grant, identityB, clock } = await started();
+      const commits = a.store.commits.length;
+      clock.t = T0 + DAY;
+      await grant.admit(identityB.publicKey, B_NAME);
+      expect(a.store.commits).toHaveLength(commits + 1);
+      const [commit] = a.store.commits.slice(-1);
+      expect(commit?.put.map((p) => [p.recordType, p.recordId])).toEqual([
+        [RecordType.device, deviceId(identityB.publicKey)],
+      ]);
+      const b = a.session
+        .devices()
+        .find((d) => idKey(d.deviceId) === idKey(deviceId(identityB.publicKey)));
+      expect(b?.device).toEqual({
+        publicKey: identityB.publicKey,
+        displayName: B_NAME,
+        retired: false,
+        registeredAt: T0 + DAY,
+      });
+      // A wrote it: it is seen, and no new-device notice follows (D48).
+      expect(localState(a.store).seenDevices).toEqual([deviceId(identityB.publicKey)]);
+    });
+
+    it('writes its own Device record too when it holds none (D141)', async () => {
+      const source = await create();
+      const file = await source.session.exportBackup({
+        kek: kek(source.keyring),
+        method: 'password',
+      });
+      const keyring = new Keyring();
+      const restored = await VaultSession.restore({
+        store: new MemoryStore(),
+        keyring,
+        kek: kek(keyring, 2),
+        salt: SALT,
+        kdfParams: PARAMS,
+        backup: restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+        now: new Clock().now,
+      });
+      open.push(restored);
+      expect(restored.registered).toBe(false);
+      const caller = new Keyring();
+      // It has no name of its own yet: the pairing asks for one.
+      expect(() => restored.openPairing({ kek: kek(caller, 2), method: 'password' })).toThrow(
+        RangeError,
+      );
+      const grant = restored.openPairing({
+        kek: kek(caller, 2),
+        method: 'password',
+        displayName: 'Safari on iPhone',
+      });
+      const identityB = generateDeviceIdentity(new Keyring());
+      await grant.admit(identityB.publicKey, B_NAME);
+      expect(restored.registered).toBe(true);
+      const own = restored.devices().find((d) => idKey(d.deviceId) === idKey(restored.deviceId));
+      expect(own?.device.displayName).toBe('Safari on iPhone');
+      expect(restored.devices()).toHaveLength(3);
+    });
+
+    it('refuses a key that already has a Device record, its own included, writing nothing', async () => {
+      const { a, grant, identityB } = await started();
+      const own = must(a.session.devices()[0]).device.publicKey;
+      const commits = a.store.commits.length;
+      await expect(grant.admit(own, B_NAME)).rejects.toThrow(PairingRefusedError);
+      await grant.admit(identityB.publicKey, B_NAME);
+      const error = await grant.admit(identityB.publicKey, B_NAME).catch((e: unknown) => e);
+      expect((error as PairingRefusedError).reason).toBe('known-device');
+      expect(a.store.commits).toHaveLength(commits + 1);
+    });
+
+    it('reads every stored record again and verifies it before sending it (D181)', async () => {
+      const { a, grant, identityB } = await started();
+      await grant.admit(identityB.publicKey, B_NAME);
+      const records = await grant.records();
+      expect(records.map((r) => Buffer.from(r).toString('hex')).sort()).toEqual(
+        (await a.store.records()).map((r) => Buffer.from(r.envelope).toString('hex')).sort(),
+      );
+      // A record damaged in storage after unlock is caught at this read.
+      const [item] = a.store.ofType(RecordType.item);
+      a.store.put({ ...must(item), envelope: Uint8Array.of(0xa0) as RecordEnvelope });
+      const error = await grant.records().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PairingRefusedError);
+      expect((error as PairingRefusedError).reason).toBe('corrupt-record');
+      expect((error as PairingRefusedError).record?.recordType).toBe(RecordType.item);
+    });
+
+    it('records the completed sync with B, ascending by deviceId (D34)', async () => {
+      const { a, grant, identityB, clock } = await started();
+      await grant.admit(identityB.publicKey, B_NAME);
+      const other = deviceId(generateDeviceIdentity(new Keyring()).publicKey);
+      clock.t = T0 + DAY;
+      await grant.completed(other);
+      clock.t = T0 + 2 * DAY;
+      await grant.completed(deviceId(identityB.publicKey));
+      clock.t = T0 + 3 * DAY;
+      await grant.completed(other);
+      expect(a.session.lastSyncByPeer).toEqual(
+        sortedHex([other, deviceId(identityB.publicKey)]).map((id) => [
+          id,
+          idKey(id) === idKey(other) ? T0 + 3 * DAY : T0 + 2 * DAY,
+        ]),
+      );
+    });
+
+    it('wipes the Master Key it opened when the vault locks (D93)', async () => {
+      const { a, grant, identityB } = await started();
+      const keys = keysOf(a.store);
+      a.session.lock();
+      expect(() => sameKey(grant.masterKey, keys.masterKey)).toThrow(KeyWipedError);
+      await expect(grant.admit(identityB.publicKey, B_NAME)).rejects.toThrow(VaultLockedError);
+      await expect(grant.records()).rejects.toThrow(VaultLockedError);
+    });
+  });
+
+  describe('on B, the joining device', () => {
+    it('commits every record and its Local Config in one commit, with its own identity (D33)', async () => {
+      const t = await transferred();
+      const { session, store } = await join(t);
+      expect(store.commits).toHaveLength(1);
+      expect(
+        (store.commits[0]?.put ?? []).map((p) => Buffer.from(p.envelope).toString('hex')).sort(),
+      ).toEqual(t.records.map((r) => Buffer.from(r).toString('hex')).sort());
+      expect(session.vaultId).toEqual(t.a.session.vaultId);
+      expect(session.deviceId).toEqual(deviceId(t.identityB.publicKey));
+      expect(session.registered).toBe(true);
+      expect(session.items().map((i) => i.item?.title)).toEqual(['Example']);
+      expect(session.folders().map((f) => f.name)).toEqual(['Work']);
+      // Seen without a notice (D53), the phrase seen (D43), the sync with A completed (D34).
+      expect(session.lastPhraseId).toEqual(t.a.session.lastPhraseId);
+      expect(session.lastSyncByPeer).toEqual([[t.a.session.deviceId, T0]]);
+      session.lock();
+      const again = await unlock(store, new Clock(), 2);
+      expect(again.deviceId).toEqual(deviceId(t.identityB.publicKey));
+      expect(again.items()).toHaveLength(1);
+    });
+
+    it('refuses a newer record before anything else (unsupported-format, D68, D81)', async () => {
+      const t = await transferred();
+      // A record of a newer format version: the same envelope with v 2.
+      const map = decodeCbor(must(t.records[0])) as CborMap;
+      map.set('v', RECORD_FORMAT_VERSION + 1);
+      const store = new MemoryStore();
+      expect(
+        await rejection(join(t, [Uint8Array.of(0xa0), ...t.records, encodeCbor(map)], store)),
+      ).toBe('unsupported-format');
+      expect(store.commits).toEqual([]);
+      expect(t.keyringB.wiped).toBe(true);
+    });
+
+    it('refuses a record that fails verification (verification-failed)', async () => {
+      const t = await transferred();
+      const store = new MemoryStore();
+      const records = [...t.records];
+      const flipped = must(records[1]).slice();
+      flipped[flipped.length - 1] = must(flipped[flipped.length - 1]) ^ 1;
+      records[1] = flipped;
+      expect(await rejection(join(t, records, store))).toBe('verification-failed');
+      expect(store.commits).toEqual([]);
+      expect(t.keyringB.wiped).toBe(true);
+    });
+
+    it('refuses two records of one identity (protocol-error)', async () => {
+      const t = await transferred();
+      expect(await rejection(join(t, [...t.records, must(t.records[0])]))).toBe('protocol-error');
+    });
+
+    it("refuses a transfer without B's own Device record, or without A's (protocol-error)", async () => {
+      const t = await transferred();
+      const without = (records: readonly Uint8Array[], id: Uint8Array) =>
+        records
+          .map((r) => ({ r, header: decodeEnvelope(r).header }))
+          .filter(
+            (d) =>
+              !(
+                d.header.recordType === RecordType.device && idKey(d.header.recordId) === idKey(id)
+              ),
+          )
+          .map((d) => d.r);
+      expect(await rejection(join(t, without(t.records, deviceId(t.identityB.publicKey))))).toBe(
+        'protocol-error',
+      );
+      const u = await transferred();
+      expect(await rejection(join(u, without(u.records, u.a.session.deviceId)))).toBe(
+        'protocol-error',
+      );
+    });
+
+    it("refuses a transfer where A's own Device record is retired (retired-peer, D45)", async () => {
+      const t = await transferred();
+      const keys = keysOf(t.a.store);
+      const own = must(
+        t.a.session.devices().find((d) => idKey(d.deviceId) === idKey(t.a.session.deviceId)),
+      );
+      plantDevice(t.a.store, keys, own.device.publicKey, hlcAt(T0 + DAY), true);
+      const records = (await t.a.store.records()).map((r) => r.envelope);
+      const store = new MemoryStore();
+      expect(await rejection(join(t, records, store))).toBe('retired-peer');
+      expect(store.commits).toEqual([]);
+    });
+
+    it('accepts a record beyond the future-clock bound, read-only until the clock reaches it (D101)', async () => {
+      const t = await transferred();
+      const keys = keysOf(t.a.store);
+      const ahead = new MemoryStore();
+      const id = randomId();
+      plant(
+        ahead,
+        keys,
+        RecordType.item,
+        id,
+        hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + DAY),
+        false,
+        itemToCbor(login('Ahead'), false),
+      );
+      const { session } = await join(t, [
+        ...t.records,
+        ...[...ahead.held.values()].map((r) => r.envelope),
+      ]);
+      expect(session.item(id)?.readOnly).toBe('future-clock');
+      expect(session.writable).toBe(true);
+    });
+
+    it('joins only into an empty storage (D202)', async () => {
+      const t = await transferred();
+      const store = new MemoryStore();
+      store.put({
+        recordType: RecordType.item,
+        recordId: randomId(),
+        envelope: Uint8Array.of(0) as RecordEnvelope,
+      });
+      await expect(join(t, t.records, store)).rejects.toThrow(RangeError);
+      expect(t.keyringB.wiped).toBe(true);
+    });
+
+    it('writes nothing and keeps no key when the commit fails (D33)', async () => {
+      const t = await transferred();
+      const store = new MemoryStore();
+      store.failNext = true;
+      await expect(join(t, t.records, store)).rejects.toThrow('storage failure');
+      expect(store.held.size).toBe(0);
+      expect(store.localConfig).toHaveLength(0);
+      expect(t.keyringB.wiped).toBe(true);
+    });
   });
 });

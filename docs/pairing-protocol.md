@@ -2,7 +2,7 @@
 
 > Normative for the bytes and the order of pairing and re-admission; `overview.md` prevails on
 > design. Implements overview §8 and D1, D4, D22, D29, D30, D33, D34, D35, D45, D49, D50, D93,
-> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199 and D201, using the conventions, primitives
+> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201 and D202, using the conventions, primitives
 > and encodings of `crypto-spec.md` (§1, §2, §3, §13, §14). The full transfer that follows the
 > handshake is in `sync-protocol.md` §2.
 
@@ -40,7 +40,7 @@ A device offers to start or join an admission only if:
 
 | Device | Condition |
 | --- | --- |
-| A, pairing | vault unlocked and not read-only (D102); its own Device record not retired (D45) |
+| A, pairing | vault unlocked and not read-only (D102); its own Device record not retired (D45); no record kept aside as corrupt; its local password or a passkey assertion given again, which opens the Master Key for this pairing only (D202) |
 | B, pairing | holds no vault, or the user confirmed a replacement (D150, D153); its local password created, its Device KEK derived and its identity generated, all in memory (D33) |
 | Re-admission, both | vault unlocked and not read-only (D102); its own Device record not retired (D45) |
 
@@ -228,22 +228,27 @@ No Device record is written and no key is sent.
 
 After both confirmations (section 6.4):
 
-1. A sends `master-key` with the Master Key and the `vaultId`.
+1. A sends `master-key` with the Master Key and the `vaultId`. The Master Key was opened when A
+   started the pairing (section 2, D202); A wipes it when the session ends.
 2. B keeps them in memory. When it replaces a vault, it compares the received `vaultId` with the
    one in its cleartext Local Config to choose between the two replacements of D153.
 3. B sends `received` with its display name (1 to 64 code points, single line, trimmed,
    `record-content.md`).
 4. A writes, in one storage transaction, B's Device record, with the static key A authenticated
    in the handshake and B's display name, and, when A holds no Device record of its own (an
-   unregistered device, D141), A's own (D30). Then A sends the full transfer
-   (`sync-protocol.md` §2.2).
+   unregistered device, D141), A's own (D30). A refuses a `received` whose static key already
+   has a Device record (`protocol-error`). Then A reads every stored record again, verifies it as
+   an export does (D181), and sends the full transfer (`sync-protocol.md` §2.2).
 5. B verifies the transfer in memory and aborts before its commit when:
    - a record fails verification on receipt (`crypto-spec.md` §9.5) or the domain checks
      (`verification-failed`);
    - a record has an unknown `recordFormatVersion` or `recordType` (`unsupported-format`, D68,
      D81);
    - A's own Device record is retired (`retired-peer`, D45);
-   - B's own Device record is missing, or its public key is not B's (`protocol-error`).
+   - B's own Device record is missing, or its public key is not B's, A's own Device record is
+     missing, or two records have the same identity (`protocol-error`, D202).
+
+   A newer record aborts with `unsupported-format` whatever else fails (D202).
 
    Records beyond the future-clock bound are accepted and read-only until the clock reaches them
    (D101).
@@ -398,4 +403,10 @@ a real DataChannel in Playwright. The official Noise
 vectors are in `packages/crypto/test-vectors/noise-v1.json` (`crypto-spec.md` §15); the handshake
 and the Noise channel are tested over the in-memory transport with tampered, truncated, extended,
 duplicated and foreign messages, a low-order ephemeral key, payloads that differ between the two
-sides and the device's own static key, and over a real DataChannel in Playwright.
+sides and the device's own static key, and over a real DataChannel in Playwright. The transfer of
+section 8 is tested over the in-memory transport with messages out of order, a wrong `count`, a
+record outside `records-begin` and `records-end`, and a refusal on either side; B's commit and A's
+Device record writes in `packages/vault` with each rejection of section 8 step 5; and the whole
+pairing, handshake included, through IndexedDB in `tests/pairing.test.ts`, with the link closed in
+place of each of A's frames, a rejected SAS and a lock on A, each leaving B's storage empty (D33,
+D202).
