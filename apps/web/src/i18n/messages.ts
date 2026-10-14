@@ -100,11 +100,94 @@ const en = {
       'Share → Add to Home Screen on iPhone and iPad, File → Add to Dock on a Mac. Then open BlindVault from there.',
     continueTab: 'Continue in this tab',
   },
-  pair: {
+  pairing: {
+    title: 'Pair a new device',
+    intro:
+      'The new device gets this whole vault. On it, open BlindVault and choose “Pair with an existing device”.',
+    start: 'Pair a new device…',
+    auth: 'Pairing hands this vault’s Master Key to the new device for good: enter the local password again.',
+    password: 'Local password',
+    begin: 'Start pairing',
+    passkey: 'Use the passkey',
+    wrong: 'That password does not open this vault.',
+    passkeyCancelled: 'The passkey prompt was closed. Nothing was started.',
+    passkeyFailed: 'The passkey did not open this vault. Use the password.',
+    unavailable: 'This browser cannot pair: it offers no WebRTC.',
+    readOnly:
+      'The device clock went back, so the vault is read-only: pairing comes back once writing does.',
+    retired: 'This device was retired: it cannot pair another device.',
+    corrupt:
+      'This device holds a record it cannot read: pairing would hand it on. Re-found the vault or restore a backup.',
+    sameNetwork: 'Same network only (no STUN server)',
+    sameNetworkHint:
+      'Both devices must then be on the same network. Otherwise a STUN server (Google, Cloudflare) sees this device’s public address.',
+    preparing: 'Preparing the connection…',
+    offerIntro:
+      'Copy this text to the new device, which pastes it in its pairing screen. Then paste its answer below.',
+    offerLabel: 'This device’s pairing text',
+    copy: 'Copy',
+    copied: 'Copied',
+    channel:
+      'Whatever carries this text, a message or an email, sees this device’s network addresses. Nothing else: the numbers compared next protect the pairing.',
+    leaving:
+      'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the pairing ends.',
+    leavingImmediate:
+      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock below.',
+    answerPaste: 'The new device’s answer',
+    connect: 'Connect',
+    connecting: 'Connecting…',
+    sasTitle: 'Compare the numbers',
+    sasQuestion: 'Does the other device show exactly this number?',
+    match: 'Yes, the same',
+    differ: 'No, it differs',
+    waiting: 'Waiting for the other device…',
+    sending: 'Sending the vault…',
+    done: '{name} is paired: it holds this vault now.',
+    readmit:
+      'The other devices of this vault do not know this device or {name} yet: re-admit this device with one of them, so they can sync with both.',
+    close: 'Done',
+    again: 'Start again',
+    cancel: 'Cancel',
+    pasteInvalid: 'This is not a BlindVault pairing text. Copy it again, whole.',
+    pasteVersion: 'This text comes from another version of BlindVault: update both devices.',
+    pasteWrongSession:
+      'This answer belongs to another pairing: paste the answer to the text above.',
+    pasteOutdated:
+      'The new device runs a BlindVault that cannot hold this vault: update the app there, then pair again.',
+    pastePeerHoldsVault: 'That device already holds a vault: only a device with no vault can join.',
+    pastePeerNoVault:
+      'This text comes from a device with no vault: start the pairing on the device that holds the vault.',
+    failed: {
+      cancelled: 'The pairing was cancelled on this device.',
+      cancelledRemote: 'The pairing was cancelled on the other device.',
+      sasMismatch:
+        'The numbers differ, so the pairing stopped and nothing was sent. Someone may have changed the texts on the way: pair again, and carry them some other way.',
+      locked: 'A vault locked, or BlindVault stayed hidden too long, so the pairing stopped.',
+      expired: 'The pairing took too long and expired.',
+      retiredPeer:
+        'The device holding the vault was retired, so no device can join through it: pair with another device of the vault.',
+      differentVaults: 'The two devices hold different vaults.',
+      unsupportedFormat:
+        'The vault holds records this BlindVault cannot read: update the app on the new device, then pair again.',
+      verificationFailed:
+        'A record failed verification, so the pairing stopped and the new device kept nothing.',
+      version: 'The devices run versions of BlindVault that cannot pair: update both.',
+      protocolError: 'The other device sent something unexpected, so the pairing stopped.',
+      closed: 'The connection closed, so the pairing stopped.',
+    },
+  },
+  join: {
     title: 'Pair with an existing device',
-    later: 'Pairing arrives in a later version of BlindVault.',
-    today:
-      'To bring a vault you already have, today: on the other device, make a backup in Settings, then restore it here with its Recovery Phrase or its export password.',
+    intro:
+      'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a new device”.',
+    submit: 'Continue',
+    scanIntro: 'Paste here the pairing text the other device shows.',
+    offerPaste: 'The other device’s pairing text',
+    next: 'Continue',
+    answerIntro: 'Copy this answer back to the other device, which pastes it below its own text.',
+    answerLabel: 'This device’s answer',
+    waitingConnection: 'Waiting for the other device to connect…',
+    receiving: 'Receiving the vault…',
   },
   ready: {
     title: 'Vault ready',
@@ -115,7 +198,8 @@ const en = {
       'This vault was restored with an export password: check that your Recovery Phrase still opens it.',
     checkPhraseAction: 'Check the Recovery Phrase',
     readmitAction: 'See the devices',
-    pair: 'Pairing another device keeps a second copy of the vault, and arrives in a later version of BlindVault. Until then, a backup restored on another device takes the vault there.',
+    pair: 'Pair another device, so the vault has a second copy that stays in sync.',
+    pairAction: 'Pair a device',
     backup:
       'Make a backup and keep it off this device: with the Recovery Phrase, it brings the vault back if this device is lost.',
     backupAction: 'Make a backup',
@@ -550,6 +634,12 @@ const en = {
     devices: 'Devices',
     devicesThis: '{name} (this device)',
     devicesRegistered: 'Registered on {date}',
+    devicesLastSync: 'Last synced with this device: {date}',
+    devicesNeverSynced: 'Last synced with this device: never',
+    devicesPending:
+      'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
+    devicesPendingRetire:
+      'Before retiring {name}, look at it: if it shows the vault, the pairing succeeded, and only its confirmation was lost.',
     devicesRetiredCount: 'Retired devices, not shown: {n}.',
     devicesReadmit:
       'This device is not registered: it was restored from a backup, and the other devices do not know it. Until one of the devices below re-admits it, it exchanges data with them only through backups.',
@@ -753,11 +843,96 @@ const ptBR: Messages = {
       'Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac. Depois abra o BlindVault por lá.',
     continueTab: 'Continuar nesta aba',
   },
-  pair: {
+  pairing: {
+    title: 'Parear um dispositivo novo',
+    intro:
+      'O dispositivo novo recebe este cofre inteiro. Nele, abra o BlindVault e escolha “Parear com um dispositivo existente”.',
+    start: 'Parear um dispositivo novo…',
+    auth: 'Parear entrega a Chave Mestra deste cofre ao dispositivo novo para sempre: digite a senha local de novo.',
+    password: 'Senha local',
+    begin: 'Começar o pareamento',
+    passkey: 'Usar a passkey',
+    wrong: 'Essa senha não abre este cofre.',
+    passkeyCancelled: 'O pedido de passkey foi fechado. Nada foi iniciado.',
+    passkeyFailed: 'A passkey não abriu este cofre. Use a senha.',
+    unavailable: 'Este navegador não consegue parear: ele não oferece WebRTC.',
+    readOnly:
+      'O relógio do dispositivo voltou, então o cofre está somente leitura: o pareamento volta quando a escrita voltar.',
+    retired: 'Este dispositivo foi aposentado: ele não pode parear outro dispositivo.',
+    corrupt:
+      'Este dispositivo tem um registro que não consegue ler: parear o passaria adiante. Refunde o cofre ou restaure um backup.',
+    sameNetwork: 'Somente na mesma rede (sem servidor STUN)',
+    sameNetworkHint:
+      'Os dois dispositivos precisam então estar na mesma rede. Sem isso, um servidor STUN (Google, Cloudflare) vê o endereço público deste dispositivo.',
+    preparing: 'Preparando a conexão…',
+    offerIntro:
+      'Copie este texto para o dispositivo novo, que o cola na tela de pareamento dele. Depois cole a resposta dele abaixo.',
+    offerLabel: 'Texto de pareamento deste dispositivo',
+    copy: 'Copiar',
+    copied: 'Copiado',
+    channel:
+      'O que levar este texto, uma mensagem ou um e-mail, vê os endereços de rede deste dispositivo. Mais nada: os números comparados em seguida protegem o pareamento.',
+    leaving:
+      'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, o pareamento termina.',
+    leavingImmediate:
+      'Este cofre bloqueia assim que o BlindVault fica oculto, o que termina o pareamento: copie e cole sem sair do app, ou mude o bloqueio do app oculto abaixo.',
+    answerPaste: 'Resposta do dispositivo novo',
+    connect: 'Conectar',
+    connecting: 'Conectando…',
+    sasTitle: 'Compare os números',
+    sasQuestion: 'O outro dispositivo mostra exatamente este número?',
+    match: 'Sim, o mesmo',
+    differ: 'Não, é diferente',
+    waiting: 'Aguardando o outro dispositivo…',
+    sending: 'Enviando o cofre…',
+    done: '{name} está pareado: ele tem este cofre agora.',
+    readmit:
+      'Os outros dispositivos deste cofre ainda não conhecem este dispositivo nem {name}: readmita este dispositivo com um deles, para que possam sincronizar com os dois.',
+    close: 'Concluir',
+    again: 'Começar de novo',
+    cancel: 'Cancelar',
+    pasteInvalid: 'Isto não é um texto de pareamento do BlindVault. Copie-o de novo, inteiro.',
+    pasteVersion: 'Este texto vem de outra versão do BlindVault: atualize os dois dispositivos.',
+    pasteWrongSession: 'Esta resposta é de outro pareamento: cole a resposta ao texto acima.',
+    pasteOutdated:
+      'O dispositivo novo roda um BlindVault que não comporta este cofre: atualize o app nele e pareie de novo.',
+    pastePeerHoldsVault:
+      'Esse dispositivo já tem um cofre: só um dispositivo sem cofre pode entrar.',
+    pastePeerNoVault:
+      'Este texto vem de um dispositivo sem cofre: comece o pareamento no dispositivo que tem o cofre.',
+    failed: {
+      cancelled: 'O pareamento foi cancelado neste dispositivo.',
+      cancelledRemote: 'O pareamento foi cancelado no outro dispositivo.',
+      sasMismatch:
+        'Os números são diferentes, então o pareamento parou e nada foi enviado. Alguém pode ter alterado os textos no caminho: pareie de novo e leve-os por outro meio.',
+      locked:
+        'Um cofre bloqueou, ou o BlindVault ficou oculto por tempo demais, então o pareamento parou.',
+      expired: 'O pareamento demorou demais e expirou.',
+      retiredPeer:
+        'O dispositivo que tem o cofre foi aposentado, então nenhum dispositivo pode entrar por ele: pareie com outro dispositivo do cofre.',
+      differentVaults: 'Os dois dispositivos têm cofres diferentes.',
+      unsupportedFormat:
+        'O cofre tem registros que este BlindVault não consegue ler: atualize o app no dispositivo novo e pareie de novo.',
+      verificationFailed:
+        'Um registro falhou na verificação, então o pareamento parou e o dispositivo novo não guardou nada.',
+      version: 'Os dispositivos rodam versões do BlindVault que não pareiam: atualize os dois.',
+      protocolError: 'O outro dispositivo enviou algo inesperado, então o pareamento parou.',
+      closed: 'A conexão fechou, então o pareamento parou.',
+    },
+  },
+  join: {
     title: 'Parear com um dispositivo existente',
-    later: 'O pareamento chega numa versão futura do BlindVault.',
-    today:
-      'Para trazer um cofre que você já tem, hoje: no outro dispositivo, faça um backup em Configurações e restaure-o aqui com a Frase de Recuperação ou com a senha de exportação.',
+    intro:
+      'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo novo”.',
+    submit: 'Continuar',
+    scanIntro: 'Cole aqui o texto de pareamento que o outro dispositivo mostra.',
+    offerPaste: 'Texto de pareamento do outro dispositivo',
+    next: 'Continuar',
+    answerIntro:
+      'Copie esta resposta de volta para o outro dispositivo, que a cola abaixo do texto dele.',
+    answerLabel: 'Resposta deste dispositivo',
+    waitingConnection: 'Aguardando o outro dispositivo conectar…',
+    receiving: 'Recebendo o cofre…',
   },
   ready: {
     title: 'Cofre pronto',
@@ -768,7 +943,8 @@ const ptBR: Messages = {
       'Este cofre foi restaurado com uma senha de exportação: verifique se sua Frase de Recuperação ainda o abre.',
     checkPhraseAction: 'Verificar a Frase de Recuperação',
     readmitAction: 'Ver os dispositivos',
-    pair: 'Parear outro dispositivo mantém uma segunda cópia do cofre, e chega numa versão futura do BlindVault. Até lá, um backup restaurado em outro dispositivo leva o cofre até ele.',
+    pair: 'Pareie outro dispositivo, para que o cofre tenha uma segunda cópia que fica sincronizada.',
+    pairAction: 'Parear um dispositivo',
     backup:
       'Faça um backup e guarde-o fora deste dispositivo: com a Frase de Recuperação, ele traz o cofre de volta se este dispositivo for perdido.',
     backupAction: 'Fazer um backup',
@@ -1203,6 +1379,12 @@ const ptBR: Messages = {
     devices: 'Dispositivos',
     devicesThis: '{name} (este dispositivo)',
     devicesRegistered: 'Registrado em {date}',
+    devicesLastSync: 'Última sincronização com este dispositivo: {date}',
+    devicesNeverSynced: 'Última sincronização com este dispositivo: nunca',
+    devicesPending:
+      'Pareamento não concluído: este dispositivo nunca recebeu a confirmação de que o outro guardou o cofre.',
+    devicesPendingRetire:
+      'Antes de aposentar {name}, olhe para ele: se ele mostra o cofre, o pareamento deu certo e só a confirmação se perdeu.',
     devicesRetiredCount: 'Dispositivos aposentados, não mostrados: {n}.',
     devicesReadmit:
       'Este dispositivo não está registrado: ele foi restaurado de um backup, e os outros dispositivos não o conhecem. Até que um dos dispositivos abaixo o readmita, ele troca dados com eles só por backups.',

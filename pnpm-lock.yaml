@@ -41,6 +41,9 @@ importers:
       '@blindvault/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@blindvault/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@blindvault/vault':
         specifier: workspace:*
         version: link:../../packages/vault

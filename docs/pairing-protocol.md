@@ -2,7 +2,7 @@
 
 > Normative for the bytes and the order of pairing and re-admission; `overview.md` prevails on
 > design. Implements overview §8 and D1, D4, D22, D29, D30, D33, D34, D35, D45, D49, D50, D93,
-> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201 and D202, using the conventions, primitives
+> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201, D202 and D203, using the conventions, primitives
 > and encodings of `crypto-spec.md` (§1, §2, §3, §13, §14). The full transfer that follows the
 > handshake is in `sync-protocol.md` §2.
 
@@ -222,6 +222,8 @@ The flags are bound through the prologue, so a modified flag makes the handshake
 R decides on reading `payload_I`, I on reading `payload_R`, both before the handshake. A refuses a
 pairing before the handshake when B's `formatVersions` lacks a `recordFormatVersion` A holds, or
 B's `recordTypes` lacks a `recordType` A holds, and tells the user to update the app on B (D122).
+In v1 a device holds only formats and types its version supports (D68, D81), so A compares B's
+lists with its own (D203).
 No Device record is written and no key is sent.
 
 ## 8. Pairing
@@ -361,7 +363,8 @@ says, the receiver aborts.
 - **After confirmation.** A device waiting for a message aborts (`expired`) after **60 seconds**
   without receiving a frame.
 - **Lock.** A lock on either device aborts at once, sending `abort` with `locked` when the channel
-  is open (D93).
+  is open (D93); the connection closes only once that message is out. B holds no vault, so its
+  lock is the app hidden for the default hidden-app delay, 60 seconds (D203).
 - **Single use.** A payload belongs to one session and one connection. A device accepts one peer
   connection per session; a second scan of the same payload, or an answer for another
   `sessionId`, is refused. A device that aborted or expired generates a new payload, with a new

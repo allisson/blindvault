@@ -5,6 +5,7 @@ import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
 import { Button, Card, Field, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
+import { JoinVault } from './Pairing';
 import { ResetPassword } from './ResetPassword';
 import { RestoreVault } from './RestoreVault';
 
@@ -62,6 +63,7 @@ export function Start({
     case 'no-vault':
     case 'creating':
     case 'restoring':
+    case 'joining':
       return (
         <VaultHeld.Provider value="none">
           <NoVault controller={controller} status={status.kind} />
@@ -212,20 +214,27 @@ function Unlock({
 
 /**
  * No vault yet: the three starts (overview §13.3, D198), after the advice to install first on a
- * Safari tab (D103). Pairing comes with Phase 4: until then its start explains today's path.
+ * Safari tab (D103). The pair start joins a pairing (§8.4, D203).
  */
 function NoVault({
   controller,
   status,
 }: {
   readonly controller: VaultController;
-  readonly status: 'no-vault' | 'creating' | 'restoring';
+  readonly status: 'no-vault' | 'creating' | 'restoring' | 'joining';
 }) {
   const m = useMessages();
   const [choice, setChoice] = useState<'create' | 'pair' | 'restore' | undefined>();
   // Not stored: a reload shows the advice again (D198).
   const [inTab, setInTab] = useState(false);
-  const shown = status === 'creating' ? 'create' : status === 'restoring' ? 'restore' : choice;
+  const shown =
+    status === 'creating'
+      ? 'create'
+      : status === 'restoring'
+        ? 'restore'
+        : status === 'joining'
+          ? 'pair'
+          : choice;
   const back = () => {
     setChoice(undefined);
   };
@@ -240,21 +249,8 @@ function NoVault({
   }
   if (shown === 'pair') {
     return (
-      <Card title={m.pair.title}>
-        <p className="text-sm">{m.pair.later}</p>
-        <p className="text-sm">{m.pair.today}</p>
-        <div className="flex flex-col gap-2">
-          <Button
-            onClick={() => {
-              setChoice('restore');
-            }}
-          >
-            {m.start.restore}
-          </Button>
-          <Button variant="quiet" onClick={back}>
-            {m.app.back}
-          </Button>
-        </div>
+      <Card title={m.join.title}>
+        <JoinVault controller={controller} working={status === 'joining'} onCancel={back} />
       </Card>
     );
   }

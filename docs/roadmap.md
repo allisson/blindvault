@@ -273,23 +273,25 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] QR payload encoding/decoding in base45 and SDP reconstruction (D4)
 - [x] `Noise_XX` handshake integration with the defined prologue (D1, D200)
 - [x] SAS derivation and confirmation protocol: commitment, nonces, `confirmed`, `abort` and the timeouts of `pairing-protocol.md` §11 (D199, D201)
-- [ ] SAS display on both devices, with explicit confirmation, and a lock aborting the session (D201)
+- [x] SAS display on both devices, with explicit confirmation, and a lock aborting the session (D201, D203)
 - [x] Vault key material transferred over the Noise channel only after confirmation (D202)
-- [ ] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
-- [ ] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
+- [x] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
+- [x] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [x] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
-- [ ] The pair start of onboarding runs the pairing flow, and "Vault ready" after a pairing recommends a backup; the pairing recommendation after a creation or a restore offers it (§13.3, D198)
-- [ ] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
+- [x] The pair start of onboarding runs the pairing flow, and "Vault ready" after a pairing recommends a backup; the pairing recommendation after a creation or a restore offers it (§13.3, D198)
+- [x] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
 - [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
-- [ ] Camera QR scanning and copy/paste fallback
-- [ ] Pairing session expiration; a lock on either device aborts the pairing (D93)
-- [ ] LAN-only mode (no STUN) and configurable STUN list
+- [ ] Camera QR scanning and copy/paste fallback (copy/paste done, D203)
+- [x] Pairing session expiration; a lock on either device aborts the pairing (D93, D203)
+- [x] LAN-only mode (no STUN): "same network only", per pairing (D203)
+- [ ] Configurable STUN list
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste with no camera, reconnection), and revise D161 with the result
 
 ### Gate C
 
 - [ ] Full pairing between two browsers (Playwright) and between iOS and Android (manual, recorded)
+    - [ ] Measure A's wait for `committed` while B verifies and commits a large vault on a phone (D202, D203)
 - [ ] Mismatched SAS aborts without transferring anything (CRYPTO-INV-011)
 - [ ] Replay of an old pairing session fails
 - [ ] A modified QR payload or SDP makes the handshake or SAS fail

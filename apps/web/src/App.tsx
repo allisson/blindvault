@@ -1,3 +1,4 @@
+import { DEFAULT_PREFERENCES } from '@blindvault/vault';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { BackButton, browserHistory } from './app/back-button';
@@ -74,6 +75,28 @@ function Root({ controller, monitor }: RootProps) {
       timers.stop();
     };
   }, [preferences, timers, nav, controller]);
+
+  // Joining a pairing, B holds no vault and so no lock preference: the app hidden for the default
+  // delay ends the pairing as a lock would (D93, D203).
+  const joining = status.kind === 'joining';
+  useEffect(() => {
+    if (!joining) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const visibility = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      if (document.visibilityState !== 'hidden') return;
+      timer = setTimeout(() => {
+        controller.lock();
+      }, DEFAULT_PREFERENCES.hiddenLockSeconds * 1000);
+    };
+    visibility();
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, [joining, controller]);
 
   // The inactivity lock pauses while a regeneration's Recovery Phrase is shown (D104, D185).
   const showingPhrase = useSyncExternalStore(controller.subscribe, () => controller.showingPhrase);

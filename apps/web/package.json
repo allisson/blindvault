@@ -17,6 +17,7 @@
     "@blindvault/backup": "workspace:*",
     "@blindvault/crypto": "workspace:*",
     "@blindvault/storage": "workspace:*",
+    "@blindvault/sync": "workspace:*",
     "@blindvault/vault": "workspace:*",
     "@zxcvbn-ts/core": "3.0.4",
     "@zxcvbn-ts/language-common": "3.0.4",

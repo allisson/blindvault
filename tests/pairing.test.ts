@@ -1,7 +1,7 @@
 // Gate C (Phase 4): a pairing end to end over the in-memory transport, through the real Noise_XX
 // handshake, the SAS confirmation, the Master Key transfer and the full transfer, with both vaults
-// in IndexedDB (pairing-protocol.md §5 to §8, D33, D202). The app wires sync to the vault the way
-// `wire` does here; the controller and the screens come next.
+// in IndexedDB (pairing-protocol.md §5 to §8, D33, D202). The app wires sync to the vault the same
+// way, in `apps/web/src/app/pairing.ts` and its controller.
 
 import {
   Keyring,
@@ -86,7 +86,10 @@ function lazyStore(factory: IDBFactory) {
   return store;
 }
 
-/** The abort reason a vault error stands for (pairing-protocol.md §10.3), as the app maps it. */
+/**
+ * The abort reason a vault error stands for (pairing-protocol.md §10.3): a copy of `refusal` in
+ * `apps/web/src/app/pairing.ts`, which `tests/` does not import.
+ */
 function refusal(error: unknown): unknown {
   if (error instanceof JoinRejectedError)
     return new TransferRefusal(error.reason, { cause: error });

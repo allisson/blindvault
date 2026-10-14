@@ -1,4 +1,4 @@
-// The "Vault ready" screen after a creation or a restore (overview §13.3, D198): which
+// The "Vault ready" screen after a creation, a restore or a pairing (overview §13.3, D198): which
 // recommendations it lists, in the order of section 13.3.
 
 import { type DeviceAdvice } from './devices';
@@ -6,7 +6,9 @@ import { type DeviceAdvice } from './devices';
 /** How the vault came to this device, set by the controller until the screen is closed. */
 export type Ready =
   | { readonly start: 'created' }
-  | { readonly start: 'restored'; readonly openedWith: 'phrase' | 'password' };
+  | { readonly start: 'restored'; readonly openedWith: 'phrase' | 'password' }
+  /** Joined a pairing (§13.3, D203). */
+  | { readonly start: 'paired' };
 
 export type ReadyAdvice = 'passkey' | 'check-phrase' | 'readmit' | 'pair' | 'backup';
 
@@ -26,6 +28,11 @@ export function readyAdvice({ ready, devices, passkeys, exportable }: ReadyInput
     if (exportable) advice.push('backup');
     // A vault just created is on its only device.
     advice.push('pair');
+    return advice;
+  }
+  // A paired device holds the vault with its pairing peer: a backup is what is left (§13.3).
+  if (ready.start === 'paired') {
+    if (exportable) advice.push('backup');
     return advice;
   }
   if (ready.openedWith === 'password') advice.push('check-phrase');
