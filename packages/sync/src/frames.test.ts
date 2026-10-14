@@ -29,6 +29,9 @@ function frames(described: readonly { last: number | null; length: number }[]): 
   });
 }
 
+/** Bytes as hex: `toEqual` walks a `Uint8Array` element by element, seconds for the 1 MB vector. */
+const toHex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+
 function read(list: readonly Uint8Array[]): Uint8Array[] {
   const reader = new FrameReader();
   const out: Uint8Array[] = [];
@@ -50,8 +53,8 @@ describe('framing (pairing-protocol.md §10.1, D201)', () => {
     (length, c) => {
       const built = toFrames(message(length));
       expect(built.map((f) => ({ last: f[0], length: f.length - 1 }))).toEqual(c.frames);
-      expect(built).toEqual(frames(c.frames));
-      expect(read(built)).toEqual([message(length)]);
+      expect(built.map(toHex)).toEqual(frames(c.frames).map(toHex));
+      expect(read(built).map(toHex)).toEqual([toHex(message(length))]);
     },
   );
 
