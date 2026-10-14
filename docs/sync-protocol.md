@@ -1,9 +1,10 @@
 # Sync protocol
 
-This document specifies how records received from elsewhere join the vault. Only section 1, the
-merge rules, exists so far: it is what a backup merge applies (Phase 2, D182). The reconnection
-payload, messages, summaries, ordering, idempotency and versioning of the sync exchange are added
-in Phase 5, and the sync exchange then applies the same merge rules.
+This document specifies how records received from elsewhere join the vault. Section 1, the merge
+rules, is what a backup merge applies (Phase 2, D182). Section 2, the full transfer, is what a
+pairing and a re-admission run after their handshake (`pairing-protocol.md`, Phase 4, D199). The
+reconnection payload, summaries and incremental exchange of the sync session are added in Phase 5
+on top of section 2, and apply the same merge rules.
 
 The overview prevails over this document (sections 9.2 and 10). Record identities, headers and
 verification on receipt are in `crypto-spec.md`.
@@ -110,3 +111,51 @@ A merge reports, for the UI to show once (D182):
 
 A device whose own Device record is retired after the merge shows the D41 notice for as long as it
 holds it; that notice is derived from the held record, not stored.
+
+## 2. Full transfer (D199)
+
+A full transfer sends every record a device holds, inside the Noise channel of an admission
+(`pairing-protocol.md` §10), with no summaries. It is the first full sync of a pairing and the
+merge sync of a re-admission (§8.4).
+
+### 2.1 Messages
+
+Each message has the keys `v` (1) and `t` of `pairing-protocol.md` §10.2, plus:
+
+| `t` | Keys | Meaning |
+| --- | --- | --- |
+| `records-begin` | `count`: uint | the number of `record` messages that follow |
+| `record` | `r`: bstr | one record envelope exactly as stored (`crypto-spec.md` §9.2) |
+| `records-end` | — | the last message of the transfer |
+
+The sender sends `records-begin`, then each held record once, in any order, then `records-end`.
+The receiver aborts (`protocol-error`) when the number of `record` messages differs from `count`,
+when two records have the same identity (`recordType`, `recordId`, D158), or when a `record`
+arrives outside `records-begin` and `records-end`. An envelope longer than the largest envelope
+is rejected before decoding (D129).
+
+### 2.2 Pairing
+
+A sends every record it holds, the Device records it has just written included. B holds nothing,
+so it adds every record, as a fresh restore does:
+
+- every record is verified on receipt (`crypto-spec.md` §9.5) and passes the domain checks of
+  `record-content.md`; one failure aborts the whole pairing (`verification-failed`), since B must
+  not commit an incomplete vault;
+- an unknown `recordFormatVersion` or `recordType` aborts it (`unsupported-format`, D68, D81);
+- a record beyond the future-clock bound is accepted and read-only until the clock reaches it
+  (D101);
+- nothing is persisted before B's commit (`pairing-protocol.md` §8 step 6, D33).
+
+### 2.3 Re-admission
+
+Both sides send every record they hold, at the same time, and each merges what it receives with
+section 1, except section 1.1: the key-confirmation MACs already proved the same Master Key, and
+so the same `vaultId` (D29). As in sync (§9.2), a received record that fails verification on
+receipt, is beyond the future-clock bound, has an unknown format or type, or breaks the
+immutability of section 1.3 is rejected and reported, not merged; the other records merge, and
+the re-admission completes. A rejected unknown format is recorded for the incomplete-backup
+warning (D68, D81).
+
+The merge writes in one storage transaction, with the completed sync with the peer (D34), and its
+notices are those of section 1.6.
