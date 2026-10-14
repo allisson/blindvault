@@ -67,6 +67,7 @@ import {
 import { backupFileName, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { devicesOf } from './devices';
+import { type Ready } from './ready';
 import { StorageMonitor } from './storage-state';
 import {
   PasskeyCancelledError,
@@ -342,6 +343,8 @@ export class VaultController {
   #refounded = false;
   /** After a fresh restore, while other devices exist: recommend re-admission (D30, D186). */
   #readmission = false;
+  /** After a creation or a restore: the "Vault ready" screen, until closed or locked (D198). */
+  #ready: Ready | undefined;
   /** The replaced vault's passkey, which the authenticator could not be asked to forget (D120). */
   #leftoverPasskey = false;
   /**
@@ -575,6 +578,7 @@ export class VaultController {
       this.#db = db;
       this.#vaultId = session.vaultId;
       this.#hold(lock);
+      this.#ready = { start: 'created' };
       this.#set({ kind: 'unlocked', session });
       void this.#requestPersistence();
     } catch (error) {
@@ -787,6 +791,7 @@ export class VaultController {
       }
       this.#afterRestore = backup.openedWith === 'password' ? 'check-phrase' : undefined;
       this.#readmission = devicesOf(session).advice === 'readmit';
+      this.#ready = { start: 'restored', openedWith: backup.openedWith };
       this.#set({ kind: 'unlocked', session });
       void this.#requestPersistence();
       return { kind: 'ok' };
@@ -868,6 +873,24 @@ export class VaultController {
 
   dismissAfterRestore(): void {
     this.#afterRestore = undefined;
+    this.#set({ ...this.#status });
+  }
+
+  /** The "Vault ready" screen after a creation or a restore, until closed (§13.3, D198). */
+  get ready(): Ready | undefined {
+    return this.#ready;
+  }
+
+  /**
+   * Closes "Vault ready". After a restore it listed Check Recovery Phrase (D43) and re-admission
+   * (D186), so their one-time notices count as shown.
+   */
+  dismissReady(): void {
+    if (this.#ready?.start === 'restored') {
+      this.#afterRestore = undefined;
+      this.#readmission = false;
+    }
+    this.#ready = undefined;
     this.#set({ ...this.#status });
   }
 
@@ -1115,6 +1138,7 @@ export class VaultController {
     this.#dropRestore();
     this.#afterRestore = undefined;
     this.#readmission = false;
+    this.#ready = undefined;
     this.#dropRefounding();
     this.#refounded = false;
     this.#reminderDismissed = undefined;

@@ -3,6 +3,8 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type TextareaHTMLAttributes,
+  createContext,
+  useContext,
   useId,
   useSyncExternalStore,
 } from 'react';
@@ -238,11 +240,26 @@ export function StorageAlert({
   );
 }
 
-/** Before unlock only the Safari warning applies: it does not depend on the vault (D55, D196). */
+/**
+ * Whether the screens inside hold a vault: `none` for the first screen and the starts (D198),
+ * `unknown` while starting, before the app knows.
+ */
+export const VaultHeld = createContext<'yes' | 'none' | 'unknown'>('yes');
+
+/**
+ * Before unlock only the Safari warning applies: it does not depend on the vault (D55, D196). With
+ * no vault yet there is nothing to move, so it says to start in the installed app (D198).
+ */
 export function SafariTabWarning() {
   const m = useMessages();
-  if (!safariTab()) return null;
-  return <StorageAlert warning="safari-tab" text={m.storage.safariTab} />;
+  const held = useContext(VaultHeld);
+  if (held === 'unknown' || !safariTab()) return null;
+  return (
+    <StorageAlert
+      warning="safari-tab"
+      text={held === 'none' ? m.storage.safariTabNoVault : m.storage.safariTab}
+    />
+  );
 }
 
 /** A centered card for the screens shown before unlock. */

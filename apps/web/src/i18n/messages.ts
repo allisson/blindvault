@@ -62,6 +62,8 @@ const en = {
       'The browser did not agree to keep the storage. Browsers decide this by their own rules, such as an installed app or a site used often.',
     safariTab:
       'Safari may delete this vault after seven days of Safari use without opening BlindVault. Install the app (Share → Add to Home Screen on iPhone and iPad, File → Add to Dock on a Mac) and move the vault to it: installing does not take this vault along, so pair the installed app with this tab, or restore a backup in it.',
+    safariTabNoVault:
+      'Safari may delete what you create in this tab after seven days of Safari use without opening BlindVault. Install the app (Share → Add to Home Screen on iPhone and iPad, File → Add to Dock on a Mac) and start there: the installed app does not share this tab’s storage.',
     notKeptOnly:
       'The browser may delete this vault’s storage, and this is the only device of the vault: if it does, only a backup and the Recovery Phrase bring the vault back. Make a backup, and pair another device.',
     nearlyFull:
@@ -84,9 +86,40 @@ const en = {
     corrupt: 'The local configuration of this vault cannot be read.',
     unsupported: 'This browser lacks IndexedDB or Web Locks, which BlindVault needs.',
     chooseIntro:
-      'BlindVault has no server: your vault lives only on your devices and in your backups.',
+      'BlindVault has no account and no server: your vault lives only on your devices and in your backups.',
+    noReset:
+      'Nobody, BlindVault included, can reset your local password or recover your vault for you.',
+    recoveryOnly: 'Your Recovery Phrase and a backup are the only way to get the vault back.',
     create: 'Create a new vault',
+    pair: 'Pair with an existing device',
     restore: 'Restore from a backup',
+    installTitle: 'Install BlindVault first',
+    installWhy:
+      'In Safari, the installed app does not share this tab’s storage: a vault created here stays in this tab, and Safari may delete it after seven days of Safari use without opening BlindVault.',
+    installHow:
+      'Share → Add to Home Screen on iPhone and iPad, File → Add to Dock on a Mac. Then open BlindVault from there.',
+    continueTab: 'Continue in this tab',
+  },
+  pair: {
+    title: 'Pair with an existing device',
+    later: 'Pairing arrives in a later version of BlindVault.',
+    today:
+      'To bring a vault you already have, today: on the other device, make a backup in Settings, then restore it here with its Recovery Phrase or its export password.',
+  },
+  ready: {
+    title: 'Vault ready',
+    intro: 'Your vault is on this device. Before you start:',
+    passkey: 'Unlock with a passkey instead of typing the local password.',
+    passkeyAction: 'Set up a passkey',
+    checkPhrase:
+      'This vault was restored with an export password: check that your Recovery Phrase still opens it.',
+    checkPhraseAction: 'Check the Recovery Phrase',
+    readmitAction: 'See the devices',
+    pair: 'Pairing another device keeps a second copy of the vault, and arrives in a later version of BlindVault. Until then, a backup restored on another device takes the vault there.',
+    backup:
+      'Make a backup and keep it off this device: with the Recovery Phrase, it brings the vault back if this device is lost.',
+    backupAction: 'Make a backup',
+    open: 'Open the vault',
   },
   restore: {
     title: 'Restore from a backup',
@@ -681,6 +714,8 @@ const ptBR: Messages = {
       'O navegador não aceitou manter o armazenamento. Os navegadores decidem isso por regras próprias, como uma app instalada ou um site usado com frequência.',
     safariTab:
       'O Safari pode apagar este cofre depois de sete dias de uso do Safari sem abrir o BlindVault. Instale a app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e passe o cofre para ela: instalar não leva este cofre junto, então pareie a app instalada com esta aba ou restaure um backup nela.',
+    safariTabNoVault:
+      'O Safari pode apagar o que você criar nesta aba depois de sete dias de uso do Safari sem abrir o BlindVault. Instale a app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e comece por lá: a app instalada não compartilha o armazenamento desta aba.',
     notKeptOnly:
       'O navegador pode apagar o armazenamento deste cofre, e este é o único dispositivo do cofre: se isso acontecer, só um backup e a Frase de Recuperação trazem o cofre de volta. Faça um backup e pareie outro dispositivo.',
     nearlyFull:
@@ -704,9 +739,40 @@ const ptBR: Messages = {
     corrupt: 'A configuração local deste cofre não pode ser lida.',
     unsupported: 'Este navegador não tem IndexedDB ou Web Locks, de que o BlindVault precisa.',
     chooseIntro:
-      'O BlindVault não tem servidor: seu cofre existe só nos seus dispositivos e nos seus backups.',
+      'O BlindVault não tem conta nem servidor: seu cofre existe só nos seus dispositivos e nos seus backups.',
+    noReset:
+      'Ninguém, nem o BlindVault, consegue redefinir sua senha local ou recuperar seu cofre por você.',
+    recoveryOnly: 'Sua Frase de Recuperação e um backup são o único jeito de recuperar o cofre.',
     create: 'Criar um cofre novo',
+    pair: 'Parear com um dispositivo existente',
     restore: 'Restaurar de um backup',
+    installTitle: 'Instale o BlindVault primeiro',
+    installWhy:
+      'No Safari, a app instalada não compartilha o armazenamento desta aba: um cofre criado aqui fica nesta aba, e o Safari pode apagá-lo depois de sete dias de uso do Safari sem abrir o BlindVault.',
+    installHow:
+      'Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac. Depois abra o BlindVault por lá.',
+    continueTab: 'Continuar nesta aba',
+  },
+  pair: {
+    title: 'Parear com um dispositivo existente',
+    later: 'O pareamento chega numa versão futura do BlindVault.',
+    today:
+      'Para trazer um cofre que você já tem, hoje: no outro dispositivo, faça um backup em Configurações e restaure-o aqui com a Frase de Recuperação ou com a senha de exportação.',
+  },
+  ready: {
+    title: 'Cofre pronto',
+    intro: 'Seu cofre está neste dispositivo. Antes de começar:',
+    passkey: 'Desbloqueie com uma passkey em vez de digitar a senha local.',
+    passkeyAction: 'Configurar uma passkey',
+    checkPhrase:
+      'Este cofre foi restaurado com uma senha de exportação: verifique se sua Frase de Recuperação ainda o abre.',
+    checkPhraseAction: 'Verificar a Frase de Recuperação',
+    readmitAction: 'Ver os dispositivos',
+    pair: 'Parear outro dispositivo mantém uma segunda cópia do cofre, e chega numa versão futura do BlindVault. Até lá, um backup restaurado em outro dispositivo leva o cofre até ele.',
+    backup:
+      'Faça um backup e guarde-o fora deste dispositivo: com a Frase de Recuperação, ele traz o cofre de volta se este dispositivo for perdido.',
+    backupAction: 'Fazer um backup',
+    open: 'Abrir o cofre',
   },
   restore: {
     title: 'Restaurar de um backup',

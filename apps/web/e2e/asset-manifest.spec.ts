@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { expect, test } from '@playwright/test';
+import { startScreen } from './create';
 
 // The served asset manifest matches the served files (overview §11, D189, docs/build.md).
 test('serves asset-manifest.txt, whose lines match the served files and cover every loaded asset (D189)', async ({
@@ -36,7 +37,7 @@ test('serves asset-manifest.txt, whose lines match the served files and cover ev
     if (url.pathname.startsWith('/assets/')) loaded.push(url.pathname.slice(1));
   });
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Create a new vault', exact: true })).toBeVisible();
+  await startScreen(page);
   expect(loaded.length).toBeGreaterThan(0);
   for (const path of loaded) expect(paths, path).toContain(path);
 });

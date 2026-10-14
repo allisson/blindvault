@@ -153,6 +153,38 @@ function session(c: VaultController) {
   return s.session;
 }
 
+describe('Vault ready after a creation (§13.3, D198)', () => {
+  it('shows once after the creation, until dismissed or locked, and never after an unlock', async () => {
+    const c = controller();
+    await c.start();
+    expect(c.ready).toBeUndefined();
+    await createIn(c);
+    expect(c.ready).toEqual({ start: 'created' });
+    c.dismissReady();
+    expect(c.ready).toBeUndefined();
+    c.lock();
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(c.ready).toBeUndefined();
+
+    const again = controller();
+    await again.start();
+    await createIn(again);
+    again.lock();
+    expect(again.ready).toBeUndefined();
+  });
+
+  it('is not set by a creation that a lock aborted', async () => {
+    const c = controller();
+    await c.start();
+    c.newRecoveryPhrase();
+    const creating = c.create(PASSWORD, 'Test device');
+    c.lock();
+    await creating;
+    expect(c.status.kind).toBe('no-vault');
+    expect(c.ready).toBeUndefined();
+  });
+});
+
 describe('Recovery Phrase at creation (§5.4, D179)', () => {
   it('hands out 24 words, a new phrase each time, and creates the vault for the last one', async () => {
     const c = controller();
@@ -577,6 +609,37 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const c = await restored(made.bytes, source.words);
     expect(session(c).registered).toBe(false);
     expect(c.readmissionNotice).toBe(false);
+  });
+
+  it('shows Vault ready once after a restore, which counts as the restore notices (D198)', async () => {
+    const source = await backup(EXPORT_PASSWORD);
+    const c = await empty();
+    expect(c.ready).toBeUndefined();
+    c.openBackupFile(source.bytes);
+    await c.openBackup({ kind: 'password', password: EXPORT_PASSWORD });
+    expect(c.ready).toBeUndefined();
+    expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
+    expect(c.ready).toEqual({ start: 'restored', openedWith: 'password' });
+    expect(c.afterRestore).toBe('check-phrase');
+    expect(c.readmissionNotice).toBe(true);
+    c.dismissReady();
+    expect(c.ready).toBeUndefined();
+    expect(c.afterRestore).toBeUndefined();
+    expect(c.readmissionNotice).toBe(false);
+    // An unlock is not an onboarding.
+    c.lock();
+    expect(await c.unlock(NEW_PASSWORD)).toBe('ok');
+    expect(c.ready).toBeUndefined();
+  });
+
+  it('records how the restored backup opened, and a lock clears Vault ready (D198)', async () => {
+    const source = await backup();
+    const c = await restored(source.bytes, source.words);
+    expect(c.ready).toEqual({ start: 'restored', openedWith: 'phrase' });
+    c.lock();
+    expect(c.ready).toBeUndefined();
+    expect(await c.unlock(NEW_PASSWORD)).toBe('ok');
+    expect(c.ready).toBeUndefined();
   });
 
   it('retires another device, refuses its own and a retired one, and nothing once locked (D41, D186)', async () => {

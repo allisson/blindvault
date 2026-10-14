@@ -161,8 +161,10 @@ test.describe('Safari', () => {
     await page.goto('/');
     const banner = page.getByTestId('storage-warning');
     await expect(banner).toHaveAttribute('data-warning', 'safari-tab');
-    await expect(banner).toContainText('installing does not take this vault along');
+    // No vault yet: nothing to move, so start in the installed app (D198).
+    await expect(banner).toContainText('start there');
     await createVault(page, PASSWORD);
+    await expect(banner).toContainText('installing does not take this vault along');
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 800 });
       await expect(banner).toHaveAttribute('data-warning', 'safari-tab');

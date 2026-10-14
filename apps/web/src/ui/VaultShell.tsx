@@ -23,6 +23,7 @@ import { ItemEditor } from './ItemEditor';
 import { ItemHistory } from './ItemHistory';
 import { FolderPane } from './Folders';
 import { ItemList } from './ItemList';
+import { Ready } from './Ready';
 import { focusBackup } from './RegeneratePhrase';
 import { Settings } from './Settings';
 import { StorageWarningBanner } from './StorageState';
@@ -160,7 +161,9 @@ export function VaultShell({
   // The session holds the state; a write only asks the panes to read it again.
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const { messages: m, language } = useLanguage();
-  const reminder = controller.backupReminder;
+  // "Vault ready" lists the backup, so the reminder waits until it is closed (D198).
+  const ready = controller.ready;
+  const reminder = ready ? undefined : controller.backupReminder;
   const detail = <DetailPane session={session} nav={nav} onChange={refresh} />;
   // The search index and query live in memory only, and go with the shell on lock (D132).
   const index = useMemo(() => new SearchIndex(), []);
@@ -175,7 +178,8 @@ export function VaultShell({
   useEffect(() => {
     // Ctrl/⌘ + K focuses search; N alone starts a new item (overview §13.1, D197).
     const keys = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
+      // Under "Vault ready" a new item would open unseen (D198).
+      if (e.defaultPrevented || controller.ready) return;
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         searchRef.current?.focus();
@@ -195,7 +199,7 @@ export function VaultShell({
     return () => {
       window.removeEventListener('keydown', keys);
     };
-  }, [nav, session]);
+  }, [controller, nav, session]);
   const list = (
     <ItemList
       session={session}
@@ -261,7 +265,10 @@ export function VaultShell({
     layout === 'mobile' ? 'flex-1' : 'border-r border-zinc-200 dark:border-zinc-800';
   const body = (
     <>
-      <div className={`flex-1 ${panes} ${settings ? 'hidden' : ''}`} data-testid="panes">
+      {ready && !settings ? (
+        <Ready controller={controller} session={session} nav={nav} ready={ready} />
+      ) : null}
+      <div className={`flex-1 ${panes} ${settings || ready ? 'hidden' : ''}`} data-testid="panes">
         {open ? (
           // Escape and the button close it too: the backdrop is for the pointer only.
           <div
@@ -321,7 +328,7 @@ export function VaultShell({
           <Notice>{m.merge.ownRetired}</Notice>
         </div>
       ) : null}
-      {controller.afterRestore === 'check-phrase' ? (
+      {controller.afterRestore === 'check-phrase' && !ready ? (
         <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="after-restore">
           <Notice>{m.restore.checkPhrase}</Notice>
           <Button
@@ -350,28 +357,6 @@ export function VaultShell({
             variant="quiet"
             onClick={() => {
               controller.dismissRefounded();
-            }}
-          >
-            {m.restore.dismiss}
-          </Button>
-        </div>
-      ) : null}
-      {controller.readmissionNotice ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="readmission">
-          <Notice>{m.restore.readmit}</Notice>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissReadmission();
-              nav.open({ name: 'settings' });
-            }}
-          >
-            {m.restore.openSettings}
-          </Button>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissReadmission();
             }}
           >
             {m.restore.dismiss}

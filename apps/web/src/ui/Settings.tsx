@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { download, phraseLabel } from '../app/backup-file';
 import { devicesOf } from '../app/devices';
-import { type Navigation } from '../app/nav';
+import { type Navigation, type SettingsFocus } from '../app/nav';
 import {
   type BackupExport,
   type ExportAuth,
@@ -32,12 +32,14 @@ export function Settings({
   readonly controller: VaultController;
   readonly session: VaultSession;
   readonly nav: Navigation;
-  /** Opened from the backup reminder: the cursor goes to the export (D188). */
-  readonly focus?: 'backup' | undefined;
+  /** Opened from the backup reminder (D188) or "Vault ready" (D198): where the cursor goes. */
+  readonly focus?: SettingsFocus | undefined;
 }) {
   const { messages: m, language, setLanguage } = useLanguage();
   useEffect(() => {
     if (focus === 'backup') focusBackup();
+    // The passkey section shows once support is known: it focuses itself.
+    else if (focus === 'recovery' || focus === 'devices') focusSection(focus);
   }, [focus]);
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">
@@ -48,7 +50,7 @@ export function Settings({
       <RecoveryPhraseSettings controller={controller} session={session} />
       <DeviceSettings controller={controller} session={session} />
       <ChangePassword controller={controller} />
-      <PasskeySettings controller={controller} session={session} />
+      <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
       <LockSettings controller={controller} preferences={session.preferences} />
       <RefoundVault controller={controller} session={session} nav={nav} />
       <section className="flex flex-col gap-4">
@@ -210,12 +212,23 @@ type PasskeyState =
  * Passkey unlock (§5.5): says what then protects a lost device (D75) and, for a synced passkey,
  * what it then depends on (D84). Setup asks for the local password (D172).
  */
+/** Scrolls to a section and puts the cursor in its first field, or on its heading (D198). */
+function focusSection(name: SettingsFocus): void {
+  const section = document.querySelector(`[data-section="${name}"]`);
+  const target =
+    section?.querySelector<HTMLElement>('input, textarea') ?? section?.querySelector('h2');
+  target?.scrollIntoView({ block: 'center' });
+  target?.focus();
+}
+
 function PasskeySettings({
   controller,
   session,
+  focus,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
+  readonly focus: boolean;
 }) {
   const m = useLanguage().messages;
   const [supported, setSupported] = useState<boolean>();
@@ -230,6 +243,9 @@ function PasskeySettings({
       live = false;
     };
   }, [controller]);
+  useEffect(() => {
+    if (focus && supported !== undefined) focusSection('passkey');
+  }, [focus, supported]);
   if (supported === undefined) return null;
   const on = session.passkeyCredentialId !== undefined;
   const error = {
@@ -239,8 +255,10 @@ function PasskeySettings({
     unavailable: m.settings.passkeyUnavailable,
   };
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="font-semibold">{m.settings.passkey}</h2>
+    <section className="flex flex-col gap-4" data-section="passkey">
+      <h2 tabIndex={-1} className="font-semibold">
+        {m.settings.passkey}
+      </h2>
       {!supported && !on ? (
         <p className="text-sm text-zinc-500">{m.settings.passkeyUnsupported}</p>
       ) : null}
@@ -363,8 +381,10 @@ function RecoveryPhraseSettings({
   const result = check ? phraseResult(m, check) : undefined;
   const last = session.lastBackupAt;
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="font-semibold">{m.settings.recovery}</h2>
+    <section className="flex flex-col gap-4" data-section="recovery">
+      <h2 tabIndex={-1} className="font-semibold">
+        {m.settings.recovery}
+      </h2>
       {envelope === 'none' ? <Notice>{m.settings.recoveryNone}</Notice> : null}
       {envelope === 'corrupt' ? <Notice>{m.settings.recoveryCorrupt}</Notice> : null}
       {envelope === 'held' && recovery ? (
@@ -443,8 +463,10 @@ function DeviceSettings({
   const devices = devicesOf(session);
   const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' });
   return (
-    <section className="flex flex-col gap-4" data-testid="devices">
-      <h2 className="font-semibold">{m.settings.devices}</h2>
+    <section className="flex flex-col gap-4" data-testid="devices" data-section="devices">
+      <h2 tabIndex={-1} className="font-semibold">
+        {m.settings.devices}
+      </h2>
       {devices.advice === 'readmit' ? (
         <Notice>
           <span data-testid="devices-readmit">{m.settings.devicesReadmit}</span>
