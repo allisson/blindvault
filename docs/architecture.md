@@ -285,7 +285,7 @@ every project through the references in the root `tsconfig.json`.
   with its leading zeros; grouping it is the UI's). In `packages/sync`, `src/frames.ts` cuts a
   message into canonical frames and `FrameReader` joins them, rejecting any other framing and any
   message over 1,049,194 bytes, and wiping the frames it joined; `src/messages.ts` encodes and
-  decodes the messages of §10.2 but the transfer's, with `MessageError.reason` `version` or
+  decodes the messages of §10.2, with `MessageError.reason` `version` or
   `protocol-error`, an unknown abort reason read as `protocol-error`. `src/session.ts`
   (`PairingSession`) carries them over the Noise channel: one reader at a time; a local failure
   sends `abort` and closes, a received `abort` closes, a closed link ends it as `closed`, and every
@@ -296,7 +296,26 @@ every project through the references in the root `tsconfig.json`.
   only after; R checks the commitment) and wipes both nonces; `SasStage` reads the peer's
   `confirmed` as soon as it arrives, so anything else before both confirmations, or an `abort`,
   ends the session while the SAS is on screen, and `confirm()` resolves only with both. The
-  screens, and a lock aborting with `locked`, come with the key transfer (D201).
+  screens, and a lock aborting with `locked`, come after the transfer (D201, D202).
+- **Master Key transfer and full transfer (Phase 4, §8, D202).** `packages/crypto/src/keys.ts`
+  hands key bytes out in one place only: `exportTransferKey` copies the Master Key for the
+  `master-key` message, and `importTransferKey` copies the received bytes into a keyring and zeroes
+  them. `PairingSession` wipes every message's encoding and frames once sent, and the joined bytes
+  once decoded; `decodeMessage` returns copies of its byte strings, since the CBOR decoder's are
+  views of its input. `packages/sync/src/transfer.ts`: `sendVault` (A) sends `master-key`, waits for
+  `received`, runs `admit(name)` and sends `records-begin`, every record and `records-end`, then
+  waits for `committed`; `receiveVault` (B) checks the order and the `count` and returns a
+  `ReceivedVault` whose `commit(persist)` runs B's commit, then sends `committed`. Sync never sees
+  the vault: a callback that throws `TransferRefusal(reason)` aborts with that reason, any other
+  error with `protocol-error`. In `packages/vault`, `VaultSession.openPairing` asks for the password
+  or passkey again and opens the Master Key into a keyring of the pairing, wiped by `wipe()` or a
+  lock; it is refused while read-only, retired or holding a corrupt record (`PairingRefusedError`),
+  and an unregistered device gives its own name. Its `PairingGrant` exposes the identity for the
+  handshake, `admit` (B's Device record, and A's own under D141, in one commit), `records()` (read
+  again and verified, as an export) and `completed` (`lastSyncByPeer`, D34). `VaultSession.join`
+  shares `restore`'s body (`#fresh`) with B's identity and the checks of §8 step 5, each a
+  `JoinRejectedError` whose reason is the abort reason. `tests/pairing.test.ts` runs the whole
+  pairing through IndexedDB, mapping vault errors to abort reasons as the app will.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

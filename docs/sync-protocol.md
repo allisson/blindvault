@@ -124,7 +124,7 @@ Each message has the keys `v` (1) and `t` of `pairing-protocol.md` §10.2, plus:
 
 | `t` | Keys | Meaning |
 | --- | --- | --- |
-| `records-begin` | `count`: uint | the number of `record` messages that follow |
+| `records-begin` | `count`: uint, at most 2⁵³ − 1 | the number of `record` messages that follow |
 | `record` | `r`: bstr | one record envelope exactly as stored (`crypto-spec.md` §9.2) |
 | `records-end` | — | the last message of the transfer |
 

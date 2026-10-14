@@ -145,6 +145,25 @@ export function privateKeyBytes(key: PrivateKey): Uint8Array {
 }
 
 /**
+ * A copy of the Master Key's bytes for the `master-key` message of a pairing, the only place key
+ * bytes leave this package (`pairing-protocol.md` §8, D202). The caller wipes the copy, and every
+ * message and frame made from it, once sent.
+ */
+export function exportTransferKey(key: SymmetricKey): Uint8Array {
+  return keyBytes(key).slice();
+}
+
+/**
+ * The received Master Key as a handle in `keyring`. The keyring holds a copy and `bytes` are zeroed,
+ * so the decoded message they belong to keeps no key (D202).
+ */
+export function importTransferKey(keyring: Keyring, bytes: Uint8Array): SymmetricKey {
+  const copy = bytes.slice();
+  lib().memzero(bytes);
+  return keyring.adopt(copy);
+}
+
+/**
  * Whether two keys hold the same bytes, compared in constant time with `sodium_memcmp`: an
  * immutable Vault Key record received again (D42) or a backup's Master Key subkey (D57).
  */

@@ -7,7 +7,9 @@ import {
   Keyring,
   SymmetricKey,
   adoptKey,
+  exportTransferKey,
   generateKey,
+  importTransferKey,
   keyBytes,
   sameKey,
 } from './keys';
@@ -117,5 +119,38 @@ describe('sameKey (D42, D57)', () => {
     const b = generateKey(keyring);
     keyring.release(b);
     expect(() => sameKey(a, b)).toThrow(KeyWipedError);
+  });
+});
+
+describe('the Master Key transfer of a pairing (pairing-protocol.md §8, D202)', () => {
+  it('hands out a copy of the bytes, which the caller wipes, leaving the key intact', () => {
+    const keyring = new Keyring();
+    const key = generateKey(keyring);
+    const bytes = exportTransferKey(key);
+    expect(bytes).toEqual(keyBytes(key));
+    bytes.fill(0);
+    expect(keyBytes(key).some((b) => b !== 0)).toBe(true);
+  });
+
+  it('takes the bytes back into a handle of the same key and wipes what it was given', () => {
+    const sender = new Keyring();
+    const key = generateKey(sender);
+    const bytes = exportTransferKey(key);
+    const receiver = new Keyring();
+    const received = importTransferKey(receiver, bytes);
+    expect(bytes.every((b) => b === 0)).toBe(true);
+    expect(sameKey(received, key)).toBe(true);
+    receiver.wipeAll();
+    expect(() => keyBytes(received)).toThrow(KeyWipedError);
+  });
+
+  it('refuses a wiped key, and bytes that are not 32 long, zeroing them', () => {
+    const keyring = new Keyring();
+    const key = generateKey(keyring);
+    keyring.wipeAll();
+    expect(() => exportTransferKey(key)).toThrow(KeyWipedError);
+    const short = new Uint8Array(31).fill(5);
+    expect(() => importTransferKey(new Keyring(), short)).toThrow(EncodingError);
+    expect(short.every((b) => b === 0)).toBe(true);
   });
 });

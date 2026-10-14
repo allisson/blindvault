@@ -17,6 +17,7 @@
     "@blindvault/backup": "workspace:*",
     "@blindvault/crypto": "workspace:*",
     "@blindvault/storage": "workspace:*",
+    "@blindvault/sync": "workspace:*",
     "@blindvault/vault": "workspace:*"
   }
 }

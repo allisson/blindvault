@@ -171,3 +171,39 @@ export class MergeRejectedError extends VaultError {
     super(`merge rejected: ${reason}`);
   }
 }
+
+/**
+ * Why A refuses to pair (pairing-protocol.md §2, §8, D45, D102, D202): its vault is read-only for a
+ * clock gone back, its own Device record is retired, a record fails verification (`record`, kept
+ * aside at unlock or found when read again before sending), or the joining device's key already
+ * has a Device record. Nothing was written.
+ */
+export type PairingRefusal = 'read-only' | 'retired' | 'corrupt-record' | 'known-device';
+
+export class PairingRefusedError extends VaultError {
+  override name = 'PairingRefusedError';
+  constructor(
+    readonly reason: PairingRefusal,
+    readonly record?: RecordKey,
+  ) {
+    super(`pairing refused: ${reason}`);
+  }
+}
+
+/**
+ * Why B refuses what it received, before its commit (pairing-protocol.md §8 step 5, D202): each
+ * reason is the abort reason of §10.3 it sends. `record` names a record that fails verification.
+ * Nothing was written.
+ */
+export type JoinRejection =
+  'unsupported-format' | 'verification-failed' | 'retired-peer' | 'protocol-error';
+
+export class JoinRejectedError extends VaultError {
+  override name = 'JoinRejectedError';
+  constructor(
+    readonly reason: JoinRejection,
+    readonly record?: RecordKey,
+  ) {
+    super(`pairing rejected: ${reason}`);
+  }
+}

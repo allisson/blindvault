@@ -444,8 +444,8 @@ The same generator writes the `record-content.md` vectors to
 `pairing-protocol.md` vectors to `packages/sync/test-vectors/pairing-v1.json`: base45 (the RFC
 9285 examples and rejected texts), valid payloads with their bytes and text, and one invalid payload
 per rule of §3.3, tagged with the reason it is refused (`version`, `malformed`, `wrong-role`,
-`wrong-session`); every message type of §10.2 but the transfer's with its bytes, and invalid
-messages tagged `version` or `protocol-error`; framings given by frame lengths, valid (up to the
+`wrong-session`); every message type of §10.2, the transfer's of `sync-protocol.md` §2.1
+included (D202), with its bytes, and invalid messages tagged `version` or `protocol-error`; framings given by frame lengths, valid (up to the
 largest message) and invalid (D201). `packages/sync` MUST reproduce and reject them the same way.
 
 `tests/vectors/noise.py` extracts the official Noise vectors (D157, D200): the cacophony and snow

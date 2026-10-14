@@ -131,6 +131,30 @@ describe('pairing session (pairing-protocol.md §10, §11)', () => {
     expect([error.reason, error.by]).toEqual(['locked', 'local']);
   });
 
+  it('wipes the bytes and frames of every message it sent (D202)', async () => {
+    const link = memoryPair();
+    const sent: Uint8Array[] = [];
+    const a = new PairingSession({
+      ...link.a,
+      send: (frame) => {
+        sent.push(frame);
+        return link.a.send(frame);
+      },
+    });
+    const b = new PairingSession(link.b);
+    const mk = new Uint8Array(32).fill(9);
+    await a.send({ t: 'master-key', mk, vid: new Uint8Array(16).fill(3) });
+    expect(sent).toHaveLength(1);
+    expect(sent.every((frame) => frame.every((byte) => byte === 0))).toBe(true);
+    // The caller's own buffer is the caller's to wipe; the peer gets the message whole.
+    expect(mk.every((byte) => byte === 9)).toBe(true);
+    expect(await b.receive()).toEqual({
+      t: 'master-key',
+      mk: new Uint8Array(32).fill(9),
+      vid: new Uint8Array(16).fill(3),
+    });
+  });
+
   it('closes a finished session with no abort', async () => {
     const { a, b } = sessions();
     await a.send({ t: 'committed' });

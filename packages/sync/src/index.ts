@@ -29,6 +29,7 @@ export {
 export { type Direction, type MemoryPair, type MemoryPairOptions, memoryPair } from './memory';
 export {
   ABORT_REASONS,
+  MAX_RECORD_COUNT,
   type AbortReason,
   MESSAGE_VERSION,
   type Message,
@@ -63,6 +64,14 @@ export {
   type PairingSessionOptions,
   SESSION_TIMEOUT_MS,
 } from './session';
+export {
+  ReceivedVault,
+  type ReceiveVaultOptions,
+  type SendVaultOptions,
+  TransferRefusal,
+  receiveVault,
+  sendVault,
+} from './transfer';
 export {
   type ClosedBy,
   MAX_MESSAGE_LENGTH,

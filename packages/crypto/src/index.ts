@@ -16,7 +16,16 @@ export {
   UserVerificationError,
 } from './errors';
 export { ID_LENGTH, initCrypto, randomBytes, randomId } from './sodium';
-export { KEY_LENGTH, Keyring, PrivateKey, SymmetricKey, generateKey, sameKey } from './keys';
+export {
+  KEY_LENGTH,
+  Keyring,
+  PrivateKey,
+  SymmetricKey,
+  exportTransferKey,
+  generateKey,
+  importTransferKey,
+  sameKey,
+} from './keys';
 export { type MasterSubkeys, deriveMasterSubkeys, isMasterKeyOf } from './kdf';
 export {
   ACCEPTED_KDF_RANGE,
