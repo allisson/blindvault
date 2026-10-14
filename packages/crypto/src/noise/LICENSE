@@ -1,0 +1,26 @@
+The files of this directory are copied from noise-protocol 3.0.2
+(https://github.com/emilbayes/noise-protocol, tag v3.0.2, commit
+4a05d0b87edb8d195f1525dfdc5cc06627c857d5) and hmac-blake2b 2.0.2
+(https://github.com/emilbayes/hmac-blake2b), ported to TypeScript and bound to
+libsodium-wrappers-sumo (BlindVault D157, D200). Each file lists its deviations.
+
+noise-protocol:
+
+Copyright (c) 2018, Emil Bay <github@tixz.dk>
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+hmac-blake2b:
+
+ISC License, Copyright (c) Emil Bay <github@tixz.dk>, with the same
+permission notice and disclaimer as above.

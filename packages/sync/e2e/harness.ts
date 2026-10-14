@@ -1,13 +1,18 @@
 // A page for the Playwright tests: one device's side of the WebRTC connection of a pairing, driven
 // through `window.harness`. Two pages, in two browser contexts, pair by passing the base45 texts.
 
+import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
+
 import {
   type Initiator,
   PayloadError,
+  type Role,
   type Transport,
   TransportClosedError,
+  decodeBase45,
   decodePayloadText,
   encodePayloadText,
+  pairingHandshake,
   startInitiator,
   startResponder,
 } from '../src/index';
@@ -17,6 +22,12 @@ const options = { iceServers: [] };
 
 let initiator: Initiator | undefined;
 let transport: Promise<Transport> | undefined;
+let channel: Transport | undefined;
+// The texts as exchanged, for the prologue: the initiator's, then the responder's.
+const texts: { role?: Role; initiator?: string; responder?: string } = {};
+const ready = initCrypto();
+const hex = (bytes: Uint8Array) =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 const abort = new AbortController();
 
 function outcome(error: unknown): string {
@@ -65,7 +76,9 @@ export const harness = {
       },
       { ...options, signal: abort.signal },
     );
-    return encodePayloadText(initiator.payload);
+    const text = encodePayloadText(initiator.payload);
+    Object.assign(texts, { role: 'initiator', initiator: text, responder: undefined });
+    return text;
   },
 
   /** The SHA-256 fingerprint of the initiator's certificate, as hex. */
@@ -80,7 +93,9 @@ export const harness = {
       : decodePayloadText(offerText, { role: 'initiator' });
     const responder = await startResponder(offer, { ...context, holdsVault: false }, options);
     transport = responder.transport;
-    return encodePayloadText(responder.payload);
+    const text = encodePayloadText(responder.payload);
+    Object.assign(texts, { role: 'responder', initiator: offerText, responder: text });
+    return text;
   },
 
   /** Accepts the responder's answer; "open", a refusal reason, or "pending" after `ms`. */
@@ -91,6 +106,7 @@ export const harness = {
       ? tamperFingerprint(answerText, 'responder', initiator.payload.sessionId)
       : decodePayloadText(answerText, expected);
     transport = initiator.accept(answer);
+    texts.responder = answerText;
     return settle(transport, ms);
   },
 
@@ -115,6 +131,55 @@ export const harness = {
   /** Aborts the session's signal. */
   abort(): void {
     abort.abort();
+  },
+
+  /**
+   * Runs the Noise_XX handshake over the open connection with a new identity; returns the
+   * handshake hash and both public keys as hex.
+   */
+  async handshake(): Promise<{ hash: string; self: string; peer: string }> {
+    if (!transport || !texts.role || !texts.initiator || !texts.responder) {
+      throw new Error('no connection');
+    }
+    await ready;
+    const identity = generateDeviceIdentity(new Keyring());
+    const result = await pairingHandshake(await transport, {
+      role: texts.role,
+      identity,
+      payloadInitiator: decodeBase45(texts.initiator),
+      payloadResponder: decodeBase45(texts.responder),
+    });
+    channel = result.channel;
+    return {
+      hash: hex(result.handshakeHash),
+      self: hex(identity.publicKey),
+      peer: hex(result.peerPublicKey),
+    };
+  },
+
+  async channelSend(length: number, seed: number): Promise<void> {
+    if (!channel) throw new Error('no channel');
+    await channel.send(Uint8Array.from({ length }, (_, i) => (i * 31 + seed) & 0xff));
+  },
+
+  async channelReceive(): Promise<{ length: number; sum: number }> {
+    if (!channel) throw new Error('no channel');
+    const message = await channel.receive();
+    return {
+      length: message.length,
+      sum: message.reduce((s, b, i) => (s + b * (i + 1)) % 1_000_003, 0),
+    };
+  },
+
+  async channelClose(): Promise<string> {
+    if (!channel) throw new Error('no channel');
+    channel.close();
+    return channel.closed;
+  },
+
+  async channelClosed(): Promise<string> {
+    if (!channel) throw new Error('no channel');
+    return channel.closed;
   },
 
   async send(length: number, seed: number): Promise<void> {

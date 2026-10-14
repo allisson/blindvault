@@ -271,7 +271,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `docs/pairing-protocol.md`: messages, prologue, SAS derivation and length, brute-force analysis and commitment in copy/paste mode, versioning (D199)
 - [x] Transport abstraction in `packages/sync` (real WebRTC and an in-memory transport for tests)
 - [x] QR payload encoding/decoding in base45 and SDP reconstruction (D4)
-- [ ] `Noise_XX` handshake integration with the defined prologue (D1)
+- [x] `Noise_XX` handshake integration with the defined prologue (D1, D200)
 - [ ] SAS derivation and display on both devices, with explicit confirmation
 - [ ] Vault key material transferred over the Noise channel only after confirmation
 - [ ] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
@@ -299,7 +299,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
 - [ ] An unregistered device is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
 - [ ] No Device record is written outside vault creation, re-founding or a SAS-confirmed pairing or re-admission (CRYPTO-INV-007)
-- [ ] Official Noise test vectors pass in CI
+- [x] Official Noise test vectors pass in CI
 
 ---
 

@@ -6,6 +6,7 @@ import type { Harness } from './harness';
 // browser contexts, LAN-only (no STUN), exchanging only the base45 payload texts.
 
 const MAX_MESSAGE_LENGTH = 65_535;
+const MAX_CHANNEL_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH - 16;
 
 /**
  * One device in its own browser context. The scanning device (B, the responder) holds the camera
@@ -65,6 +66,38 @@ test('two devices connect from the payloads alone and carry messages both ways',
 
   expect(await a.page.evaluate(() => window.harness.close())).toBe('local');
   expect(await b.page.evaluate(() => window.harness.closed())).toBe('remote');
+});
+
+// The pairing handshake over the real DataChannel (`pairing-protocol.md` §5, §10.1).
+test('the two devices run Noise_XX over the connection and talk through the Noise channel', async ({
+  browser,
+}) => {
+  const { a, b, answer } = await pair(browser);
+  expect(await a.page.evaluate((text) => window.harness.accept(text), answer)).toBe('open');
+  expect(await b.page.evaluate(() => window.harness.connected())).toBe('open');
+
+  const [onA, onB] = await Promise.all([
+    a.page.evaluate(() => window.harness.handshake()),
+    b.page.evaluate(() => window.harness.handshake()),
+  ]);
+  expect(onA.hash).toMatch(/^[0-9a-f]{128}$/);
+  expect(onA.hash).toBe(onB.hash);
+  expect(onA.peer).toBe(onB.self);
+  expect(onB.peer).toBe(onA.self);
+
+  for (const [from, to, length, seed] of [
+    [b, a, 1, 5],
+    [a, b, MAX_CHANNEL_MESSAGE_LENGTH, 6],
+    [b, a, MAX_CHANNEL_MESSAGE_LENGTH, 7],
+  ] as const) {
+    await from.page.evaluate(([l, s]) => window.harness.channelSend(l, s), [length, seed] as const);
+    expect(await to.page.evaluate(() => window.harness.channelReceive())).toEqual(
+      checksum(length, seed),
+    );
+  }
+
+  expect(await b.page.evaluate(() => window.harness.channelClose())).toBe('local');
+  expect(await a.page.evaluate(() => window.harness.channelClosed())).toBe('remote');
 });
 
 test('an answer for another session is refused, and the right one still connects once', async ({

@@ -263,6 +263,21 @@ every project through the references in the root `tsconfig.json`.
   while more than 1 MiB is buffered, until `bufferedamountlow` at 256 KiB. Its tests run in Node
   against a stand-in channel. An ESLint rule keeps `packages/sync` to `@blindvault/crypto` and away
   from UI code.
+- **Noise handshake and channel (Phase 4, D157, D200).** `packages/crypto/src/noise.ts` runs the
+  copied state machine: `startNoiseXX` takes the device identity's `PrivateKey` handle, and the
+  handshake copies the key into its own state, wiped after `split` or on any failure, after which
+  every call throws `NoiseError`; `result` gives the 64-byte handshake hash, the peer's static key and
+  a `NoiseTransport`, whose keys a failed decryption or `wipe()` erases. `src/transcripts.ts`
+  computes `prologue_XX`. `packages/sync/src/handshake.ts` (`pairingHandshake`) decodes both payloads
+  again (role and session), derives the prologue from their bytes and fingerprints, sends the three
+  messages with empty payloads (32, 96 and 64 bytes), refuses any payload and the device's own
+  static key, and closes the transport on any failure, as `HandshakeError` `closed`, `invalid` or
+  `same-identity`. The `abort` message of §10.3 needs the framing of §10.1, which comes with the SAS
+  task, so until then a refused handshake only closes the transport. `src/channel.ts`
+  (`noiseChannel`) is a `Transport` of plaintext messages of at most 65,519 bytes, one Noise
+  transport message each; it decrypts as messages arrive, so those before a remote close stay
+  readable, and any decryption failure closes it with an error. `e2e/connection.spec.ts` runs the
+  handshake and the channel over a real DataChannel in the three browsers.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`
@@ -525,6 +540,22 @@ phase adds them here with a justification; the spike measures the QR pair the pr
 Conditions: the copied files keep the ISC notice; the handshake logic is not modified; CI runs the
 cacophony and snow vectors for both protocol names; a later maintained library that passes the
 same vectors may replace the copy.
+
+**Noise copy as built (Phase 4, D200).** `packages/crypto/src/noise/` holds `noise-protocol` 3.0.2
+(tag `v3.0.2`, `4a05d0b`) and the `hmac-blake2b` 2.0.2 it uses, both ISC, with both notices in
+`noise/LICENSE`. Ported to TypeScript file by file, same functions and order of operations. Deviations,
+listed again in each file's header: `libsodium-wrappers-sumo` instead of `sodium-universal` (its
+functions return new arrays, copied into the caller's buffer and wiped; `crypto_generichash_batch`
+becomes init, update, final); `Uint8Array` buffers wiped with `memzero` instead of `sodium_malloc`
+and `sodium_free`; a local `assert` instead of `nanoassert`, and `required` where the original let a
+null key fail with a TypeError; arrays copied with spread instead of `clone`; no `keygen`,
+`seedKeygen` or `generateSeedKeypair`; `bindNoise(dh)` takes the DH so the vectors fix the ephemeral
+keys. **One logic fix:** `split` assigns the CipherStates by role, `c1` always the initiator's
+sending key (Noise §5.2); the original assigned them by who wrote and who read the last message,
+which swaps them in even-length patterns such as KK. Its own tests only checked that both sides
+agree, and the Phase 0 check reached only the handshake messages and hash; the cacophony and snow
+KK transport messages fail without the fix. `src/noise-copy.test.ts` checks what the vectors do not
+reach against Node's HMAC-BLAKE2b and BLAKE2b and the spec's REKEY. No dependency is added.
 
 **CBOR: `cbor2` with a strict decoder plus a re-encode check (D10).** Evaluated on 2026-10-09 by
 decoding malformed inputs:

@@ -132,7 +132,8 @@ never the trust mechanism (§8.2): nothing is trusted until the SAS is confirmed
 
 ## 5. Handshake
 
-- Protocol name: `Noise_XX_25519_ChaChaPoly_BLAKE2b`, from the copied implementation of D157.
+- Protocol name: `Noise_XX_25519_ChaChaPoly_BLAKE2b`, from the copied implementation of D157 in
+  `packages/crypto` (D200).
 - Prologue: `prologue_XX` of `crypto-spec.md` §13, with `payload_initiator = payload_I` and
   `payload_responder = payload_R`, each the decoded bytes exactly as received, commitment included.
 - Static keys: each device's X25519 identity (§8.1). B's exists in memory only until its commit.
@@ -386,4 +387,8 @@ prologue label, so two devices of different versions never reach a SAS that look
 
 The tests of overview §16 (pairing tests) and of Gate C cover this document. The payload and
 base45 vectors are in `packages/sync/test-vectors/pairing-v1.json` (`crypto-spec.md` §15); the
-vectors for the commitment and the SAS are added with their implementation.
+vectors for the commitment and the SAS are added with their implementation. The official Noise
+vectors are in `packages/crypto/test-vectors/noise-v1.json` (`crypto-spec.md` §15); the handshake
+and the Noise channel are tested over the in-memory transport with tampered, truncated, extended,
+duplicated and foreign messages, a low-order ephemeral key, payloads that differ between the two
+sides and the device's own static key, and over a real DataChannel in Playwright.
