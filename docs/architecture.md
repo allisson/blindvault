@@ -214,6 +214,12 @@ every project through the references in the root `tsconfig.json`.
   also uses. `e2e/self-hosting/serve.sh` serves `dist/` with either in Docker, and
   `playwright.self-hosting.config.ts` runs `self-hosting.spec.ts` (excluded from the main suite)
   with the smoke, PWA and About specs against it, in the CI job `self-hosting`.
+- **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
+  has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
+  landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it
+  never retries, so a screen that drops what was typed still fails. `e2e/fill-password.spec.ts`
+  covers both failures. `restore.spec.ts` uses it for its unlocks, where a WebKit run once lost the
+  password after Lock without a cause found in 52 repeated runs.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,

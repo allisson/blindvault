@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { type Page, expect, test } from '@playwright/test';
 
 import { createVault } from './create';
+import { fillPassword } from './password';
 
 // Creation, export and restore each calibrate or derive Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -128,10 +129,10 @@ test('restores a backup by the Recovery Phrase after the browser lost its storag
 
   // The new local password opens it; the old one does not.
   await button(page, 'Lock').click();
-  await page.getByTestId('unlock-password').fill(PASSWORD);
+  await fillPassword(page.getByTestId('unlock-password'), PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('unlock-password').fill(NEW_PASSWORD);
+  await fillPassword(page.getByTestId('unlock-password'), NEW_PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
   await expect(button(page, 'ACME')).toBeVisible();
