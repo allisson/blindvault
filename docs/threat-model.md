@@ -92,7 +92,7 @@ encrypted backups and synchronized records (§3).
 | --- | --- | --- | --- |
 | Script injection | Protected | Strict CSP, Trusted Types, text-only rendering, `http:`/`https:` URLs only (D83) | overview §11 |
 | Reverse tabnabbing, Referer leak | Protected | `noopener`, `noreferrer`, `no-referrer` (D147) | overview §13 |
-| Clickjacking | Limited | Unlock refused while framed (D83) | overview §11 |
+| Clickjacking | Limited | The app does not open inside a frame (D83, D193) | overview §11 |
 
 ## Non-adversarial risks
 
