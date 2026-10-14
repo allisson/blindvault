@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { BackButton, browserHistory } from './app/back-button';
 import { clipboard } from './app/clipboard';
 import { type VaultController } from './app/controller';
 import { LockTimers } from './app/lock-timers';
@@ -33,6 +34,8 @@ function Root({ controller, monitor }: RootProps) {
     [controller],
   );
   const status = useSyncExternalStore(controller.subscribe, controller.getStatus);
+  // The system's back goes one screen back, through one history entry that carries nothing (D197).
+  useEffect(() => new BackButton(nav, browserHistory()).start(), [nav]);
 
   useEffect(() => {
     if (supported()) void controller.start();

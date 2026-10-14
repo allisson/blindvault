@@ -14,7 +14,7 @@ import {
 } from '../app/generator-settings';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
-import { Button, Field } from './components';
+import { Button, Field, TARGET } from './components';
 
 const SETS: readonly CharacterSetName[] = ['lowercase', 'uppercase', 'digits', 'symbols'];
 
@@ -48,7 +48,7 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
     <fieldset className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
       <div className="flex gap-4 text-sm" role="radiogroup">
         {(['characters', 'words'] as const).map((mode) => (
-          <label key={mode} className="flex items-center gap-2">
+          <label key={mode} className={`${TARGET} flex items-center gap-2`}>
             <input
               type="radio"
               name="generator-mode"
@@ -74,7 +74,7 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
           />
           <div className="flex flex-wrap gap-4 text-sm">
             {SETS.map((set) => (
-              <label key={set} className="flex items-center gap-2">
+              <label key={set} className={`${TARGET} flex items-center gap-2`}>
                 <input
                   type="checkbox"
                   checked={settings.sets.includes(set)}

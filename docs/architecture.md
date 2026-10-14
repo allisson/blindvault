@@ -224,6 +224,17 @@ every project through the references in the root `tsconfig.json`.
   section of Settings. The Safari warning before unlock, and the alert both use, live in
   `components.tsx`, with the cards. `e2e/storage-state.spec.ts` replaces `navigator.storage`'s
   answers, the user agent and `matchMedia` before the app loads.
+- **Layouts (Phase 3, D15, D197).** `src/ui/VaultShell.tsx` renders the folder tree, the item
+  list and the item detail at the same places of one tree in every layout, and only styles or hides
+  them, so a resize remounts nothing; Settings hides the panes instead of replacing them. On tablet
+  the folder tree is a drawer over the list. `src/app/back-button.ts` keeps one history entry, with
+  no state and the same URL, while the navigation is deeper than the root (`Navigation.deeper()`),
+  and turns `popstate` into `nav.back()`; it is the only `history.pushState` call the lint rule of
+  D167 lets through. `src/app/shortcuts.ts` decides when N starts a new item. `TARGET` gives every
+  control, and each checkbox or radio label, 44 px on a coarse pointer. `e2e/layout.spec.ts`
+  checks the panes, the lock state, masked secrets and no horizontal overflow at 390, 800 and
+  1280 px, state kept across both breakpoints, the drawer, the system's back, N, and, in Chromium
+  with `isMobile`, every control's height.
 - **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
   has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
   landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it
