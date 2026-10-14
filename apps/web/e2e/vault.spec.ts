@@ -1,5 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
+import { formAlert } from './alerts';
 import { confirmPhrase, createVault } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
@@ -95,7 +96,7 @@ test('refuses a near miss and an unrelated password alike, changing nothing stor
   const before = await storedLocalConfig(page);
   for (const attempt of [`${PASSWORD.slice(0, -1)}5`, 'meadow-copper-signal-ferry-5830']) {
     await unlock(page, attempt);
-    const alert = page.getByRole('alert');
+    const alert = formAlert(page);
     await expect(alert).toHaveText('Wrong password.', { timeout: 30_000 });
     // The typed password does not stay in the field.
     await expect(page.getByTestId('unlock-password')).toHaveValue('');

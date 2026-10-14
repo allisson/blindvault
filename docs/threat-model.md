@@ -98,7 +98,7 @@ encrypted backups and synchronized records (§3).
 
 | Risk | Status | Mitigation |
 | --- | --- | --- |
-| Browser storage eviction | Partially protected | Persistent storage request, backups, replication; Safari warnings (D55, D103) |
+| Browser storage eviction | Partially protected | Persistent storage request, backups, replication; the persistence status and storage warnings: Safari in a plain tab, not kept on the only device, nearly full (D55, D103, D119, D196) |
 | Accidental deletion | Protected | Trash with 30-day purge, item history (D6, D7) |
 | Sync conflict | Protected (items), limited (folders) | HLC, LWW, item history; folders without history (D14) |
 | Device clock wrong | Limited | Future-clock bound, read-only rules (D73, D74, D76, D149) |

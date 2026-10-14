@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import { sharedOrigin } from '../app/origin';
+import { type StorageWarning, safariTab } from '../app/storage-state';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { AboutBuild } from './About';
@@ -217,6 +218,33 @@ export function SharedOriginWarning() {
   );
 }
 
+/** A storage warning: none can be dismissed, each goes once its condition ends (D196). */
+export function StorageAlert({
+  warning,
+  text,
+}: {
+  readonly warning: StorageWarning;
+  readonly text: string;
+}) {
+  return (
+    <p
+      role="alert"
+      data-testid="storage-warning"
+      data-warning={warning}
+      className="bg-red-50 px-4 py-2 text-sm text-red-900 dark:bg-red-950 dark:text-red-100"
+    >
+      {text}
+    </p>
+  );
+}
+
+/** Before unlock only the Safari warning applies: it does not depend on the vault (D55, D196). */
+export function SafariTabWarning() {
+  const m = useMessages();
+  if (!safariTab()) return null;
+  return <StorageAlert warning="safari-tab" text={m.storage.safariTab} />;
+}
+
 /** A centered card for the screens shown before unlock. */
 export function Card({
   title,
@@ -236,6 +264,7 @@ export function Card({
   return (
     <div className="flex min-h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <SharedOriginWarning />
+      <SafariTabWarning />
       <PreviewBanner />
       <UpdateBanner />
       <main className="flex flex-1 items-center justify-center p-4">
