@@ -208,6 +208,12 @@ every project through the references in the root `tsconfig.json`.
   `## Service worker` section when `sw.js` changed since the previous tag, the release body), the
   attested files, the GitHub Release, the Pages deployment, then a check of the served files
   against the release. It replaces the hand-started preview workflow.
+- **Self-hosting (Phase 3, D195).** `deploy/Caddyfile` and `deploy/nginx/blindvault.conf` send
+  the CSP of `build/csp.ts` as a header, with `frame-ancestors 'none'`, and the other headers of
+  `docs/self-hosting.md`; `build/csp.test.ts` checks both against `build/csp.ts`, which the build
+  also uses. `e2e/self-hosting/serve.sh` serves `dist/` with either in Docker, and
+  `playwright.self-hosting.config.ts` runs `self-hosting.spec.ts` (excluded from the main suite)
+  with the smoke, PWA and About specs against it, in the CI job `self-hosting`.
 - **Key handles.** Keys never leave `packages/crypto` as bytes: a key is an opaque object whose
   bytes sit in a private field, used only by `crypto` functions. Every handle is registered in a
   keyring; lock wipes them all with `sodium_memzero`, and any later use throws (CRYPTO-INV-005,
@@ -390,11 +396,13 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 
 ### CI and release
 
-Every GitHub Action is pinned to a commit, with its version in a comment.
+Every GitHub Action is pinned to a commit, with its version in a comment, and every Docker image to a digest.
 
 | Dependency | Where | Justification |
 | --- | --- | --- |
 | `actions/attest-build-provenance` v4.2.2 | `.github/workflows/release.yml` | Signs the release files with a build provenance attestation (Sigstore, through GitHub), the signing of overview §12 (D194). Anyone can check a file with `gh attestation verify`, with no key of the project to distribute. Phase 3. |
+| `nginx` 1.30.5 (Alpine image) | `apps/web/e2e/self-hosting/serve.sh`, CI job `self-hosting` | Serves the build with `deploy/nginx/blindvault.conf` for the self-hosting test (D195). Pinned by digest; the stable line. Test only. Phase 3. |
+| `caddy` 2.11.4 (Alpine image) | `apps/web/e2e/self-hosting/serve.sh`, CI job `self-hosting` | Serves the build with `deploy/Caddyfile` for the self-hosting test (D195). Pinned by digest. Test only. Phase 3. |
 
 ### Runtime
 

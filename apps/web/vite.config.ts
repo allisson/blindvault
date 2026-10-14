@@ -4,28 +4,14 @@ import react from '@vitejs/plugin-react';
 import { type Plugin, defineConfig } from 'vite';
 
 import { assetManifest } from './build/asset-manifest';
+import { META_CSP } from './build/csp';
 import { versionText } from './build/version';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version: string;
 };
 
-// The CSP of overview §11 (D83, D91), by <meta> so it works on static hosts. Only in the build:
-// the dev server injects inline scripts for hot reload.
-const CSP = [
-  "default-src 'none'",
-  "script-src 'self' 'wasm-unsafe-eval'",
-  "style-src 'self'",
-  "img-src 'self' data: blob:",
-  "worker-src 'self'",
-  "manifest-src 'self'",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "require-trusted-types-for 'script'",
-].join('; ');
-
+// Only in the build: the dev server injects inline scripts for hot reload.
 function csp(): Plugin {
   return {
     name: 'blindvault-csp',
@@ -33,7 +19,7 @@ function csp(): Plugin {
     transformIndexHtml: () => [
       {
         tag: 'meta',
-        attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP },
+        attrs: { 'http-equiv': 'Content-Security-Policy', content: META_CSP },
         injectTo: 'head-prepend',
       },
     ],

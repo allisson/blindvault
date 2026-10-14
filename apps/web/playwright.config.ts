@@ -4,6 +4,8 @@ const port = 4173;
 
 export default defineConfig({
   testDir: './e2e',
+  // Needs a server with the headers of deploy/ (playwright.self-hosting.config.ts).
+  testIgnore: 'self-hosting.spec.ts',
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
