@@ -4,7 +4,7 @@
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, startScreen } from './create';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9).
 test.setTimeout(120_000);
@@ -271,7 +271,7 @@ test.describe('on a coarse pointer', () => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/');
     expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-    await expect(page.getByRole('button', { name: 'Create a new vault' })).toBeVisible();
+    await startScreen(page);
     expect(await smallTargets(page), 'the first screen').toEqual([]);
     await createVault(page, PASSWORD);
     await newLogin(page);

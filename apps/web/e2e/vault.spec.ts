@@ -178,7 +178,12 @@ test.describe('in Portuguese', () => {
 
   test('shows the UI in pt-BR (D165)', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Criar um cofre novo' })).toBeVisible();
+    // Playwright's WebKit is Safari in a plain tab: the install advice comes first (D198).
+    const create = page.getByRole('button', { name: 'Criar um cofre novo' });
+    const advice = page.getByRole('button', { name: 'Continuar nesta aba' });
+    await expect(create.or(advice)).toBeVisible();
+    if (await advice.isVisible()) await advice.click();
+    await expect(create).toBeVisible();
     await expect(page.getByTestId('lock-state')).toHaveText('Bloqueado');
   });
 });

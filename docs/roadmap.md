@@ -248,7 +248,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] State UI: locked/unlocked, persistence status, last backup, storage warnings, in all three layouts (D196)
 - [x] Layout polish per form factor: drill-down navigation on mobile, drawer on tablet, three panes and keyboard shortcuts on desktop (D15, D197)
 - [x] Input adaptation via `pointer`/`hover` media queries (44 px touch targets, D197)
-- [ ] Full onboarding with three starts (create, pair, restore), making clear that no server can reset the vault
+- [x] Full onboarding with three starts (create, pair, restore), making clear that no server can reset the vault; the pair start explains today's path until Phase 4 (D198)
 
 ### PWA Gate
 
@@ -278,6 +278,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [x] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
+- [ ] The pair start of onboarding runs the pairing flow, and "Vault ready" after a pairing recommends a backup; the pairing recommendation after a creation or a restore offers it (§13.3, D198)
 - [ ] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
 - [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
 - [ ] Camera QR scanning and copy/paste fallback

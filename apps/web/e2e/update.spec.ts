@@ -8,7 +8,7 @@ import { extname, join, normalize } from 'node:path';
 import { type Page, expect, test } from '@playwright/test';
 
 import { MANIFEST, writeManifest } from '../build/asset-manifest';
-import { createVault } from './create';
+import { createVault, startScreen } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9).
 test.setTimeout(180_000);
@@ -195,7 +195,7 @@ test('does not offer a deploy whose files fail their hashes (D191)', async ({ pa
   );
   expect(reply).toEqual({ type: 'none' });
   await becomeVisible(page);
-  await expect(page.getByRole('button', { name: 'Create a new vault' })).toBeVisible();
+  await startScreen(page);
   await expect(page.getByTestId('update-banner')).toHaveCount(0);
 });
 

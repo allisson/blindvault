@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, startScreen } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9).
 test.setTimeout(120_000);
@@ -35,12 +35,12 @@ test('shows the version and the hash of the running build, before unlock and in 
   const hash = createHash('sha256').update(manifest).digest('hex');
 
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Create a new vault' })).toBeVisible();
+  await startScreen(page);
   await page.getByRole('button', { name: 'About', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'About BlindVault' })).toBeVisible();
   await expectAbout(page, hash);
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Create a new vault' })).toBeVisible();
+  await startScreen(page);
 
   await createVault(page, PASSWORD);
   await page.getByRole('button', { name: 'Settings' }).first().click();

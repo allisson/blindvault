@@ -235,6 +235,16 @@ every project through the references in the root `tsconfig.json`.
   checks the panes, the lock state, masked secrets and no horizontal overflow at 390, 800 and
   1280 px, state kept across both breakpoints, the drawer, the system's back, N, and, in Chromium
   with `isMobile`, every control's height.
+- **Onboarding (Phase 3, §13.3, D198).** `src/ui/Start.tsx` opens with what having no server
+  means, then the three starts; the pair start explains today's path (a backup restored here) until
+  Phase 4. On a Safari tab (`safariTab()`) the advice to install first comes before the starts, and
+  the `VaultHeld` context gives the Safari warning its text for a device with no vault, and hides it while starting. After a
+  creation or a restore the controller holds `ready` until `dismissReady()` or a lock, and
+  `src/ui/Ready.tsx` shows "Vault ready" in place of the panes, with the recommendations that
+  `src/app/ready.ts` (`readyAdvice`) orders; each action opens Settings at a `SettingsFocus`.
+  `e2e/create.ts` `startScreen()` passes the install advice, since Playwright's WebKit is Safari in
+  a plain tab, and `openVault()` closes "Vault ready"; `e2e/onboarding.spec.ts` covers the first
+  screen, the pair start, "Vault ready" after a creation and the Safari advice.
 - **Checked password fills (Phase 3).** Playwright's `fill` focuses a field, then types into whatever
   has the focus, without checking. `apps/web/e2e/password.ts` (`fillPassword`) checks the value
   landed and otherwise fails at once, saying whether the field was recreated or the focus moved; it

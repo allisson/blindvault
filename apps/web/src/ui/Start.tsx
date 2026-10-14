@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 
 import { type PasskeyOutcome, type Status, type VaultController } from '../app/controller';
 import { useMessages } from '../i18n/context';
-import { Button, Card, Field } from './components';
+import { safariTab } from '../app/storage-state';
+import { Button, Card, Field, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
 import { ResetPassword } from './ResetPassword';
 import { RestoreVault } from './RestoreVault';
@@ -18,7 +19,12 @@ export function Start({
   const m = useMessages();
   switch (status.kind) {
     case 'starting':
-      return <Card title={m.app.name}>{m.start.starting}</Card>;
+      return (
+        // Whether a vault exists is not known yet: the Safari warning waits (D198).
+        <VaultHeld.Provider value="unknown">
+          <Card title={m.app.name}>{m.start.starting}</Card>
+        </VaultHeld.Provider>
+      );
     case 'unsupported':
       return <Card title={m.app.name}>{m.start.unsupported}</Card>;
     case 'busy':
@@ -56,7 +62,11 @@ export function Start({
     case 'no-vault':
     case 'creating':
     case 'restoring':
-      return <NoVault controller={controller} status={status.kind} />;
+      return (
+        <VaultHeld.Provider value="none">
+          <NoVault controller={controller} status={status.kind} />
+        </VaultHeld.Provider>
+      );
     case 'locked':
     case 'unlocking':
     case 'replacing':
@@ -200,7 +210,10 @@ function Unlock({
   );
 }
 
-/** No vault yet: create one, or restore one from a backup (overview §10, §13.3). */
+/**
+ * No vault yet: the three starts (overview §13.3, D198), after the advice to install first on a
+ * Safari tab (D103). Pairing comes with Phase 4: until then its start explains today's path.
+ */
 function NoVault({
   controller,
   status,
@@ -209,7 +222,9 @@ function NoVault({
   readonly status: 'no-vault' | 'creating' | 'restoring';
 }) {
   const m = useMessages();
-  const [choice, setChoice] = useState<'create' | 'restore' | undefined>();
+  const [choice, setChoice] = useState<'create' | 'pair' | 'restore' | undefined>();
+  // Not stored: a reload shows the advice again (D198).
+  const [inTab, setInTab] = useState(false);
   const shown = status === 'creating' ? 'create' : status === 'restoring' ? 'restore' : choice;
   const back = () => {
     setChoice(undefined);
@@ -223,9 +238,49 @@ function NoVault({
       <RestoreVault controller={controller} working={status === 'restoring'} onCancel={back} />
     );
   }
+  if (shown === 'pair') {
+    return (
+      <Card title={m.pair.title}>
+        <p className="text-sm">{m.pair.later}</p>
+        <p className="text-sm">{m.pair.today}</p>
+        <div className="flex flex-col gap-2">
+          <Button
+            onClick={() => {
+              setChoice('restore');
+            }}
+          >
+            {m.start.restore}
+          </Button>
+          <Button variant="quiet" onClick={back}>
+            {m.app.back}
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+  if (!inTab && safariTab()) {
+    return (
+      <Card title={m.start.installTitle}>
+        <p className="text-sm">{m.start.installWhy}</p>
+        <p className="text-sm">{m.start.installHow}</p>
+        <Button
+          variant="quiet"
+          onClick={() => {
+            setInTab(true);
+          }}
+        >
+          {m.start.continueTab}
+        </Button>
+      </Card>
+    );
+  }
   return (
     <Card title={m.app.name}>
-      <p className="text-sm">{m.start.chooseIntro}</p>
+      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm" data-testid="no-server">
+        <li>{m.start.chooseIntro}</li>
+        <li>{m.start.noReset}</li>
+        <li>{m.start.recoveryOnly}</li>
+      </ul>
       <div className="flex flex-col gap-2">
         <Button
           onClick={() => {
@@ -233,6 +288,14 @@ function NoVault({
           }}
         >
           {m.start.create}
+        </Button>
+        <Button
+          variant="quiet"
+          onClick={() => {
+            setChoice('pair');
+          }}
+        >
+          {m.start.pair}
         </Button>
         <Button
           variant="quiet"

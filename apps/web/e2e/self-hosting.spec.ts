@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { HEADER_CSP } from '../build/csp';
+import { startScreen } from './create';
 
 // Runs only against a self-hosted server with a configuration of deploy/ (playwright.self-hosting
 // .config.ts, docs/self-hosting.md, D195): the preview server of the main suite sends no headers.
@@ -106,7 +107,7 @@ test('keeps no handle for a page of another origin that opens it (D195)', async 
     (window as unknown as { opened: Window | null }).opened = window.open(url);
   }, `${origin}/`);
   const app = await popup;
-  await expect(app.getByRole('button', { name: 'Create a new vault' })).toBeVisible();
+  await startScreen(app);
   // Cross-Origin-Opener-Policy put the app in another browsing context group: the opener's handle
   // is closed, and the app has no opener.
   await expect

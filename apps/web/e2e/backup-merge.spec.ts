@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Browser, type BrowserContext, type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openVault, startScreen } from './create';
 
 // Creation, export, restore and merge each derive Argon2id at about 1 s (D9).
 test.setTimeout(300_000);
@@ -91,6 +91,7 @@ test('merges a backup made on another installation, keeping the losing edit in h
 
   // Installation B: the same vault, by a fresh restore of A's backup.
   const b = await installation(browser, logged);
+  await startScreen(b);
   await button(b, 'Restore from a backup').click();
   await b.getByTestId('restore-file').setInputFiles({
     name: 'blindvault-backup.bvault',
@@ -102,7 +103,7 @@ test('merges a backup made on another installation, keeping the losing edit in h
   await b.getByTestId('new-password').fill(B_PASSWORD);
   await b.getByTestId('confirm-password').fill(B_PASSWORD);
   await button(b, 'Restore').click();
-  await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
+  await openVault(b);
 
   // Concurrent edits: A first, then B, so B's is the newer write.
   await setPassword(a, ON_A);

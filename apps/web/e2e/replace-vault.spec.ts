@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Browser, type BrowserContext, type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openVault } from './create';
 
 // Creation, export and replacement each derive Argon2id at about 1 s (D9).
 test.setTimeout(300_000);
@@ -83,7 +83,7 @@ async function replaceWith(page: Page, file: Buffer, words: readonly string[]) {
   await expect(button(page, 'Replace')).toBeDisabled();
   await page.getByTestId('replace-understood').check();
   await button(page, 'Replace').click();
-  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
+  await openVault(page);
 }
 
 test('replaces the locked vault with a backup of another vault, deleting the old database (D89, D183)', async ({

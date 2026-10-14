@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, startScreen } from './create';
 
 // Creation, export and restore each calibrate or derive Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -39,7 +39,7 @@ async function loseStorage(page: Page): Promise<void> {
     }
   });
   await page.goto('/');
-  await expect(button(page, 'Restore from a backup')).toBeVisible();
+  await startScreen(page);
 }
 
 test('a restored device is unregistered, is told to get re-admitted, and retires the lost device (D30, D41, D119, D186)', async ({
@@ -82,10 +82,11 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await button(page, 'Restore').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
 
-  // Once, right after the restore: re-admission is recommended (D30, D186).
-  await expect(page.getByTestId('readmission')).toContainText('only through backups');
-  await button(page, 'Open Settings').click();
-  await expect(page.getByTestId('readmission')).toHaveCount(0);
+  // Once, right after the restore, on "Vault ready": re-admission is recommended (D30, D186, D198).
+  await expect(page.getByTestId('ready-readmit')).toContainText('only through backups');
+  await expect(page.getByTestId('ready-pair')).toHaveCount(0);
+  await button(page, 'See the devices').click();
+  await expect(page.getByTestId('ready')).toHaveCount(0);
 
   // Settings keeps it while unregistered: the old device is listed, this one is not.
   await expect(devices.getByTestId('devices-readmit')).toBeVisible();
@@ -119,6 +120,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await page.getByTestId('unlock-password').fill(NEW_PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await expect(page.getByTestId('ready')).toHaveCount(0);
   await expect(page.getByTestId('readmission')).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await expect(devices.getByTestId('devices-retired-count')).toBeVisible();

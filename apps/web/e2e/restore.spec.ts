@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openVault, startScreen } from './create';
 import { fillPassword } from './password';
 
 // Creation, export and restore each calibrate or derive Argon2id at about 1 s (D9).
@@ -66,7 +66,7 @@ async function loseStorage(page: Page): Promise<void> {
     }
   });
   await page.goto('/');
-  await expect(button(page, 'Restore from a backup')).toBeVisible();
+  await startScreen(page);
 }
 
 async function databases(page: Page): Promise<number> {
@@ -124,6 +124,10 @@ test('restores a backup by the Recovery Phrase after the browser lost its storag
   // Nothing is written before the local password (D33).
   expect(await databases(page)).toBe(0);
   await setLocalPassword(page, NEW_PASSWORD);
+  // Opened by the phrase: "Vault ready" does not recommend checking it (D43, D198).
+  await expect(page.getByTestId('ready')).toBeVisible();
+  await expect(page.getByTestId('ready-check-phrase')).toHaveCount(0);
+  await openVault(page);
   await expect(button(page, 'ACME')).toBeVisible();
   await expect(page.getByTestId('after-restore')).toHaveCount(0);
 
@@ -166,12 +170,27 @@ test('restores a backup by its export password, then recommends Check Recovery P
   await button(page, 'Open the backup').click();
   await expect(page.getByTestId('restore-opened')).toBeVisible({ timeout: 30_000 });
   await setLocalPassword(page, NEW_PASSWORD);
+  // "Vault ready" lists Check Recovery Phrase before re-admission (§13.3, D43, D186, D198).
+  const ready = page.getByTestId('ready');
+  await expect(ready.getByTestId('ready-check-phrase')).toContainText(
+    'Recovery Phrase still opens it',
+  );
+  // Passkey unlock comes first where the browser has it, which differs between browsers.
+  await expect(ready.locator('li:not([data-testid="ready-passkey"])')).toHaveText([
+    /Recovery Phrase still opens it/,
+    /only through backups/,
+    /Make a backup/,
+  ]);
+  // Its action opens Settings with the cursor in the check; back returns to "Vault ready".
+  await button(page, 'Check the Recovery Phrase').click();
+  await expect(page.getByTestId('check-phrase')).toBeFocused();
+  await button(page, 'Back').click();
+  await expect(ready).toBeVisible();
+  // Closing it counts as both one-time notices: no banner repeats them.
+  await openVault(page);
   await expect(button(page, 'ACME')).toBeVisible();
-  await expect(page.getByTestId('after-restore')).toContainText('Recovery Phrase still opens it');
-  // The re-admission notice has its own Dismiss (D186): this one dismisses only this notice.
-  await page.getByTestId('after-restore').getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('after-restore')).toHaveCount(0);
-  await expect(page.getByTestId('readmission')).toBeVisible();
+  await expect(page.getByTestId('readmission')).toHaveCount(0);
 
   const secrets = [PASSWORD, NEW_PASSWORD, SECRET, passphrase];
   expect(logged.filter((line) => secrets.some((s) => line.includes(s)))).toEqual([]);

@@ -7,10 +7,15 @@ export type ListScreen =
   | { readonly name: 'trash' }
   | { readonly name: 'folder'; readonly id: Uint8Array };
 
+/**
+ * Where Settings puts the cursor: `backup` in the export's password field (D185, D188), the others
+ * at their section, from "Vault ready" (D198).
+ */
+export type SettingsFocus = 'backup' | 'passkey' | 'recovery' | 'devices';
+
 export type Screen =
   | ListScreen
-  /** `focus: 'backup'` puts the cursor in the export's password field (D185, D188). */
-  | { readonly name: 'settings'; readonly focus?: 'backup' }
+  | { readonly name: 'settings'; readonly focus?: SettingsFocus }
   | { readonly name: 'item'; readonly id: Uint8Array }
   | { readonly name: 'edit'; readonly id: Uint8Array }
   | { readonly name: 'history'; readonly id: Uint8Array }

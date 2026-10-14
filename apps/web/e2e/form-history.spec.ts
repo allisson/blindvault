@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { answerConfirmation, readPhrase } from './create';
+import { answerConfirmation, openVault, readPhrase } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(180_000);
@@ -71,6 +71,7 @@ test('keeps vault content out of the form history and the spellchecker (D174, D1
   await button(page, 'Create vault').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
   await expectNoneKept(page);
+  await openVault(page);
 
   // The folder forms: new folder, new subfolder, rename.
   await button(page, '+ New folder').click();
