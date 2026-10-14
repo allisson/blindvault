@@ -4423,8 +4423,10 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
     t: Awaited<ReturnType<typeof transferred>>,
     records: readonly Uint8Array[] = t.records,
     store = new MemoryStore(),
+    replacesVaultId?: Uint8Array,
   ) {
     const session = await VaultSession.join({
+      ...(replacesVaultId ? { replacesVaultId } : {}),
       store,
       keyring: t.keyringB,
       kek: kek(t.keyringB, 2),
@@ -4737,6 +4739,32 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
         envelope: Uint8Array.of(0) as RecordEnvelope,
       });
       await expect(join(t, t.records, store)).rejects.toThrow(RangeError);
+      expect(t.keyringB.wiped).toBe(true);
+    });
+
+    it('records the vault it replaces, another one, until forgotten (D89, D96, D150)', async () => {
+      const t = await transferred();
+      const replaced = randomId();
+      const { session, store } = await join(t, t.records, new MemoryStore(), replaced);
+      expect(store.commits).toHaveLength(1);
+      expect(parseLocalConfig(store.localConfig).replacesVaultId).toEqual(replaced);
+      await session.forgetReplacedVault();
+      expect(parseLocalConfig(store.localConfig).replacesVaultId).toBeUndefined();
+    });
+
+    it('refuses a replaced vaultId that is not an ID, writing nothing', async () => {
+      const t = await transferred();
+      const store = new MemoryStore();
+      await expect(join(t, t.records, store, new Uint8Array(15))).rejects.toThrow(RangeError);
+      expect(store.commits).toEqual([]);
+      expect(t.keyringB.wiped).toBe(true);
+    });
+
+    it('refuses to replace the vault it joins: the same vaultId commits in place (D153)', async () => {
+      const t = await transferred();
+      const store = new MemoryStore();
+      await expect(join(t, t.records, store, t.grant.vaultId.slice())).rejects.toThrow(RangeError);
+      expect(store.commits).toEqual([]);
       expect(t.keyringB.wiped).toBe(true);
     });
 

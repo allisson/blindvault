@@ -278,7 +278,8 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] New device initialization: local password and KEK before the handshake, display name sent with the acknowledgement, Device record written by A, records and Local Config persisted in one transaction after the first sync, commit acknowledgement (D30, D33)
 - [x] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [x] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
-- [ ] Pairing only into a device without a vault; an existing vault must be explicitly erased first, after a warning (D13)
+- [x] Pairing only into a device without a vault, or replacing the locked vault from the unlock screen after the erase warning and an explicit confirmation; a failed pairing leaves it intact (D13, D150, D153, D183, D204)
+- [ ] Erase: the warning, the confirmation naming this device's Device record or saying it cannot while locked, the Web Lock held (§7, D41, D154, D183)
 - [x] The pair start of onboarding runs the pairing flow, and "Vault ready" after a pairing recommends a backup; the pairing recommendation after a creation or a restore offers it (§13.3, D198)
 - [x] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
 - [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
@@ -299,7 +300,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Pairing interrupted at any step before the commit, including a failed first sync, leaves the new device's storage empty (D33)
 - [ ] Duplicate pairing and expired sessions handled
 - [ ] A lock or hidden-app lock on either device aborts the pairing, leaving the joining device's storage empty (D93)
-- [ ] Pairing into a device that already holds a different vault is blocked until the user erases it (D13)
+- [ ] Pairing into a device that already holds a vault replaces it only after the user confirms; an interruption before the commit leaves it intact (D150, D153)
 - [ ] An unregistered device is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014)
 - [ ] No Device record is written outside vault creation, re-founding or a SAS-confirmed pairing or re-admission (CRYPTO-INV-007)
 - [x] Official Noise test vectors pass in CI

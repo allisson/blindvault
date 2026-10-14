@@ -270,6 +270,10 @@ const en = {
       'The vault on this device is deleted and replaced by the backup, whether it is of this vault or of another one. Changes that exist only on this device are lost. If you can still unlock the vault, make a backup first, in Settings.',
     retire:
       "Afterwards, retire this device's Device record from another device of the replaced vault: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.",
+    pairChoose: 'Replace by pairing with another device…',
+    pairTitle: 'Replace this vault by pairing',
+    pairWarning:
+      'The vault on this device is deleted and replaced by the vault of the device you pair with, whether it is this vault or another one. Changes that exist only on this device are lost. If you can still unlock the vault, make a backup first, in Settings.',
     understand: 'I understand that the vault on this device will be replaced',
     submit: 'Replace',
     replacing: 'Replacing the vault…',
@@ -1016,6 +1020,10 @@ const ptBR: Messages = {
       'O cofre deste dispositivo é apagado e substituído pelo backup, seja ele deste cofre ou de outro. As mudanças que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
     retire:
       'Depois, aposente o registro de dispositivo deste dispositivo a partir de outro dispositivo do cofre substituído: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
+    pairChoose: 'Substituir por pareamento com outro dispositivo…',
+    pairTitle: 'Substituir este cofre por pareamento',
+    pairWarning:
+      'O cofre deste dispositivo é apagado e substituído pelo cofre do dispositivo com que você parear, seja ele este cofre ou outro. As mudanças que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
     understand: 'Entendo que o cofre deste dispositivo será substituído',
     submit: 'Substituir',
     replacing: 'Substituindo o cofre…',

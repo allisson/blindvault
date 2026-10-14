@@ -335,6 +335,15 @@ every project through the references in the root `tsconfig.json`.
   Playwright spec `e2e/pairing.spec.ts` runs on a second preview server bound to `127.0.0.1`
   (`playwright.config.ts`), because Playwright's Firefox gathers no candidate on `localhost`, and
   skips WebKit on Linux only.
+- **Replace by pairing (Phase 4, `apps/web`, D150, D153, D204).** `beginJoin` takes `replace`
+  from the locked status only, keeping the old vault's database, `vaultId`, Web Lock and passkey
+  until the commit; the status is `joining` with `replacing`, which the start screen shows inside
+  the unlock flow, and any end before the commit goes back to `locked`. `#join` commits as
+  `restore(…, {replace})` does: another vault in a database of its own, recording the replaced
+  `vaultId` (`JoinOptions.replacesVaultId` in `packages/vault`, refused when it is not another
+  vault's ID), then the old database deleted; the same vault in the existing database, cleared in
+  the commit's transaction. A take-over by another app window loses the Web Lock, which locks and
+  ends the pairing; a window opened during the pairing stays `busy` on the installation guard.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

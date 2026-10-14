@@ -18,6 +18,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { VaultController } from './controller';
 import { type PairingPort, type PairingStage, STUN_SERVERS } from './pairing';
+import { type PasskeyPort } from './passkey';
 
 beforeAll(initCrypto);
 
@@ -136,13 +137,19 @@ afterEach(async () => {
   for (const c of controllers.splice(0)) await c.close();
 });
 
-function controller(prefix: string, factory: IDBFactory, pairing?: PairingPort) {
+function controller(
+  prefix: string,
+  factory: IDBFactory,
+  pairing?: PairingPort,
+  passkeys?: PasskeyPort,
+) {
   const c = new VaultController({
     factory,
     locks: locksOf(prefix),
     kdf: fakeKdf,
     now: () => 1_760_000_000_000,
     ...(pairing ? { pairing } : {}),
+    ...(passkeys ? { passkeys } : {}),
   });
   controllers.push(c);
   return c;
@@ -178,9 +185,9 @@ async function created(c: VaultController): Promise<void> {
 async function toSas(
   sameNetwork = true,
   vaultOnA: (a: VaultController) => Promise<void> = created,
+  factoryB = new IDBFactory(),
+  net = network(),
 ) {
-  const net = network();
-  const factoryB = new IDBFactory();
   const a = controller('a', new IDBFactory(), net.a);
   const b = controller('b', factoryB, net.b);
   await vaultOnA(a);
@@ -476,5 +483,237 @@ describe('pairing through the controller (§8.4, D202, D203)', () => {
       .sort();
     expect(names).toEqual(['Creator', 'Firefox on Linux', 'Own name']);
     expect(session(a).registered).toBe(true);
+  });
+});
+
+describe('replace by pairing (§8.4, D150, D153, D154, D204)', () => {
+  const PASSWORD_NEW = 'a third horse battery staple comet';
+
+  /** One credential whose PRF output is its input XOR 7, with user verification (D75). */
+  function authenticator() {
+    const forgotten: Uint8Array[] = [];
+    const result = (prfInput: Uint8Array) => {
+      const authenticatorData = new Uint8Array(37);
+      authenticatorData[32] = 0x01 | 0x04;
+      return {
+        credentialId: Uint8Array.of(9),
+        authenticatorData,
+        prfOutput: prfInput.map((b) => b ^ 7),
+      };
+    };
+    const port: PasskeyPort = {
+      supported: () => Promise.resolve(true),
+      create: (prfInput) => Promise.resolve(result(prfInput)),
+      get: (_id, prfInput) => Promise.resolve(result(prfInput)),
+      forget: (id) => {
+        forgotten.push(id);
+        return Promise.resolve(false);
+      },
+    };
+    return { port, forgotten };
+  }
+
+  /** A holds a vault with an item and invites; B is given, locked or not. Both reach the SAS. */
+  async function pairWith(
+    b: VaultController,
+    net: ReturnType<typeof network>,
+    a?: VaultController,
+  ) {
+    const inviter = a ?? controller('a', new IDBFactory(), net.a);
+    if (!a) {
+      await created(inviter);
+      await session(inviter).createItem({
+        templateId: 'login',
+        templateVersion: 1,
+        title: 'Bank',
+        fields: [],
+        tags: [],
+      });
+    }
+    expect(
+      await inviter.startPairing(
+        { kind: 'password', password: PASSWORD_A },
+        { sameNetwork: true, defaultName: 'unused' },
+      ),
+    ).toBe('ok');
+    const offer = textOf(await stage(inviter, 'offer'));
+    expect(
+      await b.beginJoin(PASSWORD_NEW, { sameNetwork: true, name: 'Replacing', replace: true }),
+    ).toBe('ok');
+    expect(b.status).toEqual({ kind: 'joining', replacing: true });
+    expect(await b.joinOffer(offer)).toBe('ok');
+    expect(inviter.pairingAnswer(textOf(await stage(b, 'answer')))).toBe('ok');
+    await stage(inviter, 'sas');
+    await stage(b, 'sas');
+    return inviter;
+  }
+
+  /** B holds a vault of its own, with one item, locked. */
+  async function lockedB(net: ReturnType<typeof network>, passkeys?: PasskeyPort) {
+    const factory = new IDBFactory();
+    const b = controller('b', factory, net.b, passkeys);
+    await b.start();
+    b.newRecoveryPhrase();
+    await b.create(PASSWORD_B, 'Old name');
+    await session(b).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Old item',
+      fields: [],
+      tags: [],
+    });
+    if (passkeys) expect(await b.setUpPasskey(PASSWORD_B)).toMatchObject({ kind: 'ok' });
+    const vaultId = session(b).vaultId;
+    b.lock();
+    return { b, factory, vaultId };
+  }
+
+  async function titles(c: VaultController, password: string) {
+    expect(await c.unlock(password)).toBe('ok');
+    return session(c)
+      .items()
+      .map((i) => i.item?.title);
+  }
+
+  it('replaces a locked vault of another vault: the old database goes after the commit (D89, D150)', async () => {
+    const net = network();
+    const { port, forgotten } = authenticator();
+    const { b, factory, vaultId } = await lockedB(net, port);
+    const a = await pairWith(b, net);
+    a.confirmSas();
+    b.confirmSas();
+    await vi.waitFor(() => {
+      expect(b.status.kind).toBe('unlocked');
+    });
+    expect(session(b).vaultId).toEqual(session(a).vaultId);
+    expect(session(b).vaultId).not.toEqual(vaultId);
+    expect(b.ready).toEqual({ start: 'paired' });
+    expect(await databases(factory)).toBe(1);
+    // The old vault's passkey: the authenticator is asked to forget it, or the user is told (D120).
+    expect(forgotten).toEqual([Uint8Array.of(9)]);
+    expect(b.hasPasskey).toBe(false);
+    expect(b.leftoverPasskey).toBe(true);
+    expect(await stage(a, 'done')).toMatchObject({ kind: 'done', name: 'Replacing' });
+
+    b.lock();
+    expect(await b.unlock(PASSWORD_B)).toBe('wrong-password');
+    expect(await titles(b, PASSWORD_NEW)).toEqual(['Bank']);
+    // A startup keeps only the new vault (D150).
+    await b.close();
+    const again = controller('b', factory);
+    await again.start();
+    expect(await titles(again, PASSWORD_NEW)).toEqual(['Bank']);
+  });
+
+  it('replaces a locked vault of the same vaultId in its own database (D153)', async () => {
+    const net = network();
+    const factory = new IDBFactory();
+    const { a, b } = await toSas(true, created, factory, net);
+    a.confirmSas();
+    b.confirmSas();
+    await vi.waitFor(() => {
+      expect(b.status.kind).toBe('unlocked');
+    });
+    a.cancelPairing();
+    const vaultId = session(b).vaultId;
+    // A change only B holds is lost by the replacement.
+    await session(b).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Only on B',
+      fields: [],
+      tags: [],
+    });
+    b.lock();
+
+    await pairWith(b, net, a);
+    a.confirmSas();
+    b.confirmSas();
+    await vi.waitFor(() => {
+      expect(b.status.kind).toBe('unlocked');
+    });
+    expect(session(b).vaultId).toEqual(vaultId);
+    expect(await databases(factory)).toBe(1);
+    expect(
+      session(b)
+        .items()
+        .map((i) => i.item?.title),
+    ).toEqual(['Bank']);
+    // B's old Device record stays, for the user to retire from another device (D183).
+    expect(
+      session(b)
+        .devices()
+        .map((d) => d.device.displayName)
+        .sort(),
+    ).toEqual(['Chrome on macOS', 'Firefox on Linux', 'Replacing']);
+    b.lock();
+    expect(await b.unlock(PASSWORD_B)).toBe('wrong-password');
+    expect(await titles(b, PASSWORD_NEW)).toEqual(['Bank']);
+  });
+
+  it('a SAS said to differ leaves the old vault intact and locked (D150, D153)', async () => {
+    const net = network();
+    const { b, factory } = await lockedB(net);
+    await pairWith(b, net);
+    b.rejectSas();
+    await stage(b, 'failed');
+    expect(b.status).toEqual({ kind: 'joining', replacing: true });
+    b.cancelPairing();
+    expect(b.status.kind).toBe('locked');
+    expect(await databases(factory)).toBe(1);
+    expect(await titles(b, PASSWORD_B)).toEqual(['Old item']);
+  });
+
+  it('a lock on B, the app hidden, ends the pairing and leaves the old vault locked (D93, D203)', async () => {
+    const net = network();
+    const { b } = await lockedB(net);
+    const a = await pairWith(b, net);
+    a.confirmSas();
+    b.lock();
+    expect(b.status.kind).toBe('locked');
+    expect(b.pairing).toBeUndefined();
+    expect(await stage(a, 'failed')).toEqual({ kind: 'failed', reason: 'locked', by: 'remote' });
+    expect(await titles(b, PASSWORD_B)).toEqual(['Old item']);
+  });
+
+  it('a take-over by another app window ends the pairing; the old vault stays (D154)', async () => {
+    const net = network();
+    const { b, factory } = await lockedB(net);
+    // Opened before the pairing: during it, the installation guard keeps a new window busy (D97).
+    const other = controller('b', factory);
+    await other.start();
+    expect(other.status.kind).toBe('elsewhere');
+    const a = await pairWith(b, net);
+    const late = controller('b', factory);
+    await late.start();
+    expect(late.status.kind).toBe('busy');
+    await other.takeOver();
+    expect(other.status.kind).toBe('locked');
+    await vi.waitFor(() => {
+      expect(b.status.kind).toBe('elsewhere');
+    });
+    expect(b.pairing).toBeUndefined();
+    expect(await stage(a, 'failed')).toEqual({ kind: 'failed', reason: 'locked', by: 'remote' });
+    expect(await titles(other, PASSWORD_B)).toEqual(['Old item']);
+  });
+
+  it('replaces only a locked vault, and only when asked (D183, D204)', async () => {
+    const net = network();
+    const { b } = await lockedB(net);
+    expect(await b.beginJoin(PASSWORD_NEW, { sameNetwork: true, name: 'B' })).toBe('unavailable');
+    expect(await b.unlock(PASSWORD_B)).toBe('ok');
+    expect(await b.beginJoin(PASSWORD_NEW, { sameNetwork: true, name: 'B', replace: true })).toBe(
+      'unavailable',
+    );
+    expect(b.status.kind).toBe('unlocked');
+    // With no vault, there is nothing to replace: the flag changes nothing.
+    const none = controller('c', new IDBFactory(), network().b);
+    await none.start();
+    expect(
+      await none.beginJoin(PASSWORD_NEW, { sameNetwork: true, name: 'C', replace: true }),
+    ).toBe('ok');
+    expect(none.status).toEqual({ kind: 'joining' });
+    none.cancelPairing();
+    expect(none.status.kind).toBe('no-vault');
   });
 });

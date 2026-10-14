@@ -328,7 +328,10 @@ export interface UnlockOptions {
 
 /** B's commit of a pairing (pairing-protocol.md §8 steps 5, 6, D33, D202). */
 export interface JoinOptions {
-  /** An empty store: B joins only into an empty storage here (D202). */
+  /**
+   * An empty store: B joins only into an empty storage here (D202). A replaced vault of the same
+   * `vaultId` is cleared by the store's first commit (D153).
+   */
   readonly store: RecordStore;
   /**
    * B's keyring, holding `kek`, the identity's private key and `masterKey`; the session owns it
@@ -348,6 +351,11 @@ export interface JoinOptions {
   readonly records: readonly Uint8Array[];
   /** A's static key, authenticated in the handshake. */
   readonly peerPublicKey: Uint8Array;
+  /**
+   * The `vaultId` of the vault this pairing replaces, another one (D89, D150): kept in the
+   * cleartext part of Local Config until `forgetReplacedVault` (D96).
+   */
+  readonly replacesVaultId?: Uint8Array;
   readonly now?: () => number;
 }
 
@@ -881,13 +889,21 @@ export class VaultSession {
    * checks, `protocol-error` when B's own Device record or A's is missing or holds another key, and
    * `retired-peer` when A's own is retired (D45). A record beyond the future-clock bound is read-only
    * until within it (D101). The commit records every device as seen (D53) and the completed sync
-   * with A (D34). A store that already holds records throws `RangeError`.
+   * with A (D34). A store that already holds records throws `RangeError`, as does a
+   * `replacesVaultId` that is not the ID of another vault (D150, D153).
    */
   static async join(options: JoinOptions): Promise<VaultSession> {
-    const { keyring, identity, peerPublicKey } = options;
+    const { keyring, identity, peerPublicKey, replacesVaultId } = options;
     const now = options.now ?? Date.now;
     let records: StoredRecord[];
     try {
+      if (
+        replacesVaultId &&
+        (!isId(replacesVaultId) || sameBytes(replacesVaultId, options.vaultId))
+      ) {
+        // The same vault is replaced in its own database (D153), never through this field.
+        throw new RangeError('replacesVaultId is the ID of another vault');
+      }
       if ((await options.store.records()).length > 0) {
         throw new RangeError('a pairing joins only into an empty storage');
       }

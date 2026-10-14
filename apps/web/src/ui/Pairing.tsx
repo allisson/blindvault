@@ -500,15 +500,18 @@ export function InviteDevice({
 
 /**
  * B, from the pair start: its local password first, then the pairing (§13.3, D33). `working` while
- * the controller is joining.
+ * the controller is joining. With `replace`, from the unlock screen: the pairing replaces the locked
+ * vault, once the user confirms it at the password step (D150, D204).
  */
 export function JoinVault({
   controller,
   working,
+  replace = false,
   onCancel,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
+  readonly replace?: boolean;
   readonly onCancel: () => void;
 }) {
   const m = useMessages();
@@ -516,6 +519,8 @@ export function JoinVault({
   const stage = usePairing(controller);
   const [password, setPassword] = useState<string | null>(null);
   const [sameNetwork, setSameNetwork] = useState(false);
+  const [understood, setUnderstood] = useState(false);
+  const ready = password !== null && password !== '' && (!replace || understood);
   const onChange = useCallback((value: string | null) => {
     setPassword(value);
   }, []);
@@ -546,10 +551,11 @@ export function JoinVault({
         onSubmit={(e) => {
           e.preventDefault();
           // Another app window holding the installation guard shows on the start screen (D97).
-          if (password)
+          if (password && ready)
             void controller.beginJoin(password, {
               sameNetwork,
               name: deviceName(navigator.userAgent),
+              replace,
             });
         }}
       >
@@ -559,8 +565,21 @@ export function JoinVault({
           onChange={onChange}
         />
         <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
+        {replace ? (
+          <label className={`${TARGET} flex items-center gap-2 text-sm`}>
+            <input
+              type="checkbox"
+              checked={understood}
+              onChange={(e) => {
+                setUnderstood(e.target.checked);
+              }}
+              data-testid="replace-understood"
+            />
+            {m.replace.understand}
+          </label>
+        ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={!password}>
+          <Button type="submit" disabled={!ready}>
             {j.submit}
           </Button>
           <Button variant="quiet" onClick={onCancel}>
