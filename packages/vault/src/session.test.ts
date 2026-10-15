@@ -4696,6 +4696,40 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
       );
     });
 
+    it('refuses a transfer naming identities the handshake did not authenticate (protocol-error, D211)', async () => {
+      // A admitted another key than B's, as it would for a man in the middle.
+      const t = await transferred();
+      const other = generateDeviceIdentity(new Keyring()).publicKey;
+      const u = await started();
+      await u.grant.admit(other, B_NAME);
+      const masterKey = importTransferKey(u.keyringB, exportTransferKey(u.grant.masterKey));
+      const store = new MemoryStore();
+      expect(
+        await rejection(
+          join({ ...u, records: await u.grant.records(), masterKey }, undefined, store),
+        ),
+      ).toBe('protocol-error');
+      expect(store.commits).toEqual([]);
+      expect(u.keyringB.wiped).toBe(true);
+
+      // The peer the handshake authenticated is not the vault's A.
+      const peer = await VaultSession.join({
+        store: new MemoryStore(),
+        keyring: t.keyringB,
+        kek: kek(t.keyringB, 2),
+        salt: SALT,
+        kdfParams: PARAMS,
+        identity: t.identityB,
+        vaultId: t.grant.vaultId,
+        masterKey: t.masterKey,
+        records: t.records,
+        peerPublicKey: other,
+        now: t.clock.now,
+      }).catch((e: unknown) => e);
+      expect((peer as JoinRejectedError).reason).toBe('protocol-error');
+      expect(t.keyringB.wiped).toBe(true);
+    });
+
     it("refuses a transfer where A's own Device record is retired (retired-peer, D45)", async () => {
       const t = await transferred();
       const keys = keysOf(t.a.store);

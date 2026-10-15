@@ -410,6 +410,14 @@ every project through the references in the root `tsconfig.json`.
   lands while the write is pending; the e2e helpers that act right after a Save now wait for the
   saved item. Found as a Firefox flake of `refounding.spec.ts` in CI runs 38582869362 and
   38754562281.
+- **Gate C tests (Phase 4, `packages/sync`, `packages/vault`, `tests/`, D211).** No production code
+  changes. `src/handshake.test.ts` records a finished handshake and replays it against a new
+  session of the same identities, with the old payloads and new ones. `tests/pairing.test.ts`
+  wraps each side's channel to keep the plaintext of the messages it sends, beside every frame of
+  the link, and looks for the Master Key in both; it reuses A's vault for a second pairing after an
+  interrupted one; `mitm()` runs four handshakes over two links, a man in the middle with its own
+  keys and A's nonce, and checks that the two devices show different SAS. The audit of the Device
+  record writes in `session.ts` is recorded under CRYPTO-INV-007.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

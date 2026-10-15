@@ -269,6 +269,72 @@ describe('pairing handshake (pairing-protocol.md §5)', () => {
       expect(failure(closed.responder)).toBe('closed');
     });
 
+    // §11, D211: the ephemeral keys of the live session change every key of the handshake, so a
+    // recorded handshake of the same two devices opens nothing, with the old payloads or new ones.
+    describe('on a replay of a recorded session (§11, D211)', () => {
+      const newSession = {
+        initiator: payload('initiator', { sessionId: new Uint8Array(16).fill(0x6b) }),
+        responder: payload('responder', { sessionId: new Uint8Array(16).fill(0x6b) }),
+      };
+
+      /** A finished handshake of `a` and `b`, recorded: messages 1 and 3 of I, message 2 of R. */
+      async function recorded() {
+        const keyring = new Keyring();
+        const identities = [generateDeviceIdentity(keyring), generateDeviceIdentity(keyring)] as [
+          DeviceIdentity,
+          DeviceIdentity,
+        ];
+        const messages: Uint8Array[] = [];
+        const old = await run({
+          identities,
+          intercept: (_d, m) => {
+            messages.push(m.slice());
+            return [m];
+          },
+        });
+        value(old.initiator).channel.close();
+        value(old.responder).channel.close();
+        return { identities, messages: messages.slice(0, 3) };
+      }
+
+      it.each([
+        ['the old payloads', payloadInitiator, payloadResponder],
+        ['new payloads', newSession.initiator, newSession.responder],
+      ])('the responder refuses messages 1 and 3 of I, with %s', async (_name, pi, pr) => {
+        const { identities, messages } = await recorded();
+        const [m1, , m3] = messages;
+        const link = memoryPair();
+        const responder = pairingHandshake(link.b, {
+          role: 'responder',
+          identity: identities[1],
+          payloadInitiator: pi,
+          payloadResponder: pr,
+        }).catch((e: unknown) => e);
+        await link.a.send(m1 ?? new Uint8Array());
+        expect(await link.a.receive()).toHaveLength(96);
+        await link.a.send(m3 ?? new Uint8Array());
+        expect(await responder).toMatchObject({ reason: 'invalid' });
+      });
+
+      it.each([
+        ['the old payloads', payloadInitiator, payloadResponder],
+        ['new payloads', newSession.initiator, newSession.responder],
+      ])('the initiator refuses message 2 of R, with %s', async (_name, pi, pr) => {
+        const { identities, messages } = await recorded();
+        const [, m2] = messages;
+        const link = memoryPair();
+        const initiator = pairingHandshake(link.a, {
+          role: 'initiator',
+          identity: identities[0],
+          payloadInitiator: pi,
+          payloadResponder: pr,
+        }).catch((e: unknown) => e);
+        expect(await link.b.receive()).toHaveLength(32);
+        await link.b.send(m2 ?? new Uint8Array());
+        expect(await initiator).toMatchObject({ reason: 'invalid' });
+      });
+    });
+
     it('on payloads of the wrong role or session, before sending anything', async () => {
       const sent: number[] = [];
       const { initiator, responder } = await run({
