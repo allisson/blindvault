@@ -13,7 +13,8 @@ test.setTimeout(240_000);
 
 test.beforeEach(({ browserName }) => {
   // Copy/paste with no camera: both sides send only mDNS names, which WebKit does not connect on
-  // the Linux runner (architecture.md). It joins with the QR task, when B holds the camera (D203).
+  // the Linux runner (architecture.md). The QR spec keeps the skip: its camera is a canvas, not a
+  // capture (D208).
   test.skip(
     browserName === 'webkit' && process.platform === 'linux',
     'WebKit on Linux does not connect over mDNS names only',

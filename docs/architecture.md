@@ -377,6 +377,20 @@ every project through the references in the root `tsconfig.json`.
   `ReadmitDevice` in `ui/Pairing.tsx` sits in Settings › Devices above pairing; the result reuses
   `MergeNotices` and lists rejected records. A pairing's A still refuses an answer that holds a vault,
   now pointing to re-admission.
+- **Camera QR (Phase 4, `apps/web`, D208).** `app/qr.ts` turns a payload's base45 text into the
+  module matrix (`qrcode-generator`, alphanumeric mode, error correction M) and an SVG path;
+  `ui/Qr.tsx` draws it (`QrCode`) and scans the other device's (`QrScanner`). `app/qr-reader.ts`
+  wraps `zxing-wasm/reader` for QR codes only, and `app/qr-wasm.ts`, imported only when a scan
+  starts, points it at the WASM file the build emits under `assets/`; the library's default
+  `locateFile` would fetch it from jsDelivr, which `connect-src 'self'` refuses anyway. `app/camera.ts`
+  opens the camera and sorts its failures into `denied`, `none` and `failed`. The scanner reads a
+  frame every 200 ms, at most 640 pixels wide, hands each text to the same `pairingAnswer` or
+  `joinOffer` as a paste, and stops every track on success or unmount. Vitest reads back the drawn
+  codes with the WASM loaded `?inline` (`vitest.config.ts` lists `.wasm` as an asset). Playwright
+  (`e2e/camera.ts`, `e2e/pairing-qr.spec.ts`) wraps `getUserMedia` to open the browser's fake
+  camera, now set in `playwright.config.ts` for Chromium and Firefox, and return a canvas stream
+  showing the other page's code. Playwright's WebKit swaps `navigator.mediaDevices` for a new object
+  shortly after load, so the wrapper goes through the `Navigator.prototype` getter.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`
@@ -606,6 +620,8 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 | `cbor2` 2.3.0 | `packages/crypto` | Deterministic CBOR with a strict decoder (D10), chosen at Gate 0 (below). Phase 1. |
 | `@scure/bip39` 2.4.0 | `packages/crypto`, `packages/vault` | BIP39 encoding of the Recovery Phrase (D2), the passphrase word list (D128) and seed-phrase word checks (stack). Encoding only: its PBKDF2 seed is never used, and its entropy comes from libsodium's RNG, never from its own generator. Its one dependency, `@noble/hashes` 2.4.0, supplies the SHA-256 of the checksum. Same line as BlindPass. Phase 1. |
 | `@zxcvbn-ts/core` 3.0.4, `@zxcvbn-ts/language-common` 3.0.4, `-language-en` 3.0.2, `-language-pt-br` 3.0.2 | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
+| `qrcode-generator` 2.0.4 | `apps/web` | Draws the pairing and re-admission QR codes (D208): MIT, no dependencies, gives the module matrix, so React draws the SVG without injected markup. Chosen in the Phase 0 spike. Phase 4. |
+| `zxing-wasm` 3.1.4 | `apps/web` | Reads the other device's QR code from the camera (D208): MIT, ZXing-C++ in WASM, the reader alone (953,527 bytes of WASM, 416 kB gzipped in the build, loaded only when a scan starts, from the app's origin). Read every code in the Phase 0 spike on Safari, which has no `BarcodeDetector`. Its dependencies are types only (`@types/emscripten`, `type-fest`). 3.1.5 was under 14 days old. Phase 4. |
 | `@base-ui/react` 1.x | `apps/web` | Headless, accessible dialog, menu and popover primitives, already used by BlindPass; no styling of its own, so Tailwind stays the only styling layer. Phase 1. |
 
 Each is pinned to an exact version at least 14 days old when its phase adds it. Runtime
@@ -621,7 +637,8 @@ records how it was built.
 from the same origin, never a CDN) are dependencies of the throwaway spike workspace only, outside
 lint and CI, and are deleted with it after Gate 0. They become product dependencies only when a
 phase adds them here with a justification; the spike measures the QR pair the product would use
-(`docs/spikes/README.md`).
+(`docs/spikes/README.md`). Phase 4 added `qrcode-generator` and `zxing-wasm`, not `barcode-detector`
+(D208).
 
 ### Chosen for later phases (Phase 0 selection, Gate 0)
 

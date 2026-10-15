@@ -283,7 +283,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] The pair start of onboarding runs the pairing flow, and "Vault ready" after a pairing recommends a backup; the pairing recommendation after a creation or a restore offers it (§13.3, D198)
 - [x] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
 - [x] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35, D206, D207)
-- [ ] Camera QR scanning and copy/paste fallback (copy/paste done, D203)
+- [x] Camera QR scanning and copy/paste fallback (D203, D208)
 - [x] Pairing session expiration; a lock on either device aborts the pairing (D93, D203)
 - [x] LAN-only mode (no STUN): "same network only", per pairing (D203)
 - [ ] Configurable STUN list

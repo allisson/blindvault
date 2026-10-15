@@ -16,10 +16,12 @@ import { type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice, TARGET, TextArea } from './components';
 import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
+import { QrCode, QrScanner } from './Qr';
 import { recordTypeName } from './Settings';
 
 // The pairing screens (§8.4, D202, D203): A invites from Settings › Devices, B joins from the pair
-// start. The payloads are copied and pasted; both devices show the SAS, and the user says on each
+// start. Each payload is shown as a QR code and as text; the other device scans it or pastes it
+// (D208). Both devices show the SAS, and the user says on each
 // whether it matches. A re-admission (§9, D207) runs from Settings › Devices on both devices, either
 // one showing its text first. The flow lives in the controller, so a lock ends it whatever is on
 // screen.
@@ -136,12 +138,16 @@ function SameNetwork({
   );
 }
 
-/** A payload to copy to the other device; the channel sees this device's addresses (D117). */
+/**
+ * A payload for the other device, as a QR code to scan and a text to copy; whoever sees the code or
+ * carries the text sees this device's addresses (D117, D208).
+ */
 function PayloadText({ text, label }: { readonly text: string; readonly label: string }) {
   const m = useMessages();
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col gap-2">
+      <QrCode text={text} label={m.pairing.qrLabel} />
       <TextArea label={label} value={text} readOnly data-testid="pairing-text" />
       <Button
         variant="quiet"
@@ -165,7 +171,7 @@ function PayloadText({ text, label }: { readonly text: string; readonly label: s
   );
 }
 
-/** A text pasted from the other device. */
+/** A text scanned from the other device's QR code, or pasted (D208). */
 function PasteText({
   label,
   submit,
@@ -181,18 +187,28 @@ function PasteText({
   const [text, setText] = useState('');
   const [check, setCheck] = useState<PayloadCheck>();
   const [working, setWorking] = useState(false);
+  const take = async (value: string): Promise<boolean> => {
+    setWorking(true);
+    const outcome = await onPaste(value);
+    setWorking(false);
+    setCheck(outcome);
+    return outcome === 'ok';
+  };
   return (
     <form
       className="flex flex-col gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        setWorking(true);
-        void onPaste(text).then((outcome) => {
-          setWorking(false);
-          setCheck(outcome);
-        });
+        void take(text);
       }}
     >
+      <QrScanner
+        onRead={(value) => {
+          // A text read goes through the same checks as a pasted one.
+          setText(value);
+          return take(value);
+        }}
+      />
       <TextArea
         label={label}
         value={text}
