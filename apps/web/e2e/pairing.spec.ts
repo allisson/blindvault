@@ -166,3 +166,75 @@ test('B hidden for 60 seconds while joining stops the pairing, as a lock would (
   await expect(b.getByTestId('new-password')).toBeVisible();
   expect(await b.evaluate(async () => (await indexedDB.databases()).length)).toBe(0);
 });
+
+const PASSWORD_NEW = 'harbor-violet-ember-sextant-5820';
+
+/** B holds a vault of its own with one item, locked, and starts replacing it by pairing (D204). */
+async function replacing(browser: Browser) {
+  const a = await device(browser);
+  const b = await device(browser);
+  await createVault(b, PASSWORD_B);
+  await button(b, 'New item').click();
+  await button(b, 'Login').click();
+  await b.getByTestId('item-title').fill('Old item');
+  await button(b, 'Save').click();
+  await expect(b.getByRole('heading', { name: 'Old item' })).toBeVisible();
+  await button(b, 'Lock').click();
+  await button(b, 'Replace by pairing with another device…').click();
+  await expect(b.getByTestId('replace-warning')).toContainText(
+    'Changes that exist only on this device are lost',
+  );
+  await fillPassword(b.getByTestId('new-password'), PASSWORD_NEW);
+  await fillPassword(b.getByTestId('confirm-password'), PASSWORD_NEW);
+  await b.getByTestId('pairing-same-network').check();
+  // Nothing starts before the user confirms the replacement (D183, D204).
+  await expect(button(b, 'Continue')).toBeDisabled();
+  await b.getByTestId('replace-understood').check();
+
+  const offer = await invite(a);
+  await button(b, 'Continue').click();
+  await b.getByTestId('pairing-paste').fill(offer, { timeout: 30_000 });
+  await button(b, 'Continue').click();
+  const text = b.getByTestId('pairing-text');
+  await expect(text).not.toHaveValue('', { timeout: 30_000 });
+  await a.getByTestId('pairing-paste').fill(await text.inputValue());
+  await button(a, 'Connect').click();
+  await expect(a.getByTestId('pairing-sas')).toHaveText(/^\d{3} \d{3}$/, { timeout: 30_000 });
+  await expect(b.getByTestId('pairing-sas')).toHaveText(
+    (await a.getByTestId('pairing-sas').textContent()) ?? '',
+    { timeout: 30_000 },
+  );
+  return { a, b };
+}
+
+test('replaces a locked vault by pairing: B then holds only the other vault (D150, D204)', async ({
+  browser,
+}) => {
+  const { a, b } = await replacing(browser);
+  await button(a, 'Yes, the same').click();
+  await button(b, 'Yes, the same').click();
+  await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
+  await openVault(b);
+  await expect(b.getByRole('button', { name: new RegExp(TITLE) })).toBeVisible();
+  await expect(b.getByRole('button', { name: /Old item/ })).toHaveCount(0);
+  // The old database is deleted once the new one commits (D89).
+  await expect.poll(() => b.evaluate(async () => (await indexedDB.databases()).length)).toBe(1);
+  await button(b, 'Lock').click();
+  await fillPassword(b.getByTestId('unlock-password'), PASSWORD_NEW);
+  await button(b, 'Unlock').click();
+  await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+});
+
+test('numbers said to differ leave the vault being replaced intact (D150, D153)', async ({
+  browser,
+}) => {
+  const { a, b } = await replacing(browser);
+  await button(b, 'No, it differs').click();
+  await expect(a.getByTestId('pairing-failed')).toHaveAttribute('data-reason', 'sas-mismatch');
+  await button(b, 'Start again').click();
+  await button(b, 'Back').click();
+  await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
+  await button(b, 'Unlock').click();
+  await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await expect(b.getByRole('button', { name: /Old item/ })).toBeVisible();
+});

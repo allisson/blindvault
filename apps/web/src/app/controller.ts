@@ -98,8 +98,11 @@ export type Status =
   | { readonly kind: 'restoring' }
   /** The locked vault being replaced by a backup, until the commit (D89, D153, D183). */
   | { readonly kind: 'replacing' }
-  /** No vault yet: joining a pairing, from its password step until the commit (§8.4, D33, D203). */
-  | { readonly kind: 'joining' }
+  /**
+   * Joining a pairing, from its password step until the commit (§8.4, D33, D203): with no vault, or
+   * `replacing` the locked vault (D150, D153, D204).
+   */
+  | { readonly kind: 'joining'; readonly replacing?: true }
   /** A forgotten local password being reset with the Recovery Phrase (D173, D184). */
   | { readonly kind: 'resetting' }
   /** Another app window holds the vault's Web Lock (D51). */
@@ -1180,9 +1183,8 @@ export class VaultController {
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
-    if (status.kind === 'creating' || status.kind === 'restoring' || status.kind === 'joining') {
-      this.#set({ kind: 'no-vault' });
-    }
+    if (status.kind === 'joining') this.#set(this.#joined());
+    if (status.kind === 'creating' || status.kind === 'restoring') this.#set({ kind: 'no-vault' });
     if (status.kind === 'replacing' || status.kind === 'resetting') this.#set({ kind: 'locked' });
   }
 
@@ -1626,18 +1628,28 @@ export class VaultController {
    * checked for strength by the caller (D71), becomes its local password; the Device KEK and the
    * identity exist in memory only until the commit. Holds the installation guard until then (D97);
    * any lock before it ends the pairing with nothing persisted (D93, D104).
+   *
+   * With `replace`, the locked vault is replaced, after the confirmation the UI asked for (D204).
+   * This app window already holds its Web Lock (D154), and the old vault stays intact until the
+   * commit (D150, D153).
    */
   async beginJoin(
     password: string,
-    options: PairingOptions & { readonly name: string },
+    options: PairingOptions & { readonly name: string; readonly replace?: boolean },
   ): Promise<'ok' | 'busy' | 'locked' | 'unavailable'> {
     const port = this.#deps.pairing;
-    if (this.#status.kind !== 'no-vault' || !port) return 'unavailable';
+    const { kind } = this.#status;
+    const old =
+      kind === 'locked' && options.replace === true && this.#db && this.#vaultId && this.#lock
+        ? { db: this.#db, vaultId: this.#vaultId, lock: this.#lock, passkey: this.#passkey }
+        : undefined;
+    if ((kind !== 'no-vault' && !old) || !port) return 'unavailable';
     const epoch = this.#epoch;
-    this.#set({ kind: 'joining' });
+    const joining: Status = old ? { kind: 'joining', replacing: true } : { kind: 'joining' };
+    this.#set(joining);
     const guard = await acquireInstallationGuard(this.#deps.locks);
     if (!guard) {
-      if (epoch === this.#epoch) this.#set({ kind: 'busy' });
+      if (epoch === this.#epoch) this.#set(old ? { kind: 'locked' } : { kind: 'busy' });
       return 'busy';
     }
     const keyring = new Keyring();
@@ -1660,7 +1672,7 @@ export class VaultController {
         keyring,
         onChange: this.#pairingChanged,
         commit: (received, peerPublicKey) =>
-          this.#join(epoch, {
+          this.#join(epoch, old, {
             keyring,
             kek,
             salt,
@@ -1673,12 +1685,12 @@ export class VaultController {
           }),
         released: () => void guard.release(),
       });
-      this.#set({ kind: 'joining' });
+      this.#set(joining);
       return 'ok';
     } catch (error) {
       keyring.wipeAll();
       await guard.release();
-      if (this.getStatus().kind === 'joining') this.#set({ kind: 'no-vault' });
+      if (this.#status.kind === 'joining') this.#set(this.#joined());
       if (error instanceof Aborted || epoch !== this.#epoch) return 'locked';
       throw error;
     }
@@ -1690,44 +1702,94 @@ export class VaultController {
     return flow instanceof Joining ? flow.offer(text) : 'unavailable';
   }
 
+  /** The status a joining device goes back to when its pairing ends before the commit. */
+  #joined(): Status {
+    const status = this.#status;
+    return status.kind === 'joining' && status.replacing
+      ? { kind: 'locked' }
+      : { kind: 'no-vault' };
+  }
+
   /**
    * B's single commit (§8 step 6, D33): the vault is this window's from then on. A lock after the
-   * commit leaves it committed and locked; one before aborts it with nothing persisted.
+   * commit leaves it committed and locked; one before aborts it with nothing persisted, and the
+   * vault it replaces stays intact. Another vault commits a database of its own that records the
+   * replaced `vaultId`, then the old database is deleted (D89, D96, D150); the same vault commits in
+   * the existing database, clearing it in the same transaction (D153). The old vault's passkey is
+   * forgotten afterwards (D120).
    */
   async #join(
     epoch: number,
+    old:
+      | {
+          readonly db: VaultDatabase;
+          readonly vaultId: Uint8Array;
+          readonly lock: HeldLock;
+          readonly passkey: { readonly credentialId: Uint8Array } | undefined;
+        }
+      | undefined,
     options: Omit<Parameters<typeof VaultSession.join>[0], 'store' | 'now'>,
   ): Promise<VaultSession> {
     const { factory, locks } = this.#deps;
+    const same = old !== undefined && sameBytes(old.vaultId, options.vaultId);
     let db: VaultDatabase | undefined;
     let lock: HeldLock | undefined;
+    let clear = same;
     const store: RecordStore = {
-      records: () => (db ? db.records() : Promise.resolve([])),
+      records: () => (db && !clear ? db.records() : Promise.resolve([])),
       commit: async (commit) => {
         if (epoch !== this.#epoch) throw new Aborted();
         if (!db) {
-          const { vaultId } = parseLocalConfig(commit.localConfig);
-          lock = (await acquireVaultLock(vaultId, {}, locks)) ?? undefined;
-          if (!lock) throw new Aborted();
-          db = await VaultDatabase.open(vaultId, factory);
+          if (same) {
+            db = old.db;
+            lock = old.lock;
+          } else {
+            const { vaultId } = parseLocalConfig(commit.localConfig);
+            lock = (await acquireVaultLock(vaultId, {}, locks)) ?? undefined;
+            if (!lock) throw new Aborted();
+            db = await VaultDatabase.open(vaultId, factory);
+          }
         }
-        await db.commit(commit);
+        // D153: the first commit clears the old vault in the transaction that writes the new one.
+        await db.commit(clear ? { ...commit, clear } : commit);
+        clear = false;
       },
     };
     let session: VaultSession;
     try {
-      session = await VaultSession.join({ ...options, store, now: this.#now });
+      session = await VaultSession.join({
+        ...options,
+        ...(old && !same ? { replacesVaultId: old.vaultId } : {}),
+        store,
+        now: this.#now,
+      });
       if (!db || !lock) throw new Aborted();
     } catch (error) {
-      db?.close();
-      await lock?.release();
+      if (db !== old?.db) db?.close();
+      if (lock !== old?.lock) await lock?.release();
       if (error instanceof Aborted) throw new VaultLockedError();
       throw error;
+    }
+    if (old && !same) {
+      old.db.close();
+      try {
+        await deleteDatabase(factory, databaseName(old.vaultId));
+        await session.forgetReplacedVault();
+      } catch {
+        // The new vault has committed: the startup cleanup deletes the old one (D89, D96).
+      }
+      this.#hold(lock);
+      await old.lock.release();
+    } else if (!same) {
+      this.#hold(lock);
     }
     this.#db = db;
     this.#vaultId = session.vaultId;
     this.#passkey = undefined;
-    this.#hold(lock);
+    if (old?.passkey) {
+      const forgotten = await this.#deps.passkeys?.forget(old.passkey.credentialId);
+      this.#leftoverPasskey = forgotten !== true;
+    }
     if (epoch !== this.#epoch) {
       // Committed: the vault exists, and the lock stands.
       session.lock();
@@ -1757,7 +1819,7 @@ export class VaultController {
    */
   cancelPairing(): void {
     this.#dropPairing();
-    if (this.#status.kind === 'joining') this.#set({ kind: 'no-vault' });
+    if (this.#status.kind === 'joining') this.#set(this.#joined());
     else this.#set({ ...this.#status });
   }
 

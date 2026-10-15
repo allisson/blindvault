@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { type PasskeyOutcome, type Status, type VaultController } from '../app/controller';
 import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
-import { Button, Card, Field, VaultHeld } from './components';
+import { Button, Card, Field, Notice, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
 import { JoinVault } from './Pairing';
 import { ResetPassword } from './ResetPassword';
@@ -64,6 +64,9 @@ export function Start({
     case 'creating':
     case 'restoring':
     case 'joining':
+      if (status.kind === 'joining' && status.replacing) {
+        return <Locked controller={controller} status="joining" />;
+      }
       return (
         <VaultHeld.Provider value="none">
           <NoVault controller={controller} status={status.kind} />
@@ -79,18 +82,33 @@ export function Start({
   }
 }
 
-/** The locked vault: unlock it, or replace it by a backup without unlocking (§10, D153, D183). */
+/**
+ * The locked vault: unlock it, or replace it without unlocking, by a backup or by pairing (§8.4,
+ * §10, D150, D153, D183, D204).
+ */
 function Locked({
   controller,
   status,
 }: {
   readonly controller: VaultController;
-  readonly status: 'locked' | 'unlocking' | 'replacing' | 'resetting';
+  readonly status: 'locked' | 'unlocking' | 'replacing' | 'resetting' | 'joining';
 }) {
-  const [choice, setChoice] = useState<'replace' | 'reset' | undefined>();
+  const m = useMessages();
+  const [choice, setChoice] = useState<'replace' | 'pair' | 'reset' | undefined>();
   const back = () => {
     setChoice(undefined);
   };
+  if (choice === 'pair' || status === 'joining') {
+    return (
+      <Card title={m.replace.pairTitle}>
+        <div className="flex flex-col gap-2" data-testid="replace-warning">
+          <Notice>{m.replace.pairWarning}</Notice>
+          <p className="text-sm">{m.replace.retire}</p>
+        </div>
+        <JoinVault controller={controller} working={status === 'joining'} replace onCancel={back} />
+      </Card>
+    );
+  }
   if (choice === 'reset' || status === 'resetting') {
     return (
       <ResetPassword controller={controller} working={status === 'resetting'} onCancel={back} />
@@ -113,6 +131,9 @@ function Locked({
       onReplace={() => {
         setChoice('replace');
       }}
+      onPair={() => {
+        setChoice('pair');
+      }}
       onReset={() => {
         setChoice('reset');
       }}
@@ -124,11 +145,13 @@ function Unlock({
   controller,
   working,
   onReplace,
+  onPair,
   onReset,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
   readonly onReplace: () => void;
+  readonly onPair: () => void;
   readonly onReset: () => void;
 }) {
   const m = useMessages();
@@ -207,6 +230,9 @@ function Unlock({
       </Button>
       <Button variant="quiet" className="self-start" disabled={working} onClick={onReplace}>
         {m.replace.choose}
+      </Button>
+      <Button variant="quiet" className="self-start" disabled={working} onClick={onPair}>
+        {m.replace.pairChoose}
       </Button>
     </Card>
   );
