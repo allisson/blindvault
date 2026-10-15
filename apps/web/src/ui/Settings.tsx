@@ -3,7 +3,7 @@ import { type Preferences, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState } from 'react';
 
 import { download, phraseLabel } from '../app/backup-file';
-import { devicesOf } from '../app/devices';
+import { devicesOf, eraseAdvice } from '../app/devices';
 import { type Navigation, type SettingsFocus } from '../app/nav';
 import {
   type BackupExport,
@@ -16,6 +16,7 @@ import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Messages, format } from '../i18n/messages';
 import { AboutBuild } from './About';
 import { Button, Field, INPUT, Notice, TARGET, TextArea } from './components';
+import { EraseVault } from './EraseVault';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
@@ -54,6 +55,7 @@ export function Settings({
       <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
       <LockSettings controller={controller} preferences={session.preferences} />
       <RefoundVault controller={controller} session={session} nav={nav} />
+      <EraseSettings controller={controller} session={session} />
       <section className="flex flex-col gap-4">
         <h2 className="font-semibold">{m.about.title}</h2>
         <AboutBuild />
@@ -213,6 +215,44 @@ type PasskeyState =
  * Passkey unlock (§5.5): says what then protects a lost device (D75) and, for a synced passkey,
  * what it then depends on (D84). Setup asks for the local password (D172).
  */
+/** Erase, while unlocked: it names this device's Device record (§7, D41, D205). */
+function EraseSettings({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const m = useLanguage().messages;
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="flex flex-col gap-4" data-section="erase">
+      <h2 className="font-semibold">{m.erase.title}</h2>
+      <p className="text-sm">{m.erase.intro}</p>
+      {open ? (
+        <EraseVault
+          controller={controller}
+          advice={eraseAdvice(devicesOf(session))}
+          onBackup={focusBackup}
+          onCancel={() => {
+            setOpen(false);
+          }}
+        />
+      ) : (
+        <Button
+          variant="quiet"
+          className="self-start"
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          {m.erase.choose}
+        </Button>
+      )}
+    </section>
+  );
+}
+
 /** Scrolls to a section and puts the cursor in its first field, or on its heading (D198). */
 function focusSection(name: SettingsFocus): void {
   const section = document.querySelector(`[data-section="${name}"]`);

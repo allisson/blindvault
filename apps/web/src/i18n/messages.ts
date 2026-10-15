@@ -280,6 +280,30 @@ const en = {
     leftoverPasskey:
       'The passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
   },
+  erase: {
+    choose: 'Erase this vault from this device…',
+    title: 'Erase this vault from this device',
+    intro:
+      'Removes the vault and its local settings from this device only. Other devices and backups keep their copy.',
+    warning:
+      'Changes that exist only on this device are lost. Make a backup first, if you can still unlock the vault.',
+    onlyDevice: 'This is the only device holding the vault: without a backup, it is lost for good.',
+    named:
+      'Afterwards, retire this device\'s Device record, "{name}", from another device: until then they keep offering it as a sync peer.',
+    locked:
+      "Afterwards, retire this device's Device record from another device: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.",
+    unregistered: 'This device has no Device record left to retire.',
+    understand: 'I understand that the vault on this device will be erased',
+    submit: 'Erase',
+    cancel: 'Cancel',
+    erasing: 'Erasing the vault…',
+    backupNow: 'Make a backup now',
+    busy: 'BlindVault is busy in another window. Nothing was erased.',
+    failed: 'The vault could not be erased. It is still on this device, locked.',
+    done: 'The vault was erased from this device.',
+    leftoverPasskey:
+      'The passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+  },
   merge: {
     title: 'Merge a backup',
     intro:
@@ -1029,6 +1053,30 @@ const ptBR: Messages = {
     replacing: 'Substituindo o cofre…',
     leftoverPasskey:
       'A passkey do cofre substituído não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
+  },
+  erase: {
+    choose: 'Apagar este cofre deste dispositivo…',
+    title: 'Apagar este cofre deste dispositivo',
+    intro:
+      'Remove o cofre e as configurações locais dele só deste dispositivo. Os outros dispositivos e os backups mantêm a cópia deles.',
+    warning:
+      'As mudanças que só existem neste dispositivo se perdem. Faça um backup antes, se você ainda consegue desbloquear o cofre.',
+    onlyDevice: 'Este é o único dispositivo com o cofre: sem um backup, ele se perde de vez.',
+    named:
+      'Depois, aposente o registro de dispositivo deste dispositivo, "{name}", a partir de outro dispositivo: até lá, eles continuam a oferecê-lo para sincronizar.',
+    locked:
+      'Depois, aposente o registro de dispositivo deste dispositivo a partir de outro dispositivo: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
+    unregistered: 'Este dispositivo não tem registro de dispositivo a aposentar.',
+    understand: 'Entendo que o cofre deste dispositivo será apagado',
+    submit: 'Apagar',
+    cancel: 'Cancelar',
+    erasing: 'Apagando o cofre…',
+    backupNow: 'Fazer um backup agora',
+    busy: 'O BlindVault está ocupado em outra janela. Nada foi apagado.',
+    failed: 'Não foi possível apagar o cofre. Ele continua neste dispositivo, bloqueado.',
+    done: 'O cofre foi apagado deste dispositivo.',
+    leftoverPasskey:
+      'A passkey do cofre apagado não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
   },
   merge: {
     title: 'Mesclar um backup',

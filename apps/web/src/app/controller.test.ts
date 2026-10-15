@@ -1059,6 +1059,136 @@ describe('replacing the vault by a backup (§10, D89, D96, D120, D153, D154, D18
   });
 });
 
+describe('erase (§7, D41, D97, D120, D154, D205)', () => {
+  async function names(factory: IDBFactory) {
+    return (await factory.databases()).map((d) => d.name).sort();
+  }
+
+  it('erases the unlocked vault, locking it first, and ends with no vault and the advice', async () => {
+    const factory = new IDBFactory();
+    const c = await created(factory);
+    const old = session(c);
+    const pending = c.erase();
+    // Locked before anything else: its keys are gone even if the erase stopped here.
+    expect(old.locked).toBe(true);
+    expect(c.status.kind).toBe('erasing');
+    expect(c.updateAllowed).toBe(false);
+    expect(await pending).toEqual({ kind: 'ok' });
+    expect(c.status.kind).toBe('no-vault');
+    expect(await names(factory)).toEqual([]);
+    // The only device: nothing to retire (D119).
+    expect(c.erased).toEqual({ kind: 'only-device' });
+    c.dismissErased();
+    expect(c.erased).toBeUndefined();
+
+    await c.close();
+    const again = controller(factory);
+    await again.start();
+    expect(again.status.kind).toBe('no-vault');
+    await createIn(again);
+    expect(again.status.kind).toBe('unlocked');
+  });
+
+  it('erases a locked vault without its password, saying the record cannot be named (D183)', async () => {
+    const factory = new IDBFactory();
+    const c = await created(factory);
+    c.lock();
+    expect(await c.erase()).toEqual({ kind: 'ok' });
+    expect(c.status.kind).toBe('no-vault');
+    expect(await names(factory)).toEqual([]);
+    expect(c.erased).toEqual({ kind: 'locked' });
+  });
+
+  it('clears the notice when a vault is created again', async () => {
+    const c = await created();
+    expect(await c.erase()).toEqual({ kind: 'ok' });
+    await createIn(c);
+    expect(c.erased).toBeUndefined();
+  });
+
+  it('erases nothing while another app window holds the installation guard (D97)', async () => {
+    const factory = new IDBFactory();
+    const c = await created(factory);
+    const vaultId = session(c).vaultId;
+    const guard = must((await acquireInstallationGuard(navigator.locks)) ?? undefined);
+    try {
+      expect(await c.erase()).toEqual({ kind: 'busy' });
+    } finally {
+      await guard.release();
+    }
+    expect(c.status.kind).toBe('locked');
+    expect(c.erased).toBeUndefined();
+    expect(c.eraseFailure).toBe('busy');
+    c.dismissEraseFailure();
+    expect(c.eraseFailure).toBeUndefined();
+    expect(await names(factory)).toEqual([databaseName(vaultId)]);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+  });
+
+  it('keeps the vault, locked, when its database cannot be deleted', async () => {
+    const factory = new IDBFactory();
+    const c = await created(factory);
+    const vaultId = session(c).vaultId;
+    const remove = vi.spyOn(factory, 'deleteDatabase').mockImplementationOnce(() => {
+      throw new Error('interrupted');
+    });
+    expect(await c.erase()).toEqual({ kind: 'failed' });
+    remove.mockRestore();
+    expect(c.status.kind).toBe('locked');
+    expect(c.erased).toBeUndefined();
+    expect(c.eraseFailure).toBe('failed');
+    expect(await names(factory)).toEqual([databaseName(vaultId)]);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(c.eraseFailure).toBeUndefined();
+    expect(session(c).vaultId).toEqual(vaultId);
+  });
+
+  it('erases nothing with no vault, nor in an app window that does not hold the vault (D51, D154)', async () => {
+    const factory = new IDBFactory();
+    const empty = controller();
+    await empty.start();
+    expect(await empty.erase()).toEqual({ kind: 'unavailable' });
+
+    const first = await created(factory);
+    const vaultId = session(first).vaultId;
+    const second = controller(factory);
+    await second.start();
+    expect(second.status.kind).toBe('elsewhere');
+    expect(await second.erase()).toEqual({ kind: 'unavailable' });
+    expect(await names(factory)).toEqual([databaseName(vaultId)]);
+    expect(session(first).locked).toBe(false);
+  });
+
+  it('sends a window that takes over an erased vault to the start screen (D205)', async () => {
+    const factory = new IDBFactory();
+    const first = await created(factory);
+    const second = controller(factory);
+    await second.start();
+    expect(second.status.kind).toBe('elsewhere');
+    expect(await first.erase()).toEqual({ kind: 'ok' });
+    await second.takeOver();
+    expect(second.status.kind).toBe('no-vault');
+    expect(await names(factory)).toEqual([]);
+    await createIn(second);
+    expect(second.status.kind).toBe('unlocked');
+  });
+
+  it('asks the authenticator to forget the vault’s passkey, or says to do it by hand (D120)', async () => {
+    for (const signal of [true, false]) {
+      const authenticator = new FakeAuthenticator();
+      authenticator.signal = signal;
+      const c = controller(new IDBFactory(), undefined, authenticator);
+      await c.start();
+      await createIn(c);
+      expect(await c.setUpPasskey(PASSWORD)).toMatchObject({ kind: 'ok' });
+      expect(await c.erase()).toEqual({ kind: 'ok' });
+      expect(authenticator.forgotten).toEqual([new Uint8Array([1])]);
+      expect(c.hasPasskey).toBe(false);
+      expect(c.leftoverPasskey).toBe(!signal);
+    }
+  });
+});
+
 describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
   const EXPORT_PASSWORD = 'orbit-tulip-granite-ferry-cedar-pixel';
   const NEW_PASSWORD = 'a new local password for this device';

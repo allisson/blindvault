@@ -330,6 +330,16 @@ describe('pairing through the controller (§8.4, D202, D203)', () => {
     expect(await databases(factoryB)).toBe(0);
   });
 
+  it('an erase on A ends the pairing with locked on B before the database goes (D93, D205)', async () => {
+    const { a, b, factoryB } = await toSas();
+    b.confirmSas();
+    expect(await a.erase()).toEqual({ kind: 'ok' });
+    expect(a.status.kind).toBe('no-vault');
+    expect(a.pairing).toBeUndefined();
+    expect(await stage(b, 'failed')).toEqual({ kind: 'failed', reason: 'locked', by: 'remote' });
+    expect(await databases(factoryB)).toBe(0);
+  });
+
   it('a cancel on A ends B with cancelled', async () => {
     const { a, b } = await toSas();
     a.cancelPairing();
