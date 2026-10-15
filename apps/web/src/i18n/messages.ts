@@ -154,7 +154,8 @@ const en = {
       'This answer belongs to another pairing: paste the answer to the text above.',
     pasteOutdated:
       'The new device runs a BlindVault that cannot hold this vault: update the app there, then pair again.',
-    pastePeerHoldsVault: 'That device already holds a vault: only a device with no vault can join.',
+    pastePeerHoldsVault:
+      'That device already holds a vault: to re-admit it, cancel here and choose “Re-admit with another device of this vault…” on both devices.',
     pastePeerNoVault:
       'This text comes from a device with no vault: start the pairing on the device that holds the vault.',
     failed: {
@@ -188,6 +189,61 @@ const en = {
     answerLabel: 'This device’s answer',
     waitingConnection: 'Waiting for the other device to connect…',
     receiving: 'Receiving the vault…',
+  },
+  readmission: {
+    title: 'Re-admission',
+    intro:
+      'Two devices of this vault get to know each other and merge everything they hold, both ways: a device restored from a backup becomes registered, and two devices that never synced meet. No key leaves either device.',
+    start: 'Re-admit with another device of this vault…',
+    how: 'On the other device, open Settings → Devices → “Re-admit with another device of this vault…” too. One device shows its text first; the other pastes it.',
+    first: 'Show this device’s text first',
+    paste: 'Paste the other device’s text',
+    readOnly:
+      'The device clock went back, so the vault is read-only: re-admission comes back once writing does.',
+    retired: 'This device was retired: it cannot be re-admitted. Replace it by pairing to sync.',
+    corrupt:
+      'This device holds a record it cannot read: re-admission would hand it on. Re-found the vault or restore a backup.',
+    offerIntro:
+      'Copy this text to the other device, which pastes it in its re-admission screen. Then paste its answer below.',
+    answerPaste: 'The other device’s answer',
+    scanIntro: 'Paste here the re-admission text the other device shows.',
+    offerPaste: 'The other device’s re-admission text',
+    answerIntro: 'Copy this answer back to the other device, which pastes it below its own text.',
+    merging: 'Merging the two devices…',
+    done: 'Re-admitted with {name}: both devices know each other and hold the same records.',
+    notCommitted:
+      'This device merged, but the other may not have finished: check it there. Re-admitting again is safe.',
+    rejected:
+      '{n} records from the other device were rejected and not merged: {records}. The rest merged.',
+    rejectedNoKey: 'a record that does not decode',
+    rejectedReasons: {
+      'verification-failed': 'does not verify',
+      'future-clock': 'dated ahead of this device’s clock',
+      'immutable-record': 'a changed copy of a record that never changes',
+    },
+    pastePeerNoVault:
+      'This text comes from a device with no vault: pair it instead, with “Pair a new device…”.',
+    failed: {
+      cancelled: 'The re-admission was cancelled on this device.',
+      cancelledRemote: 'The re-admission was cancelled on the other device.',
+      sasMismatch:
+        'The numbers differ, so the re-admission stopped and nothing was sent. Someone may have changed the texts on the way: start again, and carry them some other way.',
+      locked: 'A vault locked, or BlindVault stayed hidden too long, so the re-admission stopped.',
+      expired: 'The re-admission took too long and expired.',
+      retiredPeer:
+        'One of the two devices was retired, so the re-admission stopped: re-admit with another device of the vault.',
+      differentVaults:
+        'The two devices hold different vaults, and nothing was written. To make one of them hold this vault, lock it and choose “Replace by pairing with another device…” on its unlock screen.',
+      unsupportedFormat:
+        'The other device holds records this BlindVault cannot read: update the app on this device, then re-admit again.',
+      unsupportedFormatRemote:
+        'This device holds records the other device’s BlindVault cannot read: update the app there, then re-admit again.',
+      verificationFailed:
+        'A stored record failed verification, so the re-admission stopped before the merge.',
+      version: 'The devices run versions of BlindVault that cannot re-admit: update both.',
+      protocolError: 'The other device sent something unexpected, so the re-admission stopped.',
+      closed: 'The connection closed, so the re-admission stopped.',
+    },
   },
   ready: {
     title: 'Vault ready',
@@ -925,7 +981,7 @@ const ptBR: Messages = {
     pasteOutdated:
       'O dispositivo novo roda um BlindVault que não comporta este cofre: atualize o app nele e pareie de novo.',
     pastePeerHoldsVault:
-      'Esse dispositivo já tem um cofre: só um dispositivo sem cofre pode entrar.',
+      'Esse dispositivo já tem um cofre: para readmiti-lo, cancele aqui e escolha “Readmitir com outro dispositivo deste cofre…” nos dois dispositivos.',
     pastePeerNoVault:
       'Este texto vem de um dispositivo sem cofre: comece o pareamento no dispositivo que tem o cofre.',
     failed: {
@@ -961,6 +1017,64 @@ const ptBR: Messages = {
     answerLabel: 'Resposta deste dispositivo',
     waitingConnection: 'Aguardando o outro dispositivo conectar…',
     receiving: 'Recebendo o cofre…',
+  },
+  readmission: {
+    title: 'Readmissão',
+    intro:
+      'Dois dispositivos deste cofre passam a se conhecer e mesclam tudo o que têm, nos dois sentidos: um dispositivo restaurado de um backup fica registrado, e dois dispositivos que nunca sincronizaram se encontram. Nenhuma chave sai de nenhum dos dois.',
+    start: 'Readmitir com outro dispositivo deste cofre…',
+    how: 'No outro dispositivo, abra também Configurações → Dispositivos → “Readmitir com outro dispositivo deste cofre…”. Um dispositivo mostra o texto dele primeiro; o outro o cola.',
+    first: 'Mostrar primeiro o texto deste dispositivo',
+    paste: 'Colar o texto do outro dispositivo',
+    readOnly:
+      'O relógio do dispositivo voltou, então o cofre está somente leitura: a readmissão volta quando a escrita voltar.',
+    retired:
+      'Este dispositivo foi aposentado: ele não pode ser readmitido. Substitua-o por pareamento para sincronizar.',
+    corrupt:
+      'Este dispositivo tem um registro que não consegue ler: a readmissão o passaria adiante. Refunde o cofre ou restaure um backup.',
+    offerIntro:
+      'Copie este texto para o outro dispositivo, que o cola na tela de readmissão dele. Depois cole a resposta dele abaixo.',
+    answerPaste: 'Resposta do outro dispositivo',
+    scanIntro: 'Cole aqui o texto de readmissão que o outro dispositivo mostra.',
+    offerPaste: 'Texto de readmissão do outro dispositivo',
+    answerIntro:
+      'Copie esta resposta de volta para o outro dispositivo, que a cola abaixo do texto dele.',
+    merging: 'Mesclando os dois dispositivos…',
+    done: 'Readmitido com {name}: os dois dispositivos se conhecem e têm os mesmos registros.',
+    notCommitted:
+      'Este dispositivo mesclou, mas o outro pode não ter terminado: confira nele. Readmitir de novo é seguro.',
+    rejected:
+      '{n} registros do outro dispositivo foram rejeitados e não mesclados: {records}. O resto foi mesclado.',
+    rejectedNoKey: 'um registro que não decodifica',
+    rejectedReasons: {
+      'verification-failed': 'não verifica',
+      'future-clock': 'datado à frente do relógio deste dispositivo',
+      'immutable-record': 'uma cópia alterada de um registro que nunca muda',
+    },
+    pastePeerNoVault:
+      'Este texto vem de um dispositivo sem cofre: pareie-o em vez disso, com “Parear um dispositivo novo…”.',
+    failed: {
+      cancelled: 'A readmissão foi cancelada neste dispositivo.',
+      cancelledRemote: 'A readmissão foi cancelada no outro dispositivo.',
+      sasMismatch:
+        'Os números são diferentes, então a readmissão parou e nada foi enviado. Alguém pode ter alterado os textos no caminho: comece de novo e leve-os por outro meio.',
+      locked:
+        'Um cofre bloqueou, ou o BlindVault ficou oculto por tempo demais, então a readmissão parou.',
+      expired: 'A readmissão demorou demais e expirou.',
+      retiredPeer:
+        'Um dos dois dispositivos foi aposentado, então a readmissão parou: readmita com outro dispositivo do cofre.',
+      differentVaults:
+        'Os dois dispositivos têm cofres diferentes, e nada foi escrito. Para que um deles tenha este cofre, bloqueie-o e escolha “Substituir por pareamento com outro dispositivo…” na tela de desbloqueio dele.',
+      unsupportedFormat:
+        'O outro dispositivo tem registros que este BlindVault não consegue ler: atualize o app neste dispositivo e readmita de novo.',
+      unsupportedFormatRemote:
+        'Este dispositivo tem registros que o BlindVault do outro dispositivo não consegue ler: atualize o app nele e readmita de novo.',
+      verificationFailed:
+        'Um registro guardado falhou na verificação, então a readmissão parou antes da mescla.',
+      version: 'Os dispositivos rodam versões do BlindVault que não readmitem: atualize os dois.',
+      protocolError: 'O outro dispositivo enviou algo inesperado, então a readmissão parou.',
+      closed: 'A conexão fechou, então a readmissão parou.',
+    },
   },
   ready: {
     title: 'Cofre pronto',

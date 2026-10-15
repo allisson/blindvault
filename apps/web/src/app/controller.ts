@@ -49,6 +49,7 @@ import {
   type MergeResult,
   type PairingGrant,
   PairingRefusedError,
+  type ReadmissionGrant,
   PasswordResetRejectedError,
   type Preferences,
   RecordNotFoundError,
@@ -76,6 +77,7 @@ import {
   type PairingPort,
   type PairingStage,
   type PayloadCheck,
+  Readmitting,
 } from './pairing';
 import { type Ready } from './ready';
 import { StorageMonitor } from './storage-state';
@@ -297,6 +299,16 @@ export type PairingStart =
   /** No WebRTC in this browser. */
   | 'no-webrtc';
 
+/**
+ * Starting a re-admission (§9, D206, D207): no password, so only the refusals of a vault that offers
+ * none, a locked one, or no WebRTC.
+ */
+export type ReadmissionStart =
+  'ok' | 'locked' | Exclude<PairingRefusedError['reason'], 'known-device'> | 'no-webrtc';
+
+/** Which flow the pairing in progress is: A's, B's, or a re-admission (D207). */
+export type PairingFlow = 'invite' | 'join' | 'readmit';
+
 /** How a pairing runs: `sameNetwork` uses no STUN server (§9.2, D203). */
 export interface PairingOptions {
   readonly sameNetwork: boolean;
@@ -400,8 +412,11 @@ export class VaultController {
    * replaces it (D188).
    */
   #reminderDismissed: VaultSession | undefined;
-  /** The pairing in progress, inviting (A) or joining (B), until closed or locked (§8.4, D93). */
-  #pairing: Inviting | Joining | undefined;
+  /**
+   * The pairing in progress, inviting (A) or joining (B), or a re-admission, until closed or locked
+   * (§8.4, D93).
+   */
+  #pairing: Inviting | Joining | Readmitting | undefined;
 
   /** Whether the browser keeps this origin's storage, and how much is used (D196). */
   readonly storage: StorageMonitor;
@@ -1669,6 +1684,14 @@ export class VaultController {
     return this.#pairing?.stage;
   }
 
+  /** Which flow the pairing in progress is, for the screen that shows it (D207). */
+  get pairingFlow(): PairingFlow | undefined {
+    const flow = this.#pairing;
+    if (flow instanceof Inviting) return 'invite';
+    if (flow instanceof Joining) return 'join';
+    return flow ? 'readmit' : undefined;
+  }
+
   #pairingChanged = (): void => {
     this.#set({ ...this.#status });
   };
@@ -1732,7 +1755,52 @@ export class VaultController {
   /** A takes B's answer, pasted (§3.4). */
   pairingAnswer(text: string): PayloadCheck {
     const flow = this.#pairing;
-    return flow instanceof Inviting ? flow.answer(text) : 'unavailable';
+    return flow instanceof Inviting || flow instanceof Readmitting
+      ? flow.answer(text)
+      : 'unavailable';
+  }
+
+  /**
+   * Starts a re-admission with another device of this vault (§9, D206, D207): no password, since no
+   * key leaves the device. `initiator` shows this device's text first; `responder` pastes the other's.
+   * An unregistered device sends `defaultName`, the name its own record takes if written (D141).
+   */
+  async startReadmission(
+    role: 'initiator' | 'responder',
+    options: PairingOptions & { readonly defaultName: string },
+  ): Promise<ReadmissionStart> {
+    const status = this.#status;
+    const port = this.#deps.pairing;
+    if (status.kind !== 'unlocked') return 'locked';
+    if (!port) return 'no-webrtc';
+    this.#dropPairing();
+    const { session } = status;
+    let grant: ReadmissionGrant;
+    try {
+      grant = session.openReadmission();
+    } catch (error) {
+      if (error instanceof PairingRefusedError && error.reason !== 'known-device') {
+        return error.reason;
+      }
+      throw error;
+    }
+    const own = devicesOf(session).listed.find((d) => d.own);
+    const flow = new Readmitting({
+      port,
+      sameNetwork: options.sameNetwork,
+      grant,
+      role,
+      name: own?.device.displayName ?? options.defaultName,
+      onChange: this.#pairingChanged,
+      merged: () => {
+        // Registered now, or merged with a device that is: the recommendation is done (D207).
+        this.#readmission = false;
+      },
+    });
+    this.#pairing = flow;
+    this.#set({ ...status });
+    await flow.begin();
+    return 'ok';
   }
 
   /**
@@ -1811,7 +1879,9 @@ export class VaultController {
   /** B takes A's payload, pasted (§3.4), and shows its answer once gathered. */
   async joinOffer(text: string): Promise<PayloadCheck> {
     const flow = this.#pairing;
-    return flow instanceof Joining ? flow.offer(text) : 'unavailable';
+    return flow instanceof Joining || flow instanceof Readmitting
+      ? flow.offer(text)
+      : 'unavailable';
   }
 
   /** The status a joining device goes back to when its pairing ends before the commit. */

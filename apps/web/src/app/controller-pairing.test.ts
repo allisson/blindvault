@@ -727,3 +727,254 @@ describe('replace by pairing (§8.4, D150, D153, D154, D204)', () => {
     expect(none.status.kind).toBe('no-vault');
   });
 });
+
+describe('re-admission through the controller (§9, D206, D207)', () => {
+  /** The creator, with an item, and a device restored from its backup that adds one of its own. */
+  async function restoredPair(net = network(), restoredInitiates = false) {
+    const creator = controller('c', new IDBFactory(), restoredInitiates ? net.b : net.a);
+    await creator.start();
+    const words = creator.newRecoveryPhrase();
+    await creator.create(PASSWORD_A, 'Creator');
+    await session(creator).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Bank',
+      fields: [],
+      tags: [],
+    });
+    const file = await creator.exportBackup({ kind: 'password', password: PASSWORD_A });
+    if (file.kind !== 'ok' || !words) throw new Error('no backup');
+    const restored = controller('r', new IDBFactory(), restoredInitiates ? net.a : net.b);
+    await restored.start();
+    expect(restored.openBackupFile(file.bytes).kind).toBe('ok');
+    expect((await restored.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
+    expect((await restored.restore(PASSWORD_B)).kind).toBe('ok');
+    expect(session(restored).registered).toBe(false);
+    expect(restored.readmissionNotice).toBe(true);
+    await session(restored).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Only restored',
+      fields: [],
+      tags: [],
+    });
+    return { creator, restored, net };
+  }
+
+  /** `first` shows its text, `second` pastes it and answers; both reach the SAS. */
+  async function toReadmissionSas(first: VaultController, second: VaultController) {
+    expect(
+      await first.startReadmission('initiator', {
+        sameNetwork: true,
+        defaultName: 'First default',
+      }),
+    ).toBe('ok');
+    expect(first.pairingFlow).toBe('readmit');
+    const offer = textOf(await stage(first, 'offer'));
+    expect(
+      await second.startReadmission('responder', {
+        sameNetwork: true,
+        defaultName: 'Second default',
+      }),
+    ).toBe('ok');
+    expect(second.pairing).toEqual({ kind: 'scan' });
+    expect(await second.joinOffer(offer)).toBe('ok');
+    const answer = textOf(await stage(second, 'answer'));
+    expect(first.pairingAnswer(answer)).toBe('ok');
+    const sasFirst = await stage(first, 'sas');
+    const sasSecond = await stage(second, 'sas');
+    expect(sasFirst).toEqual(sasSecond);
+    return { offer, answer };
+  }
+
+  function names(c: VaultController): string[] {
+    return session(c)
+      .devices()
+      .map((d) => d.device.displayName)
+      .sort();
+  }
+
+  function titles(c: VaultController): (string | undefined)[] {
+    return session(c)
+      .items()
+      .map((i) => i.item?.title)
+      .sort();
+  }
+
+  it('re-admits a restored device: the creator writes its record, and both merge both ways', async () => {
+    const { creator, restored } = await restoredPair();
+    await toReadmissionSas(creator, restored);
+    expect(creator.updateAllowed).toBe(false);
+    creator.confirmSas();
+    restored.confirmSas();
+    const doneCreator = await stage(creator, 'readmitted');
+    const doneRestored = await stage(restored, 'readmitted');
+    expect(doneCreator).toMatchObject({
+      kind: 'readmitted',
+      name: 'Second default',
+      peerCommitted: true,
+      result: { rejected: [] },
+    });
+    expect(doneRestored).toMatchObject({
+      kind: 'readmitted',
+      name: 'Creator',
+      peerCommitted: true,
+      result: { rejected: [] },
+    });
+    if (doneCreator.kind !== 'readmitted') throw new Error('not readmitted');
+    expect(doneCreator.result.added).toBeGreaterThan(0);
+
+    expect(names(creator)).toEqual(['Creator', 'Second default']);
+    expect(names(restored)).toEqual(['Creator', 'Second default']);
+    expect(session(restored).registered).toBe(true);
+    expect(titles(creator)).toEqual(['Bank', 'Only restored']);
+    expect(titles(restored)).toEqual(['Bank', 'Only restored']);
+    expect(session(creator).lastSyncByPeer).toHaveLength(1);
+    expect(session(restored).lastSyncByPeer).toHaveLength(1);
+    // The recommendation is done (D207).
+    expect(restored.readmissionNotice).toBe(false);
+
+    // The result stays until closed.
+    expect(creator.pairingFlow).toBe('readmit');
+    creator.cancelPairing();
+    restored.cancelPairing();
+    expect(creator.pairing).toBeUndefined();
+    expect(creator.pairingFlow).toBeUndefined();
+    expect(creator.updateAllowed).toBe(true);
+  });
+
+  it('runs with the restored device showing its text first: then the creator still writes (D35)', async () => {
+    const { creator, restored } = await restoredPair(network(), true);
+    await toReadmissionSas(restored, creator);
+    creator.confirmSas();
+    restored.confirmSas();
+    expect(await stage(creator, 'readmitted')).toMatchObject({ name: 'First default' });
+    expect(await stage(restored, 'readmitted')).toMatchObject({ name: 'Creator' });
+    expect(names(restored)).toEqual(['Creator', 'First default']);
+    expect(titles(creator)).toEqual(['Bank', 'Only restored']);
+  });
+
+  it('two devices of different vaults: different-vaults on both, and nothing written (CRYPTO-INV-014)', async () => {
+    const net = network();
+    const a = controller('a', new IDBFactory(), net.a);
+    const b = controller('b', new IDBFactory(), net.b);
+    await created(a);
+    await b.start();
+    b.newRecoveryPhrase();
+    await b.create(PASSWORD_B, 'Other vault');
+    await toReadmissionSas(a, b);
+    a.confirmSas();
+    b.confirmSas();
+    const failedA = await stage(a, 'failed');
+    const failedB = await stage(b, 'failed');
+    expect([failedA, failedB].map((f) => f.kind === 'failed' && f.reason)).toEqual([
+      'different-vaults',
+      'different-vaults',
+    ]);
+    expect(names(a)).toEqual(['Chrome on macOS']);
+    expect(names(b)).toEqual(['Other vault']);
+  });
+
+  it('refuses a retired peer before the nonces: no SAS is shown (§9 step 1, D45)', async () => {
+    const { creator, restored } = await restoredPair();
+    const record = session(restored)
+      .devices()
+      .find((d) => d.device.displayName === 'Creator');
+    if (!record) throw new Error('no record');
+    expect(await restored.retireDevice(record.deviceId)).toBe('ok');
+    expect(
+      await creator.startReadmission('initiator', { sameNetwork: true, defaultName: 'x' }),
+    ).toBe('ok');
+    const offer = textOf(await stage(creator, 'offer'));
+    await restored.startReadmission('responder', { sameNetwork: true, defaultName: 'y' });
+    await restored.joinOffer(offer);
+    expect(creator.pairingAnswer(textOf(await stage(restored, 'answer')))).toBe('ok');
+    expect(await stage(restored, 'failed')).toEqual({
+      kind: 'failed',
+      reason: 'retired-peer',
+      by: 'local',
+    });
+    expect(await stage(creator, 'failed')).toEqual({
+      kind: 'failed',
+      reason: 'retired-peer',
+      by: 'remote',
+    });
+    expect(names(creator)).toEqual(['Creator']);
+  });
+
+  it('a lock while the SAS is shown ends both, with locked on the other (D93)', async () => {
+    const { creator, restored } = await restoredPair();
+    await toReadmissionSas(creator, restored);
+    creator.confirmSas();
+    restored.lock();
+    expect(restored.pairing).toBeUndefined();
+    expect(await stage(creator, 'failed')).toEqual({
+      kind: 'failed',
+      reason: 'locked',
+      by: 'remote',
+    });
+    expect(names(creator)).toEqual(['Creator']);
+    expect(await restored.unlock(PASSWORD_B)).toBe('ok');
+    expect(session(restored).registered).toBe(false);
+  });
+
+  it('refuses a text from a device with no vault, either way, keeping the session (§7, D207)', async () => {
+    const net = network();
+    const a = controller('a', new IDBFactory(), net.a);
+    const b = controller('b', new IDBFactory(), net.b);
+    await created(a);
+    await created(b);
+    await a.startReadmission('initiator', { sameNetwork: true, defaultName: 'x' });
+    const offer = textOf(await stage(a, 'offer'));
+    const decoded = decodePayloadText(offer, { role: 'initiator' });
+    const answer = encodePayloadText({
+      ...decoded,
+      role: 'responder',
+      setup: 'active',
+      commitment: null,
+      holdsVault: false,
+    });
+    expect(a.pairingAnswer(answer)).toBe('peer-no-vault');
+    expect(a.pairingAnswer('not a payload')).toBe('invalid');
+    expect(a.pairing?.kind).toBe('offer');
+    expect(await a.joinOffer(offer)).toBe('unavailable');
+
+    await b.startReadmission('responder', { sameNetwork: true, defaultName: 'y' });
+    expect(await b.joinOffer(encodePayloadText({ ...decoded, holdsVault: false }))).toBe(
+      'peer-no-vault',
+    );
+    expect(b.pairing).toEqual({ kind: 'scan' });
+    expect(b.pairingAnswer(answer)).toBe('unavailable');
+    a.cancelPairing();
+    b.cancelPairing();
+  });
+
+  it('starts only on an unlocked vault, with WebRTC, and never while it is retired (D45, D207)', async () => {
+    const none = controller('n', new IDBFactory());
+    await created(none);
+    expect(await none.startReadmission('initiator', { sameNetwork: true, defaultName: 'x' })).toBe(
+      'no-webrtc',
+    );
+    const net = network();
+    const a = controller('a', new IDBFactory(), net.a);
+    await created(a);
+    a.lock();
+    expect(await a.startReadmission('initiator', { sameNetwork: true, defaultName: 'x' })).toBe(
+      'locked',
+    );
+    expect(net.options).toEqual([]);
+  });
+
+  it('names the flow in progress for the screens: invite, join or readmit (D207)', async () => {
+    const { a, b } = await toSas();
+    expect(a.pairingFlow).toBe('invite');
+    expect(b.pairingFlow).toBe('join');
+    // Starting a re-admission drops the pairing in progress.
+    expect(await a.startReadmission('responder', { sameNetwork: true, defaultName: 'x' })).toBe(
+      'ok',
+    );
+    expect(a.pairingFlow).toBe('readmit');
+    expect(await stage(b, 'failed')).toEqual({ kind: 'failed', reason: 'cancelled', by: 'remote' });
+    a.cancelPairing();
+  });
+});

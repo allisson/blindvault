@@ -365,7 +365,18 @@ every project through the references in the root `tsconfig.json`.
   held flags, the step-1 retired check, the writes, the verified records and the merge, which
   rejects and reports a record failing verification, beyond the bound or breaking D42/D44 (looping
   until what is left passes, since a rejected Vault Key takes its epoch's records) and refuses a
-  newer record, a duplicate or a retired peer with `JoinRejectedError`. The screens come next.
+  newer record, a duplicate or a retired peer with `JoinRejectedError`.
+- **Re-admission screens (Phase 4, `apps/web`, §9, D207).** `Readmitting` in `app/pairing.ts` is
+  either side of a re-admission over the same `Flow` as pairing: the initiator shows its text, the
+  responder pastes it, each refuses a text from a device with no vault (`peer-no-vault`), and
+  `secure()` takes a `checkPeer` run between the handshake and the nonces (§9 step 1). It wires
+  `ReadmissionGrant` into `readmit()`, mapping vault errors with `refusal()`, and ends on a
+  `readmitted` stage with the merge result and `peerCommitted`. `controller.startReadmission(role)`
+  asks for no password and returns the refusals of `openReadmission`; `pairingAnswer` and
+  `joinOffer` take the re-admission's texts too, and `pairingFlow` tells the screens which flow runs.
+  `ReadmitDevice` in `ui/Pairing.tsx` sits in Settings › Devices above pairing; the result reuses
+  `MergeNotices` and lists rejected records. A pairing's A still refuses an answer that holds a vault,
+  now pointing to re-admission.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

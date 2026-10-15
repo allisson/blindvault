@@ -127,7 +127,7 @@ export function MergeBackup({
 }
 
 /** The merge's result and the notices it calls for, shown once (sync-protocol.md §1.6). */
-function MergeNotices({
+export function MergeNotices({
   result,
   recovery,
   date,

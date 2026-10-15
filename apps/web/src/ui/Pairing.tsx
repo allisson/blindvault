@@ -1,20 +1,34 @@
-import { DEFAULT_PREFERENCES, type VaultSession } from '@blindvault/vault';
+import { DEFAULT_PREFERENCES, type ReadmissionResult, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
-import { type ExportAuth, type PairingStart, type VaultController } from '../app/controller';
+import { recordIdPrefix } from '../app/backup-file';
+import {
+  type ExportAuth,
+  type PairingFlow,
+  type PairingStart,
+  type ReadmissionStart,
+  type VaultController,
+} from '../app/controller';
 import { deviceName } from '../app/device-name';
 import { type PairingStage, type PayloadCheck } from '../app/pairing';
-import { useMessages } from '../i18n/context';
+import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice, TARGET, TextArea } from './components';
+import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
+import { recordTypeName } from './Settings';
 
 // The pairing screens (§8.4, D202, D203): A invites from Settings › Devices, B joins from the pair
 // start. The payloads are copied and pasted; both devices show the SAS, and the user says on each
-// whether it matches. The flow lives in the controller, so a lock ends it whatever is on screen.
+// whether it matches. A re-admission (§9, D207) runs from Settings › Devices on both devices, either
+// one showing its text first. The flow lives in the controller, so a lock ends it whatever is on
+// screen.
 
-function usePairing(controller: VaultController): PairingStage | undefined {
-  return useSyncExternalStore(controller.subscribe, () => controller.pairing);
+/** The stage of the pairing in progress, when it is `flow`. */
+function usePairing(controller: VaultController, flow: PairingFlow): PairingStage | undefined {
+  const stage = useSyncExternalStore(controller.subscribe, () => controller.pairing);
+  const current = useSyncExternalStore(controller.subscribe, () => controller.pairingFlow);
+  return current === flow ? stage : undefined;
 }
 
 /** Six digits in two groups of three (pairing-protocol.md §6.2). */
@@ -22,7 +36,11 @@ function grouped(sas: string): string {
   return `${sas.slice(0, 3)} ${sas.slice(3)}`;
 }
 
-function payloadError(m: Messages, check: PayloadCheck | undefined): string | undefined {
+function payloadError(
+  m: Messages,
+  check: PayloadCheck | undefined,
+  flow: PairingFlow,
+): string | undefined {
   const p = m.pairing;
   switch (check) {
     case undefined:
@@ -40,12 +58,32 @@ function payloadError(m: Messages, check: PayloadCheck | undefined): string | un
     case 'peer-holds-vault':
       return p.pastePeerHoldsVault;
     case 'peer-no-vault':
-      return p.pastePeerNoVault;
+      return flow === 'readmit' ? m.readmission.pastePeerNoVault : p.pastePeerNoVault;
   }
 }
 
-function failure(m: Messages, stage: Extract<PairingStage, { kind: 'failed' }>): string {
-  const f = m.pairing.failed;
+function failure(
+  m: Messages,
+  stage: Extract<PairingStage, { kind: 'failed' }>,
+  flow: PairingFlow,
+): string {
+  if (flow === 'readmit') {
+    // `unsupported-format` names the device to update: the one that refused (D206, D207).
+    const r = m.readmission.failed;
+    if (stage.reason === 'unsupported-format') {
+      return stage.by === 'local' ? r.unsupportedFormat : r.unsupportedFormatRemote;
+    }
+    return reasonText(r, stage);
+  }
+  return reasonText(m.pairing.failed, stage);
+}
+
+function reasonText(
+  f: Omit<Messages['pairing']['failed'], 'unsupportedFormat'> & {
+    readonly unsupportedFormat: string;
+  },
+  stage: Extract<PairingStage, { kind: 'failed' }>,
+): string {
   switch (stage.reason) {
     case 'cancelled':
       return stage.by === 'local' ? f.cancelled : f.cancelledRemote;
@@ -131,10 +169,12 @@ function PayloadText({ text, label }: { readonly text: string; readonly label: s
 function PasteText({
   label,
   submit,
+  flow,
   onPaste,
 }: {
   readonly label: string;
   readonly submit: string;
+  readonly flow: PairingFlow;
   readonly onPaste: (text: string) => Promise<PayloadCheck>;
 }) {
   const m = useMessages();
@@ -160,7 +200,7 @@ function PasteText({
           setText(e.target.value);
           setCheck(undefined);
         }}
-        error={payloadError(m, check)}
+        error={payloadError(m, check, flow)}
         data-testid="pairing-paste"
       />
       <Button type="submit" className="self-start" disabled={text.trim() === '' || working}>
@@ -170,23 +210,49 @@ function PasteText({
   );
 }
 
+/** Records the other device sent that a re-admission rejected, with why (D206, D207). */
+function Rejected({ result }: { readonly result: ReadmissionResult }) {
+  const m = useMessages();
+  const r = m.readmission;
+  if (result.rejected.length === 0) return null;
+  const records = result.rejected
+    .map(({ reason, record }) =>
+      record
+        ? `${recordTypeName(m, record.recordType)} ${recordIdPrefix(record.recordId)} (${r.rejectedReasons[reason]})`
+        : `${r.rejectedNoKey} (${r.rejectedReasons[reason]})`,
+    )
+    .join(', ');
+  return (
+    <Notice>
+      <span data-testid="readmission-rejected">
+        {format(r.rejected, { n: String(result.rejected.length), records })}
+      </span>
+    </Notice>
+  );
+}
+
 /** Every stage after the start, on either device. */
 function Stage({
   controller,
+  session,
   stage,
-  inviting,
+  flow,
   leaving,
   onAgain,
 }: {
   readonly controller: VaultController;
+  /** The vault this device holds, when it holds one unlocked. */
+  readonly session?: VaultSession;
   readonly stage: PairingStage;
-  readonly inviting: boolean;
+  readonly flow: PairingFlow;
   /** What hiding the app does to the pairing (D93, D105). */
   readonly leaving: string;
   readonly onAgain: () => void;
 }) {
-  const m = useMessages();
+  const { messages: m, language } = useLanguage();
   const p = m.pairing;
+  const r = m.readmission;
+  const readmit = flow === 'readmit';
   const cancel = (
     <Button
       variant="quiet"
@@ -210,12 +276,13 @@ function Stage({
     case 'offer':
       return (
         <>
-          <p className="text-sm">{p.offerIntro}</p>
+          <p className="text-sm">{readmit ? r.offerIntro : p.offerIntro}</p>
           <PayloadText text={stage.text} label={p.offerLabel} />
           <Notice>{leaving}</Notice>
           <PasteText
-            label={p.answerPaste}
+            label={readmit ? r.answerPaste : p.answerPaste}
             submit={p.connect}
+            flow={flow}
             onPaste={(text) => Promise.resolve(controller.pairingAnswer(text))}
           />
           {cancel}
@@ -224,11 +291,12 @@ function Stage({
     case 'scan':
       return (
         <>
-          <p className="text-sm">{m.join.scanIntro}</p>
+          <p className="text-sm">{readmit ? r.scanIntro : m.join.scanIntro}</p>
           <Notice>{leaving}</Notice>
           <PasteText
-            label={m.join.offerPaste}
+            label={readmit ? r.offerPaste : m.join.offerPaste}
             submit={m.join.next}
+            flow={flow}
             onPaste={(text) => controller.joinOffer(text)}
           />
           {cancel}
@@ -237,7 +305,7 @@ function Stage({
     case 'answer':
       return (
         <>
-          <p className="text-sm">{m.join.answerIntro}</p>
+          <p className="text-sm">{readmit ? r.answerIntro : m.join.answerIntro}</p>
           <PayloadText text={stage.text} label={m.join.answerLabel} />
           <Notice>{leaving}</Notice>
           <p role="status">{m.join.waitingConnection}</p>
@@ -290,7 +358,11 @@ function Stage({
         </>
       );
     case 'transfer':
-      return <p role="status">{inviting ? p.sending : m.join.receiving}</p>;
+      return (
+        <p role="status">
+          {readmit ? r.merging : flow === 'invite' ? p.sending : m.join.receiving}
+        </p>
+      );
     case 'done':
       return (
         <>
@@ -308,6 +380,34 @@ function Stage({
           </Button>
         </>
       );
+    case 'readmitted':
+      return (
+        <>
+          <p role="status" data-testid="readmission-done">
+            {format(r.done, { name: stage.name })}
+          </p>
+          {stage.peerCommitted ? null : (
+            <Notice>
+              <span data-testid="readmission-not-committed">{r.notCommitted}</span>
+            </Notice>
+          )}
+          <MergeNotices
+            result={stage.result}
+            recovery={session?.recovery}
+            date={(at) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(at)}
+          />
+          <Rejected result={stage.result} />
+          <Button
+            className="self-start"
+            onClick={() => {
+              controller.cancelPairing();
+            }}
+            data-testid="readmission-close"
+          >
+            {p.close}
+          </Button>
+        </>
+      );
     case 'failed':
       return (
         <>
@@ -317,7 +417,7 @@ function Stage({
             data-testid="pairing-failed"
             data-reason={stage.reason}
           >
-            {failure(m, stage)}
+            {failure(m, stage, flow)}
           </p>
           <Button className="self-start" onClick={onAgain} data-testid="pairing-again">
             {p.again}
@@ -353,6 +453,14 @@ function startError(m: Messages, outcome: PairingStart | undefined): string | un
   }
 }
 
+/** The warning about hiding the app while a pairing or re-admission runs (D93, D105). */
+function leavingText(m: Messages, session: VaultSession): string {
+  const hidden = session.preferences.hiddenLockSeconds;
+  return hidden === 0
+    ? m.pairing.leavingImmediate
+    : format(m.pairing.leaving, { seconds: String(hidden) });
+}
+
 /** Why this vault offers no pairing now (D45, D102, D202), or `undefined`. */
 function blocked(m: Messages, session: VaultSession): string | undefined {
   if (session.retired) return m.pairing.retired;
@@ -371,7 +479,7 @@ export function InviteDevice({
 }) {
   const m = useMessages();
   const p = m.pairing;
-  const stage = usePairing(controller);
+  const stage = usePairing(controller, 'invite');
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [sameNetwork, setSameNetwork] = useState(false);
@@ -394,9 +502,7 @@ export function InviteDevice({
     },
     [controller],
   );
-  const hidden = session.preferences.hiddenLockSeconds;
-  const leaving =
-    hidden === 0 ? p.leavingImmediate : format(p.leaving, { seconds: String(hidden) });
+  const leaving = leavingText(m, session);
   const start = (auth: ExportAuth) => {
     setWorking(true);
     setOutcome(undefined);
@@ -416,8 +522,9 @@ export function InviteDevice({
       {stage ? (
         <Stage
           controller={controller}
+          session={session}
           stage={stage}
-          inviting
+          flow="invite"
           leaving={leaving}
           onAgain={() => {
             controller.cancelPairing();
@@ -516,7 +623,7 @@ export function JoinVault({
 }) {
   const m = useMessages();
   const j = m.join;
-  const stage = usePairing(controller);
+  const stage = usePairing(controller, 'join');
   const [password, setPassword] = useState<string | null>(null);
   const [sameNetwork, setSameNetwork] = useState(false);
   const [understood, setUnderstood] = useState(false);
@@ -533,7 +640,7 @@ export function JoinVault({
       <Stage
         controller={controller}
         stage={stage}
-        inviting={false}
+        flow="join"
         leaving={leaving}
         onAgain={() => {
           // A new session takes a new identity and a new local password (§11).
@@ -588,5 +695,148 @@ export function JoinVault({
         </div>
       </form>
     </>
+  );
+}
+
+function readmissionStartError(
+  m: Messages,
+  outcome: ReadmissionStart | undefined,
+): string | undefined {
+  const r = m.readmission;
+  switch (outcome) {
+    case undefined:
+    case 'ok':
+    case 'locked':
+      return undefined;
+    case 'no-webrtc':
+      return m.pairing.unavailable;
+    case 'read-only':
+      return r.readOnly;
+    case 'retired':
+      return r.retired;
+    case 'corrupt-record':
+      return r.corrupt;
+  }
+}
+
+/** Why this vault offers no re-admission now (D45, D102, D207), or `undefined`. */
+function readmissionBlocked(m: Messages, session: VaultSession): string | undefined {
+  if (session.retired) return m.readmission.retired;
+  if (!session.writable) return m.readmission.readOnly;
+  if (session.corrupt().length > 0) return m.readmission.corrupt;
+  return undefined;
+}
+
+/**
+ * Re-admission, in Settings › Devices (§9, D206, D207): no password; the user chooses on each device
+ * whether it shows its text first or pastes the other's.
+ */
+export function ReadmitDevice({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const m = useMessages();
+  const r = m.readmission;
+  const stage = usePairing(controller, 'readmit');
+  const [open, setOpen] = useState(false);
+  const [sameNetwork, setSameNetwork] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [outcome, setOutcome] = useState<ReadmissionStart>();
+  // Leaving Settings ends a re-admission in progress, as a pairing.
+  useEffect(
+    () => () => {
+      if (controller.pairingFlow === 'readmit') controller.cancelPairing();
+    },
+    [controller],
+  );
+  const start = (role: 'initiator' | 'responder') => {
+    setWorking(true);
+    setOutcome(undefined);
+    void controller
+      .startReadmission(role, { sameNetwork, defaultName: deviceName(navigator.userAgent) })
+      .then((result) => {
+        setWorking(false);
+        setOutcome(result);
+      });
+  };
+  const reason = readmissionBlocked(m, session);
+  const error = readmissionStartError(m, outcome);
+  return (
+    <div className="flex flex-col gap-3" data-testid="readmit-device">
+      <h3 className="font-semibold">{r.title}</h3>
+      {stage ? (
+        <Stage
+          controller={controller}
+          session={session}
+          stage={stage}
+          flow="readmit"
+          leaving={leavingText(m, session)}
+          onAgain={() => {
+            controller.cancelPairing();
+            setOpen(true);
+          }}
+        />
+      ) : reason ? (
+        <Notice>{reason}</Notice>
+      ) : !open ? (
+        <>
+          <p className="text-sm">{r.intro}</p>
+          <Button
+            variant="quiet"
+            className="self-start"
+            onClick={() => {
+              setOpen(true);
+            }}
+            data-testid="readmission-start"
+          >
+            {r.start}
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm">{r.how}</p>
+          <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
+          {error ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={working}
+              onClick={() => {
+                start('initiator');
+              }}
+              data-testid="readmission-first"
+            >
+              {r.first}
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={working}
+              onClick={() => {
+                start('responder');
+              }}
+              data-testid="readmission-paste"
+            >
+              {r.paste}
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={working}
+              onClick={() => {
+                setOpen(false);
+                setOutcome(undefined);
+              }}
+            >
+              {m.pairing.cancel}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
