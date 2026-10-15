@@ -1,7 +1,8 @@
 // Builds a vault in Node through the public API, for the load test (architecture.md "Load at
 // unlock"): 2,000 items, each edited until it holds HISTORY_LIMIT Item Versions. The Device KEK
 // comes from the Argon2id worker entry of @blindvault/crypto, run in-process, so the local password
-// opens the vault in a browser.
+// opens the vault in a browser. The same vault as a `.bvault` file feeds the Gate C manual run
+// (D202): `large-backup.spec.ts`.
 
 import {
   type KdfParams,
@@ -53,7 +54,8 @@ function kdfWorker(): Promise<(request: unknown) => Promise<KdfResponse>> {
   return worker;
 }
 
-async function port(): Promise<KdfPort> {
+/** An Argon2id port on the worker entry, in-process. */
+export async function workerPort(): Promise<KdfPort> {
   const run = await kdfWorker();
   const p: KdfPort = {
     onmessage: null,
@@ -90,6 +92,46 @@ export async function buildVault(
   items: number,
   edits: number = HISTORY_LIMIT,
 ): Promise<Fixture> {
+  const built = await build(password, params, items, edits);
+  built.session.lock();
+  return built.fixture();
+}
+
+/**
+ * The vault of `buildVault` as a `.bvault` file, opened by `exportPassword` (D36), which must be
+ * strong enough for the app's export (D134); its Recovery Phrase is discarded.
+ */
+export async function buildBackup(
+  password: string,
+  exportPassword: string,
+  params: KdfParams,
+  items: number,
+  edits: number = HISTORY_LIMIT,
+): Promise<Uint8Array> {
+  const built = await build(password, params, items, edits);
+  const keyring = new Keyring();
+  try {
+    const kek = await deriveDeviceKek(
+      keyring,
+      await workerPort(),
+      normalizePassword(password),
+      built.salt,
+      params,
+    );
+    const file = await built.session.exportBackup({
+      kek,
+      method: 'password',
+      exportPassword: { password: normalizePassword(exportPassword), port: await workerPort() },
+    });
+    return file.bytes;
+  } finally {
+    keyring.wipeAll();
+    built.session.lock();
+  }
+}
+
+/** The vault, still unlocked, and its stored state. */
+async function build(password: string, params: KdfParams, items: number, edits: number) {
   await initCrypto();
   const held = new Map<string, StoredRecord>();
   let localConfig = new Uint8Array(0);
@@ -108,7 +150,7 @@ export async function buildVault(
   const salt = generateSalt();
   const kek = await deriveDeviceKek(
     keyring,
-    await port(),
+    await workerPort(),
     normalizePassword(password),
     salt,
     params,
@@ -128,13 +170,18 @@ export async function buildVault(
       const id = await session.createItem(item(i, 0));
       for (let e = 1; e <= edits; e++) await session.updateItem(id, item(i, e));
     }
-  } finally {
+  } catch (error) {
     session.lock();
+    throw error;
   }
   return {
-    name: databaseName(parseLocalConfig(localConfig).vaultId),
-    localConfig,
-    records: [...held.values()],
+    session,
+    salt,
+    fixture: (): Fixture => ({
+      name: databaseName(parseLocalConfig(localConfig).vaultId),
+      localConfig,
+      records: [...held.values()],
+    }),
   };
 }
 
@@ -143,10 +190,16 @@ export async function unlockInMemory(fixture: Fixture, password: string): Promis
   const localConfig = parseLocalConfig(fixture.localConfig);
   const keyring = new Keyring();
   const { salt, opslimit, memlimit } = localConfig.kek;
-  const kek = await deriveDeviceKek(keyring, await port(), normalizePassword(password), salt, {
-    opslimit,
-    memlimit,
-  });
+  const kek = await deriveDeviceKek(
+    keyring,
+    await workerPort(),
+    normalizePassword(password),
+    salt,
+    {
+      opslimit,
+      memlimit,
+    },
+  );
   const store: RecordStore = {
     records: () => Promise.resolve(fixture.records),
     commit: () => Promise.reject(new Error('read only')),
