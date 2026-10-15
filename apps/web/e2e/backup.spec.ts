@@ -40,6 +40,7 @@ test('exports a backup, asking for the local password again, then one under a ge
   await page.getByTestId('item-title').fill('ACME');
   await page.getByTestId('input-Password').fill(SECRET);
   await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await expect(page.getByTestId('last-backup')).toHaveText(
     'No backup has been made on this device yet.',

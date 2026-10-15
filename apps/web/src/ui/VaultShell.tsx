@@ -49,8 +49,12 @@ function DetailPane({
       </section>
     );
   }
-  // Keyed by screen and item, so a revealed secret or a draft never carries to another item.
-  const key = screen.name === 'new' ? 'new' : `${screen.name}-${hex(screen.id)}`;
+  // Keyed by screen and item, so a revealed secret or a draft never carries to another item, and
+  // by opening for a new item, so each New item starts from the template picker (D210).
+  const key =
+    screen.name === 'new'
+      ? `new-${String(nav.opening(screen))}`
+      : `${screen.name}-${hex(screen.id)}`;
   return (
     <section aria-label={m.vault.detail} className="flex flex-1 justify-center overflow-y-auto">
       {screen.name === 'item' ? (

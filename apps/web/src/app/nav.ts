@@ -47,6 +47,8 @@ const ROOT: readonly Screen[] = [ROOT_SCREEN];
 export class Navigation {
   #stack: readonly Screen[] = ROOT;
   readonly #listeners = new Set<() => void>();
+  readonly #openings = new WeakMap<Screen, number>();
+  #opened = 0;
 
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
@@ -62,6 +64,25 @@ export class Navigation {
   list = (): ListScreen => {
     const top = this.#listStack().at(-1);
     return top && isList(top) ? top : ROOT_LIST;
+  };
+
+  /**
+   * Runs `step` only while `from`, the screen a write started from, is still current: a write that
+   * completes after the user went elsewhere leaves them there (D210). Every navigation makes a new
+   * screen value, so the same item selected again is another screen.
+   */
+  follow(from: Screen, step: () => void): void {
+    if (this.current() === from) step();
+  }
+
+  /** A number per opening of a screen, so each New item is a fresh editor (D210). */
+  opening = (screen: Screen): number => {
+    let n = this.#openings.get(screen);
+    if (n === undefined) {
+      n = ++this.#opened;
+      this.#openings.set(screen, n);
+    }
+    return n;
   };
 
   open(screen: Screen): void {

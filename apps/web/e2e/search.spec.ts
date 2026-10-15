@@ -22,18 +22,21 @@ test('searches in memory, never over secrets, and forgets the query on lock (D13
   await button(page, '+ New folder').click();
   await page.getByTestId('folder-name').fill('Finance');
   await button(page, 'Create').click();
+  await expect(page.getByRole('heading', { name: 'Finance', level: 2 })).toBeVisible();
   await button(page, 'New item').click();
   await button(page, 'Login').click();
   await page.getByTestId('item-title').fill('Harbor Credit Union');
   await page.getByTestId('input-Username').fill('ana.lima');
   await page.getByTestId('input-Password').fill(SECRET);
   await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: 'Harbor Credit Union', level: 1 })).toBeVisible();
   await button(page, 'All items').click();
   await button(page, 'New item').click();
   await button(page, 'Secure note').click();
   await page.getByTestId('item-title').fill('Garden plan');
   await page.getByTestId('item-notes').fill('Plant the tulips in spring');
   await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: 'Garden plan', level: 1 })).toBeVisible();
 
   const search = page.getByTestId('search');
   const results = page.getByRole('region', { name: 'Results' });

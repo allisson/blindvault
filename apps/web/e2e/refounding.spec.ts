@@ -20,6 +20,7 @@ async function newLogin(page: Page, title: string) {
   await page.getByTestId('item-title').fill(title);
   await page.getByTestId('input-Password').fill(SECRET);
   await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 }
 
 test('re-founds the vault: warnings, proof, new phrase and password, and only the live items carried over (D28, D72, D187)', async ({

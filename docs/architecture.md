@@ -401,6 +401,15 @@ every project through the references in the root `tsconfig.json`.
   defaults, names its hosts in the hint, and locks the option on for an unreadable list.
   `e2e/pairing-stun.spec.ts` wraps `RTCPeerConnection` in an init script to read the ICE servers
   each session gets.
+- **Navigation after a write (`apps/web`, D210).** `Navigation.follow(from, step)` runs a
+  write's closing navigation only while `from`, the screen current when the write started, is still
+  current, compared by identity; the item editor (new and edit), Duplicate, Restore this version and
+  folder creation use it. `Navigation.opening(screen)` numbers each opening of a screen, and the
+  detail pane keys a new item's editor by it, so each New item starts at the template picker.
+  `e2e/write-navigation.spec.ts` clicks the write and another navigation in one task, so the second
+  lands while the write is pending; the e2e helpers that act right after a Save now wait for the
+  saved item. Found as a Firefox flake of `refounding.spec.ts` in CI runs 38582869362 and
+  38754562281.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

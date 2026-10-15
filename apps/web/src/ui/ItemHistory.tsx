@@ -98,10 +98,13 @@ export function ItemHistory({
                 onClick={() => {
                   setWorking(true);
                   setError(undefined);
+                  const from = nav.current();
                   session.restoreVersion(id, v.versionId).then(
                     () => {
                       onChange();
-                      nav.back();
+                      nav.follow(from, () => {
+                        nav.back();
+                      });
                     },
                     (e: unknown) => {
                       setWorking(false);

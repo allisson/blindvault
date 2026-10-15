@@ -248,15 +248,19 @@ export function ItemEditor({
         }
         setErrors(undefined);
         setSaving(true);
+        const from = nav.current();
         const write = id
           ? session.updateItem(id, result.input).then(() => id)
           : session.createItem(result.input);
         write.then(
           (saved) => {
             onChange();
-            // An edit goes back to its item; a new item replaces the editor.
-            if (id) nav.back();
-            else nav.replace({ name: 'item', id: saved });
+            // An edit goes back to its item; a new item replaces the editor. Unless the user went
+            // elsewhere meanwhile (D210).
+            nav.follow(from, () => {
+              if (id) nav.back();
+              else nav.replace({ name: 'item', id: saved });
+            });
           },
           (error: unknown) => {
             setSaving(false);
