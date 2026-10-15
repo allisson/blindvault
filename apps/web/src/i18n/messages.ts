@@ -123,12 +123,20 @@ const en = {
       'Both devices must then be on the same network. Otherwise a STUN server (Google, Cloudflare) sees this device’s public address.',
     preparing: 'Preparing the connection…',
     offerIntro:
-      'Copy this text to the new device, which pastes it in its pairing screen. Then paste its answer below.',
+      'Scan this code with the new device in its pairing screen, or copy the text to it. Then scan or paste its answer below.',
     offerLabel: 'This device’s pairing text',
+    qrLabel: 'This device’s code, for the other device to scan',
     copy: 'Copy',
     copied: 'Copied',
     channel:
-      'Whatever carries this text, a message or an email, sees this device’s network addresses. Nothing else: the numbers compared next protect the pairing.',
+      'Whoever sees this code, or whatever carries this text, a message or an email, sees this device’s network addresses. Nothing else: the numbers compared next protect the pairing.',
+    scan: 'Scan with the camera',
+    scanStop: 'Stop the camera',
+    scanning: 'Point the camera at the code the other device shows.',
+    noCamera: 'This device has no camera: paste the text.',
+    cameraDenied: 'The camera was denied: allow it in the browser settings, or paste the text.',
+    cameraFailed: 'The camera did not start: paste the text.',
+    readerFailed: 'The code reader did not load: paste the text.',
     leaving:
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the pairing ends.',
     leavingImmediate:
@@ -182,10 +190,11 @@ const en = {
     intro:
       'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a new device”.',
     submit: 'Continue',
-    scanIntro: 'Paste here the pairing text the other device shows.',
+    scanIntro: 'Scan the code the other device shows, or paste its pairing text here.',
     offerPaste: 'The other device’s pairing text',
     next: 'Continue',
-    answerIntro: 'Copy this answer back to the other device, which pastes it below its own text.',
+    answerIntro:
+      'Show this code to the other device, which scans it below its own, or copy this answer back to it.',
     answerLabel: 'This device’s answer',
     waitingConnection: 'Waiting for the other device to connect…',
     receiving: 'Receiving the vault…',
@@ -204,11 +213,12 @@ const en = {
     corrupt:
       'This device holds a record it cannot read: re-admission would hand it on. Re-found the vault or restore a backup.',
     offerIntro:
-      'Copy this text to the other device, which pastes it in its re-admission screen. Then paste its answer below.',
+      'Scan this code with the other device in its re-admission screen, or copy the text to it. Then scan or paste its answer below.',
     answerPaste: 'The other device’s answer',
-    scanIntro: 'Paste here the re-admission text the other device shows.',
+    scanIntro: 'Scan the code the other device shows, or paste its re-admission text here.',
     offerPaste: 'The other device’s re-admission text',
-    answerIntro: 'Copy this answer back to the other device, which pastes it below its own text.',
+    answerIntro:
+      'Show this code to the other device, which scans it below its own, or copy this answer back to it.',
     merging: 'Merging the two devices…',
     done: 'Re-admitted with {name}: both devices know each other and hold the same records.',
     notCommitted:
@@ -950,12 +960,20 @@ const ptBR: Messages = {
       'Os dois dispositivos precisam então estar na mesma rede. Sem isso, um servidor STUN (Google, Cloudflare) vê o endereço público deste dispositivo.',
     preparing: 'Preparando a conexão…',
     offerIntro:
-      'Copie este texto para o dispositivo novo, que o cola na tela de pareamento dele. Depois cole a resposta dele abaixo.',
+      'Escaneie este código com o dispositivo novo, na tela de pareamento dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
     offerLabel: 'Texto de pareamento deste dispositivo',
+    qrLabel: 'Código deste dispositivo, para o outro dispositivo escanear',
     copy: 'Copiar',
     copied: 'Copiado',
     channel:
-      'O que levar este texto, uma mensagem ou um e-mail, vê os endereços de rede deste dispositivo. Mais nada: os números comparados em seguida protegem o pareamento.',
+      'Quem vir este código, ou o que levar este texto, uma mensagem ou um e-mail, vê os endereços de rede deste dispositivo. Mais nada: os números comparados em seguida protegem o pareamento.',
+    scan: 'Escanear com a câmera',
+    scanStop: 'Parar a câmera',
+    scanning: 'Aponte a câmera para o código que o outro dispositivo mostra.',
+    noCamera: 'Este dispositivo não tem câmera: cole o texto.',
+    cameraDenied: 'A câmera foi negada: permita nas configurações do navegador ou cole o texto.',
+    cameraFailed: 'A câmera não iniciou: cole o texto.',
+    readerFailed: 'O leitor de código não carregou: cole o texto.',
     leaving:
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, o pareamento termina.',
     leavingImmediate:
@@ -1009,11 +1027,12 @@ const ptBR: Messages = {
     intro:
       'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo novo”.',
     submit: 'Continuar',
-    scanIntro: 'Cole aqui o texto de pareamento que o outro dispositivo mostra.',
+    scanIntro:
+      'Escaneie o código que o outro dispositivo mostra, ou cole aqui o texto de pareamento dele.',
     offerPaste: 'Texto de pareamento do outro dispositivo',
     next: 'Continuar',
     answerIntro:
-      'Copie esta resposta de volta para o outro dispositivo, que a cola abaixo do texto dele.',
+      'Mostre este código ao outro dispositivo, que o escaneia abaixo do dele, ou copie esta resposta de volta para ele.',
     answerLabel: 'Resposta deste dispositivo',
     waitingConnection: 'Aguardando o outro dispositivo conectar…',
     receiving: 'Recebendo o cofre…',
@@ -1033,12 +1052,13 @@ const ptBR: Messages = {
     corrupt:
       'Este dispositivo tem um registro que não consegue ler: a readmissão o passaria adiante. Refunde o cofre ou restaure um backup.',
     offerIntro:
-      'Copie este texto para o outro dispositivo, que o cola na tela de readmissão dele. Depois cole a resposta dele abaixo.',
+      'Escaneie este código com o outro dispositivo, na tela de readmissão dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
     answerPaste: 'Resposta do outro dispositivo',
-    scanIntro: 'Cole aqui o texto de readmissão que o outro dispositivo mostra.',
+    scanIntro:
+      'Escaneie o código que o outro dispositivo mostra, ou cole aqui o texto de readmissão dele.',
     offerPaste: 'Texto de readmissão do outro dispositivo',
     answerIntro:
-      'Copie esta resposta de volta para o outro dispositivo, que a cola abaixo do texto dele.',
+      'Mostre este código ao outro dispositivo, que o escaneia abaixo do dele, ou copie esta resposta de volta para ele.',
     merging: 'Mesclando os dois dispositivos…',
     done: 'Readmitido com {name}: os dois dispositivos se conhecem e têm os mesmos registros.',
     notCommitted:
