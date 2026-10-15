@@ -19,6 +19,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { VaultController } from './controller';
 import { type PairingPort, type PairingStage, STUN_SERVERS } from './pairing';
 import { type PasskeyPort } from './passkey';
+import { type StunSettings } from './stun-settings';
 
 beforeAll(initCrypto);
 
@@ -142,6 +143,7 @@ function controller(
   factory: IDBFactory,
   pairing?: PairingPort,
   passkeys?: PasskeyPort,
+  stun?: () => StunSettings,
 ) {
   const c = new VaultController({
     factory,
@@ -150,6 +152,7 @@ function controller(
     now: () => 1_760_000_000_000,
     ...(pairing ? { pairing } : {}),
     ...(passkeys ? { passkeys } : {}),
+    ...(stun ? { stun } : {}),
   });
   controllers.push(c);
   return c;
@@ -282,6 +285,43 @@ describe('pairing through the controller (§8.4, D202, D203)', () => {
   it('uses the default STUN servers unless the same network only is chosen (§9.2)', async () => {
     const { a, net } = await toSas(false);
     expect(net.options.map((o) => o.iceServers)).toEqual([STUN_SERVERS, STUN_SERVERS]);
+    a.cancelPairing();
+  });
+
+  it('uses the STUN list stored when each pairing starts, and none when unreadable (D209)', async () => {
+    const net = network();
+    let stored: StunSettings = { kind: 'custom', urls: ['stun:a.example.org:3478'] };
+    const a = controller('a', new IDBFactory(), net.a, undefined, () => stored);
+    const b = controller('b', new IDBFactory(), net.b, undefined, () => stored);
+    await created(a);
+    await b.start();
+    const invite = async (sameNetwork: boolean) => {
+      expect(
+        await a.startPairing(
+          { kind: 'password', password: PASSWORD_A },
+          { sameNetwork, defaultName: 'Own name' },
+        ),
+      ).toBe('ok');
+      return textOf(await stage(a, 'offer'));
+    };
+    const offer = await invite(false);
+    stored = { kind: 'custom', urls: ['stun:b.example.org', 'stun:192.0.2.7:19302'] };
+    expect(await b.beginJoin(PASSWORD_B, { sameNetwork: false, name: 'B' })).toBe('ok');
+    expect(await b.joinOffer(offer)).toBe('ok');
+    await stage(b, 'answer');
+    expect(net.options.map((o) => o.iceServers)).toEqual([
+      [{ urls: 'stun:a.example.org:3478' }],
+      [{ urls: 'stun:b.example.org' }, { urls: 'stun:192.0.2.7:19302' }],
+    ]);
+    b.cancelPairing();
+
+    // The same network only wins over the list; an unreadable list uses no STUN server at all.
+    await invite(true);
+    stored = { kind: 'unreadable' };
+    await invite(false);
+    stored = { kind: 'default' };
+    await invite(false);
+    expect(net.options.slice(2).map((o) => o.iceServers)).toEqual([[], [], STUN_SERVERS]);
     a.cancelPairing();
   });
 
