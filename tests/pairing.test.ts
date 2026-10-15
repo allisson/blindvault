@@ -9,6 +9,7 @@ import {
   type SymmetricKey,
   deviceId,
   derivePrfKek,
+  exportTransferKey,
   generateDeviceIdentity,
   generateRecoveryPhrase,
   initCrypto,
@@ -18,8 +19,10 @@ import { VaultDatabase } from '@blindvault/storage';
 import {
   type MemoryPairOptions,
   PairingError,
+  type PairingHandshake,
   PairingSession,
   TransferRefusal,
+  type Transport,
   encodePayload,
   exchangeNonces,
   memoryPair,
@@ -129,6 +132,8 @@ async function vaultA() {
 }
 
 interface Run {
+  /** A's vault, when the pairing is not its first. */
+  readonly a?: Awaited<ReturnType<typeof vaultA>>;
   /** The link closes in place of A's frame of this index after the handshake (0 is the first). */
   readonly cut?: number;
   /** B's answer to the SAS. */
@@ -140,20 +145,8 @@ interface Run {
 /** A's handshake messages: the first and the third of Noise_XX. */
 const HANDSHAKE_FRAMES = 2;
 
-/** One pairing: A (initiator, holds the vault) and B (responder, an empty installation). */
-async function pairing(run: Run = {}) {
-  const a = await vaultA();
-  const caller = new Keyring();
-  const grant = a.session.openPairing({ kek: kek(caller, 1), method: 'password' });
-  caller.wipeAll();
-
-  // B, before the handshake: its identity and its Device KEK, in memory only (D33).
-  const factoryB = new IDBFactory();
-  const keyringB = new Keyring();
-  const identityB = generateDeviceIdentity(keyringB);
-  const kekB = kek(keyringB, 2);
-
-  const drawn = pairingNonce();
+/** The payloads of one session: A shows the initiator's, B the responder's. */
+function payloads(commitment: Uint8Array) {
   const base = {
     sessionId: new Uint8Array(16).fill(0x5a),
     ufrag: 'abcd',
@@ -162,24 +155,63 @@ async function pairing(run: Run = {}) {
     formatVersions: [1],
     recordTypes: [1, 2, 3, 4, 5, 6],
   } as const;
-  const payloadInitiator = encodePayload({
-    ...base,
-    role: 'initiator',
-    setup: 'actpass',
-    holdsVault: true,
-    fingerprint: new Uint8Array(32).fill(0x10),
-    commitment: drawn.commitment,
-  });
-  const payloadResponder = encodePayload({
-    ...base,
-    role: 'responder',
-    setup: 'active',
-    holdsVault: false,
-    fingerprint: new Uint8Array(32).fill(0x30),
-    commitment: null,
-  });
+  return {
+    payloadInitiator: encodePayload({
+      ...base,
+      role: 'initiator',
+      setup: 'actpass',
+      holdsVault: true,
+      fingerprint: new Uint8Array(32).fill(0x10),
+      commitment,
+    }),
+    payloadResponder: encodePayload({
+      ...base,
+      role: 'responder',
+      setup: 'active',
+      holdsVault: false,
+      fingerprint: new Uint8Array(32).fill(0x30),
+      commitment: null,
+    }),
+  };
+}
+
+/** A channel that keeps a copy of every message sent through it, before the session wipes it. */
+function recording(channel: Transport, sent: Uint8Array[]): Transport {
+  return {
+    send: (message) => {
+      sent.push(message.slice());
+      return channel.send(message);
+    },
+    receive: () => channel.receive(),
+    close: () => {
+      channel.close();
+    },
+    closed: channel.closed,
+  };
+}
+
+/** One pairing: A (initiator, holds the vault) and B (responder, an empty installation). */
+async function pairing(run: Run = {}) {
+  const a = run.a ?? (await vaultA());
+  const caller = new Keyring();
+  const grant = a.session.openPairing({ kek: kek(caller, 1), method: 'password' });
+  caller.wipeAll();
+  // A copy of the Master Key, to look for on the link (CRYPTO-INV-002); the test wipes it.
+  const masterKey = exportTransferKey(grant.masterKey);
+
+  // B, before the handshake: its identity and its Device KEK, in memory only (D33).
+  const factoryB = new IDBFactory();
+  const keyringB = new Keyring();
+  const identityB = generateDeviceIdentity(keyringB);
+  const kekB = kek(keyringB, 2);
+
+  const drawn = pairingNonce();
+  // Every frame of the link, both ways, and every message each side sent in its channel.
+  const frames: Uint8Array[] = [];
+  const messages: Uint8Array[] = [];
   let sent = 0;
   const intercept: MemoryPairOptions['intercept'] = (direction, frame) => {
+    frames.push(frame.slice());
     if (direction !== 'a-to-b' || run.cut === undefined) return [frame];
     sent += 1;
     if (sent <= HANDSHAKE_FRAMES + run.cut) return [frame];
@@ -187,13 +219,17 @@ async function pairing(run: Run = {}) {
     return [];
   };
   const link = memoryPair({ intercept });
-  const shared = { payloadInitiator, payloadResponder };
+  const shared = payloads(drawn.commitment);
   const [ha, hb] = await Promise.all([
     pairingHandshake(link.a, { ...shared, role: 'initiator', identity: grant.identity }),
     pairingHandshake(link.b, { ...shared, role: 'responder', identity: identityB }),
   ]);
-  const sa = new PairingSession(ha.channel, { expiresAt: Date.now() + 600_000 });
-  const sb = new PairingSession(hb.channel, { expiresAt: Date.now() + 600_000 });
+  const sa = new PairingSession(recording(ha.channel, messages), {
+    expiresAt: Date.now() + 600_000,
+  });
+  const sb = new PairingSession(recording(hb.channel, messages), {
+    expiresAt: Date.now() + 600_000,
+  });
 
   const sideA = (async () => {
     const sas = await exchangeNonces(sa, {
@@ -253,7 +289,97 @@ async function pairing(run: Run = {}) {
 
   const [outA, outB] = await Promise.allSettled([sideA, sideB]);
   if (outB.status === 'fulfilled') sessions.push(outB.value);
-  return { a, factoryB, keyringB, identityB, grant, link, outA, outB };
+  return { a, factoryB, keyringB, identityB, grant, link, outA, outB, masterKey, frames, messages };
+}
+
+function names(session: VaultSession): string[] {
+  return session
+    .devices()
+    .map((d) => d.device.displayName)
+    .sort();
+}
+
+/** Whether `needle` appears anywhere in `haystack`. */
+function holds(haystack: Uint8Array, needle: Uint8Array): boolean {
+  return Buffer.from(haystack).indexOf(Buffer.from(needle)) !== -1;
+}
+
+/**
+ * A man in the middle with keys of its own (D211): it runs one handshake with A as the responder
+ * and one with B as the initiator, relaying the payloads unchanged, and knows A's nonce, which a real
+ * one learns only once A reveals it.
+ */
+async function mitm() {
+  const a = await vaultA();
+  const caller = new Keyring();
+  const grant = a.session.openPairing({ kek: kek(caller, 1), method: 'password' });
+  caller.wipeAll();
+  const factoryB = new IDBFactory();
+  const keyringB = new Keyring();
+  const identityB = generateDeviceIdentity(keyringB);
+  const keyringM = new Keyring();
+  const drawn = pairingNonce();
+  const shared = payloads(drawn.commitment);
+  const toA = memoryPair();
+  const toB = memoryPair();
+  const [ha, hma, hmb, hb] = await Promise.all([
+    pairingHandshake(toA.a, { ...shared, role: 'initiator', identity: grant.identity }),
+    pairingHandshake(toA.b, {
+      ...shared,
+      role: 'responder',
+      identity: generateDeviceIdentity(keyringM),
+    }),
+    pairingHandshake(toB.a, {
+      ...shared,
+      role: 'initiator',
+      identity: generateDeviceIdentity(keyringM),
+    }),
+    pairingHandshake(toB.b, { ...shared, role: 'responder', identity: identityB }),
+  ]);
+  const session = (h: PairingHandshake) =>
+    new PairingSession(h.channel, { expiresAt: Date.now() + 600_000 });
+  const [sa, sma, smb, sb] = [ha, hma, hmb, hb].map(session) as [
+    PairingSession,
+    PairingSession,
+    PairingSession,
+    PairingSession,
+  ];
+  const [onA, , , onB] = await Promise.all([
+    exchangeNonces(sa, { role: 'initiator', handshakeHash: ha.handshakeHash, nonce: drawn.nonce }),
+    exchangeNonces(sma, {
+      role: 'responder',
+      handshakeHash: hma.handshakeHash,
+      commitment: drawn.commitment,
+    }),
+    exchangeNonces(smb, {
+      role: 'initiator',
+      handshakeHash: hmb.handshakeHash,
+      nonce: drawn.nonce,
+    }),
+    exchangeNonces(sb, {
+      role: 'responder',
+      handshakeHash: hb.handshakeHash,
+      commitment: drawn.commitment,
+    }),
+  ]);
+  return {
+    a,
+    grant,
+    factoryB,
+    keyringB,
+    identityB,
+    ha,
+    hb,
+    hma,
+    hmb,
+    sa,
+    sb,
+    onA,
+    onB,
+    toA,
+    toB,
+    keyringM,
+  };
 }
 
 function reasonOf(outcome: PromiseSettledResult<unknown>): string {
@@ -283,11 +409,6 @@ describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
       a.session.versions(item?.id ?? new Uint8Array()).length,
     );
     // Both Device records, on both devices (CRYPTO-INV-007: written by A after the SAS).
-    const names = (s: VaultSession) =>
-      s
-        .devices()
-        .map((d) => d.device.displayName)
-        .sort();
     expect(names(a.session)).toEqual(['Chrome on macOS', B_NAME]);
     expect(names(b)).toEqual(['Chrome on macOS', B_NAME]);
     expect(a.session.lastSyncByPeer).toEqual([[b.deviceId, T0]]);
@@ -354,4 +475,79 @@ describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
       expect(keyringB.size).toBe(0);
     },
   );
+
+  it('no message of the link carries the Master Key, which only the channel encryption hides (CRYPTO-INV-002, D211)', async () => {
+    const { outA, outB, masterKey, frames, messages } = await pairing();
+    expect(reasonOf(outA)).toBe('completed');
+    expect(reasonOf(outB)).toBe('completed');
+    // The master-key message holds the key before the channel encrypts it…
+    expect(messages.some((m) => holds(m, masterKey))).toBe(true);
+    // …and no frame on the link, in either direction, holds it.
+    expect(frames.length).toBeGreaterThan(HANDSHAKE_FRAMES + FRAMES);
+    expect(frames.some((f) => holds(f, masterKey))).toBe(false);
+    masterKey.fill(0);
+  });
+
+  it('pairs a new device after an attempt interrupted once A wrote its Device record (§11, D33, D211)', async () => {
+    // The link closes in place of records-begin: A already wrote B's Device record.
+    const first = await pairing({ cut: 3 });
+    first.masterKey.fill(0);
+    expect(reasonOf(first.outA)).toBe('closed');
+    expect(await databases(first.factoryB)).toBe(0);
+    expect(names(first.a.session)).toEqual(['Chrome on macOS', B_NAME]);
+    expect(first.a.session.lastSyncByPeer).toEqual([]);
+
+    const second = await pairing({ a: first.a });
+    second.masterKey.fill(0);
+    expect(reasonOf(second.outA)).toBe('completed');
+    if (second.outB.status !== 'fulfilled') throw second.outB.reason;
+    const b = second.outB.value;
+    expect(b.deviceId).not.toEqual(deviceId(first.identityB.publicKey));
+    // The first record stays, with no completed sync: the pairing shows as not completed (§8.4).
+    expect(names(first.a.session)).toEqual(['Chrome on macOS', B_NAME, B_NAME]);
+    expect(names(b)).toEqual(['Chrome on macOS', B_NAME, B_NAME]);
+    expect(first.a.session.lastSyncByPeer).toEqual([[b.deviceId, T0]]);
+  });
+
+  it('a man in the middle with keys of its own makes the two devices show different SAS (§6, D211)', async () => {
+    const {
+      a,
+      grant,
+      factoryB,
+      keyringB,
+      identityB,
+      ha,
+      hb,
+      hma,
+      hmb,
+      onA,
+      onB,
+      sa,
+      sb,
+      toA,
+      toB,
+      keyringM,
+    } = await mitm();
+    try {
+      // Each handshake authenticated the man in the middle, not the other device.
+      expect(ha.peerPublicKey).not.toEqual(identityB.publicKey);
+      expect(hb.peerPublicKey).not.toEqual(grant.identity.publicKey);
+      expect(hma.peerPublicKey).toEqual(grant.identity.publicKey);
+      expect(hmb.peerPublicKey).toEqual(identityB.publicKey);
+      expect(ha.handshakeHash).not.toEqual(hb.handshakeHash);
+      expect(onA.sas).not.toBe(onB.sas);
+      // The users compare the numbers and say they differ: nothing is written on either side.
+      await Promise.all([onA.reject('sas-mismatch'), onB.reject('sas-mismatch')]);
+      expect(await sa.ended).toMatchObject({ reason: 'sas-mismatch', by: 'local' });
+      expect(await sb.ended).toMatchObject({ reason: 'sas-mismatch', by: 'local' });
+      expect(a.session.devices()).toHaveLength(1);
+      expect(await databases(factoryB)).toBe(0);
+    } finally {
+      grant.wipe();
+      keyringB.wipeAll();
+      keyringM.wipeAll();
+      toA.a.close();
+      toB.a.close();
+    }
+  });
 });

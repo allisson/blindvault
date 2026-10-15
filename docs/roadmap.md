@@ -291,18 +291,18 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Gate C
 
-- [ ] Full pairing between two browsers (Playwright) and between iOS and Android (manual, recorded)
+- [ ] Full pairing between two browsers (Playwright) and between iOS and Android (manual, recorded) (the browsers covered by `e2e/pairing.spec.ts` and `e2e/pairing-qr.spec.ts`; iOS ↔ Android pending)
     - [ ] Measure A's wait for `committed` while B verifies and commits a large vault on a phone (D202, D203)
-- [ ] Mismatched SAS aborts without transferring anything (CRYPTO-INV-011)
-- [ ] Replay of an old pairing session fails
-- [ ] A modified QR payload or SDP makes the handshake or SAS fail
-- [ ] A wrong identity is rejected
-- [ ] Pairing interrupted at any step before the commit, including a failed first sync, leaves the new device's storage empty (D33)
-- [ ] Duplicate pairing and expired sessions handled
-- [ ] A lock or hidden-app lock on either device aborts the pairing, leaving the joining device's storage empty (D93)
-- [ ] Pairing into a device that already holds a vault replaces it only after the user confirms; an interruption before the commit leaves it intact (D150, D153)
-- [ ] An unregistered device is re-admitted and then syncs; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014) (re-admission and the different Master Key covered by `e2e/readmission.spec.ts`; the sync after it waits for Phase 5)
-- [ ] No Device record is written outside vault creation, re-founding or a SAS-confirmed pairing or re-admission (CRYPTO-INV-007)
+- [x] Mismatched SAS aborts without transferring anything (CRYPTO-INV-011)
+- [x] Replay of an old pairing session fails
+- [x] A modified QR payload or SDP makes the handshake or SAS fail
+- [x] A wrong identity is rejected
+- [x] Pairing interrupted at any step before the commit, including a failed first sync, leaves the new device's storage empty (D33)
+- [x] Duplicate pairing and expired sessions handled
+- [x] A lock or hidden-app lock on either device aborts the pairing, leaving the joining device's storage empty (D93)
+- [x] Pairing into a device that already holds a vault replaces it only after the user confirms; an interruption before the commit leaves it intact (D150, D153)
+- [x] An unregistered device is re-admitted; re-admission with a different Master Key aborts before any Device record is written (D22, D29, CRYPTO-INV-014); the sync after it is in Gate D (D211)
+- [x] No Device record is written outside vault creation, re-founding or a SAS-confirmed pairing or re-admission (CRYPTO-INV-007)
 - [x] Official Noise test vectors pass in CI
 
 ---
@@ -348,6 +348,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
+- [ ] A device re-admitted in Phase 4 then syncs (D22, D211)
 - [ ] A retired peer cannot sync, and a forged newer non-retired Device record, even one claiming another device's HLC, never un-retires it (D31, CRYPTO-INV-015)
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected
 - [ ] During a sync session, an edit on one device reaches the other without a new exchange
