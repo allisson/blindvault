@@ -1,7 +1,9 @@
-// Transcript inputs of crypto-spec.md §13: the Noise prologues, in layout encoding (D1, D10), and
-// the pairing commitment and SAS of `pairing-protocol.md` §6 (D199).
+// Transcript inputs of crypto-spec.md §13: the Noise prologues, in layout encoding (D1, D10), the
+// pairing commitment and SAS of `pairing-protocol.md` §6 (D199), and the re-admission key
+// confirmation of §9 (D29).
 
 import { EncodingError } from './errors';
+import { type SymmetricKey, keyBytes } from './keys';
 import { label, layout } from './layout';
 import { lib, randomBytes } from './sodium';
 
@@ -12,6 +14,7 @@ export const PAIRING_COMMITMENT_LENGTH = 32;
 const HANDSHAKE_HASH_LENGTH = 64;
 const SAS_HASH_LENGTH = 32;
 const SAS_MODULUS = 1_000_000n;
+export const READMISSION_MAC_LENGTH = 32;
 
 function sized(value: Uint8Array, length: number, name: string): Uint8Array {
   if (value.length !== length) throw new EncodingError(`${name} is ${String(length)} bytes`);
@@ -87,4 +90,41 @@ export function pairingSas(
   );
   const value = new DataView(sasHash.buffer, sasHash.byteOffset, 8).getBigUint64(0);
   return (value % SAS_MODULUS).toString().padStart(6, '0');
+}
+
+/**
+ * The re-admission key confirmation (D29):
+ * `BLAKE2b-256(key = K_readmission, layout("bv.v1.readmission", role, h))`, `role` being the
+ * sender's own.
+ */
+export function readmissionMac(
+  key: SymmetricKey,
+  role: 'initiator' | 'responder',
+  handshakeHash: Uint8Array,
+): Uint8Array {
+  return lib().crypto_generichash(
+    READMISSION_MAC_LENGTH,
+    layout(
+      label('bv.v1.readmission'),
+      label(role),
+      sized(handshakeHash, HANDSHAKE_HASH_LENGTH, 'a handshake hash'),
+    ),
+    keyBytes(key),
+  );
+}
+
+/** Whether `mac` is the peer's for `role`, compared with `sodium_memcmp`. */
+export function checkReadmissionMac(
+  key: SymmetricKey,
+  role: 'initiator' | 'responder',
+  handshakeHash: Uint8Array,
+  mac: Uint8Array,
+): boolean {
+  sized(mac, READMISSION_MAC_LENGTH, 'a re-admission MAC');
+  const expected = readmissionMac(key, role, handshakeHash);
+  try {
+    return lib().memcmp(expected, mac);
+  } finally {
+    expected.fill(0);
+  }
 }

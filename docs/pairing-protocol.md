@@ -2,7 +2,7 @@
 
 > Normative for the bytes and the order of pairing and re-admission; `overview.md` prevails on
 > design. Implements overview §8 and D1, D4, D22, D29, D30, D33, D34, D35, D45, D49, D50, D93,
-> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201, D202 and D203, using the conventions, primitives
+> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201, D202, D203 and D206, using the conventions, primitives
 > and encodings of `crypto-spec.md` (§1, §2, §3, §13, §14). The full transfer that follows the
 > handshake is in `sync-protocol.md` §2.
 
@@ -286,18 +286,22 @@ In this order:
 3. Each side sends `devices` with `own` (it holds its own Device record), `peer` (it holds the
    peer's) and `name`, its display name (1 to 64 code points), the one used if the peer writes
    its record.
-4. A Device record is written only for a device whose record neither side holds (D35, D49):
+4. A Device record is written only for a device whose record neither side holds (D35, D49); when
+   both sides hold both records, nothing is written and the re-admission is a full merge (D206):
    - its record is written by the other device when that device holds its own record;
    - when neither device holds its own record, I writes every record neither side holds.
 
    Each writer writes its records in one storage transaction, with the static keys authenticated
    in the handshake and the names received in `devices`; I's own record, when I writes it, takes
-   I's own name.
-5. Both sides run the full transfer in both directions and merge (`sync-protocol.md` §2.3).
+   I's own name. An unregistered device sends its default device name (D141, D206).
+5. Both sides run the full transfer in both directions, at the same time, and merge
+   (`sync-protocol.md` §2.3). A record of an unknown format or type aborts with
+   `unsupported-format` before the merge (D206).
 6. Each side commits its merge, records the completed sync with the peer in the same transaction
    (D34), sends `committed`, and ends the session on the peer's `committed`.
 
-No Master Key is transferred: both already hold it (D22).
+No Master Key is transferred: both already hold it (D22). Neither side asks for the local password
+or a passkey again: the MAC uses `K_readmission`, which the unlocked session holds (D206).
 
 ## 10. Messages
 

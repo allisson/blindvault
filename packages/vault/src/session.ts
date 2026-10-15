@@ -33,6 +33,7 @@ import {
   type Sealed,
   type SymmetricKey,
   checkKdfParams,
+  checkReadmissionMac,
   checkRecoveryEnvelope,
   decodeEnvelope,
   deriveMasterSubkeys,
@@ -50,6 +51,7 @@ import {
   parseRecoveryPhrase,
   randomId,
   openRecoveryEnvelope,
+  readmissionMac,
   recoveryEnvelopeRecordId,
   sameKey,
   sealLocalConfigPart,
@@ -389,6 +391,56 @@ export interface PairingGrant {
   /** Records the completed sync with the device `peerId` (D34). */
   completed(peerId: Uint8Array): Promise<void>;
   wipe(): void;
+}
+
+/** A record a re-admission rejected and did not merge (sync-protocol.md §2.3, D206). */
+export interface RejectedRecord {
+  readonly reason: 'verification-failed' | 'future-clock' | 'immutable-record';
+  /** Absent for an envelope that does not even decode. */
+  readonly record?: RecordKey;
+}
+
+/** A re-admission merge: what a backup merge reports, and the records rejected (D206). */
+export interface ReadmissionResult extends MergeResult {
+  readonly rejected: readonly RejectedRecord[];
+}
+
+/**
+ * A re-admission on this device (pairing-protocol.md §9, D22, D29, D35, D49, D206): no key leaves
+ * the session, which already holds `K_readmission`. Errors that end the re-admission are
+ * `JoinRejectedError`, with the abort reason to send.
+ */
+export interface ReadmissionGrant {
+  /** This device's identity, for the `Noise_XX` handshake (pairing-protocol.md §5). */
+  readonly identity: DeviceIdentity;
+  /** This device's key-confirmation MAC for its own role (crypto-spec.md §13). */
+  mac(role: 'initiator' | 'responder', handshakeHash: Uint8Array): Uint8Array;
+  /** Whether `mac` is the peer's for the peer's `role`, compared with `sodium_memcmp`. */
+  checkMac(role: 'initiator' | 'responder', handshakeHash: Uint8Array, mac: Uint8Array): boolean;
+  /** The `devices` flags: this device's own record held, and the peer's. */
+  held(peerPublicKey: Uint8Array): { readonly own: boolean; readonly peer: boolean };
+  /** §9 step 1: `retired-peer` when the peer's own Device record held here is retired (D45, D49). */
+  checkPeer(peerPublicKey: Uint8Array): void;
+  /**
+   * §9 step 4: writes in one commit the peer's Device record and this device's own, as `writes`
+   * says; nothing to write commits nothing. `protocol-error` when a record to write is already held.
+   */
+  admit(
+    writes: { readonly own: boolean; readonly peer: boolean },
+    peerPublicKey: Uint8Array,
+    peerName: string,
+    ownName: string,
+  ): Promise<void>;
+  /** Every stored record envelope, read again and verified (D181): `PairingRefusedError` otherwise. */
+  records(): Promise<Uint8Array[]>;
+  /**
+   * §9 steps 5, 6: merges the peer's records by the rules of sync and records the completed sync
+   * with it, in one commit. A newer record (`unsupported-format`), two of one identity
+   * (`protocol-error`) or the peer's own record retired (`retired-peer`) write nothing; a record
+   * that fails verification, is beyond the future-clock bound or breaks D42 or D44 is rejected and
+   * reported, and the rest merges (sync-protocol.md §2.3, D206).
+   */
+  merge(envelopes: readonly Uint8Array[], peerPublicKey: Uint8Array): Promise<ReadmissionResult>;
 }
 
 export interface ResetPasswordOptions {
@@ -1635,25 +1687,34 @@ export class VaultSession {
 
   /** sync-protocol.md §1.3: a held Vault Key epoch, or a held `phraseId`, may not change (D42, D44). */
   #checkImmutable(incoming: State): void {
+    const [changed] = this.#immutableChanged(incoming);
+    if (changed) throw new MergeRejectedError('immutable-record', changed);
+  }
+
+  /** The records of `incoming` that change a held immutable record (§1.3, D42, D44). */
+  #immutableChanged(incoming: State): RecordKey[] {
+    const changed: RecordKey[] = [];
     for (const [epoch, header] of incoming.vaultKeyHeaders) {
       const held = this.#state.vaultKeyHeaders.get(epoch);
       const heldKey = this.#state.vaultKeys.get(epoch);
       const key = incoming.vaultKeys.get(epoch);
       if (!held || !heldKey || !key) continue;
       if (compareHlc(held.hlc, header.hlc) !== 0 || !sameKey(key, heldKey)) {
-        throw new MergeRejectedError('immutable-record', headerKey(header));
+        changed.push(headerKey(header));
       }
     }
     const envelope = incoming.recovery;
     const held = this.#state.recovery;
-    if (!envelope || !held) return;
-    if (!sameBytes(phraseIdOf(envelope), phraseIdOf(held))) return;
     if (
-      compareHlc(envelope.header.hlc, held.header.hlc) !== 0 ||
-      !sameContent(envelope.content, held.content)
+      envelope &&
+      held &&
+      sameBytes(phraseIdOf(envelope), phraseIdOf(held)) &&
+      (compareHlc(envelope.header.hlc, held.header.hlc) !== 0 ||
+        !sameContent(envelope.content, held.content))
     ) {
-      throw new MergeRejectedError('immutable-record', headerKey(envelope.header));
+      changed.push(headerKey(envelope.header));
     }
+    return changed;
   }
 
   /** The writes of a merge that passed every check (sync-protocol.md §1.2 to §1.6). */
@@ -2105,6 +2166,168 @@ export class VaultSession {
   get retired(): boolean {
     this.#unlocked();
     return this.#state.devices.get(idKey(this.#identity.deviceId))?.device.value.retired === true;
+  }
+
+  /**
+   * Starts a re-admission (pairing-protocol.md §2, §9, D206): refused with `PairingRefusedError`
+   * while the vault is read-only (D102), its own Device record is retired (D45) or a record is kept
+   * aside as corrupt, since every record is sent. Asks for no password: no key leaves the session.
+   */
+  openReadmission(): ReadmissionGrant {
+    this.#unlocked();
+    const [corrupt] = this.#state.corrupt;
+    if (corrupt) throw new PairingRefusedError('corrupt-record', copyKey(corrupt));
+    if (!this.#clock.writable) throw new PairingRefusedError('read-only');
+    if (this.retired) throw new PairingRefusedError('retired');
+    return {
+      identity: this.#identity,
+      mac: (role, handshakeHash) => {
+        this.#unlocked();
+        return readmissionMac(this.#subkeys.readmission, role, handshakeHash);
+      },
+      checkMac: (role, handshakeHash, mac) => {
+        this.#unlocked();
+        return checkReadmissionMac(this.#subkeys.readmission, role, handshakeHash, mac);
+      },
+      held: (peerPublicKey) => {
+        this.#unlocked();
+        return {
+          own: this.registered,
+          peer: this.#state.devices.has(idKey(deviceId(peerPublicKey))),
+        };
+      },
+      checkPeer: (peerPublicKey) => {
+        this.#unlocked();
+        const peer = this.#state.devices.get(idKey(deviceId(peerPublicKey)));
+        if (peer?.device.value.retired) throw new JoinRejectedError('retired-peer');
+      },
+      admit: (writes, peerPublicKey, peerName, ownName) =>
+        this.#readmissionAdmit(writes, peerPublicKey, peerName, ownName),
+      records: () =>
+        this.#run(async () => {
+          const stored = await this.#store.records();
+          this.#unlocked();
+          const scratch = new Keyring();
+          try {
+            this.#verifyAll(scratch, stored, (k) => new PairingRefusedError('corrupt-record', k));
+          } finally {
+            scratch.wipeAll();
+          }
+          return { writes: [], deletes: [], result: stored.map((r) => r.envelope) };
+        }),
+      merge: (envelopes, peerPublicKey) =>
+        this.#run(() => this.#readmissionMerge(envelopes, deviceId(peerPublicKey))),
+    };
+  }
+
+  /** pairing-protocol.md §9 step 4 (D35, D49). */
+  #readmissionAdmit(
+    writes: { readonly own: boolean; readonly peer: boolean },
+    peerPublicKey: Uint8Array,
+    peerName: string,
+    ownName: string,
+  ): Promise<void> {
+    return this.#run(() => {
+      if (peerPublicKey.length !== PUBLIC_KEY_LENGTH) throw new RangeError('peerPublicKey');
+      const id = deviceId(peerPublicKey);
+      if (sameBytes(id, this.#identity.deviceId)) throw new JoinRejectedError('protocol-error');
+      if (writes.peer && this.#state.devices.has(idKey(id))) {
+        throw new JoinRejectedError('protocol-error');
+      }
+      if (writes.own && this.registered) throw new JoinRejectedError('protocol-error');
+      if (!writes.own && !writes.peer) return { writes: [], deletes: [], result: undefined };
+      if (!this.#clock.writable) throw new PairingRefusedError('read-only');
+      const registeredAt = Math.floor(this.#now());
+      const out: Write[] = [];
+      const record = (publicKey: Uint8Array, recordId: Uint8Array, displayName: string) => {
+        const content = deviceToCbor({ publicKey, displayName, retired: false, registeredAt });
+        out.push(this.#seal(RecordType.device, recordId, this.#clock.issue(), false, content));
+      };
+      if (writes.own) record(this.#identity.publicKey, this.#identity.deviceId, ownName);
+      if (writes.peer) record(peerPublicKey.slice(), id, peerName);
+      const seen = [...(this.#localState.seenDevices ?? []), ...out.map((w) => w.header.recordId)];
+      return {
+        writes: out,
+        deletes: [],
+        result: undefined,
+        // Written here: no new-device notice follows (D48).
+        seen: { seenDevices: sortedIds(seen) },
+      };
+    });
+  }
+
+  /** sync-protocol.md §2.3 with D206: reject and report, merge the rest, record the sync. */
+  #readmissionMerge(envelopes: readonly Uint8Array[], peerId: Uint8Array): Plan<ReadmissionResult> {
+    const { vaultId } = this.#cleartext;
+    const rejected: RejectedRecord[] = [];
+    // A newer record refuses the whole transfer before anything else (D206).
+    const decoded = envelopes.map((envelope): Envelope | undefined => {
+      try {
+        return decodeEnvelope(envelope);
+      } catch (error) {
+        if (error instanceof NewerRecordError) throw new JoinRejectedError('unsupported-format');
+        if (error instanceof RecordRejectedError) return undefined;
+        throw error;
+      }
+    });
+    const identities = new Set<string>();
+    let candidates: StoredRecord[] = [];
+    for (const e of decoded) {
+      if (!e) {
+        rejected.push({ reason: 'verification-failed' });
+        continue;
+      }
+      const key = recordKeyOf(e.header);
+      if (identities.has(key)) throw new JoinRejectedError('protocol-error');
+      identities.add(key);
+      const recordKey = headerKey(e.header);
+      if (this.#clock.beyondBound(e.header.hlc)) {
+        rejected.push({ reason: 'future-clock', record: recordKey });
+        continue;
+      }
+      candidates.push({ ...recordKey, envelope: encodeEnvelope(e) });
+    }
+    // Verification and immutability, until what is left passes both: a rejected Vault Key takes the
+    // records of its epoch with it.
+    for (;;) {
+      const incoming = load(
+        this.#keyring,
+        candidates,
+        vaultId,
+        this.#subkeys,
+        this.#state.vaultKeys,
+      );
+      let planned = false;
+      try {
+        const bad = new Map<string, RejectedRecord>();
+        for (const k of incoming.state.corrupt) {
+          bad.set(recordKeyOf(k), { reason: 'verification-failed', record: copyKey(k) });
+        }
+        for (const k of this.#immutableChanged(incoming.state)) {
+          bad.set(recordKeyOf(k), { reason: 'immutable-record', record: k });
+        }
+        if (bad.size > 0) {
+          rejected.push(...bad.values());
+          candidates = candidates.filter((c) => !bad.has(recordKeyOf(c)));
+          continue;
+        }
+        if (incoming.state.devices.get(idKey(peerId))?.device.value.retired) {
+          throw new JoinRejectedError('retired-peer');
+        }
+        const plan = this.#mergePlan(incoming.state, candidates);
+        for (const hlc of incoming.held) this.#clock.receive(hlc);
+        planned = true;
+        return {
+          ...plan,
+          result: { ...plan.result, rejected },
+          lastSync: [peerId, Math.floor(this.#now())] as const,
+        };
+      } finally {
+        for (const [epoch, key] of incoming.state.vaultKeys) {
+          if (!planned || this.#state.vaultKeys.has(epoch)) this.#keyring.release(key);
+        }
+      }
+    }
   }
 
   /** Every folder but purged tombstones, in the trash or not. */

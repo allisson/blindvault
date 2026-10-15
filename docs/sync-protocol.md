@@ -152,10 +152,13 @@ so it adds every record, as a fresh restore does:
 Both sides send every record they hold, at the same time, and each merges what it receives with
 section 1, except section 1.1: the key-confirmation MACs already proved the same Master Key, and
 so the same `vaultId` (D29). As in sync (§9.2), a received record that fails verification on
-receipt, is beyond the future-clock bound, has an unknown format or type, or breaks the
-immutability of section 1.3 is rejected and reported, not merged; the other records merge, and
-the re-admission completes. A rejected unknown format is recorded for the incomplete-backup
-warning (D68, D81).
+receipt, is beyond the future-clock bound or breaks the immutability of section 1.3 is rejected
+and reported, not merged; the other records merge, and the re-admission completes. The merge
+result lists each rejected record with its reason (D206). A record of an unknown format or type
+aborts the re-admission instead (`unsupported-format`), before the merge of the side that
+received it, as a pairing does before its commit; the Device records already written and a merge
+the other side already committed stay: recording it for the incomplete-backup warning (D68, D81) waits for that task of
+Phase 5 (D206).
 
 The merge writes in one storage transaction, with the completed sync with the peer (D34), and its
 notices are those of section 1.6.
