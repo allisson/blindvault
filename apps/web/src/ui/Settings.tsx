@@ -20,7 +20,7 @@ import { EraseVault } from './EraseVault';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
-import { InviteDevice } from './Pairing';
+import { InviteDevice, ReadmitDevice } from './Pairing';
 import { RefoundVault } from './RefoundVault';
 import { RegeneratePhrase, focusBackup } from './RegeneratePhrase';
 import { DeviceStorage } from './StorageState';
@@ -615,6 +615,7 @@ function DeviceSettings({
           {m.settings.devicesRefused}
         </p>
       ) : null}
+      <ReadmitDevice controller={controller} session={session} />
       <InviteDevice controller={controller} session={session} />
     </section>
   );

@@ -1,8 +1,10 @@
 // The pairing of overview §8.4 as this app runs it (pairing-protocol.md, D202, D203): A invites
 // from its unlocked vault, B joins from an installation with no vault. Each side is one flow over
 // `packages/sync`: the payloads exchanged by copy/paste, WebRTC, Noise_XX, the SAS the user
-// compares on both devices, then the transfer. The controller owns the flow, ends it on a lock
-// (D93) and runs B's commit; this module holds no key of its own and logs nothing.
+// compares on both devices, then the transfer. A re-admission (§9, D206, D207) runs between two
+// unlocked devices of the same vault, either one showing its text first. The controller owns the
+// flow, ends it on a lock (D93) and runs B's commit; this module holds no key of its own and logs
+// nothing.
 
 import {
   type DeviceIdentity,
@@ -26,6 +28,7 @@ import {
   PayloadError,
   type ReceivedVault,
   type Responder,
+  type Role,
   SESSION_TIMEOUT_MS,
   TransferRefusal,
   type Transport,
@@ -35,6 +38,7 @@ import {
   encodePayloadText,
   exchangeNonces,
   pairingHandshake,
+  readmit,
   receiveVault,
   sendVault,
 } from '@blindvault/sync';
@@ -42,6 +46,8 @@ import {
   JoinRejectedError,
   type PairingGrant,
   PairingRefusedError,
+  type ReadmissionGrant,
+  type ReadmissionResult,
   VaultLockedError,
   type VaultSession,
 } from '@blindvault/vault';
@@ -138,6 +144,16 @@ export type PairingStage =
   | { readonly kind: 'transfer' }
   /** A: B committed. `readmit`: recommend re-admission (D141). */
   | { readonly kind: 'done'; readonly name: string; readonly readmit: boolean }
+  /**
+   * A re-admission merged (§9, D207): the peer's name, the merge's result, and whether the peer's
+   * `committed` came, otherwise its merge may not have completed.
+   */
+  | {
+      readonly kind: 'readmitted';
+      readonly name: string;
+      readonly result: ReadmissionResult;
+      readonly peerCommitted: boolean;
+    }
   | ({ readonly kind: 'failed' } & Ending);
 
 /** A pasted payload: `ok` once it is taken, or why not. */
@@ -148,9 +164,9 @@ export type PayloadCheck =
   | 'wrong-session'
   /** A: B lacks a format or type this version supports (D122). */
   | 'outdated-peer'
-  /** A: the answer comes from a device that holds a vault. */
+  /** A: the answer comes from a device that holds a vault: re-admission instead (D207). */
   | 'peer-holds-vault'
-  /** B: the payload comes from a device that holds no vault (§7). */
+  /** B, or either side of a re-admission: the text comes from a device that holds no vault (§7). */
   | 'peer-no-vault'
   /** Not waiting for a payload now. */
   | 'unavailable';
@@ -225,6 +241,7 @@ abstract class Flow {
     transport: Transport,
     handshake: Parameters<typeof pairingHandshake>[1],
     nonces: (handshakeHash: Uint8Array) => NonceExchangeOptions,
+    checkPeer?: (peerPublicKey: Uint8Array) => void,
   ) {
     const result = await pairingHandshake(transport, handshake);
     const session = new PairingSession(result.channel, { expiresAt: this.#expiresAt });
@@ -234,6 +251,16 @@ abstract class Flow {
     if (this.#over) {
       await session.abort('cancelled');
       throw new Error('ended');
+    }
+    if (checkPeer) {
+      // Re-admission §9 step 1: before the nonces, a retired peer is refused (D45, D49).
+      try {
+        checkPeer(result.peerPublicKey);
+      } catch (error) {
+        const refused = refusal(error);
+        if (refused instanceof TransferRefusal) await session.refuse(refused.reason, error);
+        throw error;
+      }
     }
     const sas = await exchangeNonces(session, nonces(result.handshakeHash));
     this.set({ kind: 'sas', sas: sas.sas, confirmed: false });
@@ -529,5 +556,196 @@ export class Joining extends Flow {
     this.#released = true;
     if (!success) this.#options.keyring.wipeAll();
     this.#options.released(success);
+  }
+}
+
+export interface ReadmitFlowOptions extends FlowOptions {
+  readonly grant: ReadmissionGrant;
+  /** `initiator`: this device shows its text first; `responder`: it pastes the other's (D207). */
+  readonly role: Role;
+  /**
+   * This device's display name, sent in `devices` and given to its own record when it writes it:
+   * its own record's, or the default name when it holds none (D141, D206).
+   */
+  readonly name: string;
+  /** This side's merge committed (§9 step 6). */
+  readonly merged: () => void;
+}
+
+/** Either side of a re-admission (§9, D206, D207): no key leaves the device. */
+export class Readmitting extends Flow {
+  readonly #options: ReadmitFlowOptions;
+  #nonce: Uint8Array | undefined;
+  #initiator: Initiator | undefined;
+  #taken = false;
+
+  constructor(options: ReadmitFlowOptions) {
+    super(options, options.role === 'initiator' ? { kind: 'preparing' } : { kind: 'scan' });
+    this.#options = options;
+  }
+
+  get role(): Role {
+    return this.#options.role;
+  }
+
+  /** The initiator gathers the connection and shows its text. */
+  async begin(): Promise<void> {
+    if (this.#options.role !== 'initiator') return;
+    const drawn = pairingNonce();
+    this.#nonce = drawn.nonce;
+    try {
+      const initiator = await this.port.startInitiator(
+        {
+          sessionId: randomBytes(16),
+          commitment: drawn.commitment,
+          holdsVault: true,
+          formatVersions: FORMAT_VERSIONS,
+          recordTypes: RECORD_TYPES,
+        },
+        this.options,
+      );
+      if (this.over) {
+        initiator.close();
+        return;
+      }
+      this.#initiator = initiator;
+      this.connected(initiator);
+      this.set({ kind: 'offer', text: encodePayloadText(initiator.payload) });
+    } catch (error) {
+      this.failed(error);
+    }
+  }
+
+  /** The initiator takes the responder's answer, pasted, and connects. */
+  answer(text: string): PayloadCheck {
+    const initiator = this.#initiator;
+    if (this.stage.kind !== 'offer' || !initiator || this.#taken) return 'unavailable';
+    let answer: Payload;
+    try {
+      answer = decodePayloadText(text, {
+        role: 'responder',
+        sessionId: initiator.payload.sessionId,
+      });
+    } catch (error) {
+      return payloadCheck(error);
+    }
+    if (!answer.holdsVault) return 'peer-no-vault';
+    this.#taken = true;
+    this.set({ kind: 'connecting' });
+    void this.#connect(async () => {
+      const transport = await initiator.accept(answer);
+      return {
+        transport,
+        payloadInitiator: encodePayload(initiator.payload),
+        payloadResponder: encodePayload(answer),
+        nonces: (handshakeHash: Uint8Array): NonceExchangeOptions => {
+          const nonce = this.#nonce ?? new Uint8Array(0);
+          this.#nonce = undefined;
+          return { role: 'initiator', handshakeHash, nonce };
+        },
+      };
+    });
+    return 'ok';
+  }
+
+  /** The responder takes the initiator's text, pasted, gathers and shows its answer. */
+  async offer(text: string): Promise<PayloadCheck> {
+    if (this.#options.role !== 'responder' || this.stage.kind !== 'scan') return 'unavailable';
+    let offer: Payload;
+    try {
+      offer = decodePayloadText(text, { role: 'initiator' });
+    } catch (error) {
+      return payloadCheck(error);
+    }
+    if (!offer.holdsVault) return 'peer-no-vault';
+    this.set({ kind: 'preparing' });
+    let responder: Responder;
+    try {
+      responder = await this.port.startResponder(
+        offer,
+        { holdsVault: true, formatVersions: FORMAT_VERSIONS, recordTypes: RECORD_TYPES },
+        this.options,
+      );
+    } catch (error) {
+      this.failed(error);
+      return 'ok';
+    }
+    if (this.over) {
+      responder.close();
+      return 'ok';
+    }
+    this.connected(responder);
+    this.set({ kind: 'answer', text: encodePayloadText(responder.payload) });
+    void this.#connect(async () => {
+      const transport = await responder.transport;
+      this.set({ kind: 'connecting' });
+      const commitment = offer.commitment ?? new Uint8Array(0);
+      return {
+        transport,
+        payloadInitiator: encodePayload(offer),
+        payloadResponder: encodePayload(responder.payload),
+        nonces: (handshakeHash: Uint8Array): NonceExchangeOptions => ({
+          role: 'responder',
+          handshakeHash,
+          commitment,
+        }),
+      };
+    });
+    return 'ok';
+  }
+
+  async #connect(
+    open: () => Promise<{
+      readonly transport: Transport;
+      readonly payloadInitiator: Uint8Array;
+      readonly payloadResponder: Uint8Array;
+      readonly nonces: (handshakeHash: Uint8Array) => NonceExchangeOptions;
+    }>,
+  ): Promise<void> {
+    const { grant, role, name } = this.#options;
+    try {
+      const link = await open();
+      const { session, peerPublicKey, handshakeHash } = await this.secure(
+        link.transport,
+        {
+          role,
+          identity: grant.identity,
+          payloadInitiator: link.payloadInitiator,
+          payloadResponder: link.payloadResponder,
+        },
+        link.nonces,
+        (key) => {
+          grant.checkPeer(key);
+        },
+      );
+      const peerRole: Role = role === 'initiator' ? 'responder' : 'initiator';
+      let peerName = '';
+      const { result, peerCommitted } = await readmit(session, {
+        role,
+        mac: () => grant.mac(role, handshakeHash),
+        checkPeerMac: (mac) => grant.checkMac(peerRole, handshakeHash, mac),
+        devices: { ...grant.held(peerPublicKey), name },
+        admit: (writes, peer) =>
+          mapped(() => {
+            peerName = peer.name;
+            return grant.admit(writes, peerPublicKey, peer.name, name);
+          }),
+        records: () => mapped(() => grant.records()),
+        merge: (records) =>
+          mapped(async () => {
+            const merged = await grant.merge(records, peerPublicKey);
+            this.#options.merged();
+            return merged;
+          }),
+      });
+      this.succeeded({ kind: 'readmitted', name: peerName, result, peerCommitted });
+    } catch (error) {
+      this.failed(error);
+    }
+  }
+
+  protected release(): void {
+    this.#nonce?.fill(0);
+    this.#nonce = undefined;
   }
 }
