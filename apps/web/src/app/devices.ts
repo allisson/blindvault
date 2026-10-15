@@ -72,3 +72,19 @@ export function devicesOf(session: DeviceSource): Devices {
     advice: !others ? 'only-device' : registered ? undefined : 'readmit',
   };
 }
+
+/**
+ * What an erase says of this device's Device record (§7, D41, D183, D205): its name, to retire from
+ * another device; none to retire on the only device (D119), on an unregistered device or once its
+ * own record is retired; or, while locked (`undefined`), that its name cannot be shown.
+ */
+export type EraseAdvice =
+  | { readonly kind: 'named'; readonly name: string }
+  | { readonly kind: 'only-device' | 'unregistered' | 'locked' };
+
+export function eraseAdvice(devices: Devices | undefined): EraseAdvice {
+  if (!devices) return { kind: 'locked' };
+  if (devices.advice === 'only-device') return { kind: 'only-device' };
+  const own = devices.listed.find((d) => d.own);
+  return own ? { kind: 'named', name: own.device.displayName } : { kind: 'unregistered' };
+}

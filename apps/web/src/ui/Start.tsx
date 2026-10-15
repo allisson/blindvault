@@ -5,6 +5,7 @@ import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
 import { Button, Card, Field, Notice, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
+import { EraseVault, eraseAdviceText } from './EraseVault';
 import { JoinVault } from './Pairing';
 import { ResetPassword } from './ResetPassword';
 import { RestoreVault } from './RestoreVault';
@@ -56,6 +57,12 @@ export function Start({
           </Button>
         </Card>
       );
+    case 'erasing':
+      return (
+        <Card title={m.erase.title}>
+          <p role="status">{m.erase.erasing}</p>
+        </Card>
+      );
     case 'update-required':
       return <Card title={m.app.name}>{m.start.updateRequired}</Card>;
     case 'corrupt':
@@ -83,8 +90,8 @@ export function Start({
 }
 
 /**
- * The locked vault: unlock it, or replace it without unlocking, by a backup or by pairing (§8.4,
- * §10, D150, D153, D183, D204).
+ * The locked vault: unlock it, replace it without unlocking, by a backup or by pairing (§8.4,
+ * §10, D150, D153, D183, D204), or erase it (§7, D205).
  */
 function Locked({
   controller,
@@ -94,10 +101,18 @@ function Locked({
   readonly status: 'locked' | 'unlocking' | 'replacing' | 'resetting' | 'joining';
 }) {
   const m = useMessages();
-  const [choice, setChoice] = useState<'replace' | 'pair' | 'reset' | undefined>();
+  const [choice, setChoice] = useState<'replace' | 'pair' | 'reset' | 'erase' | undefined>();
   const back = () => {
     setChoice(undefined);
   };
+  if (choice === 'erase') {
+    return (
+      <Card title={m.erase.title}>
+        <p className="text-sm">{m.erase.intro}</p>
+        <EraseVault controller={controller} advice={{ kind: 'locked' }} onCancel={back} />
+      </Card>
+    );
+  }
   if (choice === 'pair' || status === 'joining') {
     return (
       <Card title={m.replace.pairTitle}>
@@ -137,6 +152,10 @@ function Locked({
       onReset={() => {
         setChoice('reset');
       }}
+      onErase={() => {
+        controller.dismissEraseFailure();
+        setChoice('erase');
+      }}
     />
   );
 }
@@ -147,12 +166,14 @@ function Unlock({
   onReplace,
   onPair,
   onReset,
+  onErase,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
   readonly onReplace: () => void;
   readonly onPair: () => void;
   readonly onReset: () => void;
+  readonly onErase: () => void;
 }) {
   const m = useMessages();
   const [password, setPassword] = useState('');
@@ -175,8 +196,24 @@ function Unlock({
     'no-user-verification': m.unlock.passkeyNoVerification,
     unavailable: m.unlock.passkeyUnavailable,
   }[passkey];
+  const eraseFailure = controller.eraseFailure;
   return (
     <Card title={m.unlock.title}>
+      {eraseFailure ? (
+        <div className="flex flex-wrap items-center gap-2" data-testid="erase-failure">
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            {eraseFailure === 'busy' ? m.erase.busy : m.erase.failed}
+          </p>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissEraseFailure();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
       {supported && controller.hasPasskey ? (
         <div className="flex flex-col gap-2">
           <Button
@@ -234,6 +271,9 @@ function Unlock({
       <Button variant="quiet" className="self-start" disabled={working} onClick={onPair}>
         {m.replace.pairChoose}
       </Button>
+      <Button variant="quiet" className="self-start" disabled={working} onClick={onErase}>
+        {m.erase.choose}
+      </Button>
     </Card>
   );
 }
@@ -263,6 +303,12 @@ function NoVault({
           : choice;
   const back = () => {
     setChoice(undefined);
+  };
+  // A start chosen: the erase notices have done their job (D205).
+  const choose = (next: 'create' | 'pair' | 'restore') => {
+    if (controller.erased) controller.dismissErased();
+    if (controller.leftoverPasskey) controller.dismissLeftoverPasskey();
+    setChoice(next);
   };
   if (shown === 'create') {
     // No way back from here but a reload: the phrase screen has a single control (D179).
@@ -296,8 +342,40 @@ function NoVault({
       </Card>
     );
   }
+  const erased = controller.erased;
+  const erasedAdvice = erased ? eraseAdviceText(m, erased) : undefined;
   return (
     <Card title={m.app.name}>
+      {erased ? (
+        <div className="flex flex-col gap-2" data-testid="erased">
+          <Notice>{m.erase.done}</Notice>
+          {erased.kind === 'named' || erased.kind === 'locked' ? (
+            <p className="text-sm">{erasedAdvice}</p>
+          ) : null}
+          <Button
+            variant="quiet"
+            className="self-start"
+            onClick={() => {
+              controller.dismissErased();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
+      {controller.leftoverPasskey ? (
+        <div className="flex flex-wrap items-center gap-2" data-testid="leftover-passkey">
+          <Notice>{m.erase.leftoverPasskey}</Notice>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              controller.dismissLeftoverPasskey();
+            }}
+          >
+            {m.restore.dismiss}
+          </Button>
+        </div>
+      ) : null}
       <ul className="flex list-disc flex-col gap-2 pl-5 text-sm" data-testid="no-server">
         <li>{m.start.chooseIntro}</li>
         <li>{m.start.noReset}</li>
@@ -306,7 +384,7 @@ function NoVault({
       <div className="flex flex-col gap-2">
         <Button
           onClick={() => {
-            setChoice('create');
+            choose('create');
           }}
         >
           {m.start.create}
@@ -314,7 +392,7 @@ function NoVault({
         <Button
           variant="quiet"
           onClick={() => {
-            setChoice('pair');
+            choose('pair');
           }}
         >
           {m.start.pair}
@@ -322,7 +400,7 @@ function NoVault({
         <Button
           variant="quiet"
           onClick={() => {
-            setChoice('restore');
+            choose('restore');
           }}
         >
           {m.start.restore}

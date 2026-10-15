@@ -344,6 +344,16 @@ every project through the references in the root `tsconfig.json`.
   vault's ID), then the old database deleted; the same vault in the existing database, cleared in
   the commit's transaction. A take-over by another app window loses the Web Lock, which locks and
   ends the pairing; a window opened during the pairing stays `busy` on the installation guard.
+- **Erase (Phase 4, `apps/web`, §7, D205).** `controller.erase()` works from `locked` or
+  `unlocked` in the app window holding the vault's Web Lock, and asks for no password. It reads the
+  Device record advice first (`eraseAdvice` in `app/devices.ts`: the own record's name, the only
+  device, unregistered, or locked), locks, takes the installation guard, checks that the Web Lock
+  was not taken over, closes the database and deletes it, then releases both and goes to
+  `no-vault`; `busy` and a failed deletion reopen the vault, locked, and the unlock screen says
+  why. The vault's passkey is forgotten as after a replacement (D120), and the start screen shows
+  the erase notice and the leftover-passkey notice. `takeOver` checks that the database still
+  exists and runs the startup again when another app window erased it. The UI is
+  `ui/EraseVault.tsx`, in Settings and on the unlock screen.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

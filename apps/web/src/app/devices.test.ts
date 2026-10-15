@@ -1,7 +1,7 @@
 import { type DeviceView } from '@blindvault/vault';
 import { describe, expect, it } from 'vitest';
 
-import { devicesOf } from './devices';
+import { devicesOf, eraseAdvice } from './devices';
 
 const OWN = new Uint8Array(16).fill(1);
 
@@ -82,5 +82,32 @@ describe('devices for the UI (§8.4, D30, D119, D186)', () => {
     ]);
     // This device's own record, written by itself at creation, is never pending.
     expect(devicesOf(session([view(1, false, 'A', OWN)])).listed[0]?.pending).toBe(false);
+  });
+});
+
+describe('the Device record advice of an erase (§7, D41, D119, D183, D205)', () => {
+  it("names this device's record while another non-retired one exists", () => {
+    expect(eraseAdvice(devicesOf(session([view(1, false, 'Laptop'), view(2, false)])))).toEqual({
+      kind: 'named',
+      name: 'Laptop',
+    });
+  });
+
+  it('says the device is the only one before anything else, registered or not (D119)', () => {
+    expect(eraseAdvice(devicesOf(session([view(1, false), view(2, true)])))).toEqual({
+      kind: 'only-device',
+    });
+    expect(eraseAdvice(devicesOf(session([])))).toEqual({ kind: 'only-device' });
+  });
+
+  it('has no record to retire on an unregistered device, nor once its own record is retired (D41)', () => {
+    expect(eraseAdvice(devicesOf(session([view(2, false)])))).toEqual({ kind: 'unregistered' });
+    expect(eraseAdvice(devicesOf(session([view(1, true), view(2, false)])))).toEqual({
+      kind: 'unregistered',
+    });
+  });
+
+  it('cannot name it while locked (D183)', () => {
+    expect(eraseAdvice(undefined)).toEqual({ kind: 'locked' });
   });
 });

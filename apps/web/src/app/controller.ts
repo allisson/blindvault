@@ -69,7 +69,7 @@ import {
 
 import { backupFileName, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
-import { devicesOf } from './devices';
+import { type EraseAdvice, devicesOf, eraseAdvice } from './devices';
 import {
   Inviting,
   Joining,
@@ -105,6 +105,8 @@ export type Status =
   | { readonly kind: 'joining'; readonly replacing?: true }
   /** A forgotten local password being reset with the Recovery Phrase (D173, D184). */
   | { readonly kind: 'resetting' }
+  /** The vault being erased from this device, locked, until its database is deleted (D205). */
+  | { readonly kind: 'erasing' }
   /** Another app window holds the vault's Web Lock (D51). */
   | { readonly kind: 'elsewhere' }
   | { readonly kind: 'locked' }
@@ -244,6 +246,15 @@ export type BackupOpening =
  * A fresh restore's commit, or a replacement's: `no-backup` when none was opened, or a lock dropped
  * it; `busy` when another app window holds the installation guard during a replacement (D97).
  */
+/**
+ * How an erase ended (D205): `busy` while another app window holds the installation guard,
+ * `failed` when the database could not be deleted (both leave the vault intact and locked), and
+ * `unavailable` with no vault held by this app window.
+ */
+export interface EraseOutcome {
+  readonly kind: 'ok' | 'busy' | 'failed' | 'unavailable';
+}
+
 export type RestoreOutcome =
   | { readonly kind: 'ok' | 'locked' | 'no-backup' | 'busy' }
   | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
@@ -380,6 +391,10 @@ export class VaultController {
   #ready: Ready | undefined;
   /** The replaced vault's passkey, which the authenticator could not be asked to forget (D120). */
   #leftoverPasskey = false;
+  /** After an erase: the start screen says so, with the Device record advice (D205). */
+  #erased: EraseAdvice | undefined;
+  /** An erase that left the vault intact, for the unlock screen to say why (D205). */
+  #eraseFailure: 'busy' | 'failed' | undefined;
   /**
    * The session whose backup reminder was dismissed: until the next lock, and not for a vault that
    * replaces it (D188).
@@ -409,6 +424,7 @@ export class VaultController {
 
   #set(status: Status): void {
     this.#status = status;
+    if (status.kind === 'unlocked') this.#eraseFailure = undefined;
     for (const l of this.#listeners) l();
   }
 
@@ -521,6 +537,24 @@ export class VaultController {
   async takeOver(): Promise<void> {
     if (this.#status.kind !== 'elsewhere') return;
     await this.#acquire(true);
+    const vaultId = this.#vaultId;
+    if (this.getStatus().kind !== 'locked' || !vaultId) return;
+    // Another app window erased the vault meanwhile: start again, with no vault (D205).
+    const name = databaseName(vaultId);
+    if ((await this.#deps.factory.databases()).some((d) => d.name === name)) return;
+    await this.#forgetVault();
+    await this.start();
+  }
+
+  /** Lets go of the vault this app window held: its Web Lock, database and passkey state. */
+  async #forgetVault(): Promise<void> {
+    const lock = this.#lock;
+    this.#lock = undefined;
+    await lock?.release();
+    this.#db?.close();
+    this.#db = undefined;
+    this.#vaultId = undefined;
+    this.#passkey = undefined;
   }
 
   // --- create ------------------------------------------------------------------------------------
@@ -558,6 +592,7 @@ export class VaultController {
     const phrase = this.#phrase;
     if (this.#status.kind !== 'no-vault' || !phrase) return;
     this.#phrase = undefined;
+    this.#erased = undefined;
     // Captured before the first await: a lock from here on aborts the creation.
     const epoch = this.#epoch;
     this.#set({ kind: 'creating' });
@@ -968,6 +1003,83 @@ export class VaultController {
 
   dismissLeftoverPasskey(): void {
     this.#leftoverPasskey = false;
+    this.#set({ ...this.#status });
+  }
+
+  // --- erase -------------------------------------------------------------------------------------
+
+  /**
+   * Erases the vault from this device (§7, D205), locked or unlocked, after the confirmation the UI
+   * asked for: no password, since a locked vault must be erasable without one. Locks first, which
+   * wipes the keys and ends a pairing (D93), then deletes the database under the vault's Web Lock,
+   * already held, and the installation guard (D97, D154). `busy` and `failed` leave the vault
+   * intact and locked; a take-over before the deletion leaves it intact in the other app window.
+   */
+  async erase(): Promise<EraseOutcome> {
+    const status = this.#status;
+    const db = this.#db;
+    const vaultId = this.#vaultId;
+    const held = this.#lock;
+    if ((status.kind !== 'locked' && status.kind !== 'unlocked') || !db || !vaultId || !held) {
+      return { kind: 'unavailable' };
+    }
+    const advice = eraseAdvice(status.kind === 'unlocked' ? devicesOf(status.session) : undefined);
+    const passkey = this.#passkey;
+    this.lock();
+    this.#eraseFailure = undefined;
+    this.#set({ kind: 'erasing' });
+    const guard = await acquireInstallationGuard(this.#deps.locks);
+    if (!guard) {
+      this.#eraseFailure = 'busy';
+      if (this.#lock === held) this.#set({ kind: 'locked' });
+      return { kind: 'busy' };
+    }
+    let deleted = false;
+    try {
+      // Taken over meanwhile: the vault is the other app window's now, intact (D154).
+      if (this.#lock !== held) return { kind: 'unavailable' };
+      db.close();
+      try {
+        await deleteDatabase(this.#deps.factory, databaseName(vaultId));
+        deleted = true;
+      } catch {
+        // Nothing was deleted: the vault opens again below, locked.
+      }
+      await this.#forgetVault();
+      if (!deleted) {
+        this.#eraseFailure = 'failed';
+        return { kind: 'failed' };
+      }
+      if (passkey) {
+        const forgotten = await this.#deps.passkeys?.forget(passkey.credentialId);
+        this.#leftoverPasskey = forgotten !== true;
+      }
+      this.#erased = advice;
+      this.#set({ kind: 'no-vault' });
+      return { kind: 'ok' };
+    } finally {
+      await guard.release();
+      if (!deleted && this.#status.kind === 'erasing') await this.start();
+    }
+  }
+
+  /** After an erase, until dismissed or a new vault: the Device record advice (D205). */
+  get erased(): EraseAdvice | undefined {
+    return this.#erased;
+  }
+
+  dismissErased(): void {
+    this.#erased = undefined;
+    this.#set({ ...this.#status });
+  }
+
+  /** The last erase that left the vault intact, until dismissed, unlocked or erased again. */
+  get eraseFailure(): 'busy' | 'failed' | undefined {
+    return this.#eraseFailure;
+  }
+
+  dismissEraseFailure(): void {
+    this.#eraseFailure = undefined;
     this.#set({ ...this.#status });
   }
 

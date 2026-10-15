@@ -279,7 +279,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Last completed sync per peer in Local Config, shown next to `registeredAt`; a pairing without commit acknowledgement shown as not completed (D34)
 - [x] Retire a Device record: irreversible, confirmed, UI stating it is not revocation and pointing to re-founding (D30, D31)
 - [x] Pairing only into a device without a vault, or replacing the locked vault from the unlock screen after the erase warning and an explicit confirmation; a failed pairing leaves it intact (D13, D150, D153, D183, D204)
-- [ ] Erase: the warning, the confirmation naming this device's Device record or saying it cannot while locked, the Web Lock held (§7, D41, D154, D183)
+- [x] Erase: the warning, the confirmation naming this device's Device record or saying it cannot while locked, the Web Lock held (§7, D41, D154, D183, D205)
 - [x] The pair start of onboarding runs the pairing flow, and "Vault ready" after a pairing recommends a backup; the pairing recommendation after a creation or a restore offers it (§13.3, D198)
 - [x] Pairing from an unregistered device writes both Device records; re-admission recommended when other non-retired devices exist (D141)
 - [ ] Re-admission of an unregistered device: SAS, mutual Master Key confirmation bound to the handshake hash, Device records written by the registered side (initiator if neither is), merge sync, no Master Key transfer (D22, D29, D35)
