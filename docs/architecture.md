@@ -391,6 +391,16 @@ every project through the references in the root `tsconfig.json`.
   camera, now set in `playwright.config.ts` for Chromium and Firefox, and return a canvas stream
   showing the other page's code. Playwright's WebKit swaps `navigator.mediaDevices` for a new object
   shortly after load, so the wrapper goes through the `Navigator.prototype` getter.
+- **STUN list (Phase 4, `apps/web`, D209).** `app/stun-settings.ts` parses `stun:host[:port]`
+  URLs (DNS name, IPv4 or bracketed IPv6; no TURN, `stuns:` or query; at most 8 of 255 characters,
+  lowercased, duplicates dropped) and keeps the list in `localStorage` under `blindvault.stun`, as a
+  JSON array read back only when it is exactly what the app writes; anything else is `unreadable`.
+  The controller takes a `stun` dependency (`loadStunSettings` in `main.tsx`) and reads it when each
+  pairing starts; `iceServers()` in `app/pairing.ts` gives none on the same network only or for an
+  unreadable list. `SameNetwork` in `ui/Pairing.tsx` shows the list with Edit and Restore the
+  defaults, names its hosts in the hint, and locks the option on for an unreadable list.
+  `e2e/pairing-stun.spec.ts` wraps `RTCPeerConnection` in an init script to read the ICE servers
+  each session gets.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

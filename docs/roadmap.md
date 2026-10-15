@@ -286,7 +286,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Camera QR scanning and copy/paste fallback (D203, D208)
 - [x] Pairing session expiration; a lock on either device aborts the pairing (D93, D203)
 - [x] LAN-only mode (no STUN): "same network only", per pairing (D203)
-- [ ] Configurable STUN list
+- [x] Configurable STUN list (D209)
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste with no camera, reconnection), and revise D161 with the result
 
 ### Gate C

@@ -89,4 +89,19 @@ describe('the pairing as the app runs it (pairing-protocol.md, D203)', () => {
       'stun:stun.cloudflare.com:3478',
     ]);
   });
+
+  it('uses the stored STUN list, and none when it cannot be read or on the same network (D209)', () => {
+    const custom = {
+      kind: 'custom',
+      urls: ['stun:a.example.org', 'stun:[2001:db8::1]:3478'],
+    } as const;
+    expect(iceServers(false, custom)).toEqual([
+      { urls: 'stun:a.example.org' },
+      { urls: 'stun:[2001:db8::1]:3478' },
+    ]);
+    expect(iceServers(true, custom)).toEqual([]);
+    expect(iceServers(false, { kind: 'default' })).toEqual(STUN_SERVERS);
+    expect(iceServers(false, { kind: 'unreadable' })).toEqual([]);
+    expect(iceServers(true, { kind: 'unreadable' })).toEqual([]);
+  });
 });

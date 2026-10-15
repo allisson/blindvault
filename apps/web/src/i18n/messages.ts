@@ -120,7 +120,7 @@ const en = {
       'This device holds a record it cannot read: pairing would hand it on. Re-found the vault or restore a backup.',
     sameNetwork: 'Same network only (no STUN server)',
     sameNetworkHint:
-      'Both devices must then be on the same network. Otherwise a STUN server (Google, Cloudflare) sees this device’s public address.',
+      'Both devices must then be on the same network. Otherwise a STUN server ({hosts}) sees this device’s public address.',
     preparing: 'Preparing the connection…',
     offerIntro:
       'Scan this code with the new device in its pairing screen, or copy the text to it. Then scan or paste its answer below.',
@@ -183,6 +183,29 @@ const en = {
       version: 'The devices run versions of BlindVault that cannot pair: update both.',
       protocolError: 'The other device sent something unexpected, so the pairing stopped.',
       closed: 'The connection closed, so the pairing stopped.',
+    },
+  },
+  stun: {
+    open: 'STUN servers…',
+    intro:
+      'Unless the same network only is chosen, this device asks these STUN servers for its public address. Each one sees that address, and nothing of the vault.',
+    defaults: 'These are the defaults, Google and Cloudflare.',
+    edit: 'Edit',
+    label: 'STUN servers, one per line, like stun:stun.example.org:3478',
+    save: 'Save',
+    cancel: 'Cancel',
+    reset: 'Restore the defaults',
+    unreadable:
+      'The STUN list stored on this device cannot be read, so no STUN server is used and both devices must be on the same network: fix the list or restore the defaults.',
+    notSaved: 'This browser did not save the list.',
+    problems: {
+      scheme: '“{url}” is not a STUN server: write stun:host or stun:host:port. TURN is not used.',
+      query: '“{url}”: nothing after “?” is accepted.',
+      host: '“{url}” has no valid host name or address. Write an IPv6 address in brackets.',
+      port: '“{url}” has a port outside 1 to 65535.',
+      tooLong: '“{url}” is longer than 255 characters.',
+      empty: 'Enter at least one STUN server, or choose the same network only.',
+      tooMany: 'At most 8 STUN servers.',
     },
   },
   join: {
@@ -957,7 +980,7 @@ const ptBR: Messages = {
       'Este dispositivo tem um registro que não consegue ler: parear o passaria adiante. Refunde o cofre ou restaure um backup.',
     sameNetwork: 'Somente na mesma rede (sem servidor STUN)',
     sameNetworkHint:
-      'Os dois dispositivos precisam então estar na mesma rede. Sem isso, um servidor STUN (Google, Cloudflare) vê o endereço público deste dispositivo.',
+      'Os dois dispositivos precisam então estar na mesma rede. Sem isso, um servidor STUN ({hosts}) vê o endereço público deste dispositivo.',
     preparing: 'Preparando a conexão…',
     offerIntro:
       'Escaneie este código com o dispositivo novo, na tela de pareamento dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
@@ -1020,6 +1043,30 @@ const ptBR: Messages = {
       version: 'Os dispositivos rodam versões do BlindVault que não pareiam: atualize os dois.',
       protocolError: 'O outro dispositivo enviou algo inesperado, então o pareamento parou.',
       closed: 'A conexão fechou, então o pareamento parou.',
+    },
+  },
+  stun: {
+    open: 'Servidores STUN…',
+    intro:
+      'A menos que somente a mesma rede seja escolhida, este dispositivo pede a esses servidores STUN o seu endereço público. Cada um vê esse endereço, e nada do cofre.',
+    defaults: 'Estes são os padrões, Google e Cloudflare.',
+    edit: 'Editar',
+    label: 'Servidores STUN, um por linha, como stun:stun.example.org:3478',
+    save: 'Salvar',
+    cancel: 'Cancelar',
+    reset: 'Restaurar os padrões',
+    unreadable:
+      'A lista de STUN guardada neste dispositivo não pode ser lida, então nenhum servidor STUN é usado e os dois dispositivos precisam estar na mesma rede: corrija a lista ou restaure os padrões.',
+    notSaved: 'Este navegador não salvou a lista.',
+    problems: {
+      scheme:
+        '“{url}” não é um servidor STUN: escreva stun:host ou stun:host:porta. TURN não é usado.',
+      query: '“{url}”: nada depois de “?” é aceito.',
+      host: '“{url}” não tem um nome de host ou endereço válido. Escreva um endereço IPv6 entre colchetes.',
+      port: '“{url}” tem uma porta fora de 1 a 65535.',
+      tooLong: '“{url}” tem mais de 255 caracteres.',
+      empty: 'Informe pelo menos um servidor STUN, ou escolha somente a mesma rede.',
+      tooMany: 'No máximo 8 servidores STUN.',
     },
   },
   join: {

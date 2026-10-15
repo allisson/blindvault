@@ -52,6 +52,8 @@ import {
   type VaultSession,
 } from '@blindvault/vault';
 
+import { DEFAULT_STUN_URLS, type StunSettings } from './stun-settings';
+
 /** WebRTC, behind a port so the controller's tests run over the in-memory transport. */
 export interface PairingPort {
   startInitiator(context: InitiatorContext, options: ConnectionOptions): Promise<Initiator>;
@@ -62,14 +64,19 @@ export interface PairingPort {
   ): Promise<Responder>;
 }
 
-/** The default STUN servers (§9.2); none on the same network only (D203). */
-export const STUN_SERVERS: readonly RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-];
+/** The default STUN servers (§9.2). */
+export const STUN_SERVERS: readonly RTCIceServer[] = DEFAULT_STUN_URLS.map((urls) => ({ urls }));
 
-export function iceServers(sameNetwork: boolean): readonly RTCIceServer[] {
-  return sameNetwork ? [] : STUN_SERVERS;
+/**
+ * The STUN servers of a session: none on the same network only (D203) or when the stored list
+ * cannot be read (D209), the user's own list, or the defaults.
+ */
+export function iceServers(
+  sameNetwork: boolean,
+  stun: StunSettings = { kind: 'default' },
+): readonly RTCIceServer[] {
+  if (sameNetwork || stun.kind === 'unreadable') return [];
+  return stun.kind === 'custom' ? stun.urls.map((urls) => ({ urls })) : STUN_SERVERS;
 }
 
 /** What this version supports, for the payload's capabilities (D122). */
@@ -184,6 +191,8 @@ const DISCONNECT_GRACE_MS = 3_000;
 interface FlowOptions {
   readonly port: PairingPort;
   readonly sameNetwork: boolean;
+  /** The STUN list stored when the session starts (D209). */
+  readonly stun: StunSettings;
   /** The stage changed. */
   readonly onChange: () => void;
 }
@@ -206,7 +215,10 @@ abstract class Flow {
     this.#stage = stage;
     this.#onChange = options.onChange;
     this.port = options.port;
-    this.options = { iceServers: iceServers(options.sameNetwork), signal: this.#abort.signal };
+    this.options = {
+      iceServers: iceServers(options.sameNetwork, options.stun),
+      signal: this.#abort.signal,
+    };
   }
 
   get stage(): PairingStage {

@@ -11,6 +11,16 @@ import {
 } from '../app/controller';
 import { deviceName } from '../app/device-name';
 import { type PairingStage, type PayloadCheck } from '../app/pairing';
+import {
+  DEFAULT_STUN_URLS,
+  type StunList,
+  type StunSettings,
+  loadStunSettings,
+  parseStunList,
+  resetStunList,
+  saveStunList,
+  stunHosts,
+} from '../app/stun-settings';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice, TARGET, TextArea } from './components';
@@ -112,6 +122,11 @@ function reasonText(
   }
 }
 
+/**
+ * "Same network only", and the STUN list used otherwise (D203, D209). A stored list that cannot be
+ * read uses no STUN server, so the option is then on and cannot be turned off until the list is
+ * fixed or the defaults restored; the controller reads the list again when the pairing starts.
+ */
 function SameNetwork({
   checked,
   onChange,
@@ -120,12 +135,16 @@ function SameNetwork({
   readonly onChange: (checked: boolean) => void;
 }) {
   const m = useMessages();
+  const [settings, setSettings] = useState(loadStunSettings);
+  const forced = settings.kind === 'unreadable';
+  const urls = settings.kind === 'custom' ? settings.urls : DEFAULT_STUN_URLS;
   return (
     <div className="flex flex-col gap-1">
       <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
-          checked={checked}
+          checked={checked || forced}
+          disabled={forced}
           onChange={(e) => {
             onChange(e.target.checked);
           }}
@@ -133,7 +152,158 @@ function SameNetwork({
         />
         {m.pairing.sameNetwork}
       </label>
-      <p className="text-sm text-zinc-500">{m.pairing.sameNetworkHint}</p>
+      {forced ? (
+        <p
+          role="alert"
+          className="text-sm text-red-700 dark:text-red-400"
+          data-testid="stun-unreadable"
+        >
+          {m.stun.unreadable}
+        </p>
+      ) : (
+        <p className="text-sm text-zinc-500" data-testid="same-network-hint">
+          {format(m.pairing.sameNetworkHint, { hosts: stunHosts(urls).join(', ') })}
+        </p>
+      )}
+      {checked && !forced ? null : (
+        <StunServers
+          settings={settings}
+          onSaved={() => {
+            setSettings(loadStunSettings());
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function stunProblem(m: Messages, list: Extract<StunList, { kind: 'invalid' }>): string {
+  const p = m.stun.problems;
+  const url = list.url ?? '';
+  switch (list.problem) {
+    case 'scheme':
+      return format(p.scheme, { url });
+    case 'query':
+      return format(p.query, { url });
+    case 'host':
+      return format(p.host, { url });
+    case 'port':
+      return format(p.port, { url });
+    case 'too-long':
+      return format(p.tooLong, { url });
+    case 'empty':
+      return p.empty;
+    case 'too-many':
+      return p.tooMany;
+  }
+}
+
+/** The STUN list in use, with Edit and Restore the defaults (D209). */
+function StunServers({
+  settings,
+  onSaved,
+}: {
+  readonly settings: StunSettings;
+  readonly onSaved: () => void;
+}) {
+  const m = useMessages();
+  const s = m.stun;
+  const [open, setOpen] = useState(settings.kind === 'unreadable');
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string>();
+  const urls = settings.kind === 'custom' ? settings.urls : DEFAULT_STUN_URLS;
+  if (!open) {
+    return (
+      <Button
+        variant="quiet"
+        className="self-start"
+        onClick={() => {
+          setOpen(true);
+        }}
+        data-testid="stun-open"
+      >
+        {s.open}
+      </Button>
+    );
+  }
+  const save = () => {
+    const list = parseStunList(text);
+    if (list.kind === 'invalid') {
+      setError(stunProblem(m, list));
+      return;
+    }
+    if (!saveStunList(list.urls)) {
+      setError(s.notSaved);
+      return;
+    }
+    setEditing(false);
+    onSaved();
+  };
+  return (
+    <div className="flex flex-col gap-2" data-testid="stun">
+      <p className="text-sm">{s.intro}</p>
+      {settings.kind === 'unreadable' ? null : (
+        <ul className="font-mono text-sm break-all" data-testid="stun-list">
+          {urls.map((url) => (
+            <li key={url}>{url}</li>
+          ))}
+        </ul>
+      )}
+      {settings.kind === 'default' ? <p className="text-sm text-zinc-500">{s.defaults}</p> : null}
+      {editing ? (
+        <>
+          <TextArea
+            label={s.label}
+            value={text}
+            error={error}
+            onChange={(e) => {
+              setText(e.target.value);
+              setError(undefined);
+            }}
+            data-testid="stun-text"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={save} data-testid="stun-save">
+              {s.save}
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setEditing(false);
+                setError(undefined);
+              }}
+            >
+              {s.cancel}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="quiet"
+            onClick={() => {
+              setText(urls.join('\n'));
+              setEditing(true);
+            }}
+            data-testid="stun-edit"
+          >
+            {s.edit}
+          </Button>
+          {settings.kind === 'default' ? null : (
+            <Button
+              variant="quiet"
+              onClick={() => {
+                resetStunList();
+                onSaved();
+              }}
+              data-testid="stun-reset"
+            >
+              {s.reset}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -81,6 +81,7 @@ import {
 } from './pairing';
 import { type Ready } from './ready';
 import { StorageMonitor } from './storage-state';
+import { type StunSettings } from './stun-settings';
 import {
   PasskeyCancelledError,
   type PasskeyPort,
@@ -309,7 +310,10 @@ export type ReadmissionStart =
 /** Which flow the pairing in progress is: A's, B's, or a re-admission (D207). */
 export type PairingFlow = 'invite' | 'join' | 'readmit';
 
-/** How a pairing runs: `sameNetwork` uses no STUN server (§9.2, D203). */
+/**
+ * How a pairing runs: `sameNetwork` uses no STUN server (§9.2, D203); otherwise the stored list
+ * (D209).
+ */
 export interface PairingOptions {
   readonly sameNetwork: boolean;
 }
@@ -328,6 +332,8 @@ export interface ControllerDeps {
   readonly storage?: StorageManager;
   /** WebAuthn, for passkey unlock (§5.5); absent where the browser has none. */
   readonly passkeys?: PasskeyPort;
+  /** The stored STUN list, read when each pairing starts (D209); the defaults when absent. */
+  readonly stun?: () => StunSettings;
   /** WebRTC, for pairing (§8.4); absent where the browser has none. */
   readonly pairing?: PairingPort;
 }
@@ -447,6 +453,11 @@ export class VaultController {
   async #requestPersistence(): Promise<void> {
     await requestPersistence(this.#deps.storage);
     await this.storage.refresh();
+  }
+
+  /** The STUN list for a pairing starting now (D209). */
+  #stun(): StunSettings {
+    return this.#deps.stun?.() ?? { kind: 'default' };
   }
 
   get #now(): () => number {
@@ -1742,6 +1753,7 @@ export class VaultController {
     const flow = new Inviting({
       port,
       sameNetwork: options.sameNetwork,
+      stun: this.#stun(),
       grant,
       readmit,
       onChange: this.#pairingChanged,
@@ -1788,6 +1800,7 @@ export class VaultController {
     const flow = new Readmitting({
       port,
       sameNetwork: options.sameNetwork,
+      stun: this.#stun(),
       grant,
       role,
       name: own?.device.displayName ?? options.defaultName,
@@ -1847,6 +1860,7 @@ export class VaultController {
       this.#pairing = new Joining({
         port,
         sameNetwork: options.sameNetwork,
+        stun: this.#stun(),
         identity,
         name: options.name,
         keyring,

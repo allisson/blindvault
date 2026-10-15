@@ -45,7 +45,7 @@ encrypted backups and synchronized records (§3).
 | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- |
 | Reads or alters traffic | Protected | Noise over DTLS; records stay encrypted end to end | overview §8.2, §9 |
-| Learns IP addresses | Limited | STUN sees the public IP; LAN-only mode (D136) | overview §9.2 |
+| Learns IP addresses | Limited | STUN sees the public IP; the user chooses the providers or uses LAN-only mode (D136, D209) | overview §9.2 |
 | Reads a reconnection payload sent through a third-party channel | Protected | Payload encrypted to the peer with `Noise_K` (D17, D117) | `sync-protocol.md` |
 | Reads a pairing payload sent through a third-party channel | Limited | Shows network addresses only; the UI says so (D117) | overview §8.3 |
 

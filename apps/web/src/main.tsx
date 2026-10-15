@@ -8,6 +8,7 @@ import { framed } from './app/frame';
 import { startKdfWorker } from './app/kdf';
 import { browserPasskeys } from './app/passkey';
 import { registerServiceWorker } from './app/service-worker';
+import { loadStunSettings } from './app/stun-settings';
 import { preloadStrength } from './app/strength';
 import { UpdateMonitor } from './app/updates';
 import { LanguageProvider } from './i18n/context';
@@ -51,6 +52,7 @@ function start(root: HTMLElement): void {
     },
     storage: navigator.storage,
     passkeys: browserPasskeys(),
+    stun: loadStunSettings,
     ...(typeof RTCPeerConnection === 'undefined'
       ? {}
       : { pairing: { startInitiator, startResponder } }),
