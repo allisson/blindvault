@@ -418,6 +418,12 @@ every project through the references in the root `tsconfig.json`.
   interrupted one; `mitm()` runs four handshakes over two links, a man in the middle with its own
   keys and A's nonce, and checks that the two devices show different SAS. The audit of the Device
   record writes in `session.ts` is recorded under CRYPTO-INV-007.
+- **Large backup for the Gate C manual run (`apps/web`, D202).** `e2e/load-fixture.ts` builds the
+  load test's vault once in `build()`; `buildVault` locks it for the load test, and `buildBackup`
+  exports it as a `.bvault` opened by an export password. `e2e/large-backup.spec.ts` is opt-in
+  (`BV_LARGE_BACKUP`, `BV_EXPORT_PASSWORD`), opens the file again in Node with
+  `restoreWithPassword` and writes it, for a restore on the device that holds the vault before it
+  pairs with a phone. No new dependency.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`
