@@ -3902,6 +3902,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       retireDevice: () => session.retireDevice(new Uint8Array(16)),
       lastSyncByPeer: () => session.lastSyncByPeer,
       openPairing: () => session.openPairing({ kek: kek(caller), method: 'password' }),
+      openReadmission: () => session.openReadmission(),
       confirmUser: () => {
         session.confirmUser({ kek: kek(caller), method: 'password' });
       },
@@ -4777,5 +4778,359 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
       expect(store.localConfig).toHaveLength(0);
       expect(t.keyringB.wiped).toBe(true);
     });
+  });
+});
+
+describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D29, D35, D49, D206)', () => {
+  const H = new Uint8Array(64).fill(0x50);
+
+  /** A Device record of `publicKey`, planted as another device's sync would write it. */
+  function plantDevice(
+    store: MemoryStore,
+    keys: Keys,
+    publicKey: Uint8Array,
+    hlc: Hlc,
+    retired: boolean,
+  ) {
+    plant(
+      store,
+      keys,
+      RecordType.device,
+      deviceId(publicKey),
+      hlc,
+      false,
+      deviceToCbor({ publicKey, displayName: 'Planted', retired, registeredAt: T0 }),
+    );
+  }
+
+  /** X created the vault and is registered; Y restored X's backup and holds no Device record. */
+  async function devices() {
+    const clock = new Clock();
+    const x = await create(clock);
+    await x.session.createItem(login('From X'));
+    const file = await x.session.exportBackup({ kek: kek(x.keyring), method: 'password' });
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const y = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      now: clock.now,
+    });
+    open.push(y);
+    await y.createItem(login('From Y'));
+    return { x, y: { session: y, store }, clock };
+  }
+
+  function titles(session: VaultSession): (string | undefined)[] {
+    return session
+      .items()
+      .map((i) => i.item?.title)
+      .sort();
+  }
+
+  async function rejection(promise: Promise<unknown>): Promise<string> {
+    const error = await promise.catch((e: unknown) => e);
+    if (error instanceof JoinRejectedError) return error.reason;
+    throw error;
+  }
+
+  it('confirms the same Master Key both ways, bound to the role and the handshake hash (D29)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const mac = gx.mac('initiator', H);
+    expect(gy.checkMac('initiator', H, mac)).toBe(true);
+    expect(gy.checkMac('responder', H, mac)).toBe(false);
+    expect(gx.checkMac('responder', H, gy.mac('responder', H))).toBe(true);
+    // Another vault's device derives another K_readmission.
+    const other = await create();
+    expect(other.session.openReadmission().checkMac('initiator', H, mac)).toBe(false);
+  });
+
+  it('says which Device records it holds, and refuses a retired peer at once (D45, D49)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    expect(gx.held(gy.identity.publicKey)).toEqual({ own: true, peer: false });
+    expect(gy.held(gx.identity.publicKey)).toEqual({ own: false, peer: true });
+    gy.checkPeer(gx.identity.publicKey);
+    gx.checkPeer(gy.identity.publicKey);
+
+    // X's own record retired, as Y holds it: Y refuses X before the nonces.
+    plantDevice(y.store, keysOf(x.store), gx.identity.publicKey, hlcAt(T0 + DAY), true);
+    y.session.lock();
+    const again = await unlock(y.store, new Clock(), 2);
+    expect(() => {
+      again.openReadmission().checkPeer(gx.identity.publicKey);
+    }).toThrow(JoinRejectedError);
+  });
+
+  it('writes the records step 4 gives it, in one commit, with the names received (D35)', async () => {
+    const { x, y, clock } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const commits = x.store.commits.length;
+    clock.t = T0 + DAY;
+    await gx.admit({ own: false, peer: true }, gy.identity.publicKey, 'Restored laptop', 'X');
+    expect(x.store.commits).toHaveLength(commits + 1);
+    const written = x.session
+      .devices()
+      .find((d) => idKey(d.deviceId) === idKey(y.session.deviceId));
+    expect(written?.device).toEqual({
+      publicKey: gy.identity.publicKey,
+      displayName: 'Restored laptop',
+      retired: false,
+      registeredAt: T0 + DAY,
+    });
+    // Nothing to write: no commit.
+    const yCommits = y.store.commits.length;
+    await gy.admit({ own: false, peer: false }, gx.identity.publicKey, 'X', 'Restored laptop');
+    expect(y.store.commits).toHaveLength(yCommits);
+  });
+
+  it('writes its own record and the peer’s when it is I and neither is registered', async () => {
+    const { x, y } = await devices();
+    const gy = y.session.openReadmission();
+    const z = generateDeviceIdentity(new Keyring());
+    await gy.admit({ own: true, peer: true }, z.publicKey, 'Z', 'Restored laptop');
+    expect(y.session.registered).toBe(true);
+    const names = y.session
+      .devices()
+      .map((d) => d.device.displayName)
+      .sort();
+    expect(names).toEqual(['Chrome on macOS', 'Restored laptop', 'Z']);
+    expect(x.session.devices()).toHaveLength(1);
+  });
+
+  it('refuses a write that contradicts what it holds (protocol-error), writing nothing', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const commits = x.store.commits.length;
+    expect(
+      await rejection(gx.admit({ own: true, peer: false }, gy.identity.publicKey, 'Y', 'X')),
+    ).toBe('protocol-error');
+    expect(
+      await rejection(gy.admit({ own: false, peer: true }, gx.identity.publicKey, 'X', 'Y')),
+    ).toBe('protocol-error');
+    expect(x.store.commits).toHaveLength(commits);
+  });
+
+  it('merges both ways: Y becomes registered with X’s items, X gets Y’s, and both record the sync', async () => {
+    const { x, y, clock } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    await gx.admit({ own: false, peer: true }, gy.identity.publicKey, 'Restored laptop', 'X');
+    const fromX = await gx.records();
+    const fromY = await gy.records();
+    clock.t = T0 + DAY;
+    const commitsY = y.store.commits.length;
+    const resultY = await gy.merge(fromX, gx.identity.publicKey);
+    const resultX = await gx.merge(fromY, gy.identity.publicKey);
+    expect(y.store.commits).toHaveLength(commitsY + 1);
+    expect(y.session.registered).toBe(true);
+    expect(titles(y.session)).toEqual(['From X', 'From Y']);
+    expect(titles(x.session)).toEqual(['From X', 'From Y']);
+    expect(resultY.rejected).toEqual([]);
+    expect(resultX.rejected).toEqual([]);
+    expect(resultY.added).toBeGreaterThan(0);
+    expect(y.session.lastSyncByPeer).toEqual([[x.session.deviceId, T0 + DAY]]);
+    expect(x.session.lastSyncByPeer).toEqual([[y.session.deviceId, T0 + DAY]]);
+    // Y's own record came from X: no new-device notice for it (D48).
+    expect(resultY.newDevices).toEqual([]);
+  });
+
+  it('a merge with nothing new still records the sync (D206)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    await gx.admit({ own: false, peer: true }, gy.identity.publicKey, 'Y', 'X');
+    await gy.merge(await gx.records(), gx.identity.publicKey);
+    await gx.merge(await gy.records(), gy.identity.publicKey);
+    const result = await gy.merge(await gx.records(), gx.identity.publicKey);
+    expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
+    expect(y.session.lastSyncByPeer).toHaveLength(1);
+  });
+
+  it('rejects and reports a record that fails verification or is beyond the bound, merging the rest (§2.3)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const keys = keysOf(x.store);
+    const aheadId = randomId();
+    plant(
+      x.store,
+      keys,
+      RecordType.item,
+      aheadId,
+      hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + DAY),
+      false,
+      itemToCbor(login('Ahead'), false),
+    );
+    const records = await x.store.records();
+    const items = records.filter((r) => r.recordType === RecordType.item);
+    const target = must(items.find((r) => idKey(r.recordId) !== idKey(aheadId)));
+    const flipped = target.envelope.slice();
+    flipped[flipped.length - 1] = must(flipped[flipped.length - 1]) ^ 1;
+    const sent = records.map((r) => (r === target ? flipped : r.envelope));
+    const result = await gy.merge(sent, gx.identity.publicKey);
+    expect(
+      result.rejected
+        .map((r) => [r.reason, r.record?.recordType, idKey(r.record?.recordId ?? new Uint8Array())])
+        .sort(),
+    ).toEqual(
+      [
+        ['future-clock', RecordType.item, idKey(aheadId)],
+        ['verification-failed', RecordType.item, idKey(target.recordId)],
+      ].sort(),
+    );
+    expect(titles(y.session)).toEqual(['From X', 'From Y']);
+    expect(y.session.item(aheadId)).toBeUndefined();
+    expect(y.session.lastSyncByPeer).toHaveLength(1);
+  });
+
+  it('rejects and reports another version of a held Vault Key record, merging the rest (D42)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const keys = keysOf(x.store);
+    const header: RecordHeader = {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.vaultKey,
+      recordId: vaultKeyRecordId(1),
+      keyEpoch: 1,
+      hlc: hlcAt(T0 + 10),
+      deleted: false,
+    };
+    const forged = sealVaultKeyRecord(
+      header,
+      keys.vaultId,
+      keys.subkeys.vaultKeyWrap,
+      generateKey(new Keyring()),
+    );
+    const others = (await gx.records()).filter(
+      (r) => decodeEnvelope(r).header.recordType !== RecordType.vaultKey,
+    );
+    const size = y.store.commits.length;
+    const result = await gy.merge([forged, ...others], gx.identity.publicKey);
+    expect(result.rejected).toEqual([
+      {
+        reason: 'immutable-record',
+        record: { recordType: RecordType.vaultKey, recordId: vaultKeyRecordId(1) },
+      },
+    ]);
+    expect(y.store.commits).toHaveLength(size + 1);
+    expect(titles(y.session)).toEqual(['From X', 'From Y']);
+  });
+
+  it('refuses a newer record, two of one identity, or a retired peer before writing anything (D45, D206)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const records = await gx.records();
+    const commits = y.store.commits.length;
+    const map = decodeCbor(must(records[0])) as CborMap;
+    map.set('v', RECORD_FORMAT_VERSION + 1);
+    expect(await rejection(gy.merge([...records, encodeCbor(map)], gx.identity.publicKey))).toBe(
+      'unsupported-format',
+    );
+    expect(await rejection(gy.merge([...records, must(records[0])], gx.identity.publicKey))).toBe(
+      'protocol-error',
+    );
+    // X's own record arrives retired in the transfer (D49).
+    plantDevice(x.store, keysOf(x.store), gx.identity.publicKey, hlcAt(T0 + DAY), true);
+    const retired = (await x.store.records()).map((r) => r.envelope);
+    expect(await rejection(gy.merge(retired, gx.identity.publicKey))).toBe('retired-peer');
+    expect(y.store.commits).toHaveLength(commits);
+    expect(y.session.registered).toBe(false);
+  });
+
+  it('reports an envelope that does not even decode, with no record named, merging the rest', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const result = await gy.merge(
+      [Uint8Array.of(0xa0), ...(await gx.records())],
+      gx.identity.publicKey,
+    );
+    expect(result.rejected).toEqual([{ reason: 'verification-failed' }]);
+    expect(titles(y.session)).toEqual(['From X', 'From Y']);
+  });
+
+  it('refuses a malformed key or its own key as the peer, and writes only its own record when told', async () => {
+    const { x, y } = await devices();
+    const gy = y.session.openReadmission();
+    await expect(
+      gy.admit({ own: false, peer: true }, new Uint8Array(31), 'Z', 'Y'),
+    ).rejects.toThrow(RangeError);
+    expect(
+      await rejection(gy.admit({ own: true, peer: false }, gy.identity.publicKey, 'Y', 'Y')),
+    ).toBe('protocol-error');
+    await gy.admit(
+      { own: true, peer: false },
+      x.session.openReadmission().identity.publicKey,
+      'X',
+      'Y',
+    );
+    expect(y.session.registered).toBe(true);
+    expect(y.session.devices()).toHaveLength(2);
+  });
+
+  it('writes nothing once the clock went back past the bound after it started (D102)', async () => {
+    const { x, y, clock } = await devices();
+    const gy = y.session.openReadmission();
+    const xKey = x.session.openReadmission().identity.publicKey;
+    const commits = y.store.commits.length;
+    clock.t = T0 - FUTURE_CLOCK_BOUND_MS - DAY;
+    await expect(gy.admit({ own: true, peer: false }, xKey, 'X', 'Y')).rejects.toThrow(
+      PairingRefusedError,
+    );
+    expect(y.store.commits).toHaveLength(commits);
+  });
+
+  it('is refused while read-only, retired, or holding a corrupt record (D45, D102)', async () => {
+    const refusal = (session: VaultSession) => {
+      try {
+        session.openReadmission();
+      } catch (error) {
+        if (error instanceof PairingRefusedError) return error.reason;
+        throw error;
+      }
+      return 'opened';
+    };
+    const behind = await create();
+    behind.session.lock();
+    behind.clock.t = T0 - FUTURE_CLOCK_BOUND_MS - DAY;
+    expect(refusal(await unlock(behind.store, behind.clock))).toBe('read-only');
+
+    const retired = await create();
+    const own = must(retired.session.devices()[0]).device.publicKey;
+    plantDevice(retired.store, keysOf(retired.store), own, hlcAt(T0 + DAY), true);
+    retired.session.lock();
+    expect(refusal(await unlock(retired.store))).toBe('retired');
+
+    const damaged = await create();
+    damaged.store.put({
+      recordType: RecordType.item,
+      recordId: randomId(),
+      envelope: Uint8Array.of(0xa0) as RecordEnvelope,
+    });
+    damaged.session.lock();
+    expect(refusal(await unlock(damaged.store))).toBe('corrupt-record');
+  });
+
+  it('does nothing once the vault locks (D93)', async () => {
+    const { x, y } = await devices();
+    const gx = x.session.openReadmission();
+    const gy = y.session.openReadmission();
+    const records = await gx.records();
+    y.session.lock();
+    expect(() => gy.mac('initiator', H)).toThrow(VaultLockedError);
+    await expect(gy.merge(records, gx.identity.publicKey)).rejects.toThrow(VaultLockedError);
+    await expect(gy.records()).rejects.toThrow(VaultLockedError);
   });
 });

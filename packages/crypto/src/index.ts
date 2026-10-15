@@ -69,11 +69,14 @@ export {
   DTLS_FINGERPRINT_LENGTH,
   PAIRING_COMMITMENT_LENGTH,
   PAIRING_NONCE_LENGTH,
+  READMISSION_MAC_LENGTH,
   checkPairingCommitment,
+  checkReadmissionMac,
   pairingCommitment,
   pairingNonce,
   pairingPrologue,
   pairingSas,
+  readmissionMac,
 } from './transcripts';
 export {
   PRF_INPUT_LENGTH,

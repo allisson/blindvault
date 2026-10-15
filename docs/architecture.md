@@ -354,6 +354,18 @@ every project through the references in the root `tsconfig.json`.
   the erase notice and the leftover-passkey notice. `takeOver` checks that the database still
   exists and runs the startup again when another app window erased it. The UI is
   `ui/EraseVault.tsx`, in Settings and on the unlock screen.
+- **Re-admission, protocol and vault (Phase 4, `packages/{crypto,sync,vault}`, §9, D206).**
+  `readmissionMac` and `checkReadmissionMac` in `packages/crypto` compute the key-confirmation MAC
+  of crypto-spec.md §13 over `K_readmission`, checked against the existing vectors. `readmit()` in
+  `packages/sync` runs §9 from step 2 over a `PairingSession`: the MACs, `devices`, the writes of
+  step 4 (`readmissionWrites`, the same answer on both sides), the transfer in both directions at
+  once (`sendRecords` and `receiveRecords`, now shared with the pairing transfer), the merge, then
+  `committed` both ways; once this side's merge commits, it resolves with `peerCommitted` instead of
+  failing. `VaultSession.openReadmission()` gives the vault's side with no password: the MAC, the
+  held flags, the step-1 retired check, the writes, the verified records and the merge, which
+  rejects and reports a record failing verification, beyond the bound or breaking D42/D44 (looping
+  until what is left passes, since a rejected Vault Key takes its epoch's records) and refuses a
+  newer record, a duplicate or a retired peer with `JoinRejectedError`. The screens come next.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

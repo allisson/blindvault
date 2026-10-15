@@ -1,15 +1,18 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { EncodingError } from './errors';
+import { Keyring, adoptKey } from './keys';
 import { initCrypto } from './sodium';
 import { fromHex, toHex, vectors } from './test-helpers';
 import {
   PAIRING_NONCE_LENGTH,
   checkPairingCommitment,
+  checkReadmissionMac,
   pairingCommitment,
   pairingNonce,
   pairingPrologue,
   pairingSas,
+  readmissionMac,
 } from './transcripts';
 
 beforeAll(initCrypto);
@@ -116,5 +119,56 @@ describe('SAS (pairing-protocol.md §6.2)', () => {
     expect(() => pairingSas(hh.subarray(0, 32), ni, nr)).toThrow(EncodingError);
     expect(() => pairingSas(hh, ni.subarray(1), nr)).toThrow(EncodingError);
     expect(() => pairingSas(hh, ni, new Uint8Array(33))).toThrow(EncodingError);
+  });
+});
+
+describe('re-admission key confirmation (crypto-spec.md §13, pairing-protocol.md §9, D29)', () => {
+  const key = (keyring: Keyring, hex: string) => adoptKey(keyring, fromHex(hex));
+
+  it.each(t.readmissionMac.map((v) => [v.role, v] as const))(
+    'reproduces the %s vector',
+    (_role, v) => {
+      const keyring = new Keyring();
+      const k = key(keyring, v.readmissionKey);
+      const mac = readmissionMac(k, v.role as 'initiator' | 'responder', fromHex(v.handshakeHash));
+      expect(toHex(mac)).toBe(v.mac);
+      expect(
+        checkReadmissionMac(k, v.role as 'initiator' | 'responder', fromHex(v.handshakeHash), mac),
+      ).toBe(true);
+      keyring.wipeAll();
+    },
+  );
+
+  it('binds the role, the handshake hash and the key: any other one fails the check', () => {
+    const [v] = t.readmissionMac;
+    if (!v) throw new Error('no vector');
+    const keyring = new Keyring();
+    const k = key(keyring, v.readmissionKey);
+    const h = fromHex(v.handshakeHash);
+    const mac = readmissionMac(k, 'initiator', h);
+    // A peer that echoes this device's own MAC back is refused: the roles differ.
+    expect(checkReadmissionMac(k, 'responder', h, mac)).toBe(false);
+    const otherHash = h.slice();
+    otherHash[0] = (otherHash[0] ?? 0) ^ 1;
+    expect(checkReadmissionMac(k, 'initiator', otherHash, mac)).toBe(false);
+    const otherKey = fromHex(v.readmissionKey);
+    otherKey[0] = (otherKey[0] ?? 0) ^ 1;
+    expect(checkReadmissionMac(adoptKey(keyring, otherKey), 'initiator', h, mac)).toBe(false);
+    const tampered = mac.slice();
+    tampered[31] = (tampered[31] ?? 0) ^ 1;
+    expect(checkReadmissionMac(k, 'initiator', h, tampered)).toBe(false);
+    keyring.wipeAll();
+  });
+
+  it('refuses a handshake hash or a MAC of the wrong length', () => {
+    const [v] = t.readmissionMac;
+    if (!v) throw new Error('no vector');
+    const keyring = new Keyring();
+    const k = key(keyring, v.readmissionKey);
+    expect(() => readmissionMac(k, 'initiator', new Uint8Array(32))).toThrow(EncodingError);
+    expect(() =>
+      checkReadmissionMac(k, 'initiator', fromHex(v.handshakeHash), new Uint8Array(31)),
+    ).toThrow(EncodingError);
+    keyring.wipeAll();
   });
 });

@@ -27,7 +27,7 @@ export class TransferRefusal extends Error {
 }
 
 /** Runs a callback; when it fails, ends the session with the reason it gives. */
-async function guarded<T>(session: PairingSession, run: () => Promise<T>): Promise<T> {
+export async function guarded<T>(session: PairingSession, run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {
@@ -63,13 +63,41 @@ export async function sendVault(session: PairingSession, options: SendVaultOptio
   const received = await session.receive();
   if (received.t !== 'received') return session.refuse('protocol-error');
   const records = await guarded(session, () => options.admit(received.name));
-  await session.send({ t: 'records-begin', count: records.length });
-  for (const r of records) await session.send({ t: 'record', r });
-  await session.send({ t: 'records-end' });
+  await sendRecords(session, records);
   const last = await session.receive();
   if (last.t !== 'committed') return session.refuse('protocol-error');
   session.close();
   await options.completed();
+}
+
+/** `records-begin`, every `record`, `records-end` (`sync-protocol.md` §2.1). */
+export async function sendRecords(
+  session: PairingSession,
+  records: readonly Uint8Array[],
+): Promise<void> {
+  await session.send({ t: 'records-begin', count: records.length });
+  for (const r of records) await session.send({ t: 'record', r });
+  await session.send({ t: 'records-end' });
+}
+
+/**
+ * The records of a full transfer (`sync-protocol.md` §2.1), unverified: a message out of its order,
+ * or a number of records other than `count`, aborts (`protocol-error`).
+ */
+export async function receiveRecords(session: PairingSession): Promise<Uint8Array[]> {
+  const begin = await session.receive();
+  if (begin.t !== 'records-begin') return session.refuse('protocol-error');
+  const records: Uint8Array[] = [];
+  for (;;) {
+    const message = await session.receive();
+    if (records.length < begin.count) {
+      if (message.t !== 'record') return session.refuse('protocol-error');
+      records.push(message.r);
+    } else {
+      if (message.t !== 'records-end') return session.refuse('protocol-error');
+      return records;
+    }
+  }
 }
 
 export interface ReceiveVaultOptions {
@@ -92,19 +120,8 @@ export async function receiveVault(
   const masterKey = importTransferKey(options.keyring, first.mk);
   try {
     await session.send({ t: 'received', name: options.name });
-    const begin = await session.receive();
-    if (begin.t !== 'records-begin') return await session.refuse('protocol-error');
-    const records: Uint8Array[] = [];
-    for (;;) {
-      const message = await session.receive();
-      if (records.length < begin.count) {
-        if (message.t !== 'record') return await session.refuse('protocol-error');
-        records.push(message.r);
-      } else {
-        if (message.t !== 'records-end') return await session.refuse('protocol-error');
-        return new ReceivedVault(session, first.vid, masterKey, records);
-      }
-    }
+    const records = await receiveRecords(session);
+    return new ReceivedVault(session, first.vid, masterKey, records);
   } catch (error) {
     options.keyring.release(masterKey);
     throw error;

@@ -55,6 +55,15 @@ export {
   encodePayloadText,
 } from './payload';
 export { type NonceExchangeOptions, type SasRejection, SasStage, exchangeNonces } from './sas';
+export {
+  type DevicesHeld,
+  type DevicesMessage,
+  type ReadmissionWrites,
+  type Readmitted,
+  type ReadmitOptions,
+  readmissionWrites,
+  readmit,
+} from './readmission';
 export { type LocalDescription, SdpError, buildRemoteSdp, parseLocalSdp } from './sdp';
 export {
   IDLE_TIMEOUT_MS,
