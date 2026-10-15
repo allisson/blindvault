@@ -59,6 +59,7 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   await button(page, 'Login').click();
   await page.getByTestId('item-title').fill('ACME');
   await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Settings' }).first().click();
   const oldId = await currentId(page);
   expect(oldId).toMatch(/^[0-9a-f]{8}$/);

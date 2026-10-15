@@ -122,10 +122,13 @@ export function ItemDetail({
   const duplicate = () => {
     setWorking(true);
     setError(undefined);
+    const from = nav.current();
     session.duplicateItem(id, m.items.copySuffix).then(
       (copy) => {
         onChange();
-        nav.select({ name: 'item', id: copy });
+        nav.follow(from, () => {
+          nav.select({ name: 'item', id: copy });
+        });
       },
       (e: unknown) => {
         setWorking(false);

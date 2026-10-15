@@ -179,12 +179,15 @@ export function FolderPane({
           <NameForm
             initial=""
             session={session}
-            submit={(name) =>
-              session.createFolder(name).then((id) => {
+            submit={(name) => {
+              const from = nav.current();
+              return session.createFolder(name).then((id) => {
                 onChange();
-                nav.showList({ name: 'folder', id });
-              })
-            }
+                nav.follow(from, () => {
+                  nav.showList({ name: 'folder', id });
+                });
+              });
+            }}
             onDone={() => {
               setCreating(false);
             }}
@@ -286,12 +289,15 @@ export function FolderActions({
         <NameForm
           initial=""
           session={session}
-          submit={(name) =>
-            session.createFolder(name, id).then((child) => {
+          submit={(name) => {
+            const from = nav.current();
+            return session.createFolder(name, id).then((child) => {
               onChange();
-              nav.showList({ name: 'folder', id: child });
-            })
-          }
+              nav.follow(from, () => {
+                nav.showList({ name: 'folder', id: child });
+              });
+            });
+          }}
           onDone={done}
         />
       ) : null}
