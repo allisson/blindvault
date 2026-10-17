@@ -15,6 +15,7 @@ import {
   openNoiseK,
   sealNoiseK,
   startNoise,
+  startNoiseKK,
   startNoiseXX,
 } from './noise';
 import { type Dh, createDh } from './noise/dh';
@@ -543,5 +544,106 @@ describe('Noise_K, the reconnection payload (sync-protocol.md §4.2, D214)', () 
     openNoiseK({ identity: b, peerPublicKey: a.publicKey, prologue, message });
     expect(lib().is_zero(privateKeyBytes(a.privateKey))).toBe(false);
     expect(lib().is_zero(privateKeyBytes(b.privateKey))).toBe(false);
+  });
+});
+
+describe('Noise_KK with registered identities (sync-protocol.md §5, CRYPTO-INV-008, D217)', () => {
+  function runKK(
+    keys: { a: DeviceIdentity; b: DeviceIdentity; seenByA?: Uint8Array; seenByB?: Uint8Array },
+    alter: (index: number, message: Uint8Array) => Uint8Array = (_i, m) => m,
+    prologues: [Uint8Array, Uint8Array] = [prologue, prologue],
+  ) {
+    const i = startNoiseKK({
+      initiator: true,
+      prologue: prologues[0],
+      identity: keys.a,
+      peerPublicKey: keys.seenByA ?? keys.b.publicKey,
+    });
+    const r = startNoiseKK({
+      initiator: false,
+      prologue: prologues[1],
+      identity: keys.b,
+      peerPublicKey: keys.seenByB ?? keys.a.publicKey,
+    });
+    r.readMessage(alter(0, i.writeMessage()));
+    i.readMessage(alter(1, r.writeMessage()));
+    return { initiator: done(i), responder: done(r) };
+  }
+
+  it('agrees on the handshake hash in two empty messages of 48 bytes, and carries messages', () => {
+    const { a, b } = identities();
+    const lengths: number[] = [];
+    const { initiator, responder } = runKK({ a, b }, (_i, m) => {
+      lengths.push(m.length);
+      return m;
+    });
+    expect(lengths).toEqual([48, 48]);
+    expect(toHex(initiator.handshakeHash)).toBe(toHex(responder.handshakeHash));
+    expect(toHex(initiator.remoteStaticKey)).toBe(toHex(b.publicKey));
+    expect(toHex(responder.remoteStaticKey)).toBe(toHex(a.publicKey));
+    expect(responder.transport.decrypt(initiator.transport.encrypt(Uint8Array.of(1)))).toEqual(
+      Uint8Array.of(1),
+    );
+    expect(lib().is_zero(privateKeyBytes(a.privateKey))).toBe(false);
+  });
+
+  describe('fails', () => {
+    it("when the responder is not the key the initiator holds, or the initiator not the responder's", () => {
+      const { keyring, a, b } = identities();
+      const c = generateDeviceIdentity(keyring);
+      expect(() => runKK({ a, b, seenByA: c.publicKey })).toThrow(NoiseError);
+      expect(() => runKK({ a, b, seenByB: c.publicKey })).toThrow(NoiseError);
+      // C holds A's and B's public keys, not their private keys.
+      expect(() => runKK({ a: c, b, seenByA: b.publicKey, seenByB: a.publicKey })).toThrow(
+        NoiseError,
+      );
+      expect(() => runKK({ a, b: c, seenByA: b.publicKey, seenByB: a.publicKey })).toThrow(
+        NoiseError,
+      );
+    });
+
+    it('on different prologues', () => {
+      const { a, b } = identities();
+      const other = prologue.slice();
+      other[0] = 8;
+      expect(() => runKK({ a, b }, undefined, [prologue, other])).toThrow(NoiseError);
+    });
+
+    it.each([0, 1])('on message %i changed, truncated or one byte longer', (index) => {
+      const { a, b } = identities();
+      const flip = (m: Uint8Array) => {
+        const t = m.slice();
+        t[t.length - 1] = (t[t.length - 1] ?? 0) ^ 1;
+        return t;
+      };
+      for (const change of [
+        flip,
+        (m: Uint8Array) => m.subarray(0, m.length - 1),
+        (m: Uint8Array) => Uint8Array.from([...m, 0]),
+      ]) {
+        expect(() => runKK({ a, b }, (i, m) => (i === index ? change(m) : m))).toThrow(NoiseError);
+      }
+    });
+
+    it('on a message recorded from another session between the same devices', () => {
+      const { a, b } = identities();
+      const recorded: Uint8Array[] = [];
+      runKK({ a, b }, (_i, m) => {
+        recorded.push(m);
+        return m;
+      });
+      for (const index of [0, 1]) {
+        expect(() => runKK({ a, b }, (i, m) => (i === index ? (recorded[index] ?? m) : m))).toThrow(
+          NoiseError,
+        );
+      }
+    });
+
+    it('on a peer key that is not 32 bytes', () => {
+      const { a } = identities();
+      expect(() =>
+        startNoiseKK({ initiator: true, prologue, identity: a, peerPublicKey: new Uint8Array(31) }),
+      ).toThrow(EncodingError);
+    });
   });
 });

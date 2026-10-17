@@ -84,6 +84,12 @@ export {
   openReconnection,
   sealReconnection,
 } from './reconnect';
+export {
+  type SessionPayload,
+  type SyncHandshake,
+  type SyncHandshakeOptions,
+  syncHandshake,
+} from './sync-handshake';
 export { type NonceExchangeOptions, type SasRejection, SasStage, exchangeNonces } from './sas';
 export {
   type DevicesHeld,

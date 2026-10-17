@@ -19,9 +19,9 @@ import { PairingSession } from './session';
 import { type Transport, TransportClosedError } from './transport';
 
 /**
- * Why the handshake failed: `closed`, the transport closed or broke (the peer may have refused);
- * `invalid`, a message or a payload this side refuses; `same-identity`, the peer's static key is
- * this device's own.
+ * Why a handshake, pairing or sync, failed: `closed`, the transport closed or broke (the peer may
+ * have refused); `invalid`, a message or a payload this side refuses; `same-identity` (pairing
+ * only), the peer's static key is this device's own.
  */
 export type HandshakeFailure = 'closed' | 'invalid' | 'same-identity';
 
@@ -31,7 +31,7 @@ export class HandshakeError extends Error {
     readonly reason: HandshakeFailure,
     options?: ErrorOptions,
   ) {
-    super(`pairing handshake failed (${reason})`, options);
+    super(`handshake failed (${reason})`, options);
   }
 }
 

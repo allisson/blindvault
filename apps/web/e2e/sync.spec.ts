@@ -7,7 +7,7 @@ import { fillPassword } from './password';
 // The manual sync flow between two paired installations, each in its own browser context, through
 // the screens alone (§9.1, sync-protocol.md §3 to §5, D216): the user picks the other device on
 // both, one shows its code first, the codes are copied and pasted, the same network only (no STUN
-// server), and both connect. Nothing is sent before Noise_KK, which comes with its task.
+// server), and both connect, then prove their registered identities with Noise_KK (D217).
 
 // Creation, A's password again and B's password each run Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -107,6 +107,7 @@ test('two paired devices connect from their sync codes, each with the other pick
 
   await expect(a.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
   await expect(b.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
+  await expect(a.getByTestId('sync-connected')).toContainText('identity verified');
 
   // Closing on A ends B's connection.
   await a.getByTestId('sync-close').click();

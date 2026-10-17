@@ -55,7 +55,7 @@ export class NoiseHandshake {
   #state: HandshakeState | null;
   #result: NoiseResult | null = null;
 
-  /** @internal Use `startNoiseXX`, `sealNoiseK` or `openNoiseK`. */
+  /** @internal Use `startNoiseXX`, `startNoiseKK`, `sealNoiseK` or `openNoiseK`. */
   constructor(
     noise: Noise,
     pattern: NoisePattern,
@@ -201,7 +201,7 @@ export class NoiseTransport {
   }
 }
 
-/** @internal The handshake of any copied pattern, for the vectors; the app uses `startNoiseXX`. */
+/** @internal The handshake of any copied pattern, for the vectors; the app uses the functions below. */
 export function startNoise(
   options: {
     pattern: NoisePattern;
@@ -254,6 +254,15 @@ interface NoiseKOptions {
 }
 
 /**
+ * `Noise_KK_25519_ChaChaPoly_BLAKE2b` between two registered devices (`sync-protocol.md` §5, D217):
+ * the device identity as the static key, and the peer's public key from its Device record. A peer
+ * that does not hold the private key of that public key fails the handshake (CRYPTO-INV-008).
+ */
+export function startNoiseKK(options: NoiseKOptions & { initiator: boolean }): NoiseHandshake {
+  return startWithPeer('KK', options, options.initiator);
+}
+
+/**
  * The single message of `Noise_K_25519_ChaChaPoly_BLAKE2b` from `identity` to `peerPublicKey`,
  * carrying `payload` (the reconnection payload, `sync-protocol.md` §4.2, D214). The ephemeral key is
  * new for each message. The transport keys the pattern splits into have no use and are wiped at once.
@@ -280,12 +289,21 @@ export function openNoiseK(options: NoiseKOptions & { message: Uint8Array }): Ui
 }
 
 function startNoiseK(options: NoiseKOptions, initiator: boolean, noise?: Noise): NoiseHandshake {
+  return startWithPeer('K', options, initiator, noise);
+}
+
+function startWithPeer(
+  pattern: 'K' | 'KK',
+  options: NoiseKOptions,
+  initiator: boolean,
+  noise?: Noise,
+): NoiseHandshake {
   if (options.peerPublicKey.length !== STATIC_KEY_LENGTH) {
     throw new EncodingError('an X25519 key is 32 bytes');
   }
   return startNoise(
     {
-      pattern: 'K',
+      pattern,
       initiator,
       prologue: options.prologue,
       staticKey: {

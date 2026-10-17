@@ -311,7 +311,7 @@ const en = {
     preparing: 'Preparing the connection…',
     connecting: 'Connecting…',
     connected:
-      'Connected to {name}. Exchanging records comes in a later version: close the sync here.',
+      'Connected to {name}, its identity verified. Exchanging records comes in a later version: close the sync here.',
     close: 'Close',
     again: 'Start again',
     leaving:
@@ -328,6 +328,8 @@ const en = {
       expired: 'The sync took too long and expired.',
       closed: 'The connection closed, so the sync stopped.',
       error: 'The connection could not be set up, so the sync stopped.',
+      unverified:
+        'This device could not verify {name}, so the sync stopped. Make a new code on both devices.',
     },
   },
   ready: {
@@ -1229,7 +1231,7 @@ const ptBR: Messages = {
     preparing: 'Preparando a conexão…',
     connecting: 'Conectando…',
     connected:
-      'Conectado a {name}. A troca de registros vem numa versão futura: feche a sincronização aqui.',
+      'Conectado a {name}, com a identidade verificada. A troca de registros vem numa versão futura: feche a sincronização aqui.',
     close: 'Fechar',
     again: 'Começar de novo',
     leaving:
@@ -1247,6 +1249,8 @@ const ptBR: Messages = {
       expired: 'A sincronização demorou demais e expirou.',
       closed: 'A conexão fechou, então a sincronização parou.',
       error: 'Não foi possível montar a conexão, então a sincronização parou.',
+      unverified:
+        'Este dispositivo não conseguiu verificar {name}, então a sincronização parou. Gere um novo código nos dois dispositivos.',
     },
   },
   ready: {
