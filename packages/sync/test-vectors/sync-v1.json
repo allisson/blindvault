@@ -1,5 +1,5 @@
 {
-  "description": "sync-protocol.md section 4: the reconnection payload v1, one Noise_K message (Noise_K_25519_ChaChaPoly_BLAKE2b) in base45",
+  "description": "sync-protocol.md section 4: the reconnection payload v1, one Noise_K message (Noise_K_25519_ChaChaPoly_BLAKE2b) in base45; section 11.1: messages",
   "reconnection": {
     "vaultId": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
     "minMessageLength": 133,
@@ -477,5 +477,493 @@
         "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUX6FIB556BQTN2DBPXE7$AFCO5-H8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCPI1GJ8ENPF5JDTNEO1SFJDM21LAMCBJWK$IGTIB$3PCNL+P6+VK0ZRGEBMBB63IRUVTYDXLB4LB:A8E1A$JPL*5G-6RU60XPD9C++UKDB$X8P$JUFDS$4"
       }
     ]
+  },
+  "messages": {
+    "valid": [
+      {
+        "case": "summary-begin",
+        "bytes": "a361746d73756d6d6172792d626567696e61760165636f756e7403",
+        "message": {
+          "v": 1,
+          "t": "summary-begin",
+          "count": 3
+        }
+      },
+      {
+        "case": "summary-begin with no entry",
+        "bytes": "a361746d73756d6d6172792d626567696e61760165636f756e7400",
+        "message": {
+          "v": 1,
+          "t": "summary-begin",
+          "count": 0
+        }
+      },
+      {
+        "case": "summary-begin with the largest count",
+        "bytes": "a361746d73756d6d6172792d626567696e61760165636f756e741b001fffffffffffff",
+        "message": {
+          "v": 1,
+          "t": "summary-begin",
+          "count": 9007199254740991
+        }
+      },
+      {
+        "case": "summary with one entry",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601",
+        "message": {
+          "v": 1,
+          "t": "summary",
+          "e": [
+            {
+              "recordFormatVersion": 1,
+              "recordType": 1,
+              "recordId": "505152535455565758595a5b5c5d5e5f",
+              "hlc": {
+                "physicalMs": 1700000000000,
+                "counter": 0,
+                "deviceId": "707172737475767778797a7b7c7d7e7f"
+              },
+              "deleted": false,
+              "keyEpoch": 1
+            }
+          ]
+        }
+      },
+      {
+        "case": "summary with an entry at every maximum, 62 bytes",
+        "bytes": "a36165818619ffff19ffff505152535455565758595a5b5c5d5e5f60831b001fffffffffffff1affffffff507172737475767778797a7b7c7d7e7f80f51affffffff61746773756d6d617279617601",
+        "message": {
+          "v": 1,
+          "t": "summary",
+          "e": [
+            {
+              "recordFormatVersion": 65535,
+              "recordType": 65535,
+              "recordId": "5152535455565758595a5b5c5d5e5f60",
+              "hlc": {
+                "physicalMs": 9007199254740991,
+                "counter": 4294967295,
+                "deviceId": "7172737475767778797a7b7c7d7e7f80"
+              },
+              "deleted": true,
+              "keyEpoch": 4294967295
+            }
+          ]
+        }
+      },
+      {
+        "case": "summary with an entry at every minimum",
+        "bytes": "a361658186000050000000000000000000000000000000008300005000000000000000000000000000000000f40061746773756d6d617279617601",
+        "message": {
+          "v": 1,
+          "t": "summary",
+          "e": [
+            {
+              "recordFormatVersion": 0,
+              "recordType": 0,
+              "recordId": "00000000000000000000000000000000",
+              "hlc": {
+                "physicalMs": 0,
+                "counter": 0,
+                "deviceId": "00000000000000000000000000000000"
+              },
+              "deleted": false,
+              "keyEpoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "case": "summary with an unknown format and type, only telling what the peer holds",
+        "bytes": "a36165818602075052535455565758595a5b5c5d5e5f60618305015072737475767778797a7b7c7d7e7f8081f50361746773756d6d617279617601",
+        "message": {
+          "v": 1,
+          "t": "summary",
+          "e": [
+            {
+              "recordFormatVersion": 2,
+              "recordType": 7,
+              "recordId": "52535455565758595a5b5c5d5e5f6061",
+              "hlc": {
+                "physicalMs": 5,
+                "counter": 1,
+                "deviceId": "72737475767778797a7b7c7d7e7f8081"
+              },
+              "deleted": true,
+              "keyEpoch": 3
+            }
+          ]
+        }
+      },
+      {
+        "case": "summary with three entries",
+        "bytes": "a361658386010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff4018619ffff19ffff505152535455565758595a5b5c5d5e5f60831b001fffffffffffff1affffffff507172737475767778797a7b7c7d7e7f80f51affffffff86000050000000000000000000000000000000008300005000000000000000000000000000000000f40061746773756d6d617279617601",
+        "message": {
+          "v": 1,
+          "t": "summary",
+          "e": [
+            {
+              "recordFormatVersion": 1,
+              "recordType": 1,
+              "recordId": "505152535455565758595a5b5c5d5e5f",
+              "hlc": {
+                "physicalMs": 1700000000000,
+                "counter": 0,
+                "deviceId": "707172737475767778797a7b7c7d7e7f"
+              },
+              "deleted": false,
+              "keyEpoch": 1
+            },
+            {
+              "recordFormatVersion": 65535,
+              "recordType": 65535,
+              "recordId": "5152535455565758595a5b5c5d5e5f60",
+              "hlc": {
+                "physicalMs": 9007199254740991,
+                "counter": 4294967295,
+                "deviceId": "7172737475767778797a7b7c7d7e7f80"
+              },
+              "deleted": true,
+              "keyEpoch": 4294967295
+            },
+            {
+              "recordFormatVersion": 0,
+              "recordType": 0,
+              "recordId": "00000000000000000000000000000000",
+              "hlc": {
+                "physicalMs": 0,
+                "counter": 0,
+                "deviceId": "00000000000000000000000000000000"
+              },
+              "deleted": false,
+              "keyEpoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "case": "summary-end",
+        "bytes": "a261746b73756d6d6172792d656e64617601",
+        "message": {
+          "v": 1,
+          "t": "summary-end"
+        }
+      },
+      {
+        "case": "records-begin",
+        "bytes": "a361746d7265636f7264732d626567696e61760165636f756e7402",
+        "message": {
+          "v": 1,
+          "t": "records-begin",
+          "count": 2
+        }
+      },
+      {
+        "case": "record",
+        "bytes": "a3617258284445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6174667265636f7264617601",
+        "message": {
+          "v": 1,
+          "t": "record",
+          "r": "4445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b"
+        }
+      },
+      {
+        "case": "records-end",
+        "bytes": "a261746b7265636f7264732d656e64617601",
+        "message": {
+          "v": 1,
+          "t": "records-end"
+        }
+      },
+      {
+        "case": "committed",
+        "bytes": "a2617469636f6d6d6974746564617601",
+        "message": {
+          "v": 1,
+          "t": "committed"
+        }
+      },
+      {
+        "case": "retired",
+        "bytes": "a36172582845464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c61746772657469726564617601",
+        "message": {
+          "v": 1,
+          "t": "retired",
+          "r": "45464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c"
+        }
+      },
+      {
+        "case": "abort, ended",
+        "bytes": "a361746561626f727461760166726561736f6e65656e646564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "ended"
+        }
+      },
+      {
+        "case": "abort, locked",
+        "bytes": "a361746561626f727461760166726561736f6e666c6f636b6564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "locked"
+        }
+      },
+      {
+        "case": "abort, expired",
+        "bytes": "a361746561626f727461760166726561736f6e6765787069726564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "expired"
+        }
+      },
+      {
+        "case": "abort, retired-peer",
+        "bytes": "a361746561626f727461760166726561736f6e6c726574697265642d70656572",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "retired-peer"
+        }
+      },
+      {
+        "case": "abort, verification-failed",
+        "bytes": "a361746561626f727461760166726561736f6e73766572696669636174696f6e2d6661696c6564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "verification-failed"
+        }
+      },
+      {
+        "case": "abort, version",
+        "bytes": "a361746561626f727461760166726561736f6e6776657273696f6e",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "version"
+        }
+      },
+      {
+        "case": "abort, protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e6e70726f746f636f6c2d6572726f72",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "protocol-error"
+        }
+      },
+      {
+        "case": "abort with a pairing reason, read as protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e6963616e63656c6c6564",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "protocol-error"
+        }
+      },
+      {
+        "case": "abort with an unknown reason, read as protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e6d6f75742d6f662d636f66666565",
+        "message": {
+          "v": 1,
+          "t": "abort",
+          "reason": "protocol-error"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "case": "v 2",
+        "reason": "version",
+        "bytes": "a2617469636f6d6d6974746564617602"
+      },
+      {
+        "case": "v 2 with an unknown type",
+        "reason": "version",
+        "bytes": "a261746568656c6c6f617602"
+      },
+      {
+        "case": "unknown t",
+        "reason": "protocol-error",
+        "bytes": "a261746568656c6c6f617601"
+      },
+      {
+        "case": "a pairing type, nonce",
+        "reason": "protocol-error",
+        "bytes": "a3616e5820606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f6174656e6f6e6365617601"
+      },
+      {
+        "case": "a pairing type, master-key",
+        "reason": "protocol-error",
+        "bytes": "a461746a6d61737465722d6b6579617601626d6b58201112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30637669645022232425262728292a2b2c2d2e2f3031"
+      },
+      {
+        "case": "summary-begin without count",
+        "reason": "protocol-error",
+        "bytes": "a261746d73756d6d6172792d626567696e617601"
+      },
+      {
+        "case": "summary-begin with a negative count",
+        "reason": "protocol-error",
+        "bytes": "a361746d73756d6d6172792d626567696e61760165636f756e7420"
+      },
+      {
+        "case": "summary-begin with a count over 2^53 - 1",
+        "reason": "protocol-error",
+        "bytes": "a361746d73756d6d6172792d626567696e61760165636f756e741b0020000000000000"
+      },
+      {
+        "case": "summary without e",
+        "reason": "protocol-error",
+        "bytes": "a261746773756d6d617279617601"
+      },
+      {
+        "case": "summary with no entry",
+        "reason": "protocol-error",
+        "bytes": "a361658061746773756d6d617279617601"
+      },
+      {
+        "case": "summary with e as a map",
+        "reason": "protocol-error",
+        "bytes": "a36165a161610161746773756d6d617279617601"
+      },
+      {
+        "case": "an entry that is not an array",
+        "reason": "protocol-error",
+        "bytes": "a36165810161746773756d6d617279617601"
+      },
+      {
+        "case": "an entry of 5 elements",
+        "reason": "protocol-error",
+        "bytes": "a361658185010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff461746773756d6d617279617601"
+      },
+      {
+        "case": "an entry of 7 elements",
+        "reason": "protocol-error",
+        "bytes": "a361658187010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff4010061746773756d6d617279617601"
+      },
+      {
+        "case": "recordFormatVersion 65536",
+        "reason": "protocol-error",
+        "bytes": "a3616581861a000100000150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "recordFormatVersion negative",
+        "reason": "protocol-error",
+        "bytes": "a361658186200150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "recordType 65536",
+        "reason": "protocol-error",
+        "bytes": "a361658186011a0001000050505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "recordType as text",
+        "reason": "protocol-error",
+        "bytes": "a36165818601613150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "a recordId of 15 bytes",
+        "reason": "protocol-error",
+        "bytes": "a36165818601014f505152535455565758595a5b5c5d5e831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "a recordId of 17 bytes",
+        "reason": "protocol-error",
+        "bytes": "a361658186010151505152535455565758595a5b5c5d5e5f60831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "an hlc of 2 elements",
+        "reason": "protocol-error",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f821b0000018bcfe5680000f40161746773756d6d617279617601"
+      },
+      {
+        "case": "physicalMs over 2^53 - 1",
+        "reason": "protocol-error",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f831b00200000000000000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "counter over 2^32 - 1",
+        "reason": "protocol-error",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568001b000000010000000050707172737475767778797a7b7c7d7e7ff40161746773756d6d617279617601"
+      },
+      {
+        "case": "an hlc deviceId of 15 bytes",
+        "reason": "protocol-error",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f831b0000018bcfe56800004f707172737475767778797a7b7c7d7ef40161746773756d6d617279617601"
+      },
+      {
+        "case": "deleted as 0",
+        "reason": "protocol-error",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7f000161746773756d6d617279617601"
+      },
+      {
+        "case": "keyEpoch over 2^32 - 1",
+        "reason": "protocol-error",
+        "bytes": "a361658186010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff41b000000010000000061746773756d6d617279617601"
+      },
+      {
+        "case": "one bad entry after a good one",
+        "reason": "protocol-error",
+        "bytes": "a361658286010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff40186010150505152535455565758595a5b5c5d5e5f831b0000018bcfe568000050707172737475767778797a7b7c7d7e7ff41b000000010000000061746773756d6d617279617601"
+      },
+      {
+        "case": "summary-end with an extra key",
+        "reason": "protocol-error",
+        "bytes": "a361746b73756d6d6172792d656e6461760165636f756e7400"
+      },
+      {
+        "case": "retired without r",
+        "reason": "protocol-error",
+        "bytes": "a261746772657469726564617601"
+      },
+      {
+        "case": "retired with r as text",
+        "reason": "protocol-error",
+        "bytes": "a361727850343534353435343534353435343534353435343534353435343534353435343534353435343534353435343534353435343534353435343534353435343534353435343534353435343534353435343561746772657469726564617601"
+      },
+      {
+        "case": "record with r as text",
+        "reason": "protocol-error",
+        "bytes": "a36172785034343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434346174667265636f7264617601"
+      },
+      {
+        "case": "committed with an extra key",
+        "reason": "protocol-error",
+        "bytes": "a3617469636f6d6d6974746564617601617800"
+      },
+      {
+        "case": "abort with a reason as an integer",
+        "reason": "protocol-error",
+        "bytes": "a361746561626f727461760166726561736f6e01"
+      },
+      {
+        "case": "abort without a reason",
+        "reason": "protocol-error",
+        "bytes": "a261746561626f7274617601"
+      },
+      {
+        "case": "keys not in deterministic order",
+        "reason": "protocol-error",
+        "bytes": "a2617601617469636f6d6d6974746564"
+      }
+    ],
+    "abortReasons": [
+      "ended",
+      "locked",
+      "expired",
+      "retired-peer",
+      "verification-failed",
+      "version",
+      "protocol-error"
+    ],
+    "maxSummaryEntries": 16384,
+    "largestEntry": "8619ffff19ffff505152535455565758595a5b5c5d5e5f60831b001fffffffffffff1affffffff507172737475767778797a7b7c7d7e7f80f51affffffff",
+    "smallestEntry": "86000050000000000000000000000000000000008300005000000000000000000000000000000000f400",
+    "maxEntryLength": 62,
+    "largestSummaryLength": 1015827
   }
 }

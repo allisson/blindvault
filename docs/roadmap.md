@@ -321,7 +321,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31)
 - [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)
 - [ ] Reject records in an unknown `recordFormatVersion` in sync, record it in Local Config, warn at export until cleared; abort a pairing before commit when its first full sync holds one (D68)
-- [ ] Messages bound to the session (CRYPTO-INV-009)
+- [x] Messages bound to the session (CRYPTO-INV-009, §11, D218)
 - [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, 24-hour future-clock bound (D19, D76); no new HLC issued while the device clock is behind its HLC state, the greatest HLC issued or accepted (D73, D109)
 - [ ] Summary exchange and transfer of divergent records only
 - [ ] Per-item LWW merge, with the losing version stored in history

@@ -330,6 +330,12 @@ const en = {
       error: 'The connection could not be set up, so the sync stopped.',
       unverified:
         'This device could not verify {name}, so the sync stopped. Make a new code on both devices.',
+      ended: '{name} ended the sync.',
+      locked: '{name} locked its vault, so the sync stopped.',
+      version:
+        '{name} runs another version of BlindVault, so the sync stopped: update both devices.',
+      'protocol-error':
+        '{name} sent something this device does not expect, so the sync stopped. Update both devices and try again.',
     },
   },
   ready: {
@@ -1251,6 +1257,12 @@ const ptBR: Messages = {
       error: 'Não foi possível montar a conexão, então a sincronização parou.',
       unverified:
         'Este dispositivo não conseguiu verificar {name}, então a sincronização parou. Gere um novo código nos dois dispositivos.',
+      ended: '{name} encerrou a sincronização.',
+      locked: '{name} bloqueou o cofre, então a sincronização parou.',
+      version:
+        '{name} usa outra versão do BlindVault, então a sincronização parou: atualize os dois dispositivos.',
+      'protocol-error':
+        '{name} enviou algo que este dispositivo não espera, então a sincronização parou. Atualize os dois dispositivos e tente de novo.',
     },
   },
   ready: {

@@ -13,6 +13,11 @@ import {
 import {
   HandshakeError,
   type Initiator,
+  MAX_SUMMARY_ENTRIES,
+  type SummaryEntry,
+  SyncError,
+  type SyncAbortReason,
+  SyncSession,
   type LinkOffer,
   PairingError,
   PairingSession,
@@ -53,6 +58,7 @@ const vaultId = new Uint8Array(16).fill(0x42);
 let transport: Promise<Transport> | undefined;
 let channel: Transport | undefined;
 let session: PairingSession | undefined;
+let syncSession: SyncSession | undefined;
 let stage: SasStage | undefined;
 // The initiator's nonce and the commitment its payload carries (`pairing-protocol.md` §6.1).
 let drawn: { nonce: Uint8Array; commitment: Uint8Array } | undefined;
@@ -70,8 +76,21 @@ function outcome(error: unknown): string {
 }
 
 function ended(error: unknown): string {
-  if (error instanceof PairingError) return `${error.reason}:${error.by}`;
+  if (error instanceof PairingError || error instanceof SyncError)
+    return `${error.reason}:${error.by}`;
   throw error;
+}
+
+/** An entry of `sync-protocol.md` §7 at every maximum, 62 bytes encoded. */
+function largestEntry(i: number): SummaryEntry {
+  return {
+    recordFormatVersion: 0xffff,
+    recordType: 0xffff,
+    recordId: Uint8Array.from({ length: 16 }, (_, j) => (i + j) & 0xff),
+    hlc: { physicalMs: Number.MAX_SAFE_INTEGER, counter: 0xffffffff, deviceId: new Uint8Array(16) },
+    deleted: true,
+    keyEpoch: 0xffffffff,
+  };
 }
 
 /** Resolves with "open" once the transport opens, or with how it failed, or "pending" after `ms`. */
@@ -206,6 +225,7 @@ export const harness = {
         responder,
       });
       channel = result.channel;
+      syncSession = new SyncSession(result.channel);
       return hex(result.handshakeHash);
     } catch (error) {
       if (error instanceof HandshakeError) return `handshake:${error.reason}`;
@@ -338,6 +358,45 @@ export const harness = {
   async sessionEnded(): Promise<string> {
     if (!session) throw new Error('no session');
     return ended(await session.ended);
+  },
+
+  /**
+   * Sends a summary through the sync session (`sync-protocol.md` §7, §11, D218): `summary-begin`,
+   * one `summary` of `entries` entries at their largest, `summary-end`.
+   */
+  async syncSummary(entries: number): Promise<void> {
+    if (!syncSession) throw new Error('no sync session');
+    await syncSession.send({ t: 'summary-begin', count: entries });
+    await syncSession.send({
+      t: 'summary',
+      e: Array.from({ length: Math.min(entries, MAX_SUMMARY_ENTRIES) }, (_, i) => largestEntry(i)),
+    });
+    await syncSession.send({ t: 'summary-end' });
+  },
+
+  /** The next sync message: its type, and the entries of a summary. */
+  async syncReceive(): Promise<string> {
+    if (!syncSession) throw new Error('no sync session');
+    const message = await syncSession.receive().catch(ended);
+    if (typeof message === 'string') return message;
+    if (message.t === 'summary') {
+      const same = message.e.every(
+        (e, i) => e.keyEpoch === 0xffffffff && e.recordId[0] === (i & 0xff),
+      );
+      return `summary:${String(message.e.length)}:${String(same)}`;
+    }
+    return message.t;
+  },
+
+  async syncAbort(reason: SyncAbortReason): Promise<string> {
+    if (!syncSession) throw new Error('no sync session');
+    return ended(await syncSession.abort(reason));
+  },
+
+  /** How the sync session ended, as "reason:by". */
+  async syncEnded(): Promise<string> {
+    if (!syncSession) throw new Error('no sync session');
+    return ended(await syncSession.ended);
   },
 
   async channelSend(length: number, seed: number): Promise<void> {

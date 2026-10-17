@@ -462,6 +462,13 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Sync session messages (Phase 5, D218).** `packages/sync/src/message-codec.ts` holds the strict
+  codec that `messages.ts` (pairing) and `sync-messages.ts` (sync, §11.1) apply with their own
+  schema and abort reasons; `channel-session.ts` holds the session over the Noise channel that
+  `PairingSession` and `SyncSession` extend, each with its error. `packages/crypto` exports
+  `readHlc` and `hlcValue`, the header's HLC rule, for the summary entries. `src/app/sync.ts` in
+  `apps/web` wraps the channel in a `SyncSession` after `Noise_KK`, sends `abort` with `ended` or
+  `locked`, and shows the peer's. No new dependency.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

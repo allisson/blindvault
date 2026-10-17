@@ -247,6 +247,37 @@ test('two registered devices connect from their reconnection payloads, prove the
   expect(await a.page.evaluate(() => window.harness.closed())).toBe('remote');
 });
 
+test('after Noise_KK, the sync session carries a summary of 16,384 entries and ends with abort (D218)', async ({
+  browser,
+}) => {
+  const a = await device(browser);
+  const b = await device(browser, true);
+  const keyA = await a.page.evaluate(() => window.harness.syncIdentity());
+  const keyB = await b.page.evaluate(() => window.harness.syncIdentity());
+  await a.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyB);
+  await b.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyA);
+  const offer = await a.page.evaluate(() => window.harness.startSyncInitiator());
+  const answer = await b.page.evaluate((text) => window.harness.startSyncResponder(text), offer);
+  expect(await a.page.evaluate((text) => window.harness.acceptSync(text), answer)).toBe('open');
+  await Promise.all([
+    a.page.evaluate(() => window.harness.syncHandshake()),
+    b.page.evaluate(() => window.harness.syncHandshake()),
+  ]);
+
+  // About 1 MB in one message: many frames, each a Noise channel message (CRYPTO-INV-009).
+  await a.page.evaluate(() => window.harness.syncSummary(16_384));
+  expect(await b.page.evaluate(() => window.harness.syncReceive())).toBe('summary-begin');
+  expect(await b.page.evaluate(() => window.harness.syncReceive())).toBe('summary:16384:true');
+  expect(await b.page.evaluate(() => window.harness.syncReceive())).toBe('summary-end');
+
+  expect(await b.page.evaluate(() => window.harness.syncAbort('ended'))).toBe('ended:local');
+  expect(await a.page.evaluate(() => window.harness.syncEnded())).toBe('ended:remote');
+});
+
 test('a device that does not hold the private key of the picked identity fails Noise_KK (D217)', async ({
   browser,
 }) => {

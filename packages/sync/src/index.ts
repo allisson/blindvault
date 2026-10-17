@@ -85,6 +85,18 @@ export {
   sealReconnection,
 } from './reconnect';
 export {
+  MAX_SUMMARY_ENTRIES,
+  SYNC_ABORT_REASONS,
+  type SummaryEntry,
+  type SyncAbortReason,
+  type SyncMessage,
+  type SyncMessageType,
+  decodeSyncMessage,
+  encodeSyncMessage,
+} from './sync-messages';
+export { SyncError, SyncSession, type SyncSessionFailure } from './sync-session';
+export { SessionError } from './channel-session';
+export {
   type SessionPayload,
   type SyncHandshake,
   type SyncHandshakeOptions,

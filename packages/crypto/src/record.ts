@@ -7,7 +7,7 @@ import { CryptoError, DecryptionError, EncodingError } from './errors';
 import { deviceId, recoveryEnvelopeRecordId, vaultKeyRecordId, versionId } from './ids';
 import { type MasterSubkeys, deriveMasterSubkeys } from './kdf';
 import { KEY_LENGTH, Keyring, type SymmetricKey, generateKey, keyBytes } from './keys';
-import { type RecordHeader, recordAad } from './layout';
+import { type Hlc, type RecordHeader, recordAad } from './layout';
 import { PAD_BLOCK, pad, unpad } from './pad';
 import { type RecoveryKeys, deriveRecoveryKeys } from './recovery';
 import { ID_LENGTH, lib } from './sodium';
@@ -134,7 +134,7 @@ export function encodeEnvelope(envelope: Envelope): RecordEnvelope {
     ['t', header.recordType],
     ['id', header.recordId],
     ['e', header.keyEpoch],
-    ['hlc', [header.hlc.physicalMs, header.hlc.counter, header.hlc.deviceId]],
+    ['hlc', hlcValue(header.hlc)],
     ['del', header.deleted],
   ]);
   for (const part of ['wk', 'ct', 'mk'] as const) {
@@ -147,6 +147,28 @@ export function encodeEnvelope(envelope: Envelope): RecordEnvelope {
 }
 
 // --- verification steps 1 to 5 -------------------------------------------------------------------
+
+/** An HLC as a header carries it (§9.2): `[physicalMs, counter, deviceId]`. */
+export function hlcValue(hlc: Hlc): CborValue {
+  return [hlc.physicalMs, hlc.counter, hlc.deviceId];
+}
+
+/**
+ * The HLC of a header's `hlc` (§9.2), or `null` when out of its ranges: `physicalMs` a uint up to
+ * 2⁵³ − 1, `counter` a uint up to 2³² − 1, `deviceId` 16 bytes, copied.
+ */
+export function readHlc(value: CborValue | undefined): Hlc | null {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 3 ||
+    !isUint(value[0], Number.MAX_SAFE_INTEGER) ||
+    !isUint(value[1], U32_MAX) ||
+    !isBytes(value[2], ID_LENGTH)
+  ) {
+    return null;
+  }
+  return { physicalMs: value[0], counter: value[1], deviceId: value[2].slice() };
+}
 
 function isUint(value: CborValue | undefined, max: number): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= max;
@@ -203,16 +225,8 @@ export function decodeEnvelope(bytes: Uint8Array): Envelope {
   if (!isBytes(recordId, ID_LENGTH)) reject(3, 'id');
   const e = map.get('e');
   if (!isUint(e, U32_MAX) || e < 1) reject(3, 'keyEpoch');
-  const hlc = map.get('hlc');
-  if (
-    !Array.isArray(hlc) ||
-    hlc.length !== 3 ||
-    !isUint(hlc[0], Number.MAX_SAFE_INTEGER) ||
-    !isUint(hlc[1], U32_MAX) ||
-    !isBytes(hlc[2], ID_LENGTH)
-  ) {
-    reject(3, 'hlc');
-  }
+  const hlc = readHlc(map.get('hlc'));
+  if (!hlc) reject(3, 'hlc');
   const deleted = map.get('del');
   if (typeof deleted !== 'boolean') reject(3, 'del');
   const sealed: Partial<Record<Part, Sealed>> = {};
@@ -239,7 +253,7 @@ export function decodeEnvelope(bytes: Uint8Array): Envelope {
     recordType: t,
     recordId,
     keyEpoch: e,
-    hlc: { physicalMs: hlc[0], counter: hlc[1], deviceId: hlc[2] },
+    hlc,
     deleted,
   };
   return {
