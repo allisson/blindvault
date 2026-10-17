@@ -430,6 +430,16 @@ every project through the references in the root `tsconfig.json`.
   `src/connection.ts`, the framing and channel of the pairing, and the transfer messages of §2.1,
   adding summaries, `committed` for both sides and `retired`. The merge stays in `packages/vault`
   (D182), which a sync transfer calls as a re-admission does.
+- **Reconnection payload (Phase 5, `packages/crypto` and `packages/sync`, D214).** In
+  `packages/crypto`, `src/noise.ts` adds `sealNoiseK` and `openNoiseK`, one call each for the single
+  `Noise_K` message, wiping the transport keys it splits into, and `src/transcripts.ts` adds
+  `reconnectionPrologue`. In `packages/sync`, `src/link-fields.ts` holds the fields and encoders the
+  pairing payload and the reconnection payload share, which `src/payload.ts` now uses with its bytes
+  unchanged (the pairing vectors pass as they were); `src/reconnect.ts` seals and opens the payload
+  of `sync-protocol.md` §4 from base45 text, with `ReconnectionError.reason` `version`,
+  `not-from-peer` or `malformed`, and returns `m` for `prologue_KK`. The vectors come from
+  `tests/vectors/generate.py`, which gains a `Noise_K` of its own over `hashlib` and PyNaCl, checked
+  against the official vectors before it writes them. No new dependency.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

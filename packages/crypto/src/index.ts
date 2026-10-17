@@ -63,6 +63,8 @@ export {
   type NoiseHandshake,
   type NoiseResult,
   type NoiseTransport,
+  openNoiseK,
+  sealNoiseK,
   startNoiseXX,
 } from './noise';
 export {
@@ -77,6 +79,7 @@ export {
   pairingPrologue,
   pairingSas,
   readmissionMac,
+  reconnectionPrologue,
 } from './transcripts';
 export {
   PRF_INPUT_LENGTH,

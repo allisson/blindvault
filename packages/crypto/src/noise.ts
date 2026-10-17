@@ -55,7 +55,7 @@ export class NoiseHandshake {
   #state: HandshakeState | null;
   #result: NoiseResult | null = null;
 
-  /** @internal Use `startNoiseXX`. */
+  /** @internal Use `startNoiseXX`, `sealNoiseK` or `openNoiseK`. */
   constructor(
     noise: Noise,
     pattern: NoisePattern,
@@ -244,4 +244,63 @@ export function startNoiseXX(options: {
       secretKey: privateKeyBytes(options.identity.privateKey),
     },
   });
+}
+
+interface NoiseKOptions {
+  identity: DeviceIdentity;
+  /** The peer's public key, from the peer's Device record. */
+  peerPublicKey: Uint8Array;
+  prologue: Uint8Array;
+}
+
+/**
+ * The single message of `Noise_K_25519_ChaChaPoly_BLAKE2b` from `identity` to `peerPublicKey`,
+ * carrying `payload` (the reconnection payload, `sync-protocol.md` §4.2, D214). The ephemeral key is
+ * new for each message. The transport keys the pattern splits into have no use and are wiped at once.
+ */
+export function sealNoiseK(
+  options: NoiseKOptions & { payload: Uint8Array },
+  noise?: Noise,
+): Uint8Array {
+  const handshake = startNoiseK(options, true, noise);
+  const message = handshake.writeMessage(options.payload);
+  finishNoiseK(handshake);
+  return message;
+}
+
+/**
+ * Reads a `Noise_K` message sent by `peerPublicKey` to `identity` and returns its payload. Throws
+ * `NoiseError` for a message from another key, to another key, under another prologue or altered.
+ */
+export function openNoiseK(options: NoiseKOptions & { message: Uint8Array }): Uint8Array {
+  const handshake = startNoiseK(options, false);
+  const payload = handshake.readMessage(options.message);
+  finishNoiseK(handshake);
+  return payload;
+}
+
+function startNoiseK(options: NoiseKOptions, initiator: boolean, noise?: Noise): NoiseHandshake {
+  if (options.peerPublicKey.length !== STATIC_KEY_LENGTH) {
+    throw new EncodingError('an X25519 key is 32 bytes');
+  }
+  return startNoise(
+    {
+      pattern: 'K',
+      initiator,
+      prologue: options.prologue,
+      staticKey: {
+        publicKey: options.identity.publicKey,
+        secretKey: privateKeyBytes(options.identity.privateKey),
+      },
+      remoteStaticKey: options.peerPublicKey,
+    },
+    noise,
+  );
+}
+
+function finishNoiseK(handshake: NoiseHandshake): void {
+  // K has one message: the result is always set once it is written or read.
+  /* v8 ignore next */
+  if (!handshake.result) throw new NoiseError();
+  handshake.result.transport.wipe();
 }

@@ -13,6 +13,7 @@ import {
   pairingPrologue,
   pairingSas,
   readmissionMac,
+  reconnectionPrologue,
 } from './transcripts';
 
 beforeAll(initCrypto);
@@ -170,5 +171,30 @@ describe('re-admission key confirmation (crypto-spec.md §13, pairing-protocol.m
       checkReadmissionMac(k, 'initiator', fromHex(v.handshakeHash), new Uint8Array(31)),
     ).toThrow(EncodingError);
     keyring.wipeAll();
+  });
+});
+
+describe('prologue_K (crypto-spec.md §13, sync-protocol.md §4.2, D213)', () => {
+  it.each(t.prologueK.map((v) => [v.role, v] as const))('reproduces the %s vector', (_role, v) => {
+    expect(
+      toHex(reconnectionPrologue(fromHex(v.vaultId), v.role as 'initiator' | 'responder')),
+    ).toBe(v.prologue);
+  });
+
+  it('binds the vault and the role', () => {
+    const [v] = t.prologueK;
+    if (!v) throw new Error('no vector');
+    const vaultId = fromHex(v.vaultId);
+    const prologues = new Set([
+      toHex(reconnectionPrologue(vaultId, 'initiator')),
+      toHex(reconnectionPrologue(vaultId, 'responder')),
+    ]);
+    vaultId[15] = (vaultId[15] ?? 0) ^ 1;
+    prologues.add(toHex(reconnectionPrologue(vaultId, 'initiator')));
+    expect(prologues.size).toBe(3);
+  });
+
+  it('refuses a vault ID that is not 16 bytes', () => {
+    expect(() => reconnectionPrologue(new Uint8Array(15), 'initiator')).toThrow(EncodingError);
   });
 });

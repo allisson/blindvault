@@ -15,6 +15,7 @@ Run from the repository root: uv run tests/vectors/generate.py
 
 import base64
 import hashlib
+import hmac
 import json
 import math
 import struct
@@ -29,6 +30,7 @@ OUT = ROOT / "packages/crypto/test-vectors/crypto-v1.json"
 OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
 OUT_BACKUP = ROOT / "packages/backup/test-vectors/backup-v1.json"
 OUT_PAIRING = ROOT / "packages/sync/test-vectors/pairing-v1.json"
+OUT_SYNC = ROOT / "packages/sync/test-vectors/sync-v1.json"
 
 RECORD_FORMAT_VERSION = 1
 RT_ITEM, RT_FOLDER, RT_ITEM_VERSION, RT_VAULT_KEY, RT_RECOVERY_ENVELOPE, RT_DEVICE = 1, 2, 3, 4, 5, 6
@@ -2052,6 +2054,312 @@ def framing_vectors() -> dict:
     return {"frameDataLength": FRAME_DATA, "valid": valid, "invalid": invalid}
 
 
+# --- sync-protocol.md section 4: the reconnection payload ------------------------------------
+
+NOISE_K = b"Noise_K_25519_ChaChaPoly_BLAKE2b"
+RECON_MIN_PLAINTEXT = 1 + 16 + 32 + (1 + 4) + (1 + 22) + 1 + (1 + 4 + 2)
+RECON_MAX_PLAINTEXT = 1 + 16 + 32 + 256 + 256 + 1 + 8 * (1 + 16 + 2)
+RECON_MIN_M = 32 + RECON_MIN_PLAINTEXT + 16
+RECON_MAX_M = 32 + RECON_MAX_PLAINTEXT + 16
+assert (RECON_MIN_M, RECON_MAX_M) == (133, 762)
+
+
+def _hash(data: bytes) -> bytes:
+    return hashlib.blake2b(data).digest()
+
+
+def _hkdf2(ck: bytes, ikm: bytes) -> tuple[bytes, bytes]:
+    """HKDF of the Noise specification, section 4.3, over HMAC-BLAKE2b: (ck, k)."""
+    temp = hmac.new(ck, ikm, hashlib.blake2b).digest()
+    out1 = hmac.new(temp, b"\x01", hashlib.blake2b).digest()
+    out2 = hmac.new(temp, out1 + b"\x02", hashlib.blake2b).digest()
+    return out1, out2[:32]
+
+
+def _noise_k_start(prologue: bytes, initiator_pk: bytes, responder_pk: bytes) -> bytes:
+    """`h` after InitializeSymmetric, the prologue and the pre-messages `-> s` and `<- s`."""
+    h = NOISE_K.ljust(64, b"\x00")
+    for x in (prologue, initiator_pk, responder_pk):
+        h = _hash(h + x)
+    return h
+
+
+def _noise_k_key(h: bytes, e_pk: bytes, dh_es: bytes, dh_ss: bytes) -> tuple[bytes, bytes]:
+    """`e, es, ss`: mixes the ephemeral key into `h` and both DHs into the key."""
+    h = _hash(h + e_pk)
+    ck, _ = _hkdf2(NOISE_K.ljust(64, b"\x00"), dh_es)
+    _, k = _hkdf2(ck, dh_ss)
+    return h, k
+
+
+def noise_k_write(prologue: bytes, s_sk: bytes, rs_pk: bytes, e_sk: bytes, payload: bytes) -> bytes:
+    """The single message of Noise_K_25519_ChaChaPoly_BLAKE2b, from the initiator."""
+    s_pk, e_pk = bindings.crypto_scalarmult_base(s_sk), bindings.crypto_scalarmult_base(e_sk)
+    h = _noise_k_start(prologue, s_pk, rs_pk)
+    h, k = _noise_k_key(h, e_pk, bindings.crypto_scalarmult(e_sk, rs_pk), bindings.crypto_scalarmult(s_sk, rs_pk))
+    return e_pk + bindings.crypto_aead_chacha20poly1305_ietf_encrypt(payload, h, bytes(12), k)
+
+
+def noise_k_read(prologue: bytes, s_sk: bytes, rs_pk: bytes, message: bytes) -> bytes:
+    """Reads the message as the responder; raises on any failure."""
+    s_pk, re = bindings.crypto_scalarmult_base(s_sk), message[:32]
+    h = _noise_k_start(prologue, rs_pk, s_pk)
+    h, k = _noise_k_key(h, re, bindings.crypto_scalarmult(s_sk, re), bindings.crypto_scalarmult(s_sk, rs_pk))
+    return bindings.crypto_aead_chacha20poly1305_ietf_decrypt(message[32:], h, bytes(12), k)
+
+
+def check_noise_k_against_official_vectors() -> None:
+    """This Noise_K is a second implementation: it must reproduce the official vectors first."""
+    official = json.loads((ROOT / "packages/crypto/test-vectors/noise-v1.json").read_text())["vectors"]
+    ks = [v for v in official if v["protocol_name"] == NOISE_K.decode()]
+    assert len(ks) == 2
+    for v in ks:
+        x = bytes.fromhex
+        m = v["messages"][0]
+        out = noise_k_write(x(v["init_prologue"]), x(v["init_static"]), x(v["init_remote_static"]),
+                            x(v["init_ephemeral"]), x(m["payload"]))
+        assert out.hex() == m["ciphertext"], v["source"]
+        assert noise_k_read(x(v["resp_prologue"]), x(v["resp_static"]), x(v["resp_remote_static"]), out) \
+            == x(m["payload"])
+
+
+def reconnect_prologue(vault_id: bytes, role: str) -> bytes:
+    return layout(label("bv.reconnect.v1"), vault_id, label(role))
+
+
+def encode_reconnection(p: dict) -> bytes:
+    """The plaintext of section 4.1, unchecked, so the negative vectors break one rule at a time."""
+    flags = (0 if p["role"] == "initiator" else 1) | (p["setupBits"] << 1) | p.get("reservedBits", 0)
+    out = bytearray([flags]) + p["sessionId"] + p["fingerprint"]
+    for s in (p["ufrag"], p["pwd"]):
+        out += u8(len(s)) + s.encode("ascii")
+    out += u8(len(p["candidates"]))
+    for c in p["candidates"]:
+        out += u8(c["kindByte"]) + c["address"] + u16(c["port"])
+    return bytes(out) + p.get("trailing", b"")
+
+
+def open_reconnection(text: str, s_sk: bytes, peer_pk: bytes, vault_id: bytes, expect_role: str,
+                      expect_session: bytes | None) -> dict:
+    """Reference reader of section 4.3: base45, version, length of m, Noise_K, plaintext, session."""
+    try:
+        b = b45decode(text.replace("\r", "").replace("\n", "").replace("\t", ""))
+    except ValueError:
+        raise PayloadReject("malformed", "not base45")
+    if len(b) == 0:
+        raise PayloadReject("malformed", "empty")
+    if b[0] != 1:
+        raise PayloadReject("version", f"version {b[0]}")
+    m = b[1:]
+    if not RECON_MIN_M <= len(m) <= RECON_MAX_M:
+        raise PayloadReject("malformed", "length of m")
+    try:
+        pt = noise_k_read(reconnect_prologue(vault_id, expect_role), s_sk, peer_pk, m)
+    except Exception:
+        raise PayloadReject("not-from-peer", "Noise_K")
+    i = 0
+
+    def take(n: int) -> bytes:
+        nonlocal i
+        if i + n > len(pt):
+            raise PayloadReject("malformed", "truncated")
+        out = pt[i:i + n]
+        i += n
+        return out
+
+    def byte() -> int:
+        return take(1)[0]
+
+    def ice(lo: int) -> str:
+        s = take(byte())
+        if len(s) < lo or any(chr(x) not in ICE_CHARS for x in s):
+            raise PayloadReject("malformed", "ICE credential")
+        return s.decode("ascii")
+
+    flags = byte()
+    if flags & 0xF8:
+        raise PayloadReject("malformed", "reserved flag bit")
+    role = "responder" if flags & 1 else "initiator"
+    setup_bits = (flags >> 1) & 3
+    if setup_bits == 3:
+        raise PayloadReject("malformed", "setup 3")
+    setup = SETUPS[setup_bits]
+    if (role == "initiator") != (setup == "actpass"):
+        raise PayloadReject("malformed", "setup does not match the role")
+    if role != expect_role:
+        raise PayloadReject("malformed", "role in flags")
+    session_id, fingerprint = take(16), take(32)
+    ufrag, pwd = ice(4), ice(22)
+    n = byte()
+    if not 1 <= n <= 8:
+        raise PayloadReject("malformed", "candidate count")
+    candidates = []
+    kinds = list(KINDS)
+    for _ in range(n):
+        k = byte()
+        if k >= len(kinds):
+            raise PayloadReject("malformed", "candidate kind")
+        address = take(KINDS[kinds[k]])
+        port = int.from_bytes(take(2), "big")
+        if port == 0:
+            raise PayloadReject("malformed", "port 0")
+        candidates.append({"kind": kinds[k], "address": h(address), "port": port})
+    if i != len(pt):
+        raise PayloadReject("malformed", "trailing bytes")
+    if expect_session is not None and session_id != expect_session:
+        raise PayloadReject("malformed", "sessionId")
+    return {"role": role, "setup": setup, "sessionId": h(session_id), "fingerprint": h(fingerprint),
+            "ufrag": ufrag, "pwd": pwd, "candidates": candidates}
+
+
+RECON_KEYS = {"initiator": seq(0x21, 32), "responder": seq(0x41, 32), "other": seq(0x61, 32)}
+RECON_EPHEMERAL = seq(0x81, 32)
+RECON_OTHER_VAULT = seq(0xA1, 16)
+
+
+def sync_vectors() -> dict:
+    check_noise_k_against_official_vectors()
+    session = seq(0x40, 16)
+    pk = {name: bindings.crypto_scalarmult_base(sk) for name, sk in RECON_KEYS.items()}
+
+    def cand(kind: str, address: bytes, port: int) -> dict:
+        return {"kind": kind, "kindByte": list(KINDS).index(kind), "address": address, "port": port}
+
+    offer = {
+        "role": "initiator", "setupBits": 0, "sessionId": session, "fingerprint": seq(0x80, 32),
+        "ufrag": "Lh7R", "pwd": "aB3+/cD4eF5gH6iJ7kL8mN9o",
+        "candidates": [
+            cand("srflx-ipv4", bytes([203, 0, 113, 7]), 61000),
+            cand("host-ipv4", bytes([192, 168, 1, 20]), 54321),
+            cand("host-mdns", bytes.fromhex("0f1e2d3c4b5a69788796a5b4c3d2e1f0"), 50000),
+        ],
+    }
+    shortest = {**offer, "ufrag": "abcd", "pwd": "a" * 22, "candidates": [cand("host-ipv4", bytes([10, 0, 0, 2]), 1)]}
+    answer = {
+        "role": "responder", "setupBits": 2, "sessionId": session, "fingerprint": seq(0xA0, 32),
+        "ufrag": "1a2b3c4d", "pwd": "0123456789abcdef0123456789abcdef",
+        "candidates": [cand("host-ipv6", bytes.fromhex("20010db8000000000000000000000001"), 50123)],
+    }
+    longest = {**answer, "setupBits": 1, "ufrag": "A" * 255, "pwd": "/" * 255,
+               "candidates": [cand("srflx-ipv6", bytes.fromhex("20010db8000100000000000000020003"), 1000 + i)
+                              for i in range(8)]}
+    other_of = {"initiator": "responder", "responder": "initiator"}
+
+    def seal(p: dict, sender: str, receiver: str, *, role: str | None = None, vault: bytes = VAULT_ID,
+             version: int = 1) -> tuple[bytes, bytes, bytes]:
+        pt = encode_reconnection(p)
+        prologue = reconnect_prologue(vault, role or p["role"])
+        m = noise_k_write(prologue, RECON_KEYS[sender], pk[receiver], RECON_EPHEMERAL, pt)
+        return pt, prologue, bytes([version]) + m
+
+    def expect_of(role: str) -> dict:
+        return {"role": role} if role == "initiator" else {"role": role, "sessionId": h(session)}
+
+    def opened(text: str, receiver: str, peer: str, expect: dict) -> dict:
+        es = bytes.fromhex(expect["sessionId"]) if "sessionId" in expect else None
+        return open_reconnection(text, RECON_KEYS[receiver], pk[peer], VAULT_ID, expect["role"], es)
+
+    valid = []
+    for case, p in (
+        ("initiator: srflx, host and mDNS candidates", offer),
+        ("initiator: shortest credentials and one candidate, the shortest m", shortest),
+        ("responder, setup passive, repeating the session", answer),
+        ("responder, setup active: longest credentials and 8 candidates, the longest m", longest),
+    ):
+        sender, receiver = p["role"], other_of[p["role"]]
+        pt, prologue, b = seal(p, sender, receiver)
+        text = b45encode(b)
+        expect = expect_of(sender)
+        valid.append({
+            "case": case, "sender": sender, "receiver": receiver, "expect": expect,
+            "payload": opened(text, receiver, sender, expect), "plaintext": h(pt), "prologue": h(prologue),
+            "ephemeral": h(RECON_EPHEMERAL), "message": h(b[1:]), "text": text,
+        })
+    assert [len(bytes.fromhex(v["message"])) for v in valid][1::2] == [RECON_MIN_M, RECON_MAX_M]
+
+    neg = []
+
+    def add(reason: str, case: str, text: str, receiver: str, peer: str, expect_role: str) -> None:
+        expect = expect_of(expect_role)
+        try:
+            opened(text, receiver, peer, expect)
+        except PayloadReject as r:
+            assert r.reason == reason, f"{case}: {r}"
+            neg.append({"case": case, "reason": reason, "receiver": receiver, "peer": peer,
+                        "expect": expect, "text": text})
+            return
+        raise AssertionError(f"accepted: {case}")
+
+    def sealed(p: dict, sender: str | None = None, receiver: str | None = None, **kw) -> str:
+        return b45encode(seal(p, sender or p["role"], receiver or other_of[p["role"]], **kw)[2])
+
+    def raw(b: bytes) -> str:
+        return b45encode(b)
+
+    ok = seal(offer, "initiator", "responder")[2]
+    short = seal(shortest, "initiator", "responder")[2]
+    long = seal(longest, "responder", "initiator")[2]
+    tampered = bytearray(ok)
+    tampered[-1] ^= 1
+    first = offer["candidates"][1]
+
+    add("malformed", "not base45", "bb8", "responder", "initiator", "initiator")
+    add("malformed", "empty", "", "responder", "initiator", "initiator")
+    add("version", "version 0", raw(bytes([0]) + ok[1:]), "responder", "initiator", "initiator")
+    add("version", "version 2", raw(bytes([2]) + ok[1:]), "responder", "initiator", "initiator")
+    add("version", "version 2 and nothing else", raw(b"\x02"), "responder", "initiator", "initiator")
+    add("malformed", "version 1 and no m", raw(b"\x01"), "responder", "initiator", "initiator")
+    add("malformed", "m one byte shorter than the shortest", raw(short[:-1]), "responder", "initiator", "initiator")
+    add("malformed", "m one byte longer than the longest", raw(long + b"\x00"), "initiator", "responder", "responder")
+    add("not-from-peer", "a byte of m changed", raw(bytes(tampered)), "responder", "initiator", "initiator")
+    add("not-from-peer", "from another device of the vault", sealed(offer, sender="other"),
+        "responder", "initiator", "initiator")
+    add("not-from-peer", "from the picked peer, to another device", sealed(offer, receiver="other"),
+        "responder", "initiator", "initiator")
+    add("not-from-peer", "of another vault", sealed(offer, vault=RECON_OTHER_VAULT),
+        "responder", "initiator", "initiator")
+    add("not-from-peer", "the responder's payload sealed as the initiator's", sealed(answer, role="initiator"),
+        "initiator", "responder", "responder")
+    add("not-from-peer", "an initiator payload where the responder's is expected", sealed(offer, receiver="initiator",
+        sender="responder"), "initiator", "responder", "responder")
+    add("not-from-peer", "the picked peer's key is this device's own", sealed(offer),
+        "responder", "responder", "initiator")
+    add("malformed", "reserved flag bit 3, the pairing's holdsVault", sealed({**offer, "reservedBits": 0x08}),
+        "responder", "initiator", "initiator")
+    add("malformed", "reserved flag bit 7", sealed({**offer, "reservedBits": 0x80}), "responder", "initiator", "initiator")
+    add("malformed", "setup 3", sealed({**answer, "setupBits": 3}), "initiator", "responder", "responder")
+    add("malformed", "initiator with setup active", sealed({**offer, "setupBits": 1}), "responder", "initiator", "initiator")
+    add("malformed", "responder with setup actpass", sealed({**answer, "setupBits": 0}), "initiator", "responder", "responder")
+    add("malformed", "role responder in flags, sealed as the initiator's",
+        sealed({**answer}, sender="initiator", receiver="responder", role="initiator"), "responder", "initiator", "initiator")
+    add("malformed", "ufrag of 3 characters", sealed({**offer, "ufrag": "Lh7"}), "responder", "initiator", "initiator")
+    add("malformed", "pwd with a space", sealed({**offer, "pwd": "aB3+/cD4eF5gH6iJ7kL8m o"}),
+        "responder", "initiator", "initiator")
+    add("malformed", "no candidate", sealed({**offer, "candidates": [], "trailing": seq(0, 7)}),
+        "responder", "initiator", "initiator")
+    add("malformed", "9 candidates", sealed({**offer, "candidates": [first] * 9}), "responder", "initiator", "initiator")
+    add("malformed", "candidate kind 5", sealed({**offer, "candidates": [{**first, "kindByte": 5}]}),
+        "responder", "initiator", "initiator")
+    add("malformed", "port 0", sealed({**offer, "candidates": [{**first, "port": 0}]}), "responder", "initiator", "initiator")
+    add("malformed", "a byte after the last field", sealed({**offer, "trailing": b"\x00"}),
+        "responder", "initiator", "initiator")
+    add("malformed", "the responder's answer for another session", sealed({**answer, "sessionId": seq(0x41, 16)}),
+        "initiator", "responder", "responder")
+
+    return {
+        "description": "sync-protocol.md section 4: the reconnection payload v1, one Noise_K message "
+                       "(Noise_K_25519_ChaChaPoly_BLAKE2b) in base45",
+        "reconnection": {
+            "vaultId": h(VAULT_ID),
+            "minMessageLength": RECON_MIN_M,
+            "maxMessageLength": RECON_MAX_M,
+            "devices": {name: {"staticSecret": h(sk), "publicKey": h(pk[name])} for name, sk in RECON_KEYS.items()},
+            "valid": valid,
+            "invalid": neg,
+        },
+    }
+
+
 def main() -> None:
     v: dict = {"recordFormatVersion": RECORD_FORMAT_VERSION, "generator": "tests/vectors/generate.py"}
 
@@ -2300,6 +2608,18 @@ def main() -> None:
         for nr in (nonce_r, nonce_r_low)
     ]
     assert v["transcripts"]["sas"][1]["sas"].startswith("000")
+    # sync-protocol.md section 4.2: prologue_K, and the Noise_K message of the first payload vector.
+    sync = sync_vectors()
+    first = sync["reconnection"]["valid"][0]
+    v["transcripts"]["prologueK"] = [
+        {"vaultId": h(VAULT_ID), "role": role, "prologue": h(reconnect_prologue(VAULT_ID, role))}
+        for role in ("initiator", "responder")
+    ]
+    v["transcripts"]["noiseK"] = {
+        "senderStatic": h(RECON_KEYS[first["sender"]]), "receiverStatic": h(RECON_KEYS[first["receiver"]]),
+        "ephemeral": first["ephemeral"], "prologue": first["prologue"], "payload": first["plaintext"],
+        "message": first["message"],
+    }
 
     # negative: each vector violates exactly one rule; every other part is valid, sealed under the
     # AAD of its own (mutated) header, so only the rule at expectedStep (crypto-spec §9.5) rejects it.
@@ -2433,7 +2753,7 @@ def main() -> None:
         [cbor(vk_env), cbor(rec_env), cbor(item_env)], keyslot_pk, metadata["phraseCreatedAt"]
     )
     for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup),
-                       (OUT_PAIRING, pairing_vectors())):
+                       (OUT_PAIRING, pairing_vectors()), (OUT_SYNC, sync)):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {path}")
