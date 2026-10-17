@@ -424,6 +424,12 @@ every project through the references in the root `tsconfig.json`.
   (`BV_LARGE_BACKUP`, `BV_EXPORT_PASSWORD`), opens the file again in Node with
   `restoreWithPassword` and writes it, for a restore on the device that holds the vault before it
   pairs with a phone. No new dependency.
+- **Sync protocol (Phase 5, `docs/sync-protocol.md` §3 to §14, D213).** Specified before any code.
+  The reconnection payload reuses the pairing payload's connection fields and encoders inside one
+  `Noise_K` message (`prologue_K` in `crypto-spec.md` §13); the session reuses the connection of
+  `src/connection.ts`, the framing and channel of the pairing, and the transfer messages of §2.1,
+  adding summaries, `committed` for both sides and `retired`. The merge stays in `packages/vault`
+  (D182), which a sync transfer calls as a re-admission does.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`
