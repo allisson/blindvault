@@ -329,7 +329,14 @@ verification and within the future-clock bound; otherwise the device aborts with
 Once merged, the device shows the sync ended as retired, however the peer ends it. Two devices that
 each hold the other retired each send `retired` and `abort`; neither merges, since neither reads a
 message after its own `abort`. Settings offers the retirement notice from its list of retired
-devices (section 3). Section 6's second case, a retirement during the session, comes with D69.
+devices (section 3).
+
+**Implementation (D220).** The controller asks the open sync for the same check after each of its
+commits that may retire the peer, a local retirement or a backup merge; a record merged from the
+peer comes with the transfer, which asks for it after its merge. Before `Noise_KK` the check does
+nothing, since the one above follows it. Checks run one at a time: a retirement during the check
+after `Noise_KK` sends one `retired` and one `abort`, and the sync never shows as connected. This
+device's own record retired in a transfer ends the session after its commit, with the transfer.
 
 ## 7. Summaries
 
@@ -474,7 +481,8 @@ with its task. `SyncSession` carries them over the Noise channel of `Noise_KK`, 
 pairing uses: a refused message aborts with its reason, a received `abort` ends the session, and a
 closed link ends it as closed. Until the summaries exist, the app reads no message after the
 handshake but `retired` (section 6, D219): any other message but `abort` is refused with
-`protocol-error`. Ending the sync sends `abort`
+`protocol-error`; the check of section 6 runs again after a local commit that may retire the peer
+(D220). Ending the sync sends `abort`
 with `ended`, a lock sends `locked`, and the connection closes once the `abort` had time to leave.
 
 ## 12. Timeouts, lock and replay

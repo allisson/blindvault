@@ -944,7 +944,7 @@ export class VaultController {
    * Merges the backup last opened into the unlocked vault (§10, sync-protocol.md §1, D13, D57,
    * D182): one commit, or nothing written when it is refused. The backup's Master Key is wiped
    * either way. After a backup opened with an export password, recommends Check Recovery Phrase
-   * (D43).
+   * (D43). A sync open with a device the backup retires is told so and ends (D69, D220).
    */
   async mergeBackup(): Promise<MergeOutcome> {
     const status = this.#status;
@@ -955,6 +955,8 @@ export class VaultController {
     try {
       const result = await status.session.mergeBackup(backup);
       if (backup.openedWith === 'password') this.#afterRestore = 'check-phrase';
+      // The backup may hold the sync's peer retired (D69, D220).
+      this.#sync?.flow.recheck();
       this.#set({ ...status });
       return { kind: 'ok', result };
     } catch (error) {
@@ -2293,7 +2295,8 @@ export class VaultController {
   /**
    * Retires another device's Device record (§8.4, D31, D41, D186), after the confirmation the UI
    * asks for; no password, since it exposes no secret. `refused`: this device's own record, one
-   * already retired, or one not held as a Device.
+   * already retired, or one not held as a Device. The sync with that device, if open, is told so and
+   * ends (sync-protocol.md §6, D69, D220).
    */
   async retireDevice(deviceId: Uint8Array): Promise<'ok' | 'refused' | 'locked'> {
     const status = this.#status;
@@ -2307,6 +2310,7 @@ export class VaultController {
       }
       throw error;
     }
+    this.#sync?.flow.recheck();
     this.#set({ ...status });
     return 'ok';
   }

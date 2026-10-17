@@ -319,11 +319,11 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212)
 - [x] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008, §5, D217)
 - [x] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31, CRYPTO-INV-015, §6, D219)
-- [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)
+- [x] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69, CRYPTO-INV-015, §6, D220)
 - [ ] Reject records in an unknown `recordFormatVersion` in sync, record it in Local Config, warn at export until cleared; abort a pairing before commit when its first full sync holds one (D68)
 - [x] Messages bound to the session (CRYPTO-INV-009, §11, D218)
 - [ ] HLC `(physicalMs, counter, deviceId)`: monotonic, no ties, canonical serialization, 24-hour future-clock bound (D19, D76); no new HLC issued while the device clock is behind its HLC state, the greatest HLC issued or accepted (D73, D109)
-- [ ] Summary exchange and transfer of divergent records only
+- [ ] Summary exchange and transfer of divergent records only; its own Device record received retired in a transfer ends the session after its commit, and a merged transfer checks the peer's record again (D69, D220)
 - [ ] Per-item LWW merge, with the losing version stored in history
 - [ ] An Item Version is dropped for a purged item only once the whole transfer is merged, so a restore from the trash arriving with its versions keeps them (D137)
 - [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
