@@ -1151,6 +1151,38 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(a.sync).toBeUndefined();
   });
 
+  it('tells a retired peer it is retired: B merges its record and shows the D41 notice (§6, D45, D219)', async () => {
+    const { a, b, idA, idB } = await paired();
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true }, 'retirement')).toBe('not-retired');
+    await session(a).retireDevice(idB);
+    const before = session(b).lastSyncByPeer;
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true }, 'retirement')).toBe('ok');
+    expect(b.startSync(idA, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(await b.syncPayload(codeOf(await syncStage(a, 'offer')))).toBe('ok');
+    expect(await a.syncPayload(codeOf(await syncStage(b, 'answer')))).toBe('ok');
+    expect(await syncStage(a, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(session(b).retired).toBe(true);
+    // No completed sync: the session never reached its commit (D34).
+    expect(session(b).lastSyncByPeer).toEqual(before);
+    // B, now retired, offers no sync (D41, D45).
+    b.cancelSync();
+    expect(b.startSync(idA, 'initiator', { sameNetwork: true })).toBe('retired');
+  });
+
+  it('ends a sync right after Noise_KK when the peer was retired meanwhile (§6, D31)', async () => {
+    const { a, b, idA, idB } = await paired();
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true })).toBe('ok');
+    expect(b.startSync(idA, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(await b.syncPayload(codeOf(await syncStage(a, 'offer')))).toBe('ok');
+    const answer = codeOf(await syncStage(b, 'answer'));
+    await session(a).retireDevice(idB);
+    expect(await a.syncPayload(answer)).toBe('ok');
+    expect(await syncStage(a, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(session(b).retired).toBe(true);
+  });
+
   it('starts only unlocked, with WebRTC', async () => {
     const none = controller('n', new IDBFactory());
     await created(none);

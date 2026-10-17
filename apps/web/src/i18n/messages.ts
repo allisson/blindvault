@@ -281,6 +281,9 @@ const en = {
   sync: {
     start: 'Sync',
     title: 'Sync with {name}',
+    notifyTitle: 'Tell {name} it is retired',
+    notifyHow:
+      'On {name}, open Settings → Devices and choose “Sync” next to this device. This device sends {name} only its retired record, and the sync ends: {name} then shows that it was retired and stops syncing.',
     how: 'On {name}, open Settings → Devices and choose “Sync” next to this device too. One device shows its code first; the other scans or pastes it.',
     first: 'Show this device’s code first',
     read: 'Read the code of {name}',
@@ -293,6 +296,7 @@ const en = {
       'unknown-peer':
         'This device does not know {name}: sync first with the device that paired it.',
       'retired-peer': '{name} was retired: it cannot sync.',
+      'not-retired': '{name} is not retired.',
     },
     offerIntro:
       'Scan this code with {name} in its sync screen, or copy the text to it. Then scan or paste its answer below.',
@@ -336,6 +340,12 @@ const en = {
         '{name} runs another version of BlindVault, so the sync stopped: update both devices.',
       'protocol-error':
         '{name} sent something this device does not expect, so the sync stopped. Update both devices and try again.',
+      'retired-peer':
+        '{name} is retired: this device told it so and sent it nothing else, and the sync ended.',
+      retired:
+        '{name} holds this device as retired, so the sync ended. This device can no longer sync.',
+      'verification-failed':
+        'The record of {name} on this device failed verification, so nothing was sent and the sync stopped.',
     },
   },
   ready: {
@@ -828,6 +838,10 @@ const en = {
     devicesRetireConfirm: 'Retire {name}',
     devicesRetireCancel: 'Cancel',
     devicesRetired: '{name} is retired.',
+    devicesRetiredList: 'Retired devices',
+    devicesRetiredNotify:
+      'A retired device learns it is retired only when told: sync with it from here, and it receives only its retired record.',
+    devicesNotify: 'Tell {name}',
     devicesRefused: 'That device cannot be retired: it is this device, or it is already retired.',
     recordTypes: {
       item: 'Item',
@@ -1206,6 +1220,9 @@ const ptBR: Messages = {
   sync: {
     start: 'Sincronizar',
     title: 'Sincronizar com {name}',
+    notifyTitle: 'Avisar {name} que foi aposentado',
+    notifyHow:
+      'Em {name}, abra Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Este dispositivo envia a {name} só o registro aposentado dele, e a sincronização termina: {name} então mostra que foi aposentado e para de sincronizar.',
     how: 'Em {name}, abra também Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Um dispositivo mostra o código dele primeiro; o outro o escaneia ou cola.',
     first: 'Mostrar primeiro o código deste dispositivo',
     read: 'Ler o código de {name}',
@@ -1219,6 +1236,7 @@ const ptBR: Messages = {
       'unknown-peer':
         'Este dispositivo não conhece {name}: sincronize antes com o dispositivo que o pareou.',
       'retired-peer': '{name} foi aposentado: ele não pode sincronizar.',
+      'not-retired': '{name} não está aposentado.',
     },
     offerIntro:
       'Escaneie este código com {name}, na tela de sincronização dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
@@ -1263,6 +1281,12 @@ const ptBR: Messages = {
         '{name} usa outra versão do BlindVault, então a sincronização parou: atualize os dois dispositivos.',
       'protocol-error':
         '{name} enviou algo que este dispositivo não espera, então a sincronização parou. Atualize os dois dispositivos e tente de novo.',
+      'retired-peer':
+        '{name} está aposentado: este dispositivo o avisou e não enviou mais nada, e a sincronização terminou.',
+      retired:
+        '{name} tem este dispositivo como aposentado, então a sincronização terminou. Este dispositivo não pode mais sincronizar.',
+      'verification-failed':
+        'O registro de {name} neste dispositivo falhou na verificação, então nada foi enviado e a sincronização parou.',
     },
   },
   ready: {
@@ -1755,6 +1779,10 @@ const ptBR: Messages = {
     devicesRetireConfirm: 'Aposentar {name}',
     devicesRetireCancel: 'Cancelar',
     devicesRetired: '{name} foi aposentado.',
+    devicesRetiredList: 'Dispositivos aposentados',
+    devicesRetiredNotify:
+      'Um dispositivo aposentado só fica sabendo quando é avisado: sincronize com ele daqui, e ele recebe só o registro aposentado dele.',
+    devicesNotify: 'Avisar {name}',
     devicesRefused:
       'Esse dispositivo não pode ser aposentado: é este dispositivo, ou já está aposentado.',
     recordTypes: {

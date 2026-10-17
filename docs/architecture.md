@@ -462,6 +462,13 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Retired peer at `Noise_KK` (Phase 5, D219).** `SyncGrant` in `packages/vault` gains
+  `peerRetirement`, the peer's retired Device record read again from storage and verified, and
+  `mergeOwnRetirement`, which merges a received `retired` only when it is this device's own record,
+  retired; both refuse with `SyncRejectedError`. `openSync` takes a purpose, `sync` or
+  `retirement`. `src/app/sync.ts` in `apps/web` sends `retired` and `abort` before showing the sync
+  as connected, and merges a `retired` it receives; Settings lists the retired devices with
+  "Tell {name}". No new dependency.
 - **Sync session messages (Phase 5, D218).** `packages/sync/src/message-codec.ts` holds the strict
   codec that `messages.ts` (pairing) and `sync-messages.ts` (sync, §11.1) apply with their own
   schema and abort reasons; `channel-session.ts` holds the session over the Noise channel that

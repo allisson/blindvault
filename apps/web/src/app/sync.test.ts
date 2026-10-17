@@ -2,7 +2,7 @@
 // own identity, over an in-memory link in place of WebRTC. The payload, the delivery, `Noise_KK` and
 // the session messages are tested in `packages/sync`; here, what the screens drive: the texts, the
 // refusals that keep the wait going, the handshake (D217), the connection and its end, by `abort`
-// once the session is open (D218).
+// once the session is open (D218), and a retired peer told so and nothing else (D219).
 
 import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import {
@@ -20,7 +20,7 @@ import {
   sealReconnection,
   syncHandshake,
 } from '@blindvault/sync';
-import { type SyncGrant } from '@blindvault/vault';
+import { type MergeResult, type SyncGrant, SyncRejectedError } from '@blindvault/vault';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { type SyncPort, type SyncStage, Syncing } from './sync';
@@ -106,6 +106,8 @@ function devices() {
     peerPublicKey: identities[peer].publicKey,
     peerDeviceId: identities[peer].deviceId,
     peerName: peer,
+    peerRetirement: () => Promise.resolve(undefined),
+    mergeOwnRetirement: () => Promise.reject(new Error('unexpected retired')),
   });
   return { identities, grant };
 }
@@ -358,7 +360,10 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
     expect(sent).toEqual([]);
   });
 
-  it('aborts with protocol-error on any message from the peer, until the summaries exist (§11.1)', async () => {
+  it.each([
+    ['any message from the peer, until the summaries exist (§11.1)', 'summary'],
+    ['an abort retired-peer with no retired before it (§6, D219)', 'abort'],
+  ] as const)('fails with protocol-error on %s', async (_case, kind) => {
     // R is played here, so it can send what the flow never sends: a message after Noise_KK.
     const net = network();
     const { identities } = devices();
@@ -372,6 +377,8 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
         peerPublicKey: identities.r.publicKey,
         peerDeviceId: identities.r.deviceId,
         peerName: 'r',
+        peerRetirement: () => Promise.resolve(undefined),
+        mergeOwnRetirement: () => Promise.reject(new Error('unexpected retired')),
       },
       role: 'initiator',
       onChange: () => undefined,
@@ -399,6 +406,11 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
     });
     await stage(i, 'connected');
     const session = new SyncSession(channel);
+    if (kind === 'abort') {
+      await session.abort('retired-peer');
+      expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'protocol-error' });
+      return;
+    }
     await session.send({ t: 'summary-begin', count: 0 });
     expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'protocol-error' });
     const ended = await session.receive().catch((error: unknown) => error);
@@ -454,5 +466,121 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
       expect(net.closed).toEqual(['i']);
     });
     expect(f.i.stage.kind).toBe('preparing');
+  });
+});
+
+describe('retired peer (sync-protocol.md §6, D31, D45, D219)', () => {
+  const RETIRED = new Uint8Array(40).fill(7);
+  const MERGED = {} as MergeResult;
+
+  /** I and R connected through their texts, with grants changed as given, every frame seen. */
+  async function retiring(
+    iGrant: (g: SyncGrant) => Partial<SyncGrant>,
+    rGrant: (g: SyncGrant) => Partial<SyncGrant>,
+  ) {
+    const sent: string[] = [];
+    const net = network({
+      intercept: (direction, message) => {
+        sent.push(direction);
+        return [message];
+      },
+    });
+    const { grant } = devices();
+    const make = (role: 'initiator' | 'responder', g: SyncGrant) =>
+      new Syncing({
+        port: net.port,
+        sameNetwork: true,
+        stun: { kind: 'default' },
+        grant: g,
+        role,
+        onChange: () => undefined,
+      });
+    const gi = grant('i', 'r');
+    const gr = grant('r', 'i');
+    const i = make('initiator', { ...gi, ...iGrant(gi) });
+    const r = make('responder', { ...gr, ...rGrant(gr) });
+    i.begin();
+    r.begin();
+    expect(await r.submit(textOf(await stage(i, 'offer')))).toBe('ok');
+    expect(await i.submit(textOf(await stage(r, 'answer')))).toBe('ok');
+    return { i, r, sent };
+  }
+
+  it('sends the peer only its retired record and abort, and the peer merges it (CRYPTO-INV-015)', async () => {
+    const merged: Uint8Array[] = [];
+    const { i, r, sent } = await retiring(
+      () => ({ peerRetirement: () => Promise.resolve(RETIRED.slice()) }),
+      () => ({
+        mergeOwnRetirement: (envelope) => {
+          merged.push(envelope);
+          return Promise.resolve(MERGED);
+        },
+      }),
+    );
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(merged).toEqual([RETIRED]);
+    // The two handshake messages, then I's `retired` and `abort`: nothing else, from either side.
+    expect(sent).toEqual(['a-to-b', 'b-to-a', 'a-to-b', 'a-to-b']);
+  });
+
+  it('aborts with protocol-error, merging nothing, on a retired the vault refuses', async () => {
+    const { i, r } = await retiring(
+      () => ({ peerRetirement: () => Promise.resolve(RETIRED.slice()) }),
+      () => ({
+        mergeOwnRetirement: () => Promise.reject(new SyncRejectedError('protocol-error')),
+      }),
+    );
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'protocol-error' });
+  });
+
+  it('sends nothing but abort when the retired record held fails verification', async () => {
+    const { i, r, sent } = await retiring(
+      () => ({
+        peerRetirement: () => Promise.reject(new SyncRejectedError('verification-failed')),
+      }),
+      () => ({}),
+    );
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'verification-failed' });
+    // Until its task, the peer reads verification-failed as protocol-error (§11.2).
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'protocol-error' });
+    expect(sent).toEqual(['a-to-b', 'b-to-a', 'a-to-b']);
+  });
+
+  it('ends both as retired-peer when each holds the other retired, merging nothing', async () => {
+    const merged: Uint8Array[] = [];
+    const merge = (envelope: Uint8Array) => {
+      merged.push(envelope);
+      return Promise.resolve(MERGED);
+    };
+    const { i, r } = await retiring(
+      () => ({ peerRetirement: () => Promise.resolve(RETIRED.slice()), mergeOwnRetirement: merge }),
+      () => ({ peerRetirement: () => Promise.resolve(RETIRED.slice()), mergeOwnRetirement: merge }),
+    );
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(merged).toEqual([]);
+  });
+
+  it('shows connected only once it knows the peer is not retired', async () => {
+    let release!: (value: undefined) => void;
+    const { i, r } = await retiring(
+      () => ({
+        peerRetirement: () =>
+          new Promise<undefined>((resolve) => {
+            release = resolve;
+          }),
+      }),
+      () => ({}),
+    );
+    await stage(r, 'connected');
+    await vi.waitFor(() => {
+      expect(release).toBeTypeOf('function');
+    });
+    expect(i.stage.kind).toBe('connecting');
+    release(undefined);
+    await stage(i, 'connected');
+    i.end();
   });
 });

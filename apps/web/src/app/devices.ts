@@ -1,6 +1,6 @@
 // What Settings shows of the Device records (§8.4, D30, D34, D119, D186): the non-retired ones, this
-// device's first, with the last completed sync with each, the count of retired ones, and the advice
-// for an unregistered or only device.
+// device's first, with the last completed sync with each, the retired ones, which can be told they
+// are retired (D219), and the advice for an unregistered or only device.
 
 import { type DeviceView } from '@blindvault/vault';
 
@@ -26,6 +26,8 @@ export type DeviceAdvice = 'readmit' | 'only-device';
 export interface Devices {
   readonly registered: boolean;
   readonly listed: readonly ListedDevice[];
+  /** The retired Device records, by name. */
+  readonly retired: readonly DeviceView[];
   readonly retiredCount: number;
   readonly advice: DeviceAdvice | undefined;
 }
@@ -44,6 +46,8 @@ function sameId(a: Uint8Array, b: Uint8Array): boolean {
 export function devicesOf(session: DeviceSource): Devices {
   const own = session.deviceId;
   const all = session.devices();
+  const byName = (a: DeviceView, b: DeviceView) =>
+    a.device.displayName.localeCompare(b.device.displayName, undefined, { sensitivity: 'base' });
   const listed = all
     .filter((d) => !d.device.retired)
     .map((d) => {
@@ -56,19 +60,15 @@ export function devicesOf(session: DeviceSource): Devices {
         pending: !self && lastSyncAt === undefined && sameId(d.hlc.deviceId, own),
       };
     })
-    .sort(
-      (a, b) =>
-        Number(b.own) - Number(a.own) ||
-        a.device.displayName.localeCompare(b.device.displayName, undefined, {
-          sensitivity: 'base',
-        }),
-    );
+    .sort((a, b) => Number(b.own) - Number(a.own) || byName(a, b));
+  const retired = all.filter((d) => d.device.retired).sort(byName);
   const others = listed.some((d) => !d.own);
   const { registered } = session;
   return {
     registered,
     listed,
-    retiredCount: all.length - listed.length,
+    retired,
+    retiredCount: retired.length,
     advice: !others ? 'only-device' : registered ? undefined : 'readmit',
   };
 }
