@@ -1893,9 +1893,12 @@ class MessageReject(Exception):
         self.reason = reason
 
 
-def check_message(m) -> dict:
-    """Reference decoder of section 10.2 over the value before encoding: `v` first (a uint other
-    than 1 is `version`), then the type, the exact keys, and each key's type and length."""
+def check_message(m, schema=None, reasons=None) -> dict:
+    """Reference decoder of section 10.2 (or sync-protocol.md section 11.1, with its schema and
+    reasons) over the value before encoding: `v` first (a uint other than 1 is `version`), then
+    the type, the exact keys, and each key's type and length."""
+    schema = MESSAGE_KEYS if schema is None else schema
+    reasons = ABORT_REASONS if reasons is None else reasons
     if not isinstance(m, dict):
         raise MessageReject("protocol-error")
     v = m.get("v")
@@ -1904,9 +1907,9 @@ def check_message(m) -> dict:
     if v != 1 or isinstance(v, bool) or not all(isinstance(k, str) for k in m):
         raise MessageReject("protocol-error")
     t = m.get("t")
-    if not isinstance(t, str) or t not in MESSAGE_KEYS:
+    if not isinstance(t, str) or t not in schema:
         raise MessageReject("protocol-error")
-    keys = MESSAGE_KEYS[t]
+    keys = schema[t]
     if set(m) != {"v", "t", *keys}:
         raise MessageReject("protocol-error")
     for k, (kind, *rest) in keys.items():
@@ -1920,11 +1923,14 @@ def check_message(m) -> dict:
             "envelope": lambda: isinstance(x, bytes) and len(x) <= _max_envelope_length(),
             "name": lambda: isinstance(x, str) and 1 <= len(x) <= 64 and "\n" not in x and "\r" not in x
                             and not x[0].isspace() and not x[-1].isspace(),
+            # sync-protocol.md section 7.
+            "entries": lambda: isinstance(x, list) and 1 <= len(x) <= MAX_SUMMARY_ENTRIES
+                               and all(check_entry(e) for e in x),
         }[kind]()
         if not ok:
             raise MessageReject("protocol-error")
     out = dict(m)
-    if t == "abort" and out["reason"] not in ABORT_REASONS:
+    if t == "abort" and out["reason"] not in reasons:
         out["reason"] = "protocol-error"
     return out
 
@@ -2023,6 +2029,162 @@ def message_vectors() -> dict:
     return {"valid": out_valid, "invalid": out_invalid, "abortReasons": ABORT_REASONS,
             "maxMessageLength": MAX_PROTOCOL_MESSAGE, "maxRecordCount": MAX_COUNT,
             "maxRecordLength": _max_envelope_length()}
+
+
+# --- sync-protocol.md section 11.1 -----------------------------------------------------------
+
+SYNC_MESSAGE_KEYS = {
+    "summary-begin": {"count": ("uint",)},
+    "summary": {"e": ("entries",)},
+    "summary-end": {},
+    "records-begin": {"count": ("uint",)},
+    "record": {"r": ("envelope",)},
+    "records-end": {},
+    "committed": {},
+    "retired": {"r": ("envelope",)},
+    "abort": {"reason": ("text",)},
+}
+SYNC_ABORT_REASONS = ["ended", "locked", "expired", "retired-peer", "verification-failed", "version",
+                      "protocol-error"]
+MAX_SUMMARY_ENTRIES = 16_384
+MAX_ENTRY_LENGTH = 62
+
+
+def _uint(x, top: int) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= top
+
+
+def check_entry(e) -> bool:
+    """Section 7: [recordFormatVersion, recordType, recordId, hlc, deleted, keyEpoch]."""
+    return (isinstance(e, list) and len(e) == 6
+            and _uint(e[0], 0xFFFF) and _uint(e[1], 0xFFFF)
+            and isinstance(e[2], bytes) and len(e[2]) == 16
+            and isinstance(e[3], list) and len(e[3]) == 3
+            and _uint(e[3][0], 2**53 - 1) and _uint(e[3][1], 2**32 - 1)
+            and isinstance(e[3][2], bytes) and len(e[3][2]) == 16
+            and isinstance(e[4], bool) and _uint(e[5], 2**32 - 1))
+
+
+def entry_json(e: list) -> dict:
+    return {"recordFormatVersion": e[0], "recordType": e[1], "recordId": h(e[2]),
+            "hlc": {"physicalMs": e[3][0], "counter": e[3][1], "deviceId": h(e[3][2])},
+            "deleted": e[4], "keyEpoch": e[5]}
+
+
+def sync_message_json(m: dict) -> dict:
+    return {k: [entry_json(e) for e in x] if k == "e" else h(x) if isinstance(x, bytes) else x
+            for k, x in m.items()}
+
+
+def sync_message_vectors() -> dict:
+    msg = lambda t, **kw: {"v": 1, "t": t, **kw}  # noqa: E731
+    check = lambda m: check_message(m, SYNC_MESSAGE_KEYS, SYNC_ABORT_REASONS)  # noqa: E731
+    entry = [1, 1, seq(0x50, 16), [1_700_000_000_000, 0, seq(0x70, 16)], False, 1]
+    largest = [0xFFFF, 0xFFFF, seq(0x51, 16), [2**53 - 1, 2**32 - 1, seq(0x71, 16)], True, 2**32 - 1]
+    smallest = [0, 0, bytes(16), [0, 0, bytes(16)], False, 0]
+    assert len(cbor(largest)) == MAX_ENTRY_LENGTH
+    # A summary of MAX_SUMMARY_ENTRIES entries at their largest stays below the message cap.
+    largest_summary = len(cbor(msg("summary", e=[largest] * MAX_SUMMARY_ENTRIES)))
+    assert largest_summary < MAX_PROTOCOL_MESSAGE
+    valid = [
+        ("summary-begin", msg("summary-begin", count=3)),
+        ("summary-begin with no entry", msg("summary-begin", count=0)),
+        ("summary-begin with the largest count", msg("summary-begin", count=MAX_COUNT)),
+        ("summary with one entry", msg("summary", e=[entry])),
+        ("summary with an entry at every maximum, 62 bytes", msg("summary", e=[largest])),
+        ("summary with an entry at every minimum", msg("summary", e=[smallest])),
+        ("summary with an unknown format and type, only telling what the peer holds",
+         msg("summary", e=[[2, 7, seq(0x52, 16), [5, 1, seq(0x72, 16)], True, 3]])),
+        ("summary with three entries", msg("summary", e=[entry, largest, smallest])),
+        ("summary-end", msg("summary-end")),
+        ("records-begin", msg("records-begin", count=2)),
+        ("record", msg("record", r=seq(0x44, 40))),
+        ("records-end", msg("records-end")),
+        ("committed", msg("committed")),
+        ("retired", msg("retired", r=seq(0x45, 40))),
+        *((f"abort, {r}", msg("abort", reason=r)) for r in SYNC_ABORT_REASONS),
+        ("abort with a pairing reason, read as protocol-error", msg("abort", reason="cancelled")),
+        ("abort with an unknown reason, read as protocol-error", msg("abort", reason="out-of-coffee")),
+    ]
+    out_valid = [{"case": case, "bytes": h(cbor(m)), "message": sync_message_json(check(m))}
+                 for case, m in valid]
+
+    def with_entry(i: int, x) -> dict:
+        e = list(entry)
+        e[i] = x
+        return msg("summary", e=[e])
+
+    def with_hlc(i: int, x) -> dict:
+        hlc = list(entry[3])
+        hlc[i] = x
+        return with_entry(3, hlc)
+
+    invalid = [
+        ("version", "v 2", {**msg("committed"), "v": 2}),
+        ("version", "v 2 with an unknown type", {"v": 2, "t": "hello"}),
+        ("protocol-error", "unknown t", msg("hello")),
+        ("protocol-error", "a pairing type, nonce", msg("nonce", n=seq(0x60, 32))),
+        ("protocol-error", "a pairing type, master-key", msg("master-key", mk=seq(0x11, 32), vid=seq(0x22, 16))),
+        ("protocol-error", "summary-begin without count", msg("summary-begin")),
+        ("protocol-error", "summary-begin with a negative count", msg("summary-begin", count=-1)),
+        ("protocol-error", "summary-begin with a count over 2^53 - 1", msg("summary-begin", count=MAX_COUNT + 1)),
+        ("protocol-error", "summary without e", msg("summary")),
+        ("protocol-error", "summary with no entry", msg("summary", e=[])),
+        ("protocol-error", "summary with e as a map", msg("summary", e={"a": 1})),
+        ("protocol-error", "an entry that is not an array", msg("summary", e=[1])),
+        ("protocol-error", "an entry of 5 elements", msg("summary", e=[entry[:5]])),
+        ("protocol-error", "an entry of 7 elements", msg("summary", e=[entry + [0]])),
+        ("protocol-error", "recordFormatVersion 65536", with_entry(0, 0x10000)),
+        ("protocol-error", "recordFormatVersion negative", with_entry(0, -1)),
+        ("protocol-error", "recordType 65536", with_entry(1, 0x10000)),
+        ("protocol-error", "recordType as text", with_entry(1, "1")),
+        ("protocol-error", "a recordId of 15 bytes", with_entry(2, seq(0x50, 15))),
+        ("protocol-error", "a recordId of 17 bytes", with_entry(2, seq(0x50, 17))),
+        ("protocol-error", "an hlc of 2 elements", with_entry(3, entry[3][:2])),
+        ("protocol-error", "physicalMs over 2^53 - 1", with_hlc(0, 2**53)),
+        ("protocol-error", "counter over 2^32 - 1", with_hlc(1, 2**32)),
+        ("protocol-error", "an hlc deviceId of 15 bytes", with_hlc(2, seq(0x70, 15))),
+        ("protocol-error", "deleted as 0", with_entry(4, 0)),
+        ("protocol-error", "keyEpoch over 2^32 - 1", with_entry(5, 2**32)),
+        ("protocol-error", "one bad entry after a good one",
+         msg("summary", e=[entry, [*entry[:5], 2**32]])),
+        ("protocol-error", "summary-end with an extra key", {**msg("summary-end"), "count": 0}),
+        ("protocol-error", "retired without r", msg("retired")),
+        ("protocol-error", "retired with r as text", msg("retired", r="45" * 40)),
+        ("protocol-error", "record with r as text", msg("record", r="44" * 40)),
+        ("protocol-error", "committed with an extra key", {**msg("committed"), "x": 0}),
+        ("protocol-error", "abort with a reason as an integer", msg("abort", reason=1)),
+        ("protocol-error", "abort without a reason", msg("abort")),
+    ]
+    out_invalid = []
+    for reason, case, m in invalid:
+        try:
+            check(m)
+        except MessageReject as r:
+            assert r.reason == reason, f"{case}: {r.reason}"
+            out_invalid.append({"case": case, "reason": reason, "bytes": h(cbor(m))})
+            continue
+        raise AssertionError(f"accepted: {case}")
+    out_invalid.append({"case": "keys not in deterministic order", "reason": "protocol-error",
+                        "bytes": h(b"\xa2\x61v\x01\x61t\x69committed")})
+    for case, m in (("summary of 16,384 entries at every maximum", [largest] * MAX_SUMMARY_ENTRIES),
+                    ("summary of 16,385 entries", [smallest] * (MAX_SUMMARY_ENTRIES + 1))):
+        try:
+            check(msg("summary", e=m))
+            assert len(m) == MAX_SUMMARY_ENTRIES, case
+        except MessageReject:
+            assert len(m) > MAX_SUMMARY_ENTRIES, case
+    return {
+        "valid": out_valid,
+        "invalid": out_invalid,
+        "abortReasons": SYNC_ABORT_REASONS,
+        # Too long to write out: the tests build them from these.
+        "maxSummaryEntries": MAX_SUMMARY_ENTRIES,
+        "largestEntry": h(cbor(largest)),
+        "smallestEntry": h(cbor(smallest)),
+        "maxEntryLength": MAX_ENTRY_LENGTH,
+        "largestSummaryLength": largest_summary,
+    }
 
 
 def frames_of(length: int) -> list[dict]:
@@ -2348,7 +2510,7 @@ def sync_vectors() -> dict:
 
     return {
         "description": "sync-protocol.md section 4: the reconnection payload v1, one Noise_K message "
-                       "(Noise_K_25519_ChaChaPoly_BLAKE2b) in base45",
+                       "(Noise_K_25519_ChaChaPoly_BLAKE2b) in base45; section 11.1: messages",
         "reconnection": {
             "vaultId": h(VAULT_ID),
             "minMessageLength": RECON_MIN_M,
@@ -2357,6 +2519,7 @@ def sync_vectors() -> dict:
             "valid": valid,
             "invalid": neg,
         },
+        "messages": sync_message_vectors(),
     }
 
 

@@ -167,7 +167,9 @@ describe('pairing session (pairing-protocol.md §10, §11)', () => {
 
   it('refuses to send a message the codec rejects, and stays open', async () => {
     const { a, b } = sessions();
-    await expect(a.send({ t: 'received', name: '' })).rejects.toThrow('pairing message rejected');
+    await expect(a.send({ t: 'received', name: '' })).rejects.toThrow(
+      'message rejected (protocol-error)',
+    );
     await a.send({ t: 'confirmed' });
     expect(await b.receive()).toEqual({ t: 'confirmed' });
   });

@@ -295,8 +295,8 @@ nothing else sent. Every later message travels in the Noise channel, framed as i
 payload is refused. On a failure the side that refused a message reports `invalid` and the other
 sees the link close (`closed`); nothing is sent either way, so `protocol-error` is the local reason
 only. The UI shows a sync as connected only once the handshake completed, which stops the payload
-timeout of section 12, and reports a failed handshake as a peer it could not verify. Until the
-session messages exist, closing after the handshake sends no `abort` (section 11.2).
+timeout of section 12, and reports a failed handshake as a peer it could not verify. Closing after
+the handshake sends `abort` (section 11.2, D218).
 
 ## 6. Retired peer (D31, D45, D69)
 
@@ -448,6 +448,18 @@ discarded. `reason` is one of:
 | `protocol-error` | anything else this document rejects |
 
 An unknown `reason` is shown as `protocol-error`. A merge already committed stays.
+
+### 11.3 Implementation (D218)
+
+`packages/sync` decodes these messages with `decodeSyncMessage`, on the strict codec it shares
+with the pairing messages: a pairing type is an unknown `t`, and a pairing `reason` reads as
+`protocol-error`. Each `summary` entry is checked against the ranges of section 7 as the message
+is decoded; `count`, duplicate identities and the order of this section are each stage's to check,
+with its task. `SyncSession` carries them over the Noise channel of `Noise_KK`, on the session the
+pairing uses: a refused message aborts with its reason, a received `abort` ends the session, and a
+closed link ends it as closed. Until the summaries exist, the app reads no message after the
+handshake: any message but `abort` is refused with `protocol-error`. Ending the sync sends `abort`
+with `ended`, a lock sends `locked`, and the connection closes once the `abort` had time to leave.
 
 ## 12. Timeouts, lock and replay
 

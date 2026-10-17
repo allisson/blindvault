@@ -12,8 +12,8 @@ import { PasteText, PayloadText, SameNetwork } from './Pairing';
 // chooses on each whether it shows its code first or reads the other's. Each code is shown as a QR
 // code and as text, and the other device scans or pastes it (D208); a code that does not open says
 // why and the wait goes on (D215). The flow lives in the controller, so a lock ends it whatever is
-// on screen. It ends once `Noise_KK` has verified the peer (D217): the exchange of records comes
-// with its tasks.
+// on screen. It stays connected once `Noise_KK` has verified the peer (D217), until either side ends
+// it, which the other shows with its reason (D218): the exchange of records comes with its tasks.
 
 function sameId(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);

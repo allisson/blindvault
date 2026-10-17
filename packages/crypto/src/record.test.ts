@@ -19,7 +19,9 @@ import {
   type VerificationKeys,
   decodeEnvelope,
   encodeEnvelope,
+  hlcValue,
   itemContentLength,
+  readHlc,
   sealPurgedTombstone,
   sealRecord,
   sealVaultKeyRecord,
@@ -86,6 +88,37 @@ describe('constants (crypto-spec.md §9.2, §9.4)', () => {
     expect(MAX_CIPHERTEXT_LENGTH).toBe(r.maxCiphertextLength);
     expect(ITEM_CAP).toBe(r.itemCap);
     expect(MAX_ENVELOPE_LENGTH).toBe(r.maxEnvelopeLength);
+  });
+});
+
+describe('HLC as CBOR (crypto-spec.md §9.2)', () => {
+  const deviceId = new Uint8Array(16).fill(5);
+
+  it('reads the array of a header, its deviceId a copy', () => {
+    const value: CborValue = [Number.MAX_SAFE_INTEGER, 0xffffffff, deviceId];
+    const hlc = readHlc(value);
+    expect(hlc).toEqual({ physicalMs: Number.MAX_SAFE_INTEGER, counter: 0xffffffff, deviceId });
+    deviceId.fill(5);
+    expect(hlc?.deviceId).not.toBe(deviceId);
+    expect(hlcValue({ physicalMs: 0, counter: 0, deviceId })).toEqual([0, 0, deviceId]);
+    expect(
+      readHlc(decodeCbor(encodeCbor(hlcValue({ physicalMs: 7, counter: 1, deviceId })))),
+    ).toEqual({ physicalMs: 7, counter: 1, deviceId });
+  });
+
+  it.each([
+    ['not an array', 1],
+    ['two elements', [0, 0]],
+    ['four elements', [0, 0, deviceId, 0]],
+    ['physicalMs negative', [-1, 0, deviceId]],
+    ['physicalMs over 2^53 - 1', [2n ** 53n, 0, deviceId]],
+    ['physicalMs as text', ['0', 0, deviceId]],
+    ['counter over 2^32 - 1', [0, 0x100000000, deviceId]],
+    ['a deviceId of 15 bytes', [0, 0, new Uint8Array(15)]],
+    ['a deviceId of 17 bytes', [0, 0, new Uint8Array(17)]],
+    ['a deviceId as text', [0, 0, 'device']],
+  ] as const)('refuses %s', (_case, value) => {
+    expect(readHlc(value as CborValue)).toBeNull();
   });
 });
 

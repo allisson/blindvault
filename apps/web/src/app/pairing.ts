@@ -186,7 +186,7 @@ function payloadCheck(error: unknown): PayloadCheck {
 }
 
 /** How long a session's last message has to leave before the connection is closed anyway. */
-const DISCONNECT_GRACE_MS = 3_000;
+export const DISCONNECT_GRACE_MS = 3_000;
 
 interface FlowOptions {
   readonly port: PairingPort;

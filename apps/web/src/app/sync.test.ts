@@ -1,7 +1,8 @@
-// The manual sync flow (sync-protocol.md §3 to §5, §12, D215, D216): two flows, each with its own
-// identity, over an in-memory link in place of WebRTC. The payload, the delivery and `Noise_KK` are
-// tested in `packages/sync`; here, what the screens drive: the texts, the refusals that keep the
-// wait going, the handshake (D217), the connection and its end.
+// The manual sync flow (sync-protocol.md §3 to §5, §11, §12, D215 to D218): two flows, each with its
+// own identity, over an in-memory link in place of WebRTC. The payload, the delivery, `Noise_KK` and
+// the session messages are tested in `packages/sync`; here, what the screens drive: the texts, the
+// refusals that keep the wait going, the handshake (D217), the connection and its end, by `abort`
+// once the session is open (D218).
 
 import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import {
@@ -9,10 +10,15 @@ import {
   type LinkFields,
   type MemoryPair,
   type MemoryPairOptions,
+  SyncError,
+  SyncSession,
   TransportClosedError,
   decodeReconnectionText,
   encodeReconnectionText,
   memoryPair,
+  openReconnection,
+  sealReconnection,
+  syncHandshake,
 } from '@blindvault/sync';
 import { type SyncGrant } from '@blindvault/vault';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -295,12 +301,109 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
     expect(f.net.closed).toEqual(['i']);
   });
 
-  it('fails when the peer closes the connection', async () => {
-    const { i, r, answer } = await exchanged();
+  it('fails as closed when the link closes with no abort', async () => {
+    const { i, r, answer, net } = await exchanged();
     expect(await i.submit(answer)).toBe('ok');
     await stage(r, 'connected');
-    r.end();
+    net.pair()?.b.close();
     expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'closed' });
+  });
+
+  it.each(['ended', 'locked'] as const)(
+    'sends abort with %s once connected, and the peer shows it (§11.2, D93, D218)',
+    async (reason) => {
+      vi.useFakeTimers();
+      const sent: [string, number][] = [];
+      const { i, r, answer, net } = await exchanged(
+        network({
+          intercept: (direction, message) => {
+            sent.push([direction, message.length]);
+            return [message];
+          },
+        }),
+      );
+      expect(await i.submit(answer)).toBe('ok');
+      await vi.waitFor(() => {
+        expect(i.stage.kind).toBe('connected');
+        expect(r.stage.kind).toBe('connected');
+      });
+      r.end(reason);
+      await vi.waitFor(() => {
+        expect(i.stage).toEqual({ kind: 'failed', reason });
+      });
+      // R's local end shows no failure: the screen is closed.
+      expect(r.stage.kind).toBe('connected');
+      // The two handshake messages, then one channel message: the abort, sealed.
+      expect(sent.map(([direction]) => direction)).toEqual(['a-to-b', 'b-to-a', 'b-to-a']);
+      expect(sent[2]?.[1]).toBeGreaterThan(16);
+      // R closes its connection only once the abort had time to leave.
+      expect(net.closed).not.toContain('r');
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(net.closed).toContain('r');
+    },
+  );
+
+  it('ends before Noise_KK with no abort, and closes at once', async () => {
+    const sent: number[] = [];
+    const { r, net } = await exchanged(
+      network({
+        intercept: (_direction, message) => {
+          sent.push(message.length);
+          return [message];
+        },
+      }),
+    );
+    r.end('locked');
+    expect(net.closed).toEqual(['r']);
+    expect(sent).toEqual([]);
+  });
+
+  it('aborts with protocol-error on any message from the peer, until the summaries exist (§11.1)', async () => {
+    // R is played here, so it can send what the flow never sends: a message after Noise_KK.
+    const net = network();
+    const { identities } = devices();
+    const i = new Syncing({
+      port: net.port,
+      sameNetwork: true,
+      stun: { kind: 'default' },
+      grant: {
+        identity: identities.i,
+        vaultId: VAULT,
+        peerPublicKey: identities.r.publicKey,
+        peerDeviceId: identities.r.deviceId,
+        peerName: 'r',
+      },
+      role: 'initiator',
+      onChange: () => undefined,
+    });
+    i.begin();
+    const offerText = textOf(await stage(i, 'offer'));
+    const keys = { identity: identities.r, peerPublicKey: identities.i.publicKey, vaultId: VAULT };
+    const offer = openReconnection(decodeReconnectionText(offerText), keys, { role: 'initiator' });
+    const link: LinkFields = {
+      ...offer.reconnection,
+      role: 'responder',
+      setup: 'active',
+      fingerprint: new Uint8Array(32).fill(0x30),
+    };
+    const sealed = sealReconnection(link, keys);
+    expect(await i.submit(encodeReconnectionText(sealed.bytes))).toBe('ok');
+    const pair = net.pair();
+    if (!pair) throw new Error('no link');
+    const { channel } = await syncHandshake(pair.b, {
+      role: 'responder',
+      identity: identities.r,
+      peerPublicKey: identities.i.publicKey,
+      initiator: { message: offer.message, fingerprint: offer.reconnection.fingerprint },
+      responder: { message: sealed.message, fingerprint: link.fingerprint },
+    });
+    await stage(i, 'connected');
+    const session = new SyncSession(channel);
+    await session.send({ t: 'summary-begin', count: 0 });
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'protocol-error' });
+    const ended = await session.receive().catch((error: unknown) => error);
+    expect(ended).toBeInstanceOf(SyncError);
+    expect(ended).toMatchObject({ reason: 'protocol-error', by: 'remote' });
   });
 
   it('fails when the connection cannot be set up, or the payload cannot carry it', async () => {

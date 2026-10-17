@@ -1341,7 +1341,8 @@ export class VaultController {
     // Before the session locks: the peer learns why the pairing ended (D93).
     this.#pairing?.end('locked');
     this.#pairing = undefined;
-    this.#dropSync();
+    // The peer learns why the sync ended (sync-protocol.md §11.2, D93).
+    this.#dropSync('locked');
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
@@ -2109,8 +2110,8 @@ export class VaultController {
     this.#set({ ...this.#status });
   }
 
-  #dropSync(): void {
-    this.#sync?.flow.end();
+  #dropSync(reason: 'ended' | 'locked' = 'ended'): void {
+    this.#sync?.flow.end(reason);
     this.#sync = undefined;
   }
 

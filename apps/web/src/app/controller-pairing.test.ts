@@ -1120,11 +1120,24 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     await syncStage(b, 'connected');
     expect(net.options.map((o) => o.iceServers)).toEqual([[], []]);
 
-    // Closing on one ends the other's connection.
+    // Closing on one ends the other's session, telling it why (§11.2, D218).
     a.cancelSync();
     expect(a.sync).toBeUndefined();
     expect(a.updateAllowed).toBe(true);
-    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'closed' });
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'ended' });
+  });
+
+  it("a lock once connected ends the peer's sync as locked (D93, D218)", async () => {
+    const { a, b, idA, idB } = await paired();
+    expect(b.startSync(idA, 'initiator', { sameNetwork: true })).toBe('ok');
+    expect(a.startSync(idB, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(await a.syncPayload(codeOf(await syncStage(b, 'offer')))).toBe('ok');
+    expect(await b.syncPayload(codeOf(await syncStage(a, 'answer')))).toBe('ok');
+    await syncStage(a, 'connected');
+    await syncStage(b, 'connected');
+    a.lock();
+    expect(a.sync).toBeUndefined();
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'locked' });
   });
 
   it('refuses a peer it holds no record of, itself, and a retired peer (§3, D31)', async () => {
