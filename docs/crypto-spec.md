@@ -396,6 +396,7 @@ prologue_XX = layout("bv.pairing.v1", BLAKE2b-256(payload_initiator), BLAKE2b-25
                      dtlsFingerprint_initiator, dtlsFingerprint_responder)
 prologue_KK = layout("bv.sync.v1",    BLAKE2b-256(reconnection_initiator), BLAKE2b-256(reconnection_responder),
                      dtlsFingerprint_initiator, dtlsFingerprint_responder)
+prologue_K  = layout("bv.reconnect.v1", vaultId, role)
 ```
 
 Inputs, pinned so both sides hash the same bytes:
@@ -405,7 +406,10 @@ Inputs, pinned so both sides hash the same bytes:
 - **Pairing payload:** the binary payload exactly as exchanged, after base45 decoding, including
   the commitment the initiator's payload carries in every pairing (D199).
 - **Reconnection payload:** the `Noise_K` message exactly as transmitted (its ciphertext), not its
-  plaintext.
+  plaintext, nor the payload's `version` byte.
+- **`prologue_K` role:** the label `"initiator"` or `"responder"`, the session role of the
+  payload's sender in `Noise_KK`, as in the re-admission MAC (`sync-protocol.md` §4.2, D213). The sender of a payload is
+  always the `Noise_K` initiator.
 - **DTLS fingerprint:** the 32-byte SHA-256 certificate fingerprint carried in each payload (§8.3).
   Each side also checks that the remote certificate of the live connection matches the
   fingerprint in the peer's payload; the SDP rebuilt from the payload enforces this.
@@ -419,8 +423,8 @@ role      = "initiator" | "responder"
 
 Each side sends its own MAC and verifies the other's with `sodium_memcmp`.
 
-The SAS derivation, payload formats, the commitment and the `Noise_K` prologue are specified
-in `pairing-protocol.md` and `sync-protocol.md`, using the layout encoding.
+The SAS derivation, payload formats and the commitment are specified in `pairing-protocol.md`, and
+the reconnection payload in `sync-protocol.md`, using the layout encoding.
 
 ## 14. CBOR (D10)
 
