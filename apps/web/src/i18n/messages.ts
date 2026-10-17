@@ -278,6 +278,58 @@ const en = {
       closed: 'The connection closed, so the re-admission stopped.',
     },
   },
+  sync: {
+    start: 'Sync',
+    title: 'Sync with {name}',
+    how: 'On {name}, open Settings → Devices and choose “Sync” next to this device too. One device shows its code first; the other scans or pastes it.',
+    first: 'Show this device’s code first',
+    read: 'Read the code of {name}',
+    cancel: 'Cancel',
+    unavailable: 'This browser cannot sync: it offers no WebRTC.',
+    refused: {
+      unregistered:
+        'This device has no Device record of its own yet: re-admit it with another device of this vault first.',
+      retired: 'This device was retired: it cannot sync. Replace it by pairing.',
+      'unknown-peer':
+        'This device does not know {name}: sync first with the device that paired it.',
+      'retired-peer': '{name} was retired: it cannot sync.',
+    },
+    offerIntro:
+      'Scan this code with {name} in its sync screen, or copy the text to it. Then scan or paste its answer below.',
+    offerLabel: 'This device’s sync text',
+    answerPaste: 'The answer of {name}',
+    connect: 'Connect',
+    scanIntro: 'Scan the code {name} shows, or paste its sync text here.',
+    offerPaste: 'The sync text of {name}',
+    next: 'Next',
+    answerIntro:
+      'Show this code to {name}, which scans it below its own, or copy this answer back to it.',
+    answerLabel: 'This device’s answer',
+    channel:
+      'This code is encrypted for {name}: whoever sees it, or whatever carries the text, learns only that a code was sent.',
+    waiting: 'Waiting for the connection…',
+    preparing: 'Preparing the connection…',
+    connecting: 'Connecting…',
+    connected:
+      'Connected to {name}. Exchanging records comes in a later version: close the sync here.',
+    close: 'Close',
+    again: 'Start again',
+    leaving:
+      'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the sync ends.',
+    leavingImmediate:
+      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock below.',
+    paste: {
+      malformed: 'This is not a whole BlindVault sync text. Copy it again, whole.',
+      version: 'This text comes from another version of BlindVault: update both devices.',
+      'not-from-peer':
+        'This code is not from {name} for this device: check that each device chose the other.',
+    },
+    failed: {
+      expired: 'The sync took too long and expired.',
+      closed: 'The connection closed, so the sync stopped.',
+      error: 'The connection could not be set up, so the sync stopped.',
+    },
+  },
   ready: {
     title: 'Vault ready',
     intro: 'Your vault is on this device. Before you start:',
@@ -1141,6 +1193,60 @@ const ptBR: Messages = {
       version: 'Os dispositivos rodam versões do BlindVault que não readmitem: atualize os dois.',
       protocolError: 'O outro dispositivo enviou algo inesperado, então a readmissão parou.',
       closed: 'A conexão fechou, então a readmissão parou.',
+    },
+  },
+  sync: {
+    start: 'Sincronizar',
+    title: 'Sincronizar com {name}',
+    how: 'Em {name}, abra também Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Um dispositivo mostra o código dele primeiro; o outro o escaneia ou cola.',
+    first: 'Mostrar primeiro o código deste dispositivo',
+    read: 'Ler o código de {name}',
+    cancel: 'Cancelar',
+    unavailable: 'Este navegador não consegue sincronizar: ele não oferece WebRTC.',
+    refused: {
+      unregistered:
+        'Este dispositivo ainda não tem o próprio registro de dispositivo: readmita-o antes com outro dispositivo deste cofre.',
+      retired:
+        'Este dispositivo foi aposentado: ele não pode sincronizar. Substitua-o por pareamento.',
+      'unknown-peer':
+        'Este dispositivo não conhece {name}: sincronize antes com o dispositivo que o pareou.',
+      'retired-peer': '{name} foi aposentado: ele não pode sincronizar.',
+    },
+    offerIntro:
+      'Escaneie este código com {name}, na tela de sincronização dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
+    offerLabel: 'Texto de sincronização deste dispositivo',
+    answerPaste: 'Resposta de {name}',
+    connect: 'Conectar',
+    scanIntro: 'Escaneie o código que {name} mostra, ou cole aqui o texto de sincronização dele.',
+    offerPaste: 'Texto de sincronização de {name}',
+    next: 'Avançar',
+    answerIntro:
+      'Mostre este código a {name}, que o escaneia abaixo do dele, ou copie esta resposta de volta para ele.',
+    answerLabel: 'Resposta deste dispositivo',
+    channel:
+      'Este código é cifrado para {name}: quem o vê, ou o que leva o texto, só fica sabendo que um código foi enviado.',
+    waiting: 'Esperando a conexão…',
+    preparing: 'Preparando a conexão…',
+    connecting: 'Conectando…',
+    connected:
+      'Conectado a {name}. A troca de registros vem numa versão futura: feche a sincronização aqui.',
+    close: 'Fechar',
+    again: 'Começar de novo',
+    leaving:
+      'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, a sincronização termina.',
+    leavingImmediate:
+      'Este cofre bloqueia assim que o BlindVault fica oculto, o que encerra a sincronização: copie e cole sem sair do app, ou mude o bloqueio do app oculto abaixo.',
+    paste: {
+      malformed:
+        'Este não é um texto de sincronização do BlindVault inteiro. Copie-o de novo, inteiro.',
+      version: 'Este texto vem de outra versão do BlindVault: atualize os dois dispositivos.',
+      'not-from-peer':
+        'Este código não é de {name} para este dispositivo: confira se cada dispositivo escolheu o outro.',
+    },
+    failed: {
+      expired: 'A sincronização demorou demais e expirou.',
+      closed: 'A conexão fechou, então a sincronização parou.',
+      error: 'Não foi possível montar a conexão, então a sincronização parou.',
     },
   },
   ready: {

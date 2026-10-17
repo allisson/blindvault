@@ -21,6 +21,7 @@ import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { InviteDevice, ReadmitDevice } from './Pairing';
+import { SyncDevice } from './Sync';
 import { RefoundVault } from './RefoundVault';
 import { RegeneratePhrase, focusBackup } from './RegeneratePhrase';
 import { DeviceStorage } from './StorageState';
@@ -489,7 +490,8 @@ type RetireState =
 /**
  * Devices (§8.4, D30, D34, D119, D186, D203): the non-retired Device records, this device's first,
  * with the last completed sync with each other one and the pairings not completed, the count of
- * retired ones, and pairing a new device. An unregistered device is told to get re-admitted; the only device, to
+ * retired ones, and pairing a new device. A registered device, not retired, offers to sync with
+ * each other one (§9.1, D113, D216). An unregistered device is told to get re-admitted; the only device, to
  * make a backup and pair another. Retiring another device asks for a confirmation that states it
  * cannot be undone, is not revocation, and points to re-founding; no password (D186).
  */
@@ -502,7 +504,10 @@ function DeviceSettings({
 }) {
   const { messages: m, language } = useLanguage();
   const [retire, setRetire] = useState<RetireState>({ kind: 'idle' });
+  const [syncWith, setSyncWith] = useState<string>();
   const devices = devicesOf(session);
+  const syncs = devices.registered && !session.retired;
+  const peer = devices.listed.find((d) => !d.own && hex(d.deviceId) === syncWith);
   const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' });
   return (
     <section className="flex flex-col gap-4" data-testid="devices" data-section="devices">
@@ -551,6 +556,17 @@ function DeviceSettings({
                   </span>
                 ) : null}
               </span>
+              {d.own || !syncs ? null : (
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setSyncWith(id);
+                  }}
+                  data-testid="device-sync"
+                >
+                  {m.sync.start}
+                </Button>
+              )}
               {d.own ? null : (
                 <Button
                   variant="quiet"
@@ -614,6 +630,17 @@ function DeviceSettings({
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           {m.settings.devicesRefused}
         </p>
+      ) : null}
+      {syncs && peer ? (
+        <SyncDevice
+          key={hex(peer.deviceId)}
+          controller={controller}
+          session={session}
+          peer={{ deviceId: peer.deviceId, name: peer.device.displayName }}
+          onClose={() => {
+            setSyncWith(undefined);
+          }}
+        />
       ) : null}
       <ReadmitDevice controller={controller} session={session} />
       <InviteDevice controller={controller} session={session} />

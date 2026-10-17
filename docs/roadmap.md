@@ -315,7 +315,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `docs/sync-protocol.md`: reconnection payload, messages, summaries, ordering, idempotency, versioning (§3 to §14, D213)
 - [x] Transport-agnostic reconnection payload, encrypted to the peer with `Noise_K` (D12, D17, D214)
 - [x] Keep payload delivery behind an interface so a mailbox transport (Nostr, ntfy) can be added after v1 without protocol changes (§4.4, D215)
-- [ ] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions
+- [x] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions (§3, D216)
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212)
 - [ ] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008)
 - [ ] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31)

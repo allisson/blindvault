@@ -447,6 +447,15 @@ every project through the references in the root `tsconfig.json`.
   `receiveReconnection` takes the first payload that opens and reports the others. `src/reconnect.ts`
   now seals to and opens from the bytes `version ‖ m`; `encodeReconnectionText` and
   `decodeReconnectionText` hold the base45 of the manual delivery. No new dependency.
+- **Manual sync flow (Phase 5, D216).** `packages/sync/src/connection.ts` has a link level,
+  `offerLink` and `answerLink`, over the `LinkFields` both payloads share; `startInitiator` and
+  `startResponder` build the pairing payload on it, with its bytes unchanged. `packages/vault`
+  opens a sync with `VaultSession.openSync`, which checks §3 and hands out the identity, the vault
+  ID and the peer's key and name. In `apps/web`, `src/app/sync.ts` runs one side behind a
+  `SyncPort`: it seals the link to the peer, shows it through the manual delivery and takes the
+  first code that opens, until the DataChannel is open; the controller holds one flow at a time and
+  ends it on a lock. `src/ui/Sync.tsx` is the screen, opened from Settings › Devices, reusing the
+  pairing's code and paste components. No new dependency.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

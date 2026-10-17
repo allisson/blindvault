@@ -1,22 +1,37 @@
-// A page for the Playwright tests: one device's side of the WebRTC connection of a pairing, driven
-// through `window.harness`. Two pages, in two browser contexts, pair by passing the base45 texts.
+// A page for the Playwright tests: one device's side of the WebRTC connection of a pairing or a
+// sync, driven through `window.harness`. Two pages, in two browser contexts, pair or reconnect by
+// passing the base45 texts.
 
-import { Keyring, generateDeviceIdentity, initCrypto, pairingNonce } from '@blindvault/crypto';
+import {
+  type DeviceIdentity,
+  Keyring,
+  generateDeviceIdentity,
+  initCrypto,
+  pairingNonce,
+} from '@blindvault/crypto';
 
 import {
   type Initiator,
+  type LinkOffer,
   PairingError,
   PairingSession,
   PayloadError,
   type Role,
   type Transport,
   type SasStage,
+  ReconnectionError,
   TransportClosedError,
+  answerLink,
   decodeBase45,
   decodePayloadText,
+  decodeReconnectionText,
   encodePayloadText,
+  encodeReconnectionText,
   exchangeNonces,
+  offerLink,
+  openReconnection,
   pairingHandshake,
+  sealReconnection,
   startInitiator,
   startResponder,
 } from '../src/index';
@@ -25,6 +40,11 @@ const context = { holdsVault: true, formatVersions: [1], recordTypes: [1, 2, 3, 
 const options = { iceServers: [] };
 
 let initiator: Initiator | undefined;
+// A sync: this device's identity, the peer's public key, and the initiator's side of the link.
+let identity: DeviceIdentity | undefined;
+let peerPublicKey: Uint8Array | undefined;
+let syncOffer: LinkOffer | undefined;
+const vaultId = new Uint8Array(16).fill(0x42);
 let transport: Promise<Transport> | undefined;
 let channel: Transport | undefined;
 let session: PairingSession | undefined;
@@ -39,7 +59,7 @@ const hex = (bytes: Uint8Array) =>
 const abort = new AbortController();
 
 function outcome(error: unknown): string {
-  if (error instanceof PayloadError) return error.reason;
+  if (error instanceof PayloadError || error instanceof ReconnectionError) return error.reason;
   if (error instanceof TransportClosedError) return `closed:${error.by}`;
   throw error;
 }
@@ -69,6 +89,11 @@ function tamperFingerprint(text: string, role: 'initiator' | 'responder', sessio
   return { ...payload, fingerprint };
 }
 
+function syncKeys() {
+  if (!identity || !peerPublicKey) throw new Error('exchange the identities first');
+  return { identity, peerPublicKey, vaultId };
+}
+
 export const harness = {
   /**
    * Opens and stops the camera, as the scanning device does before it gathers: the browser then
@@ -94,6 +119,56 @@ export const harness = {
     const text = encodePayloadText(initiator.payload);
     Object.assign(texts, { role: 'initiator', initiator: text, responder: undefined });
     return text;
+  },
+
+  /** A new identity for a sync; returns its public key as hex, for the other page's `syncPeer`. */
+  async syncIdentity(): Promise<string> {
+    await ready;
+    identity = generateDeviceIdentity(new Keyring());
+    return hex(identity.publicKey);
+  },
+
+  /** The public key of the peer this device syncs with, as its Device record would hold it. */
+  syncPeer(publicKey: string): void {
+    peerPublicKey = Uint8Array.from(publicKey.match(/../g) ?? [], (b) => parseInt(b, 16));
+  },
+
+  /** Starts a sync as I (`sync-protocol.md` §4, §5); returns its reconnection payload text. */
+  async startSyncInitiator(): Promise<string> {
+    syncOffer = await offerLink(crypto.getRandomValues(new Uint8Array(16)), options);
+    return encodeReconnectionText(sealReconnection(syncOffer.link, syncKeys()).bytes);
+  },
+
+  /** Opens I's text as R, gathers and returns R's sealed answer; a refusal reason otherwise. */
+  async startSyncResponder(offerText: string): Promise<string> {
+    let offer;
+    try {
+      offer = openReconnection(decodeReconnectionText(offerText), syncKeys(), {
+        role: 'initiator',
+      }).reconnection;
+    } catch (error) {
+      return outcome(error);
+    }
+    const answer = await answerLink(offer, options);
+    transport = answer.transport;
+    return encodeReconnectionText(sealReconnection(answer.link, syncKeys()).bytes);
+  },
+
+  /** Opens R's text as I and connects: "open", a refusal reason, or "pending" after `ms`. */
+  async acceptSync(answerText: string, ms = 20_000): Promise<string> {
+    if (!syncOffer) throw new Error('start the sync first');
+    let answer;
+    try {
+      answer = openReconnection(decodeReconnectionText(answerText), syncKeys(), {
+        role: 'responder',
+        sessionId: syncOffer.link.sessionId,
+      }).reconnection;
+    } catch (error) {
+      return outcome(error);
+    }
+    const opening = syncOffer.accept(answer);
+    transport = opening;
+    return settle(opening, ms);
   },
 
   /** The SHA-256 fingerprint of the initiator's certificate, as hex. */

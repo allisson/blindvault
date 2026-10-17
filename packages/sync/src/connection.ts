@@ -1,9 +1,12 @@
-// Opens the WebRTC connection of a pairing from the two payloads (`pairing-protocol.md` §3, §4):
-// a fresh DTLS certificate per session, non-trickled ICE, the peer's SDP rebuilt from its payload,
-// and one reliable, ordered DataChannel made by the initiator. It resolves with a `Transport`, over
-// which the Noise handshake runs; DTLS is never trusted (§8.2). Browser only: the Playwright tests
-// in `e2e/` cover it.
+// Opens a WebRTC connection from two payloads (`pairing-protocol.md` §3, §4, `sync-protocol.md`
+// §5): a fresh DTLS certificate per session, non-trickled ICE, the peer's SDP rebuilt from its
+// payload, and one reliable, ordered DataChannel made by the initiator. The link level gathers and
+// connects from the fields both payloads share (D216); a pairing adds its own fields on top, and a
+// sync seals the link in its reconnection payload. It resolves with a `Transport`, over which the
+// Noise handshake runs; DTLS is never trusted (§8.2). Browser only: the Playwright tests in `e2e/`
+// cover it.
 
+import { type LinkFields, equalBytes } from './link-fields';
 import { type Payload, PayloadError, encodePayload } from './payload';
 import { buildRemoteSdp, parseLocalSdp } from './sdp';
 import { type Transport, TransportClosedError } from './transport';
@@ -25,7 +28,98 @@ export interface ConnectionOptions {
   readonly signal?: AbortSignal;
 }
 
-/** The payload fields that do not come from the connection. */
+/** The initiator's side of a link: its fields, gathered, to send first. */
+export interface LinkOffer {
+  readonly link: LinkFields;
+  /**
+   * Connects with the responder's fields; resolves once the DataChannel is open. Once only: a
+   * second answer, or one of another session, is refused (`PayloadError` `wrong-session`).
+   */
+  accept(answer: LinkFields): Promise<Transport>;
+  /** Closes the connection. */
+  close(): void;
+}
+
+/** The responder's side of a link: its fields, gathered, to send back. */
+export interface LinkAnswer {
+  readonly link: LinkFields;
+  /** Resolves once the initiator's DataChannel is open. */
+  readonly transport: Promise<Transport>;
+  close(): void;
+}
+
+/** Gathers the initiator's side of a session: `sessionId` is 16 random bytes, new every time. */
+export async function offerLink(
+  sessionId: Uint8Array,
+  options: ConnectionOptions,
+): Promise<LinkOffer> {
+  const peer = await openPeer(options);
+  try {
+    const channel = peer.connection.createDataChannel('blindvault', { ordered: true });
+    await peer.connection.setLocalDescription(await peer.connection.createOffer());
+    const link: LinkFields = {
+      role: 'initiator',
+      ...(await gathered(peer)),
+      sessionId: sessionId.slice(),
+    };
+    let accepted = false;
+    return {
+      link,
+      async accept(answer) {
+        if (accepted) throw new PayloadError('wrong-session', 'an answer was already accepted');
+        if (answer.role !== 'responder')
+          throw new PayloadError('wrong-role', 'expected the responder');
+        if (!equalBytes(answer.sessionId, link.sessionId)) {
+          throw new PayloadError('wrong-session', 'the answer is for another session');
+        }
+        if (peer.isClosed()) throw new TransportClosedError('local');
+        accepted = true;
+        await peer.connection.setRemoteDescription(buildRemoteSdp(answer));
+        return peer.open(channel);
+      },
+      close: peer.close,
+    };
+  } catch (error) {
+    peer.close();
+    throw error;
+  }
+}
+
+/** Answers the initiator's fields: gathers the responder's side, then waits for the channel. */
+export async function answerLink(
+  offer: LinkFields,
+  options: ConnectionOptions,
+): Promise<LinkAnswer> {
+  if (offer.role !== 'initiator') throw new PayloadError('wrong-role', 'expected the initiator');
+  const peer = await openPeer(options);
+  try {
+    const channel = new Promise<RTCDataChannel>((resolve) => {
+      peer.connection.addEventListener(
+        'datachannel',
+        (event) => {
+          resolve(event.channel);
+        },
+        { once: true },
+      );
+    });
+    await peer.connection.setRemoteDescription(buildRemoteSdp(offer));
+    await peer.connection.setLocalDescription(await peer.connection.createAnswer());
+    const link: LinkFields = {
+      role: 'responder',
+      ...(await gathered(peer)),
+      sessionId: offer.sessionId.slice(),
+    };
+    const transport = peer.failed(channel).then((c) => peer.open(c));
+    // The caller may never await it (an abandoned session); its rejection is not unhandled.
+    transport.catch(() => undefined);
+    return { link, transport, close: peer.close };
+  } catch (error) {
+    peer.close();
+    throw error;
+  }
+}
+
+/** The payload fields of a pairing that do not come from the connection. */
 export interface PayloadContext {
   readonly holdsVault: boolean;
   readonly formatVersions: readonly number[];
@@ -62,14 +156,10 @@ export async function startInitiator(
   context: InitiatorContext,
   options: ConnectionOptions,
 ): Promise<Initiator> {
-  const peer = await openPeer(options);
+  const offer = await offerLink(context.sessionId, options);
   try {
-    const channel = peer.connection.createDataChannel('blindvault', { ordered: true });
-    await peer.connection.setLocalDescription(await peer.connection.createOffer());
     const payload: Payload = {
-      role: 'initiator',
-      ...(await gathered(peer)),
-      sessionId: context.sessionId.slice(),
+      ...offer.link,
       holdsVault: context.holdsVault,
       formatVersions: [...context.formatVersions],
       recordTypes: [...context.recordTypes],
@@ -77,25 +167,15 @@ export async function startInitiator(
     };
     // Refuses here, not when shown, a description the payload cannot carry.
     encodePayload(payload);
-    let accepted = false;
     return {
       payload,
-      async accept(answer) {
-        if (accepted) throw new PayloadError('wrong-session', 'an answer was already accepted');
-        if (answer.role !== 'responder')
-          throw new PayloadError('wrong-role', 'expected the responder');
-        if (!equal(answer.sessionId, payload.sessionId)) {
-          throw new PayloadError('wrong-session', 'the answer is for another session');
-        }
-        if (peer.isClosed()) throw new TransportClosedError('local');
-        accepted = true;
-        await peer.connection.setRemoteDescription(buildRemoteSdp(answer));
-        return peer.open(channel);
+      accept: (answer) => offer.accept(answer),
+      close: () => {
+        offer.close();
       },
-      close: peer.close,
     };
   } catch (error) {
-    peer.close();
+    offer.close();
     throw error;
   }
 }
@@ -105,36 +185,25 @@ export async function startResponder(
   context: PayloadContext,
   options: ConnectionOptions,
 ): Promise<Responder> {
-  if (offer.role !== 'initiator') throw new PayloadError('wrong-role', 'expected the initiator');
-  const peer = await openPeer(options);
+  const answer = await answerLink(offer, options);
   try {
-    const channel = new Promise<RTCDataChannel>((resolve) => {
-      peer.connection.addEventListener(
-        'datachannel',
-        (event) => {
-          resolve(event.channel);
-        },
-        { once: true },
-      );
-    });
-    await peer.connection.setRemoteDescription(buildRemoteSdp(offer));
-    await peer.connection.setLocalDescription(await peer.connection.createAnswer());
     const payload: Payload = {
-      role: 'responder',
-      ...(await gathered(peer)),
-      sessionId: offer.sessionId.slice(),
+      ...answer.link,
       holdsVault: context.holdsVault,
       formatVersions: [...context.formatVersions],
       recordTypes: [...context.recordTypes],
       commitment: null,
     };
     encodePayload(payload);
-    const transport = peer.failed(channel).then((c) => peer.open(c));
-    // The caller may never await it (an abandoned session); its rejection is not unhandled.
-    transport.catch(() => undefined);
-    return { payload, transport, close: peer.close };
+    return {
+      payload,
+      transport: answer.transport,
+      close: () => {
+        answer.close();
+      },
+    };
   } catch (error) {
-    peer.close();
+    answer.close();
     throw error;
   }
 }
@@ -266,8 +335,4 @@ async function gathered(peer: Peer): Promise<ReturnType<typeof parseLocalSdp>> {
   const sdp = connection.localDescription?.sdp;
   if (!sdp) throw new TransportClosedError('error');
   return parseLocalSdp(sdp);
-}
-
-function equal(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((value, k) => value === b[k]);
 }
