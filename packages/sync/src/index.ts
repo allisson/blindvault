@@ -55,6 +55,17 @@ export {
   encodePayloadText,
 } from './payload';
 export {
+  DeliveryClosedError,
+  type DeliveryDirection,
+  type ManualDelivery,
+  type MemoryDeliveryOptions,
+  type MemoryDeliveryPair,
+  type PayloadDelivery,
+  manualDelivery,
+  memoryDelivery,
+  receiveReconnection,
+} from './delivery';
+export {
   MAX_RECONNECTION_MESSAGE_LENGTH,
   MIN_RECONNECTION_MESSAGE_LENGTH,
   RECONNECTION_VERSION,
@@ -63,6 +74,8 @@ export {
   type ReconnectionKeys,
   type ReconnectionRejection,
   type SealedReconnection,
+  decodeReconnectionText,
+  encodeReconnectionText,
   openReconnection,
   sealReconnection,
 } from './reconnect';
