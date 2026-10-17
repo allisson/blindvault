@@ -74,6 +74,7 @@ import {
   RestoreRejectedError,
   RetirementRefusedError,
   SubtreeBlockedError,
+  SyncRefusedError,
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
@@ -3903,6 +3904,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       lastSyncByPeer: () => session.lastSyncByPeer,
       openPairing: () => session.openPairing({ kek: kek(caller), method: 'password' }),
       openReadmission: () => session.openReadmission(),
+      openSync: () => session.openSync(new Uint8Array(16)),
       confirmUser: () => {
         session.confirmUser({ kek: kek(caller), method: 'password' });
       },
@@ -5166,5 +5168,117 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
     expect(() => gy.mac('initiator', H)).toThrow(VaultLockedError);
     await expect(gy.merge(records, gx.identity.publicKey)).rejects.toThrow(VaultLockedError);
     await expect(gy.records()).rejects.toThrow(VaultLockedError);
+  });
+});
+
+describe('sync (sync-protocol.md §3, D113, D216)', () => {
+  /** A Device record of `publicKey`, planted as another device's sync would write it. */
+  function plantDevice(
+    store: MemoryStore,
+    keys: Keys,
+    publicKey: Uint8Array,
+    hlc: Hlc,
+    retired = false,
+  ) {
+    plant(
+      store,
+      keys,
+      RecordType.device,
+      deviceId(publicKey),
+      hlc,
+      false,
+      deviceToCbor({ publicKey, displayName: 'Phone', retired, registeredAt: T0 }),
+    );
+  }
+
+  /** X created the vault and holds the Device record of another device, the peer. */
+  async function withPeer(clock = new Clock()) {
+    const x = await create(clock);
+    const peer = generateDeviceIdentity(new Keyring());
+    plantDevice(x.store, keysOf(x.store), peer.publicKey, hlcAt(T0));
+    x.session.lock();
+    const session = await unlock(x.store, clock);
+    return { ...x, session, peer };
+  }
+
+  function refusal(session: VaultSession, peer: Uint8Array): string {
+    try {
+      session.openSync(peer);
+    } catch (error) {
+      if (error instanceof SyncRefusedError) return error.reason;
+      throw error;
+    }
+    return 'opened';
+  }
+
+  it("opens with this device's identity, the vault and the peer's key and name from its record", async () => {
+    const { session, peer } = await withPeer();
+    const grant = session.openSync(peer.deviceId);
+    expect(deviceId(grant.identity.publicKey)).toEqual(session.deviceId);
+    expect(grant.vaultId).toEqual(session.vaultId);
+    expect(grant.peerPublicKey).toEqual(peer.publicKey);
+    expect(grant.peerDeviceId).toEqual(peer.deviceId);
+    expect(grant.peerName).toBe('Phone');
+  });
+
+  it('refuses an unknown peer, this device itself, and a retired peer (§3, D31)', async () => {
+    const { session, peer } = await withPeer();
+    expect(refusal(session, randomId())).toBe('unknown-peer');
+    expect(refusal(session, session.deviceId)).toBe('unknown-peer');
+    await session.retireDevice(peer.deviceId);
+    expect(refusal(session, peer.deviceId)).toBe('retired-peer');
+  });
+
+  it('refuses a device with no Device record of its own, or a retired one (D41, D113)', async () => {
+    const x = await withPeer();
+    const file = await x.session.exportBackup({ kek: kek(new Keyring()), method: 'password' });
+    const keyring = new Keyring();
+    const restored = await VaultSession.restore({
+      store: new MemoryStore(),
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      now: x.clock.now,
+    });
+    open.push(restored);
+    expect(restored.registered).toBe(false);
+    expect(refusal(restored, x.peer.deviceId)).toBe('unregistered');
+
+    const own = x.session.deviceId;
+    const ownKey = must(x.session.devices().find((d) => idKey(d.deviceId) === idKey(own))).device
+      .publicKey;
+    plantDevice(x.store, keysOf(x.store), ownKey, hlcAt(T0 + DAY), true);
+    x.session.lock();
+    const retired = await unlock(x.store, x.clock);
+    expect(retired.retired).toBe(true);
+    expect(refusal(retired, x.peer.deviceId)).toBe('retired');
+  });
+
+  it('opens while read-only for a clock gone back, and while a record is kept aside (§3, §7)', async () => {
+    const x = await withPeer();
+    x.session.lock();
+    x.clock.t = T0 - FUTURE_CLOCK_BOUND_MS - DAY;
+    const behind = await unlock(x.store, x.clock);
+    expect(behind.writable).toBe(false);
+    expect(refusal(behind, x.peer.deviceId)).toBe('opened');
+
+    const y = await withPeer();
+    y.store.put({
+      recordType: RecordType.item,
+      recordId: randomId(),
+      envelope: Uint8Array.of(0xa0) as RecordEnvelope,
+    });
+    y.session.lock();
+    const damaged = await unlock(y.store, y.clock);
+    expect(damaged.corrupt()).toHaveLength(1);
+    expect(refusal(damaged, y.peer.deviceId)).toBe('opened');
+  });
+
+  it('is refused once the vault locks (D93)', async () => {
+    const { session, peer } = await withPeer();
+    session.lock();
+    expect(() => session.openSync(peer.deviceId)).toThrow(VaultLockedError);
   });
 });

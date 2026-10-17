@@ -81,6 +81,7 @@ import {
   RecordNotFoundError,
   RestoreRejectedError,
   SubtreeBlockedError,
+  SyncRefusedError,
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
@@ -441,6 +442,20 @@ export interface ReadmissionGrant {
    * reported, and the rest merges (sync-protocol.md §2.3, D206).
    */
   merge(envelopes: readonly Uint8Array[], peerPublicKey: Uint8Array): Promise<ReadmissionResult>;
+}
+
+/**
+ * A sync with one peer on this device (sync-protocol.md §3, §4, D216): what the reconnection payload
+ * and `Noise_KK` take. No key leaves the session but the identity's handle.
+ */
+export interface SyncGrant {
+  /** This device's identity, for `Noise_K` and `Noise_KK` (sync-protocol.md §4.2, §5). */
+  readonly identity: DeviceIdentity;
+  readonly vaultId: Uint8Array;
+  /** The peer's static public key, from its Device record. */
+  readonly peerPublicKey: Uint8Array;
+  readonly peerDeviceId: Uint8Array;
+  readonly peerName: string;
 }
 
 export interface ResetPasswordOptions {
@@ -2166,6 +2181,29 @@ export class VaultSession {
   get retired(): boolean {
     this.#unlocked();
     return this.#state.devices.get(idKey(this.#identity.deviceId))?.device.value.retired === true;
+  }
+
+  /**
+   * Starts a sync with the peer the user picked (sync-protocol.md §3, D113, D216): refused with
+   * `SyncRefusedError` unless this device holds its own Device record, not retired, and the peer's,
+   * not retired. A read-only vault and a record kept aside as corrupt still sync (§1.5, §7).
+   */
+  openSync(peerDeviceId: Uint8Array): SyncGrant {
+    this.#unlocked();
+    if (!this.registered) throw new SyncRefusedError('unregistered');
+    if (this.retired) throw new SyncRefusedError('retired');
+    const peer = this.#state.devices.get(idKey(peerDeviceId));
+    if (!peer || sameBytes(peerDeviceId, this.#identity.deviceId)) {
+      throw new SyncRefusedError('unknown-peer');
+    }
+    if (peer.device.value.retired) throw new SyncRefusedError('retired-peer');
+    return {
+      identity: this.#identity,
+      vaultId: this.vaultId,
+      peerPublicKey: peer.device.value.publicKey.slice(),
+      peerDeviceId: peerDeviceId.slice(),
+      peerName: peer.device.value.displayName,
+    };
   }
 
   /**

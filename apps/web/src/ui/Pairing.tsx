@@ -127,7 +127,7 @@ function reasonText(
  * read uses no STUN server, so the option is then on and cannot be turned off until the list is
  * fixed or the defaults restored; the controller reads the list again when the pairing starts.
  */
-function SameNetwork({
+export function SameNetwork({
   checked,
   onChange,
 }: {
@@ -309,10 +309,18 @@ function StunServers({
 }
 
 /**
- * A payload for the other device, as a QR code to scan and a text to copy; whoever sees the code or
- * carries the text sees this device's addresses (D117, D208).
+ * A payload for the other device, as a QR code to scan and a text to copy, with what whoever sees
+ * the code or carries the text learns: a pairing's addresses by default (D117, D208).
  */
-function PayloadText({ text, label }: { readonly text: string; readonly label: string }) {
+export function PayloadText({
+  text,
+  label,
+  channel,
+}: {
+  readonly text: string;
+  readonly label: string;
+  readonly channel?: string;
+}) {
   const m = useMessages();
   const [copied, setCopied] = useState(false);
   return (
@@ -336,26 +344,25 @@ function PayloadText({ text, label }: { readonly text: string; readonly label: s
       >
         {copied ? m.pairing.copied : m.pairing.copy}
       </Button>
-      <p className="text-sm text-zinc-500">{m.pairing.channel}</p>
+      <p className="text-sm text-zinc-500">{channel ?? m.pairing.channel}</p>
     </div>
   );
 }
 
-/** A text scanned from the other device's QR code, or pasted (D208). */
-function PasteText({
+/** A text scanned from the other device's QR code, or pasted (D208): `errorOf` says why not taken. */
+export function PasteText<C extends string>({
   label,
   submit,
-  flow,
   onPaste,
+  errorOf,
 }: {
   readonly label: string;
   readonly submit: string;
-  readonly flow: PairingFlow;
-  readonly onPaste: (text: string) => Promise<PayloadCheck>;
+  readonly onPaste: (text: string) => Promise<C>;
+  readonly errorOf: (check: C) => string | undefined;
 }) {
-  const m = useMessages();
   const [text, setText] = useState('');
-  const [check, setCheck] = useState<PayloadCheck>();
+  const [check, setCheck] = useState<C>();
   const [working, setWorking] = useState(false);
   const take = async (value: string): Promise<boolean> => {
     setWorking(true);
@@ -386,7 +393,7 @@ function PasteText({
           setText(e.target.value);
           setCheck(undefined);
         }}
-        error={payloadError(m, check, flow)}
+        error={check === undefined ? undefined : errorOf(check)}
         data-testid="pairing-paste"
       />
       <Button type="submit" className="self-start" disabled={text.trim() === '' || working}>
@@ -468,8 +475,8 @@ function Stage({
           <PasteText
             label={readmit ? r.answerPaste : p.answerPaste}
             submit={p.connect}
-            flow={flow}
             onPaste={(text) => Promise.resolve(controller.pairingAnswer(text))}
+            errorOf={(check) => payloadError(m, check, flow)}
           />
           {cancel}
         </>
@@ -482,8 +489,8 @@ function Stage({
           <PasteText
             label={readmit ? r.offerPaste : m.join.offerPaste}
             submit={m.join.next}
-            flow={flow}
             onPaste={(text) => controller.joinOffer(text)}
+            errorOf={(check) => payloadError(m, check, flow)}
           />
           {cancel}
         </>

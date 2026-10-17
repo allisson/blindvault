@@ -59,6 +59,9 @@ import {
   RegenerationBlockedError,
   RetirementRefusedError,
   RestoreRejectedError,
+  type SyncGrant,
+  type SyncRefusal,
+  SyncRefusedError,
   UnlockRejectedError,
   type UnlockMethod,
   UnsupportedLocalConfigError,
@@ -82,6 +85,7 @@ import {
 import { type Ready } from './ready';
 import { StorageMonitor } from './storage-state';
 import { type StunSettings } from './stun-settings';
+import { type SyncCheck, type SyncPort, type SyncStage, Syncing } from './sync';
 import {
   PasskeyCancelledError,
   type PasskeyPort,
@@ -307,6 +311,18 @@ export type PairingStart =
 export type ReadmissionStart =
   'ok' | 'locked' | Exclude<PairingRefusedError['reason'], 'known-device'> | 'no-webrtc';
 
+/**
+ * Starting a sync with a peer (sync-protocol.md §3, D216): no password, so only the refusals of
+ * §3, a locked vault, or no WebRTC.
+ */
+export type SyncStart = 'ok' | 'locked' | SyncRefusal | 'no-webrtc';
+
+/** The peer of the sync in progress, as the user picked it. */
+export interface SyncPeer {
+  readonly deviceId: Uint8Array;
+  readonly name: string;
+}
+
 /** Which flow the pairing in progress is: A's, B's, or a re-admission (D207). */
 export type PairingFlow = 'invite' | 'join' | 'readmit';
 
@@ -336,6 +352,8 @@ export interface ControllerDeps {
   readonly stun?: () => StunSettings;
   /** WebRTC, for pairing (§8.4); absent where the browser has none. */
   readonly pairing?: PairingPort;
+  /** WebRTC, for sync (§9.1, D216); absent where the browser has none. */
+  readonly sync?: SyncPort;
 }
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
@@ -423,6 +441,11 @@ export class VaultController {
    * (§8.4, D93).
    */
   #pairing: Inviting | Joining | Readmitting | undefined;
+  /**
+   * The sync in progress, with the peer the user picked, until closed or locked (§9.1, D93, D216).
+   * One flow at a time: a sync and a pairing or re-admission end each other.
+   */
+  #sync: { readonly flow: Syncing; readonly peer: SyncPeer } | undefined;
 
   /** Whether the browser keeps this origin's storage, and how much is used (D196). */
   readonly storage: StorageMonitor;
@@ -1318,6 +1341,7 @@ export class VaultController {
     // Before the session locks: the peer learns why the pairing ended (D93).
     this.#pairing?.end('locked');
     this.#pairing = undefined;
+    this.#dropSync();
     const status = this.#status;
     if (status.kind === 'unlocked') status.session.lock();
     if (status.kind === 'unlocked' || status.kind === 'unlocking') this.#set({ kind: 'locked' });
@@ -1625,7 +1649,8 @@ export class VaultController {
       !this.#readmission &&
       this.#refounding === undefined &&
       !this.#refounded &&
-      this.#pairing === undefined
+      this.#pairing === undefined &&
+      this.#sync === undefined
     );
   }
 
@@ -2022,6 +2047,71 @@ export class VaultController {
   #dropPairing(): void {
     this.#pairing?.end('cancelled');
     this.#pairing = undefined;
+    this.#dropSync();
+  }
+
+  // --- sync ----------------------------------------------------------------------------------------
+
+  /** The sync in progress on this device, as its screens show it (D216). */
+  get sync(): SyncStage | undefined {
+    return this.#sync?.flow.stage;
+  }
+
+  /** The peer of the sync in progress. */
+  get syncPeer(): SyncPeer | undefined {
+    return this.#sync?.peer;
+  }
+
+  /**
+   * Starts a sync with the peer the user picked (sync-protocol.md §3, §4, D216): no password, since
+   * no key leaves the device. `initiator` shows this device's code first; `responder` reads the
+   * other's. Ends any pairing, re-admission or other sync in progress.
+   */
+  startSync(
+    peerDeviceId: Uint8Array,
+    role: 'initiator' | 'responder',
+    options: PairingOptions,
+  ): SyncStart {
+    const status = this.#status;
+    const port = this.#deps.sync;
+    if (status.kind !== 'unlocked') return 'locked';
+    if (!port) return 'no-webrtc';
+    this.#dropPairing();
+    let grant: SyncGrant;
+    try {
+      grant = status.session.openSync(peerDeviceId);
+    } catch (error) {
+      if (error instanceof SyncRefusedError) return error.reason;
+      throw error;
+    }
+    const flow = new Syncing({
+      port,
+      sameNetwork: options.sameNetwork,
+      stun: this.#stun(),
+      grant,
+      role,
+      onChange: this.#pairingChanged,
+    });
+    this.#sync = { flow, peer: { deviceId: grant.peerDeviceId, name: grant.peerName } };
+    this.#set({ ...status });
+    flow.begin();
+    return 'ok';
+  }
+
+  /** The peer's code, read from its QR code or pasted (§4.3, §4.4). */
+  syncPayload(text: string): Promise<SyncCheck> {
+    return this.#sync?.flow.submit(text) ?? Promise.resolve('unavailable');
+  }
+
+  /** Cancels the sync, or closes one that ended or connected. */
+  cancelSync(): void {
+    this.#dropSync();
+    this.#set({ ...this.#status });
+  }
+
+  #dropSync(): void {
+    this.#sync?.flow.end();
+    this.#sync = undefined;
   }
 
   // --- re-founding --------------------------------------------------------------------------------

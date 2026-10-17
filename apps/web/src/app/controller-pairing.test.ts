@@ -1,6 +1,6 @@
-// The controller's pairing (§8.4, D202, D203): two controllers, each with its own IndexedDB and Web
-// Locks, over the in-memory transport in place of WebRTC. The protocol itself is tested in
-// `packages/sync` and `tests/pairing.test.ts`; here, the flow the screens drive.
+// The controller's pairing (§8.4, D202, D203) and sync (§9.1, D216): two controllers, each with its
+// own IndexedDB and Web Locks, over the in-memory transport in place of WebRTC. The protocol itself
+// is tested in `packages/sync` and `tests/pairing.test.ts`; here, the flow the screens drive.
 
 import { type KdfPort, MEMLIMIT, initCrypto } from '@blindvault/crypto';
 import {
@@ -20,6 +20,7 @@ import { VaultController } from './controller';
 import { type PairingPort, type PairingStage, STUN_SERVERS } from './pairing';
 import { type PasskeyPort } from './passkey';
 import { type StunSettings } from './stun-settings';
+import { type SyncPort, type SyncStage } from './sync';
 
 beforeAll(initCrypto);
 
@@ -129,7 +130,56 @@ function network() {
       });
     },
   };
-  return { a, b, options, closed };
+  // A sync's link, made by I's offer and opened by I's accept for R.
+  let syncLink: { pair: MemoryPair; open: () => void; opened: Promise<void> } | undefined;
+  const sync: SyncPort = {
+    offerLink: (sessionId, connection) => {
+      options.push(connection);
+      let open!: () => void;
+      const opened = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      const pair = memoryPair();
+      syncLink = { pair, open, opened };
+      return Promise.resolve({
+        link: {
+          role: 'initiator',
+          setup: 'actpass',
+          fingerprint: new Uint8Array(32).fill(0x10),
+          ...DESCRIPTION,
+          sessionId: sessionId.slice(),
+        },
+        accept: () => {
+          open();
+          return Promise.resolve(pair.a);
+        },
+        close: () => {
+          closed.push('sync-i');
+          pair.a.close();
+        },
+      });
+    },
+    answerLink: (offer, connection) => {
+      options.push(connection);
+      if (!syncLink) return Promise.reject(new Error('no session'));
+      const { pair, opened } = syncLink;
+      return Promise.resolve({
+        link: {
+          role: 'responder',
+          setup: 'active',
+          fingerprint: new Uint8Array(32).fill(0x30),
+          ...DESCRIPTION,
+          sessionId: offer.sessionId.slice(),
+        },
+        transport: opened.then(() => pair.b),
+        close: () => {
+          closed.push('sync-r');
+          pair.b.close();
+        },
+      });
+    },
+  };
+  return { a, b, sync, options, closed };
 }
 
 const controllers: VaultController[] = [];
@@ -144,6 +194,7 @@ function controller(
   pairing?: PairingPort,
   passkeys?: PasskeyPort,
   stun?: () => StunSettings,
+  sync?: SyncPort,
 ) {
   const c = new VaultController({
     factory,
@@ -153,6 +204,7 @@ function controller(
     ...(pairing ? { pairing } : {}),
     ...(passkeys ? { passkeys } : {}),
     ...(stun ? { stun } : {}),
+    ...(sync ? { sync } : {}),
   });
   controllers.push(c);
   return c;
@@ -191,8 +243,8 @@ async function toSas(
   factoryB = new IDBFactory(),
   net = network(),
 ) {
-  const a = controller('a', new IDBFactory(), net.a);
-  const b = controller('b', factoryB, net.b);
+  const a = controller('a', new IDBFactory(), net.a, undefined, undefined, net.sync);
+  const b = controller('b', factoryB, net.b, undefined, undefined, net.sync);
   await vaultOnA(a);
   await session(a).createItem({
     templateId: 'login',
@@ -1015,6 +1067,109 @@ describe('re-admission through the controller (§9, D206, D207)', () => {
     );
     expect(a.pairingFlow).toBe('readmit');
     expect(await stage(b, 'failed')).toEqual({ kind: 'failed', reason: 'cancelled', by: 'remote' });
+    a.cancelPairing();
+  });
+});
+
+describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)', () => {
+  /** A and B, paired: each holds the other's Device record. */
+  async function paired() {
+    const { a, b, net } = await toSas();
+    a.confirmSas();
+    b.confirmSas();
+    await stage(a, 'done');
+    await vi.waitFor(() => {
+      expect(b.status.kind).toBe('unlocked');
+    });
+    a.cancelPairing();
+    net.options.splice(0);
+    return { a, b, net, idA: session(a).deviceId, idB: session(b).deviceId };
+  }
+
+  async function syncStage(c: VaultController, kind: SyncStage['kind']): Promise<SyncStage> {
+    await vi.waitFor(() => {
+      expect(c.sync?.kind).toBe(kind);
+    });
+    const current = c.sync;
+    if (!current) throw new Error('no sync');
+    return current;
+  }
+
+  function codeOf(s: SyncStage): string {
+    if (s.kind !== 'offer' && s.kind !== 'answer') throw new Error(`no code: ${s.kind}`);
+    return s.text;
+  }
+
+  it('connects two paired devices, each with the other picked, either one first', async () => {
+    const { a, b, net, idA, idB } = await paired();
+    expect(b.startSync(idA, 'initiator', { sameNetwork: true })).toBe('ok');
+    expect(a.startSync(idB, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(b.syncPeer).toEqual({ deviceId: idA, name: 'Chrome on macOS' });
+    expect(a.syncPeer).toEqual({ deviceId: idB, name: 'Firefox on Linux' });
+    expect(a.sync).toEqual({ kind: 'scan' });
+    // No asset update while a sync runs (D152).
+    expect(a.updateAllowed).toBe(false);
+
+    const offer = codeOf(await syncStage(b, 'offer'));
+    expect(await a.syncPayload('not a code')).toBe('malformed');
+    expect(await a.syncPayload(offer)).toBe('ok');
+    const answer = codeOf(await syncStage(a, 'answer'));
+    expect(await b.syncPayload(offer)).toBe('not-from-peer');
+    expect(await b.syncPayload(answer)).toBe('ok');
+    await syncStage(a, 'connected');
+    await syncStage(b, 'connected');
+    expect(net.options.map((o) => o.iceServers)).toEqual([[], []]);
+
+    // Closing on one ends the other's connection.
+    a.cancelSync();
+    expect(a.sync).toBeUndefined();
+    expect(a.updateAllowed).toBe(true);
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'closed' });
+  });
+
+  it('refuses a peer it holds no record of, itself, and a retired peer (§3, D31)', async () => {
+    const { a, idA, idB } = await paired();
+    expect(a.startSync(new Uint8Array(16), 'initiator', { sameNetwork: true })).toBe(
+      'unknown-peer',
+    );
+    expect(a.startSync(idA, 'initiator', { sameNetwork: true })).toBe('unknown-peer');
+    await session(a).retireDevice(idB);
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true })).toBe('retired-peer');
+    expect(a.sync).toBeUndefined();
+  });
+
+  it('starts only unlocked, with WebRTC', async () => {
+    const none = controller('n', new IDBFactory());
+    await created(none);
+    expect(none.startSync(new Uint8Array(16), 'initiator', { sameNetwork: true })).toBe(
+      'no-webrtc',
+    );
+    const { a, idB } = await paired();
+    a.lock();
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true })).toBe('locked');
+    expect(await a.syncPayload('x')).toBe('unavailable');
+  });
+
+  it('a lock ends the sync and closes its connection (D93)', async () => {
+    const { a, net, idB } = await paired();
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true })).toBe('ok');
+    await syncStage(a, 'offer');
+    a.lock();
+    expect(a.sync).toBeUndefined();
+    expect(net.closed).toContain('sync-i');
+  });
+
+  it('one flow at a time: a sync ends a re-admission, and a re-admission ends a sync', async () => {
+    const { a, idB } = await paired();
+    expect(await a.startReadmission('initiator', { sameNetwork: true, defaultName: 'x' })).toBe(
+      'ok',
+    );
+    expect(a.startSync(idB, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(a.pairingFlow).toBeUndefined();
+    expect(await a.startReadmission('initiator', { sameNetwork: true, defaultName: 'x' })).toBe(
+      'ok',
+    );
+    expect(a.sync).toBeUndefined();
     a.cancelPairing();
   });
 });

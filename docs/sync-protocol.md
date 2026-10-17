@@ -178,6 +178,11 @@ shown or read ("Sync with {name}"), so each device knows which static key to exp
 **Roles.** As in pairing, **I** is the device that shows the first payload; it makes the WebRTC
 offer and initiates `Noise_KK`. **R** answers. Either device can be I.
 
+**Starting (D216).** The user picks the peer in Settings › Devices on both devices, then chooses on
+each whether it shows its code first (I) or reads the other's (R). No password is asked: no key
+leaves the device. Each code is shown as a QR code and as text, and read with the camera or pasted
+(section 4.4). Only one flow runs at a time: a sync and a pairing or re-admission end each other.
+
 ## 4. Reconnection payload
 
 ### 4.1 Bytes

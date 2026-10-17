@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { startInitiator, startResponder } from '@blindvault/sync';
+import { answerLink, offerLink, startInitiator, startResponder } from '@blindvault/sync';
 import { App, supported } from './App';
 import { manifestHash } from './app/build-info';
 import { VaultController } from './app/controller';
@@ -55,7 +55,7 @@ function start(root: HTMLElement): void {
     stun: loadStunSettings,
     ...(typeof RTCPeerConnection === 'undefined'
       ? {}
-      : { pairing: { startInitiator, startResponder } }),
+      : { pairing: { startInitiator, startResponder }, sync: { offerLink, answerLink } }),
   });
   const monitor = new UpdateMonitor({
     lock: () => {

@@ -1,9 +1,9 @@
-// The bridge between the browser's SDP and the pairing payload (`pairing-protocol.md` §3.2, §4).
-// `parseLocalSdp` takes from this device's gathered description what the payload carries;
-// `buildRemoteSdp` rebuilds the peer's description from its payload. The rebuilt SDP carries the
+// The bridge between the browser's SDP and the payloads (`pairing-protocol.md` §3.2, §4,
+// `sync-protocol.md` §4.1). `parseLocalSdp` takes from this device's gathered description what a
+// payload carries; `buildRemoteSdp` rebuilds the peer's description from the fields of its payload. The rebuilt SDP carries the
 // peer's DTLS fingerprint, so the browser refuses any other certificate (`crypto-spec.md` §13).
 
-import type { Candidate, Payload, Setup } from './payload';
+import type { Candidate, LinkFields, Setup } from './link-fields';
 
 export class SdpError extends Error {
   override name = 'SdpError';
@@ -79,7 +79,7 @@ export function parseLocalSdp(sdp: string): LocalDescription {
 }
 
 /** Rebuilds the peer's description from its payload: an offer from I, an answer from R (§4). */
-export function buildRemoteSdp(payload: Payload): { type: 'offer' | 'answer'; sdp: string } {
+export function buildRemoteSdp(payload: LinkFields): { type: 'offer' | 'answer'; sdp: string } {
   const fingerprint = Array.from(payload.fingerprint, (b) =>
     b.toString(16).padStart(2, '0').toUpperCase(),
   ).join(':');

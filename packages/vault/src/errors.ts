@@ -191,6 +191,21 @@ export class PairingRefusedError extends VaultError {
 }
 
 /**
+ * Why this device does not sync with a peer (sync-protocol.md §3, D113, D216): it holds no Device
+ * record of its own, its own is retired, it holds no Device record of the peer (or the peer is this
+ * device), or the peer's is retired. A read-only vault and a record kept aside as corrupt still
+ * sync.
+ */
+export type SyncRefusal = 'unregistered' | 'retired' | 'unknown-peer' | 'retired-peer';
+
+export class SyncRefusedError extends VaultError {
+  override name = 'SyncRefusedError';
+  constructor(readonly reason: SyncRefusal) {
+    super(`sync refused: ${reason}`);
+  }
+}
+
+/**
  * Why B refuses what it received, before its commit (pairing-protocol.md §8 step 5, D202): each
  * reason is the abort reason of §10.3 it sends. `record` names a record that fails verification.
  * Nothing was written.

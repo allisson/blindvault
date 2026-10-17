@@ -188,3 +188,51 @@ test('aborting the session closes the connection before it opens', async ({ brow
   });
   expect(await a.page.evaluate((text) => window.harness.accept(text), answer)).toBe('closed:local');
 });
+
+// The connection of a sync (`sync-protocol.md` §4, §5, D216): the same link, its fields sealed in
+// the reconnection payload with `Noise_K`, opened only with the picked peer's key.
+test('two registered devices connect from their reconnection payloads and carry messages', async ({
+  browser,
+}) => {
+  const a = await device(browser);
+  const b = await device(browser, true);
+  const c = await device(browser);
+  const keyA = await a.page.evaluate(() => window.harness.syncIdentity());
+  const keyB = await b.page.evaluate(() => window.harness.syncIdentity());
+  await c.page.evaluate(() => window.harness.syncIdentity());
+  await a.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyB);
+  await b.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyA);
+  await c.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyB);
+
+  // C seals to B too, but B picked A: C's offer does not open.
+  const fromC = await c.page.evaluate(() => window.harness.startSyncInitiator());
+  expect(await b.page.evaluate((text) => window.harness.startSyncResponder(text), fromC)).toBe(
+    'not-from-peer',
+  );
+
+  const offer = await a.page.evaluate(() => window.harness.startSyncInitiator());
+  expect(offer).toMatch(/^[0-9A-Z $%*+\-./:]+$/);
+  const answer = await b.page.evaluate((text) => window.harness.startSyncResponder(text), offer);
+  // I's own offer handed back to it is not R's answer.
+  expect(await a.page.evaluate((text) => window.harness.acceptSync(text), offer)).toBe(
+    'not-from-peer',
+  );
+  expect(await a.page.evaluate((text) => window.harness.acceptSync(text), answer)).toBe('open');
+  expect(await b.page.evaluate(() => window.harness.connected())).toBe('open');
+
+  for (const [from, to, length, seed] of [
+    [a, b, 1, 8],
+    [b, a, MAX_MESSAGE_LENGTH, 9],
+  ] as const) {
+    await from.page.evaluate(([l, s]) => window.harness.send(l, s), [length, seed] as const);
+    expect(await to.page.evaluate(() => window.harness.receive())).toEqual(checksum(length, seed));
+  }
+  expect(await b.page.evaluate(() => window.harness.close())).toBe('local');
+  expect(await a.page.evaluate(() => window.harness.closed())).toBe('remote');
+});

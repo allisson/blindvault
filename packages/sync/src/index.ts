@@ -7,8 +7,12 @@ export {
   GATHER_TIMEOUT_MS,
   type Initiator,
   type InitiatorContext,
+  type LinkAnswer,
+  type LinkOffer,
   type PayloadContext,
   type Responder,
+  answerLink,
+  offerLink,
   startInitiator,
   startResponder,
 } from './connection';
@@ -26,6 +30,7 @@ export {
   MAX_PROTOCOL_MESSAGE_LENGTH,
   toFrames,
 } from './frames';
+export { type LinkFields } from './link-fields';
 export { type Direction, type MemoryPair, type MemoryPairOptions, memoryPair } from './memory';
 export {
   ABORT_REASONS,
