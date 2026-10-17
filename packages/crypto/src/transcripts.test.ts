@@ -14,6 +14,7 @@ import {
   pairingSas,
   readmissionMac,
   reconnectionPrologue,
+  syncPrologue,
 } from './transcripts';
 
 beforeAll(initCrypto);
@@ -196,5 +197,41 @@ describe('prologue_K (crypto-spec.md §13, sync-protocol.md §4.2, D213)', () =>
 
   it('refuses a vault ID that is not 16 bytes', () => {
     expect(() => reconnectionPrologue(new Uint8Array(15), 'initiator')).toThrow(EncodingError);
+  });
+});
+
+describe('prologue_KK (crypto-spec.md §13, sync-protocol.md §5, D217)', () => {
+  const kk = () =>
+    [
+      fromHex(t.prologueKK.reconnectionInitiator),
+      fromHex(t.prologueKK.reconnectionResponder),
+      fromHex(t.dtlsFingerprintInitiator),
+      fromHex(t.dtlsFingerprintResponder),
+    ] as const;
+
+  it('reproduces the vector', () => {
+    expect(toHex(syncPrologue(...kk()))).toBe(t.prologueKK.prologue);
+  });
+
+  it.each([0, 1, 2, 3])('changes with input %i, and with the role order', (index) => {
+    const changed = [...kk()];
+    const value = changed[index]?.slice() ?? new Uint8Array();
+    value[0] = (value[0] ?? 0) ^ 1;
+    changed[index] = value;
+    expect(toHex(syncPrologue(...(changed as unknown as ReturnType<typeof kk>)))).not.toBe(
+      t.prologueKK.prologue,
+    );
+    const [mi, mr, fi, fr] = kk();
+    expect(toHex(syncPrologue(mr, mi, fr, fi))).not.toBe(t.prologueKK.prologue);
+  });
+
+  it('differs from prologue_XX over the same bytes', () => {
+    expect(toHex(syncPrologue(...kk()))).not.toBe(toHex(pairingPrologue(...kk())));
+  });
+
+  it('refuses a fingerprint that is not 32 bytes', () => {
+    const [mi, mr, fi] = kk();
+    expect(() => syncPrologue(mi, mr, fi, new Uint8Array(31))).toThrow(EncodingError);
+    expect(() => syncPrologue(mi, mr, new Uint8Array(33), fi)).toThrow(EncodingError);
   });
 });

@@ -456,6 +456,12 @@ every project through the references in the root `tsconfig.json`.
   first code that opens, until the DataChannel is open; the controller holds one flow at a time and
   ends it on a lock. `src/ui/Sync.tsx` is the screen, opened from Settings › Devices, reusing the
   pairing's code and paste components. No new dependency.
+- **Sync handshake (Phase 5, D217).** `packages/crypto` adds `startNoiseKK` beside `startNoiseXX`
+  and `syncPrologue` beside `pairingPrologue`. `packages/sync/src/sync-handshake.ts` runs
+  `Noise_KK` over the open DataChannel from the two payloads' `Noise_K` messages and fingerprints,
+  reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
+  in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
+  reports a failed one as `unverified`. No new dependency.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

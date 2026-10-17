@@ -1,13 +1,14 @@
 // The manual sync flow (sync-protocol.md §3 to §5, §12, D215, D216): two flows, each with its own
-// identity, over an in-memory link in place of WebRTC. The payload and the delivery are tested in
-// `packages/sync`; here, what the screens drive: the texts, the refusals that keep the wait going,
-// the connection and its end.
+// identity, over an in-memory link in place of WebRTC. The payload, the delivery and `Noise_KK` are
+// tested in `packages/sync`; here, what the screens drive: the texts, the refusals that keep the
+// wait going, the handshake (D217), the connection and its end.
 
 import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import {
   type ConnectionOptions,
   type LinkFields,
   type MemoryPair,
+  type MemoryPairOptions,
   TransportClosedError,
   decodeReconnectionText,
   encodeReconnectionText,
@@ -31,7 +32,7 @@ const DESCRIPTION = {
 } as const;
 
 /** WebRTC replaced by one in-memory link per session: I's accept opens it for R. */
-function network() {
+function network(pairOptions: MemoryPairOptions = {}) {
   let link: { pair: MemoryPair; open: () => void; opened: Promise<void> } | undefined;
   const options: ConnectionOptions[] = [];
   const closed: string[] = [];
@@ -42,7 +43,7 @@ function network() {
       const opened = new Promise<void>((resolve) => {
         open = resolve;
       });
-      const pair = memoryPair();
+      const pair = memoryPair(pairOptions);
       link = { pair, open, opened };
       return Promise.resolve({
         link: {
@@ -134,8 +135,8 @@ function textOf(s: SyncStage): string {
 }
 
 /** I shows its offer, R takes it and shows its answer. */
-async function exchanged() {
-  const f = flows();
+async function exchanged(net = network()) {
+  const f = flows(net);
   f.i.begin();
   f.r.begin();
   const offer = textOf(await stage(f.i, 'offer'));
@@ -147,13 +148,60 @@ async function exchanged() {
 
 describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
   it('connects I and R from the two texts, with no STUN server on the same network only', async () => {
-    const { i, r, net, answer } = await exchanged();
+    const sent: [string, number][] = [];
+    const { i, r, net, answer } = await exchanged(
+      network({
+        intercept: (direction, message) => {
+          sent.push([direction, message.length]);
+          return [message];
+        },
+      }),
+    );
     expect(await i.submit(answer)).toBe('ok');
     await stage(i, 'connected');
     await stage(r, 'connected');
     expect(net.options.map((o) => o.iceServers)).toEqual([[], []]);
-    // Nothing is sent before Noise_KK (CRYPTO-INV-008).
+    // Nothing but the two Noise_KK messages is sent (CRYPTO-INV-008, D217).
+    expect(sent).toEqual([
+      ['a-to-b', 48],
+      ['b-to-a', 48],
+    ]);
     expect(await i.submit(answer)).toBe('unavailable');
+  });
+
+  it('fails as unverified when the peer does not complete Noise_KK, sending nothing else (D217)', async () => {
+    let seen = 0;
+    const sent: number[] = [];
+    const { i, r, answer } = await exchanged(
+      network({
+        // A changed byte in I's first handshake message: R refuses it, and I sees the close.
+        intercept: (_direction, message) => {
+          sent.push(message.length);
+          if (seen++ !== 0) return [message];
+          const t = message.slice();
+          t[t.length - 1] = (t[t.length - 1] ?? 0) ^ 1;
+          return [t];
+        },
+      }),
+    );
+    expect(await i.submit(answer)).toBe('ok');
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'unverified' });
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'closed' });
+    expect(sent).toEqual([48]);
+  });
+
+  it('no longer expires once Noise_KK completed (§12)', async () => {
+    vi.useFakeTimers();
+    const { i, r, answer } = await exchanged();
+    expect(await i.submit(answer)).toBe('ok');
+    await vi.waitFor(() => {
+      expect(i.stage.kind).toBe('connected');
+      expect(r.stage.kind).toBe('connected');
+    });
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(i.stage.kind).toBe('connected');
+    expect(r.stage.kind).toBe('connected');
+    i.end();
   });
 
   it('uses the STUN servers otherwise (D209)', async () => {

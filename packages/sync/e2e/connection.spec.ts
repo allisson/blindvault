@@ -191,7 +191,7 @@ test('aborting the session closes the connection before it opens', async ({ brow
 
 // The connection of a sync (`sync-protocol.md` §4, §5, D216): the same link, its fields sealed in
 // the reconnection payload with `Noise_K`, opened only with the picked peer's key.
-test('two registered devices connect from their reconnection payloads and carry messages', async ({
+test('two registered devices connect from their reconnection payloads, prove their identities with Noise_KK and carry messages', async ({
   browser,
 }) => {
   const a = await device(browser);
@@ -226,13 +226,51 @@ test('two registered devices connect from their reconnection payloads and carry 
   expect(await a.page.evaluate((text) => window.harness.acceptSync(text), answer)).toBe('open');
   expect(await b.page.evaluate(() => window.harness.connected())).toBe('open');
 
+  // Noise_KK, the first and only thing sent before the channel (CRYPTO-INV-008, D217).
+  const [hashA, hashB] = await Promise.all([
+    a.page.evaluate(() => window.harness.syncHandshake()),
+    b.page.evaluate(() => window.harness.syncHandshake()),
+  ]);
+  expect(hashA).toMatch(/^[0-9a-f]{128}$/);
+  expect(hashA).toBe(hashB);
+
   for (const [from, to, length, seed] of [
     [a, b, 1, 8],
-    [b, a, MAX_MESSAGE_LENGTH, 9],
+    [b, a, MAX_CHANNEL_MESSAGE_LENGTH, 9],
   ] as const) {
-    await from.page.evaluate(([l, s]) => window.harness.send(l, s), [length, seed] as const);
-    expect(await to.page.evaluate(() => window.harness.receive())).toEqual(checksum(length, seed));
+    await from.page.evaluate(([l, s]) => window.harness.channelSend(l, s), [length, seed] as const);
+    expect(await to.page.evaluate(() => window.harness.channelReceive())).toEqual(
+      checksum(length, seed),
+    );
   }
-  expect(await b.page.evaluate(() => window.harness.close())).toBe('local');
+  expect(await b.page.evaluate(() => window.harness.channelClose())).toBe('local');
   expect(await a.page.evaluate(() => window.harness.closed())).toBe('remote');
+});
+
+test('a device that does not hold the private key of the picked identity fails Noise_KK (D217)', async ({
+  browser,
+}) => {
+  const a = await device(browser);
+  const b = await device(browser, true);
+  const keyA = await a.page.evaluate(() => window.harness.syncIdentity());
+  const keyB = await b.page.evaluate(() => window.harness.syncIdentity());
+  await a.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyB);
+  await b.page.evaluate((key) => {
+    window.harness.syncPeer(key);
+  }, keyA);
+  const offer = await a.page.evaluate(() => window.harness.startSyncInitiator());
+  const answer = await b.page.evaluate((text) => window.harness.startSyncResponder(text), offer);
+  expect(await a.page.evaluate((text) => window.harness.acceptSync(text), answer)).toBe('open');
+  expect(await b.page.evaluate(() => window.harness.connected())).toBe('open');
+
+  // After the payloads, B swaps in a new identity: it still claims B's key to A, with no private key.
+  await b.page.evaluate(() => window.harness.syncIdentity());
+  const [resultA, resultB] = await Promise.all([
+    a.page.evaluate(() => window.harness.syncHandshake()),
+    b.page.evaluate(() => window.harness.syncHandshake()),
+  ]);
+  expect(resultB).toBe('handshake:invalid');
+  expect(resultA).toBe('handshake:closed');
 });

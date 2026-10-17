@@ -1,6 +1,7 @@
 // Transcript inputs of crypto-spec.md §13: the Noise prologues, in layout encoding (D1, D10), the
 // pairing commitment and SAS of `pairing-protocol.md` §6 (D199), the re-admission key confirmation
-// of §9 (D29), and the reconnection payload's prologue of `sync-protocol.md` §4.2 (D213).
+// of §9 (D29), and the reconnection payload's and the sync handshake's prologues of
+// `sync-protocol.md` §4.2 and §5 (D213, D217).
 
 import { EncodingError } from './errors';
 import { type SymmetricKey, keyBytes } from './keys';
@@ -57,6 +58,26 @@ export function reconnectionPrologue(
   role: 'initiator' | 'responder',
 ): Uint8Array {
   return layout(label('bv.reconnect.v1'), id(vaultId), label(role));
+}
+
+/**
+ * `prologue_KK = layout("bv.sync.v1", BLAKE2b-256(reconnection_initiator),
+ * BLAKE2b-256(reconnection_responder), dtlsFingerprint_initiator, dtlsFingerprint_responder)`: the
+ * reconnection payloads are the `Noise_K` messages `m` exactly as transmitted (D217).
+ */
+export function syncPrologue(
+  reconnectionInitiator: Uint8Array,
+  reconnectionResponder: Uint8Array,
+  fingerprintInitiator: Uint8Array,
+  fingerprintResponder: Uint8Array,
+): Uint8Array {
+  return layout(
+    label('bv.sync.v1'),
+    lib().crypto_generichash(PAYLOAD_HASH_LENGTH, reconnectionInitiator, null),
+    lib().crypto_generichash(PAYLOAD_HASH_LENGTH, reconnectionResponder, null),
+    fingerprint(fingerprintInitiator),
+    fingerprint(fingerprintResponder),
+  );
 }
 
 /** `BLAKE2b-256(layout("bv.pairing.commit.v1", nonce_I))` */

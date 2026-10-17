@@ -11,12 +11,14 @@ import {
 } from '@blindvault/crypto';
 
 import {
+  HandshakeError,
   type Initiator,
   type LinkOffer,
   PairingError,
   PairingSession,
   PayloadError,
   type Role,
+  type SessionPayload,
   type Transport,
   type SasStage,
   ReconnectionError,
@@ -34,6 +36,7 @@ import {
   sealReconnection,
   startInitiator,
   startResponder,
+  syncHandshake,
 } from '../src/index';
 
 const context = { holdsVault: true, formatVersions: [1], recordTypes: [1, 2, 3, 4, 5, 6] };
@@ -44,6 +47,8 @@ let initiator: Initiator | undefined;
 let identity: DeviceIdentity | undefined;
 let peerPublicKey: Uint8Array | undefined;
 let syncOffer: LinkOffer | undefined;
+// What `prologue_KK` binds of each side's reconnection payload, and this side's role in the sync.
+const sessionPayloads: { role?: Role; initiator?: SessionPayload; responder?: SessionPayload } = {};
 const vaultId = new Uint8Array(16).fill(0x42);
 let transport: Promise<Transport> | undefined;
 let channel: Transport | undefined;
@@ -136,39 +141,76 @@ export const harness = {
   /** Starts a sync as I (`sync-protocol.md` §4, §5); returns its reconnection payload text. */
   async startSyncInitiator(): Promise<string> {
     syncOffer = await offerLink(crypto.getRandomValues(new Uint8Array(16)), options);
-    return encodeReconnectionText(sealReconnection(syncOffer.link, syncKeys()).bytes);
+    const sealed = sealReconnection(syncOffer.link, syncKeys());
+    sessionPayloads.role = 'initiator';
+    sessionPayloads.initiator = {
+      message: sealed.message,
+      fingerprint: syncOffer.link.fingerprint,
+    };
+    return encodeReconnectionText(sealed.bytes);
   },
 
   /** Opens I's text as R, gathers and returns R's sealed answer; a refusal reason otherwise. */
   async startSyncResponder(offerText: string): Promise<string> {
-    let offer;
+    let opened;
     try {
-      offer = openReconnection(decodeReconnectionText(offerText), syncKeys(), {
+      opened = openReconnection(decodeReconnectionText(offerText), syncKeys(), {
         role: 'initiator',
-      }).reconnection;
+      });
     } catch (error) {
       return outcome(error);
     }
+    const offer = opened.reconnection;
     const answer = await answerLink(offer, options);
     transport = answer.transport;
-    return encodeReconnectionText(sealReconnection(answer.link, syncKeys()).bytes);
+    const sealed = sealReconnection(answer.link, syncKeys());
+    sessionPayloads.role = 'responder';
+    sessionPayloads.initiator = { message: opened.message, fingerprint: offer.fingerprint };
+    sessionPayloads.responder = { message: sealed.message, fingerprint: answer.link.fingerprint };
+    return encodeReconnectionText(sealed.bytes);
   },
 
   /** Opens R's text as I and connects: "open", a refusal reason, or "pending" after `ms`. */
   async acceptSync(answerText: string, ms = 20_000): Promise<string> {
     if (!syncOffer) throw new Error('start the sync first');
-    let answer;
+    let opened;
     try {
-      answer = openReconnection(decodeReconnectionText(answerText), syncKeys(), {
+      opened = openReconnection(decodeReconnectionText(answerText), syncKeys(), {
         role: 'responder',
         sessionId: syncOffer.link.sessionId,
-      }).reconnection;
+      });
     } catch (error) {
       return outcome(error);
     }
+    const answer = opened.reconnection;
+    sessionPayloads.responder = { message: opened.message, fingerprint: answer.fingerprint };
     const opening = syncOffer.accept(answer);
     transport = opening;
     return settle(opening, ms);
+  },
+
+  /**
+   * Runs `Noise_KK` over the open connection (`sync-protocol.md` §5, D217); returns the handshake
+   * hash as hex, or how it failed.
+   */
+  async syncHandshake(): Promise<string> {
+    const { role, initiator, responder } = sessionPayloads;
+    if (!transport || !role || !initiator || !responder) throw new Error('no connection');
+    const keys = syncKeys();
+    try {
+      const result = await syncHandshake(await transport, {
+        role,
+        identity: keys.identity,
+        peerPublicKey: keys.peerPublicKey,
+        initiator,
+        responder,
+      });
+      channel = result.channel;
+      return hex(result.handshakeHash);
+    } catch (error) {
+      if (error instanceof HandshakeError) return `handshake:${error.reason}`;
+      throw error;
+    }
   },
 
   /** The SHA-256 fingerprint of the initiator's certificate, as hex. */

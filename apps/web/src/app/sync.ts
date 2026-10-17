@@ -2,13 +2,16 @@
 // both devices and chose on each whether it shows its code first (I) or reads the other's (R). Each
 // side gathers its connection, seals its fields to the peer with `Noise_K` and hands the bytes to
 // the manual delivery, which shows them as a QR code and text; the peer's text goes back through
-// the same delivery, and the first one that opens is taken. The flow ends once the DataChannel is
-// open: nothing is sent before `Noise_KK` (CRYPTO-INV-008), which comes with its task. The
-// controller owns the flow and ends it on a lock (D93); this module logs nothing.
+// the same delivery, and the first one that opens is taken. Once the DataChannel is open, the two
+// devices run `Noise_KK` over both payloads (§5, D217) and nothing else is sent before it completes
+// (CRYPTO-INV-008). The flow ends there, with the Noise channel open: the summaries and the transfer
+// come with their tasks. The controller owns the flow and ends it on a lock (D93); this module logs
+// nothing.
 
 import { randomBytes } from '@blindvault/crypto';
 import {
   type ConnectionOptions,
+  HandshakeError,
   type LinkAnswer,
   type LinkFields,
   type LinkOffer,
@@ -18,11 +21,13 @@ import {
   type ReconnectionRejection,
   type Role,
   SESSION_TIMEOUT_MS,
+  type SessionPayload,
   type Transport,
   TransportClosedError,
   manualDelivery,
   receiveReconnection,
   sealReconnection,
+  syncHandshake,
 } from '@blindvault/sync';
 import { type SyncGrant } from '@blindvault/vault';
 
@@ -35,8 +40,11 @@ export interface SyncPort {
   answerLink(offer: LinkFields, options: ConnectionOptions): Promise<LinkAnswer>;
 }
 
-/** Why a sync ended before it was closed: its 10 minutes, a closed link, or a link not set up. */
-export type SyncFailure = 'expired' | 'closed' | 'error';
+/**
+ * Why a sync ended before it was closed: its 10 minutes, a closed link, a link not set up, or a peer
+ * that did not prove the identity of its Device record in `Noise_KK` (D217).
+ */
+export type SyncFailure = 'expired' | 'closed' | 'error' | 'unverified';
 
 /** What the sync screens show (D216). */
 export type SyncStage =
@@ -48,8 +56,9 @@ export type SyncStage =
   | { readonly kind: 'scan' }
   /** R: its answer, for I; waits for the connection. */
   | { readonly kind: 'answer'; readonly text: string }
+  /** The DataChannel opening, then `Noise_KK`. */
   | { readonly kind: 'connecting' }
-  /** The DataChannel is open; `Noise_KK` and the exchange of records come with their tasks. */
+  /** `Noise_KK` completed: the Noise channel is open; the exchange of records comes with its tasks. */
   | { readonly kind: 'connected' }
   | { readonly kind: 'failed'; readonly reason: SyncFailure };
 
@@ -141,21 +150,21 @@ export class Syncing {
   async #initiate(): Promise<void> {
     const offer = await this.#options.port.offerLink(randomBytes(16), this.#connection);
     if (!this.#gathered(offer)) return;
-    await this.#show(offer.link, (text) => ({ kind: 'offer', text }));
+    const mine = await this.#show(offer.link, (text) => ({ kind: 'offer', text }));
     const answer = await this.#receive({ role: 'responder', sessionId: offer.link.sessionId });
     if (!answer) return;
     this.#set({ kind: 'connecting' });
-    this.#open(await offer.accept(answer));
+    await this.#open(await offer.accept(answer.link), { initiator: mine, responder: answer.sent });
   }
 
   async #respond(): Promise<void> {
     const offer = await this.#receive({ role: 'initiator' });
     if (!offer) return;
     this.#set({ kind: 'preparing' });
-    const answer = await this.#options.port.answerLink(offer, this.#connection);
+    const answer = await this.#options.port.answerLink(offer.link, this.#connection);
     if (!this.#gathered(answer)) return;
-    await this.#show(answer.link, (text) => ({ kind: 'answer', text }));
-    this.#open(await answer.transport);
+    const mine = await this.#show(answer.link, (text) => ({ kind: 'answer', text }));
+    await this.#open(await answer.transport, { initiator: offer.sent, responder: mine });
   }
 
   /** The link exists: the 10-minute expiry starts with this device's payload (§12). */
@@ -171,31 +180,66 @@ export class Syncing {
     return true;
   }
 
-  /** Seals the link to the peer and shows it through the manual delivery (§4.2, §4.4). */
-  async #show(link: LinkFields, stage: (text: string) => SyncStage): Promise<void> {
-    await this.#delivery.send(sealReconnection(link, this.#keys).bytes);
+  /**
+   * Seals the link to the peer and shows it through the manual delivery (§4.2, §4.4). Returns what
+   * `prologue_KK` binds of it.
+   */
+  async #show(link: LinkFields, stage: (text: string) => SyncStage): Promise<SessionPayload> {
+    const sealed = sealReconnection(link, this.#keys);
+    await this.#delivery.send(sealed.bytes);
     this.#set(stage(this.#delivery.text ?? ''));
+    return { message: sealed.message, fingerprint: link.fingerprint };
   }
 
   /** The first payload of the peer that opens, each refusal answered as it comes (§4.4). */
-  async #receive(expected: PayloadExpectation): Promise<LinkFields | null> {
+  async #receive(
+    expected: PayloadExpectation,
+  ): Promise<{ link: LinkFields; sent: SessionPayload } | null> {
     const opened = await receiveReconnection(this.#delivery, this.#keys, expected, (error) => {
       this.#checks.shift()?.(error.reason);
     });
     if (!opened) return null;
     this.#checks.shift()?.('ok');
     this.#settle('unavailable');
-    return opened.reconnection;
+    const link = opened.reconnection;
+    return { link, sent: { message: opened.message, fingerprint: link.fingerprint } };
   }
 
-  #open(transport: Transport): void {
+  /**
+   * Runs `Noise_KK` over the open DataChannel (§5, D217). Nothing but its two messages is sent
+   * before it completes (CRYPTO-INV-008); once it has, the payload timeout no longer applies (§12).
+   */
+  async #open(
+    transport: Transport,
+    payloads: { initiator: SessionPayload; responder: SessionPayload },
+  ): Promise<void> {
     if (this.#over) {
       transport.close();
       return;
     }
     this.#transport = transport;
+    const { grant } = this.#options;
+    let channel: Transport;
+    try {
+      ({ channel } = await syncHandshake(transport, {
+        role: this.#options.role,
+        identity: grant.identity,
+        peerPublicKey: grant.peerPublicKey,
+        ...payloads,
+      }));
+    } catch (error) {
+      if (error instanceof HandshakeError) {
+        this.#fail(error.reason === 'closed' ? 'closed' : 'unverified');
+        return;
+      }
+      throw error;
+    }
+    // A flow ended meanwhile closed the DataChannel under the channel, which wipes its keys, and
+    // `#set` and `#fail` do nothing once it is over.
+    clearTimeout(this.#expiry);
+    this.#transport = channel;
     this.#set({ kind: 'connected' });
-    void transport.closed.then(() => {
+    void channel.closed.then(() => {
       this.#fail('closed');
     });
   }

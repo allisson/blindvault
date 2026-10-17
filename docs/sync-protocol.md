@@ -289,6 +289,15 @@ to this session (CRYPTO-INV-008). A handshake that fails ends the session (`prot
 nothing else sent. Every later message travels in the Noise channel, framed as in
 `pairing-protocol.md` §10.1 (CRYPTO-INV-009).
 
+**Implementation (D217).** `packages/crypto` runs the handshake with `startNoiseKK` and computes
+`prologue_KK` with `syncPrologue`; `packages/sync` drives it with `syncHandshake`. Each message is
+48 bytes: an ephemeral key and the tag of the empty payload. A handshake message that carries a
+payload is refused. On a failure the side that refused a message reports `invalid` and the other
+sees the link close (`closed`); nothing is sent either way, so `protocol-error` is the local reason
+only. The UI shows a sync as connected only once the handshake completed, which stops the payload
+timeout of section 12, and reports a failed handshake as a peer it could not verify. Until the
+session messages exist, closing after the handshake sends no `abort` (section 11.2).
+
 ## 6. Retired peer (D31, D45, D69)
 
 As soon as the handshake completes, and again whenever the peer's Device record becomes retired
