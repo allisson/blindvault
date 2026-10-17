@@ -35,14 +35,18 @@ export function Settings({
   readonly controller: VaultController;
   readonly session: VaultSession;
   readonly nav: Navigation;
-  /** Opened from the backup reminder (D188) or "Vault ready" (D198): where the cursor goes. */
+  /**
+   * Opened from the backup reminder (D188), "Vault ready" (D198) or the clock notice (D221): where
+   * the cursor goes.
+   */
   readonly focus?: SettingsFocus | undefined;
 }) {
   const { messages: m, language, setLanguage } = useLanguage();
   useEffect(() => {
     if (focus === 'backup') focusBackup();
     // The passkey section shows once support is known: it focuses itself.
-    else if (focus === 'recovery' || focus === 'devices') focusSection(focus);
+    else if (focus === 'recovery' || focus === 'devices' || focus === 'refound')
+      focusSection(focus);
   }, [focus]);
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">

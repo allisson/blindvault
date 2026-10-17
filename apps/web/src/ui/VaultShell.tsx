@@ -168,6 +168,7 @@ export function VaultShell({
   // "Vault ready" lists the backup, so the reminder waits until it is closed (D198).
   const ready = controller.ready;
   const reminder = ready ? undefined : controller.backupReminder;
+  const clock = controller.clockNotice;
   const detail = <DetailPane session={session} nav={nav} onChange={refresh} />;
   // The search index and query live in memory only, and go with the shell on lock (D132).
   const index = useMemo(() => new SearchIndex(), []);
@@ -326,7 +327,33 @@ export function VaultShell({
       <UpdateBanner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
       <StorageWarningBanner controller={controller} session={session} />
-      {session.writable ? null : <Notice>{m.vault.readOnlyVault}</Notice>}
+      {clock ? (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="clock-behind">
+          <Notice>
+            {format(m.vault.clockBehind, {
+              date: new Intl.DateTimeFormat(language, {
+                dateStyle: 'long',
+                timeStyle: 'short',
+              }).format(clock.until),
+            })}
+          </Notice>
+          {clock.far ? (
+            <>
+              <Notice>{m.vault.clockFar}</Notice>
+              <Button
+                variant="quiet"
+                data-testid="clock-refound"
+                onClick={() => {
+                  nav.open({ name: 'settings', focus: 'refound' });
+                }}
+              >
+                {m.refound.title}
+              </Button>
+              {clock.pairAgain ? <Notice>{m.vault.clockPairAgain}</Notice> : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {session.retired ? (
         <div className="px-4 py-2" data-testid="own-retired">
           <Notice>{m.merge.ownRetired}</Notice>

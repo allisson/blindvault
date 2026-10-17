@@ -74,6 +74,7 @@ import {
 
 import { backupFileName, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
+import { type ClockNotice, WritableTimer, clockNoticeOf } from './clock';
 import { type EraseAdvice, devicesOf, eraseAdvice } from './devices';
 import {
   Inviting,
@@ -448,6 +449,14 @@ export class VaultController {
    */
   #sync: { readonly flow: Syncing; readonly peer: SyncPeer } | undefined;
 
+  /** Until writing resumes on a vault read-only because the clock went back (D73, D221). */
+  readonly #writable = new WritableTimer(
+    () => this.#now(),
+    () => {
+      this.#set({ ...this.#status });
+    },
+  );
+
   /** Whether the browser keeps this origin's storage, and how much is used (D196). */
   readonly storage: StorageMonitor;
 
@@ -470,6 +479,7 @@ export class VaultController {
   #set(status: Status): void {
     this.#status = status;
     if (status.kind === 'unlocked') this.#eraseFailure = undefined;
+    this.#writable.set(status.kind === 'unlocked' ? status.session.writableAt : null);
     for (const l of this.#listeners) l();
   }
 
@@ -1037,6 +1047,15 @@ export class VaultController {
     const status = this.#status;
     if (status.kind !== 'unlocked' || this.#reminderDismissed === status.session) return undefined;
     return backupReminderOf(status.session, this.#now());
+  }
+
+  /**
+   * The vault read-only because the device clock went back: when writing resumes, and the ways out
+   * when that is more than the future-clock bound away (§9.2, D73, D149, D221).
+   */
+  get clockNotice(): ClockNotice | undefined {
+    const status = this.#status;
+    return status.kind === 'unlocked' ? clockNoticeOf(status.session, this.#now()) : undefined;
   }
 
   dismissBackupReminder(): void {

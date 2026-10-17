@@ -32,7 +32,7 @@ export interface Devices {
   readonly advice: DeviceAdvice | undefined;
 }
 
-interface DeviceSource {
+export interface DeviceSource {
   readonly deviceId: Uint8Array;
   readonly registered: boolean;
   devices(): readonly DeviceView[];
