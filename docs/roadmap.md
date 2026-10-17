@@ -287,12 +287,11 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Pairing session expiration; a lock on either device aborts the pairing (D93, D203)
 - [x] LAN-only mode (no STUN): "same network only", per pairing (D203)
 - [x] Configurable STUN list (D209)
-- [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste with no camera, reconnection), and revise D161 with the result
 
 ### Gate C
 
-- [ ] Full pairing between two browsers (Playwright) and between iOS and Android (manual, recorded) (the browsers covered by `e2e/pairing.spec.ts` and `e2e/pairing-qr.spec.ts`; iOS ↔ Android pending)
-    - [ ] Measure A's wait for `committed` while B verifies and commits a large vault on a phone (D202, D203)
+- [x] Full pairing between two browsers (Playwright) and between iOS and Android (manual, recorded) (the browsers covered by `e2e/pairing.spec.ts` and `e2e/pairing-qr.spec.ts`; iPhone 14 installed app ↔ Galaxy A54 Chrome, QR by camera both ways, v0.3.0, D212)
+    - [x] Measure A's wait for `committed` while B verifies and commits a large vault on a phone (D202, D203) (42,003 records from a Mac: 31 s on the iPhone, 70 s on the Galaxy until "Vault ready", A paired both times; the 60-second limit stands, D212)
 - [x] Mismatched SAS aborts without transferring anything (CRYPTO-INV-011)
 - [x] Replay of an old pairing session fails
 - [x] A modified QR payload or SDP makes the handshake or SAS fail
@@ -317,6 +316,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Transport-agnostic reconnection payload, encrypted to the peer with `Noise_K` (D12, D17)
 - [ ] Keep payload delivery behind an interface so a mailbox transport (Nostr, ntfy) can be added after v1 without protocol changes
 - [ ] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions
+- [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212)
 - [ ] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008)
 - [ ] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31)
 - [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)

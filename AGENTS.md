@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 4 — Pairing. Update this line when a gate passes.
+Phase 5 — Synchronization. Update this line when a gate passes.
 
 ## Repository layout
 
