@@ -193,15 +193,31 @@ export class PairingRefusedError extends VaultError {
 /**
  * Why this device does not sync with a peer (sync-protocol.md §3, D113, D216): it holds no Device
  * record of its own, its own is retired, it holds no Device record of the peer (or the peer is this
- * device), or the peer's is retired. A read-only vault and a record kept aside as corrupt still
- * sync.
+ * device), or the peer's is retired; for a retirement notice, the peer's is not retired (D219). A
+ * read-only vault and a record kept aside as corrupt still sync.
  */
-export type SyncRefusal = 'unregistered' | 'retired' | 'unknown-peer' | 'retired-peer';
+export type SyncRefusal =
+  'unregistered' | 'retired' | 'unknown-peer' | 'retired-peer' | 'not-retired';
 
 export class SyncRefusedError extends VaultError {
   override name = 'SyncRefusedError';
   constructor(readonly reason: SyncRefusal) {
     super(`sync refused: ${reason}`);
+  }
+}
+
+/**
+ * Why a sync session stops on this device (sync-protocol.md §6, §11.2, D219): the abort reason it
+ * sends. `verification-failed`: the peer's retired record it was about to send fails verification;
+ * `protocol-error`: a `retired` that is not this device's own Device record, retired and valid.
+ * Nothing was written.
+ */
+export type SyncRejection = 'verification-failed' | 'protocol-error';
+
+export class SyncRejectedError extends VaultError {
+  override name = 'SyncRejectedError';
+  constructor(readonly reason: SyncRejection) {
+    super(`sync rejected: ${reason}`);
   }
 }
 

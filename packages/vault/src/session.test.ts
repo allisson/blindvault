@@ -75,6 +75,7 @@ import {
   RetirementRefusedError,
   SubtreeBlockedError,
   SyncRefusedError,
+  SyncRejectedError,
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
@@ -5278,7 +5279,158 @@ describe('sync (sync-protocol.md §3, D113, D216)', () => {
 
   it('is refused once the vault locks (D93)', async () => {
     const { session, peer } = await withPeer();
+    const grant = session.openSync(peer.deviceId);
     session.lock();
     expect(() => session.openSync(peer.deviceId)).toThrow(VaultLockedError);
+    await expect(grant.peerRetirement()).rejects.toThrow(VaultLockedError);
+    await expect(grant.mergeOwnRetirement(new Uint8Array(8))).rejects.toThrow(VaultLockedError);
+  });
+
+  it('opens a retirement notice only to a retired peer, and a sync only to one not retired (D219)', async () => {
+    const { session, peer } = await withPeer();
+    const notice = (id: Uint8Array) => {
+      try {
+        session.openSync(id, 'retirement');
+      } catch (error) {
+        if (error instanceof SyncRefusedError) return error.reason;
+        throw error;
+      }
+      return 'opened';
+    };
+    expect(notice(peer.deviceId)).toBe('not-retired');
+    expect(notice(randomId())).toBe('unknown-peer');
+    await session.retireDevice(peer.deviceId);
+    expect(notice(peer.deviceId)).toBe('opened');
+    expect(refusal(session, peer.deviceId)).toBe('retired-peer');
+  });
+
+  describe('retired peer (§6, D31, D45, D219)', () => {
+    const own = (session: VaultSession) =>
+      must(session.devices().find((d) => idKey(d.deviceId) === idKey(session.deviceId)));
+
+    /** This device's own Device record, sealed under the vault's keys as another device writes it. */
+    function ownRecord(
+      x: { store: MemoryStore; session: VaultSession },
+      changes: { retired?: boolean; hlc?: Hlc } = {},
+    ): Uint8Array {
+      const scratch = new MemoryStore();
+      const { device } = own(x.session);
+      plant(
+        scratch,
+        keysOf(x.store),
+        RecordType.device,
+        x.session.deviceId,
+        changes.hlc ?? hlcAt(T0 + 1000),
+        false,
+        deviceToCbor({
+          publicKey: device.publicKey,
+          displayName: device.displayName,
+          retired: changes.retired ?? true,
+          registeredAt: T0,
+        }),
+      );
+      return must(scratch.ofType(RecordType.device)[0]).envelope;
+    }
+
+    it('gives nothing for a peer not retired, and the stored record once retired', async () => {
+      const { session, store, peer } = await withPeer();
+      const grant = session.openSync(peer.deviceId);
+      expect(await grant.peerRetirement()).toBeUndefined();
+      // Retired after the sync started, as when the user retires it meanwhile.
+      await session.retireDevice(peer.deviceId);
+      const sent = must(await grant.peerRetirement());
+      const stored = must(store.get({ recordType: RecordType.device, recordId: peer.deviceId }));
+      expect(sent).toEqual(stored.envelope);
+      expect(decodeEnvelope(sent).header.recordId).toEqual(peer.deviceId);
+    });
+
+    it('refuses to send a stored retired record that fails verification (verification-failed)', async () => {
+      const { session, store, peer } = await withPeer();
+      await session.retireDevice(peer.deviceId);
+      const grant = session.openSync(peer.deviceId, 'retirement');
+      const k = { recordType: RecordType.device, recordId: peer.deviceId };
+      const envelope = must(store.get(k)).envelope;
+      store.put({
+        ...k,
+        envelope: Uint8Array.from(envelope, (b, i) =>
+          i === envelope.length - 1 ? b ^ 1 : b,
+        ) as RecordEnvelope,
+      });
+      await expect(grant.peerRetirement()).rejects.toThrow(
+        expect.objectContaining({ name: 'SyncRejectedError', reason: 'verification-failed' }),
+      );
+      // A valid retired record, but not the one held: another write than the one unlocked.
+      plantDevice(store, keysOf(store), peer.publicKey, hlcAt(T0 + 5), true);
+      await expect(grant.peerRetirement()).rejects.toThrow(SyncRejectedError);
+      // Gone from storage.
+      store.held.clear();
+      await expect(grant.peerRetirement()).rejects.toThrow(SyncRejectedError);
+    });
+
+    it('merges its own record retired, with no retired-devices notice, and keeps it', async () => {
+      const x = await withPeer();
+      const grant = x.session.openSync(x.peer.deviceId);
+      const result = await grant.mergeOwnRetirement(ownRecord(x));
+      expect(result.retiredDevices).toEqual([]);
+      expect(result.newDevices).toEqual([]);
+      expect(x.session.retired).toBe(true);
+      // No completed sync: the session never reached its commit (D34).
+      expect(x.session.lastSyncByPeer).toEqual([]);
+      x.session.lock();
+      const again = await unlock(x.store, x.clock);
+      expect(again.retired).toBe(true);
+    });
+
+    it.each([
+      ['its own record not retired, newer', { retired: false, hlc: hlcAt(T0 + DAY / 2) }],
+      [
+        'its own record beyond the future-clock bound',
+        { hlc: hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + DAY) },
+      ],
+    ])('refuses %s (protocol-error), writing nothing', async (_case, change) => {
+      const x = await withPeer();
+      const grant = x.session.openSync(x.peer.deviceId);
+      const envelope = ownRecord(x, change);
+      const before = await x.store.records();
+      await expect(grant.mergeOwnRetirement(envelope)).rejects.toThrow(
+        expect.objectContaining({ name: 'SyncRejectedError', reason: 'protocol-error' }),
+      );
+      expect(await x.store.records()).toEqual(before);
+      expect(x.session.retired).toBe(false);
+    });
+
+    it("refuses another device's retired record, another type, a tampered or malformed envelope", async () => {
+      const x = await withPeer();
+      const grant = x.session.openSync(x.peer.deviceId);
+      const keys = keysOf(x.store);
+      const scratch = new MemoryStore();
+      plantDevice(scratch, keys, x.peer.publicKey, hlcAt(T0 + 1000), true);
+      plant(
+        scratch,
+        keys,
+        RecordType.item,
+        x.session.deviceId,
+        hlcAt(T0 + 1000),
+        false,
+        itemToCbor(login(), false),
+      );
+      const others = [
+        must(scratch.ofType(RecordType.device)[0]).envelope,
+        must(scratch.ofType(RecordType.item)[0]).envelope,
+      ];
+      const mine = ownRecord(x);
+      const bad = [
+        ...others,
+        Uint8Array.from(mine, (b, i) => (i === mine.length - 1 ? b ^ 1 : b)),
+        mine.subarray(0, 20),
+        new Uint8Array(0),
+      ];
+      const before = await x.store.records();
+      for (const envelope of bad) {
+        await expect(grant.mergeOwnRetirement(envelope)).rejects.toThrow(SyncRejectedError);
+      }
+      expect(await x.store.records()).toEqual(before);
+      expect(x.session.retired).toBe(false);
+    });
   });
 });

@@ -60,6 +60,7 @@ import {
   RetirementRefusedError,
   RestoreRejectedError,
   type SyncGrant,
+  type SyncPurpose,
   type SyncRefusal,
   SyncRefusedError,
   UnlockRejectedError,
@@ -2066,12 +2067,14 @@ export class VaultController {
   /**
    * Starts a sync with the peer the user picked (sync-protocol.md §3, §4, D216): no password, since
    * no key leaves the device. `initiator` shows this device's code first; `responder` reads the
-   * other's. Ends any pairing, re-admission or other sync in progress.
+   * other's. A `retirement` notice goes only to a retired peer, and sends it only its retired record
+   * (§6, D219). Ends any pairing, re-admission or other sync in progress.
    */
   startSync(
     peerDeviceId: Uint8Array,
     role: 'initiator' | 'responder',
     options: PairingOptions,
+    purpose: SyncPurpose = 'sync',
   ): SyncStart {
     const status = this.#status;
     const port = this.#deps.sync;
@@ -2080,7 +2083,7 @@ export class VaultController {
     this.#dropPairing();
     let grant: SyncGrant;
     try {
-      grant = status.session.openSync(peerDeviceId);
+      grant = status.session.openSync(peerDeviceId, purpose);
     } catch (error) {
       if (error instanceof SyncRefusedError) return error.reason;
       throw error;

@@ -82,6 +82,7 @@ import {
   RestoreRejectedError,
   SubtreeBlockedError,
   SyncRefusedError,
+  SyncRejectedError,
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
@@ -456,7 +457,22 @@ export interface SyncGrant {
   readonly peerPublicKey: Uint8Array;
   readonly peerDeviceId: Uint8Array;
   readonly peerName: string;
+  /**
+   * §6 (D31, D45, D219), right after `Noise_KK`: the envelope of the peer's Device record when this
+   * device holds it retired, read again from storage and verified, to send as `retired`; otherwise
+   * `undefined`. `SyncRejectedError` (`verification-failed`) when the stored record fails.
+   */
+  peerRetirement(): Promise<Uint8Array | undefined>;
+  /**
+   * §6: merges a received `retired` (section 1, without 1.1) in one commit, which shows the D41
+   * notice. `SyncRejectedError` (`protocol-error`), writing nothing, unless it is this device's own
+   * Device record, retired, passing verification on receipt and within the future-clock bound.
+   */
+  mergeOwnRetirement(envelope: Uint8Array): Promise<MergeResult>;
 }
+
+/** A sync, or a sync that only tells a retired peer it is retired (sync-protocol.md §3, D219). */
+export type SyncPurpose = 'sync' | 'retirement';
 
 export interface ResetPasswordOptions {
   readonly store: RecordStore;
@@ -2186,9 +2202,11 @@ export class VaultSession {
   /**
    * Starts a sync with the peer the user picked (sync-protocol.md §3, D113, D216): refused with
    * `SyncRefusedError` unless this device holds its own Device record, not retired, and the peer's,
-   * not retired. A read-only vault and a record kept aside as corrupt still sync (§1.5, §7).
+   * not retired. A read-only vault and a record kept aside as corrupt still sync (§1.5, §7). For a
+   * `retirement` notice, the peer's must be retired instead: the session then sends it only that
+   * record (§6, D45, D219).
    */
-  openSync(peerDeviceId: Uint8Array): SyncGrant {
+  openSync(peerDeviceId: Uint8Array, purpose: SyncPurpose = 'sync'): SyncGrant {
     this.#unlocked();
     if (!this.registered) throw new SyncRefusedError('unregistered');
     if (this.retired) throw new SyncRefusedError('retired');
@@ -2196,14 +2214,78 @@ export class VaultSession {
     if (!peer || sameBytes(peerDeviceId, this.#identity.deviceId)) {
       throw new SyncRefusedError('unknown-peer');
     }
-    if (peer.device.value.retired) throw new SyncRefusedError('retired-peer');
+    const retired = peer.device.value.retired;
+    if (purpose === 'sync' && retired) throw new SyncRefusedError('retired-peer');
+    if (purpose === 'retirement' && !retired) throw new SyncRefusedError('not-retired');
+    const id = peerDeviceId.slice();
     return {
       identity: this.#identity,
       vaultId: this.vaultId,
       peerPublicKey: peer.device.value.publicKey.slice(),
-      peerDeviceId: peerDeviceId.slice(),
+      peerDeviceId: id,
       peerName: peer.device.value.displayName,
+      peerRetirement: () => this.#run(() => this.#peerRetirement(id)),
+      mergeOwnRetirement: (envelope) => this.#run(() => this.#ownRetirement(envelope)),
     };
+  }
+
+  /** §6: the peer's retired Device record as stored, verified again (D181), or nothing to send. */
+  async #peerRetirement(peerId: Uint8Array): Promise<Plan<Uint8Array | undefined>> {
+    const held = this.#state.devices.get(idKey(peerId));
+    if (!held?.device.value.retired) return { writes: [], deletes: [], result: undefined };
+    const stored = (await this.#store.records()).find(
+      (r) => r.recordType === RecordType.device && sameBytes(r.recordId, peerId),
+    );
+    this.#unlocked();
+    const refuse = () => new SyncRejectedError('verification-failed');
+    if (!stored) throw refuse();
+    const scratch = new Keyring();
+    try {
+      this.#verifyAll(scratch, [stored], refuse);
+    } finally {
+      scratch.wipeAll();
+    }
+    // The record held is the one stored: every commit writes both, and an HLC names one write.
+    if (compareHlc(decodeEnvelope(stored.envelope).header.hlc, held.header.hlc) !== 0) {
+      throw refuse();
+    }
+    return { writes: [], deletes: [], result: stored.envelope.slice() };
+  }
+
+  /** §6: a received `retired`, merged only when it is this device's own record, retired. */
+  #ownRetirement(envelope: Uint8Array): Plan<MergeResult> {
+    const refuse = () => new SyncRejectedError('protocol-error');
+    let decoded: Envelope;
+    try {
+      decoded = decodeEnvelope(envelope);
+    } catch (error) {
+      if (error instanceof NewerRecordError || error instanceof RecordRejectedError) throw refuse();
+      /* v8 ignore next */
+      throw error;
+    }
+    const { header } = decoded;
+    if (
+      header.recordType !== (RecordType.device as number) ||
+      !sameBytes(header.recordId, this.#identity.deviceId) ||
+      this.#clock.beyondBound(header.hlc)
+    ) {
+      throw refuse();
+    }
+    // One Device record: no Vault Key is loaded, so none to release, unlike a whole transfer.
+    const records = [{ ...headerKey(header), envelope: encodeEnvelope(decoded) }];
+    const incoming = load(
+      this.#keyring,
+      records,
+      this.#cleartext.vaultId,
+      this.#subkeys,
+      this.#state.vaultKeys,
+    );
+    if (incoming.state.corrupt.length > 0) throw refuse();
+    const own = incoming.state.devices.get(idKey(this.#identity.deviceId));
+    if (!own?.device.value.retired) throw refuse();
+    const plan = this.#mergePlan(incoming.state, records);
+    for (const hlc of incoming.held) this.#clock.receive(hlc);
+    return plan;
   }
 
   /**

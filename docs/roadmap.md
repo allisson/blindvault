@@ -318,7 +318,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions (§3, D216)
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212)
 - [x] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008, §5, D217)
-- [ ] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31)
+- [x] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31, CRYPTO-INV-015, §6, D219)
 - [ ] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69)
 - [ ] Reject records in an unknown `recordFormatVersion` in sync, record it in Local Config, warn at export until cleared; abort a pairing before commit when its first full sync holds one (D68)
 - [x] Messages bound to the session (CRYPTO-INV-009, §11, D218)

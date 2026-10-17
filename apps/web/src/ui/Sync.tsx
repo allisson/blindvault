@@ -1,4 +1,4 @@
-import { type VaultSession } from '@blindvault/vault';
+import { type SyncPurpose, type VaultSession } from '@blindvault/vault';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { type SyncPeer, type SyncStart, type VaultController } from '../app/controller';
@@ -13,7 +13,9 @@ import { PasteText, PayloadText, SameNetwork } from './Pairing';
 // code and as text, and the other device scans or pastes it (D208); a code that does not open says
 // why and the wait goes on (D215). The flow lives in the controller, so a lock ends it whatever is
 // on screen. It stays connected once `Noise_KK` has verified the peer (D217), until either side ends
-// it, which the other shows with its reason (D218): the exchange of records comes with its tasks.
+// it, which the other shows with its reason (D218): the exchange of records comes with its tasks. A
+// retired device is told it is retired through the same screens, which then send it only its retired
+// record (D219).
 
 function sameId(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
@@ -163,17 +165,20 @@ function Stage({
 
 /**
  * A sync with the device picked in Settings › Devices (§9.1, D216): no password; the user chooses
- * on each device whether it shows its code first or reads the other's.
+ * on each device whether it shows its code first or reads the other's. With `retirement`, the
+ * session only tells a retired device that it is retired (§6, D219).
  */
 export function SyncDevice({
   controller,
   session,
   peer,
+  purpose = 'sync',
   onClose,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
   readonly peer: SyncPeer;
+  readonly purpose?: SyncPurpose;
   readonly onClose: () => void;
 }) {
   const m = useMessages();
@@ -192,12 +197,14 @@ export function SyncDevice({
   const name = peer.name;
   const mine = current && sameId(current.deviceId, peer.deviceId) ? stage : undefined;
   const start = (role: 'initiator' | 'responder') => {
-    setOutcome(controller.startSync(peer.deviceId, role, { sameNetwork }));
+    setOutcome(controller.startSync(peer.deviceId, role, { sameNetwork }, purpose));
   };
   const error = startError(m, outcome, name);
   return (
     <div className="flex flex-col gap-3" data-testid="sync">
-      <h3 className="font-semibold">{format(s.title, { name })}</h3>
+      <h3 className="font-semibold">
+        {format(purpose === 'retirement' ? s.notifyTitle : s.title, { name })}
+      </h3>
       {mine ? (
         <Stage
           controller={controller}
@@ -208,7 +215,9 @@ export function SyncDevice({
         />
       ) : (
         <>
-          <p className="text-sm">{format(s.how, { name })}</p>
+          <p className="text-sm">
+            {format(purpose === 'retirement' ? s.notifyHow : s.how, { name })}
+          </p>
           <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
           {error ? (
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">

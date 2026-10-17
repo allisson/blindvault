@@ -171,6 +171,9 @@ A device offers to sync with a peer only if (§9.1, D45, D113):
 - its vault is unlocked and it holds its own Device record, not retired;
 - it holds the peer's Device record, not retired.
 
+The one exception is a **retirement notice** (D219): the user picks a retired peer to tell it that
+it is retired, and the session sends it only that record (section 6).
+
 A vault read-only because the clock went back (D73) still syncs: it receives records, and the
 merge issues no HLC (section 1.5). The user picks the peer on both devices before any payload is
 shown or read ("Sync with {name}"), so each device knows which static key to expect (D213).
@@ -316,6 +319,18 @@ notice, and ends the session. Any other `retired` aborts (`protocol-error`), mer
 device that receives its own Device record retired in any transfer of the session also ends it,
 after its merge commits, and shows the D41 notice (D69).
 
+**Implementation (D219).** Right after `Noise_KK`, before the sync shows as connected, the vault
+reads the peer's Device record again from storage and verifies it (`peerRetirement`): a retired one
+is sent as `retired`, then `abort` with `retired-peer`; one that fails verification sends only
+`abort` with `verification-failed`. A retirement made while the codes were exchanged is caught
+there. `mergeOwnRetirement` merges a received `retired` by section 1 without 1.1, in one commit that
+records no completed sync (D34), only when it is this device's own Device record, retired, passing
+verification and within the future-clock bound; otherwise the device aborts with `protocol-error`.
+Once merged, the device shows the sync ended as retired, however the peer ends it. Two devices that
+each hold the other retired each send `retired` and `abort`; neither merges, since neither reads a
+message after its own `abort`. Settings offers the retirement notice from its list of retired
+devices (section 3). Section 6's second case, a retirement during the session, comes with D69.
+
 ## 7. Summaries
 
 After the handshake, and the check of section 6, both sides send their summary at the same time:
@@ -458,7 +473,8 @@ is decoded; `count`, duplicate identities and the order of this section are each
 with its task. `SyncSession` carries them over the Noise channel of `Noise_KK`, on the session the
 pairing uses: a refused message aborts with its reason, a received `abort` ends the session, and a
 closed link ends it as closed. Until the summaries exist, the app reads no message after the
-handshake: any message but `abort` is refused with `protocol-error`. Ending the sync sends `abort`
+handshake but `retired` (section 6, D219): any other message but `abort` is refused with
+`protocol-error`. Ending the sync sends `abort`
 with `ended`, a lock sends `locked`, and the connection closes once the `abort` had time to leave.
 
 ## 12. Timeouts, lock and replay

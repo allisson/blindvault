@@ -1,5 +1,5 @@
 import { RecordType } from '@blindvault/crypto';
-import { type Preferences, type VaultSession } from '@blindvault/vault';
+import { type Preferences, type SyncPurpose, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState } from 'react';
 
 import { download, phraseLabel } from '../app/backup-file';
@@ -504,10 +504,13 @@ function DeviceSettings({
 }) {
   const { messages: m, language } = useLanguage();
   const [retire, setRetire] = useState<RetireState>({ kind: 'idle' });
-  const [syncWith, setSyncWith] = useState<string>();
+  const [syncWith, setSyncWith] = useState<{ id: string; purpose: SyncPurpose }>();
   const devices = devicesOf(session);
   const syncs = devices.registered && !session.retired;
-  const peer = devices.listed.find((d) => !d.own && hex(d.deviceId) === syncWith);
+  const peer =
+    syncWith?.purpose === 'retirement'
+      ? devices.retired.find((d) => hex(d.deviceId) === syncWith.id)
+      : devices.listed.find((d) => !d.own && hex(d.deviceId) === syncWith?.id);
   const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' });
   return (
     <section className="flex flex-col gap-4" data-testid="devices" data-section="devices">
@@ -560,7 +563,7 @@ function DeviceSettings({
                 <Button
                   variant="quiet"
                   onClick={() => {
-                    setSyncWith(id);
+                    setSyncWith({ id, purpose: 'sync' });
                   }}
                   data-testid="device-sync"
                 >
@@ -587,6 +590,36 @@ function DeviceSettings({
         <p className="text-sm text-zinc-500" data-testid="devices-retired-count">
           {format(m.settings.devicesRetiredCount, { n: String(devices.retiredCount) })}
         </p>
+      ) : null}
+      {syncs && devices.retired.length > 0 ? (
+        <details className="text-sm" data-testid="retired-devices">
+          <summary className="cursor-pointer">{m.settings.devicesRetiredList}</summary>
+          <p className="text-zinc-500">{m.settings.devicesRetiredNotify}</p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {devices.retired.map((d) => {
+              const id = hex(d.deviceId);
+              const name = d.device.displayName;
+              return (
+                <li
+                  key={id}
+                  className="flex flex-wrap items-center justify-between gap-2"
+                  data-testid="retired-device"
+                >
+                  <span className="font-medium">{name}</span>
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      setSyncWith({ id, purpose: 'retirement' });
+                    }}
+                    data-testid="device-notify"
+                  >
+                    {format(m.settings.devicesNotify, { name })}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
       ) : null}
       {retire.kind === 'confirm' || retire.kind === 'working' ? (
         <div className="flex flex-col gap-2" data-testid="retire-confirm">
@@ -631,12 +664,14 @@ function DeviceSettings({
           {m.settings.devicesRefused}
         </p>
       ) : null}
-      {syncs && peer ? (
+      {peer && syncWith ? (
+        // Kept while this device turns retired during it, so it shows why the sync ended (D219).
         <SyncDevice
-          key={hex(peer.deviceId)}
+          key={`${syncWith.purpose}:${hex(peer.deviceId)}`}
           controller={controller}
           session={session}
           peer={{ deviceId: peer.deviceId, name: peer.device.displayName }}
+          purpose={syncWith.purpose}
           onClose={() => {
             setSyncWith(undefined);
           }}
