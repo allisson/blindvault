@@ -462,6 +462,10 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Device clock gone back (Phase 5, D221).** `apps/web/src/app/clock.ts` holds `clockNoticeOf`,
+  when writing resumes and whether D149's ways out apply, and `WritableTimer`, one `setTimeout`
+  re-armed in steps past its limit; the controller exposes `clockNotice` and re-renders when the
+  timer fires. The HLC itself stays in `packages/vault/src/hlc.ts`. No new dependency.
 - **Retirement during the sync session (Phase 5, D220).** `Syncing.recheck()` in
   `apps/web/src/app/sync.ts` runs D219's check again, one check at a time; the controller calls it
   after `retireDevice` and `mergeBackup`. Settings keeps the sync on screen while its peer turns

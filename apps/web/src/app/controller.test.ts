@@ -14,7 +14,7 @@ import {
   acquireVaultLock,
   databaseName,
 } from '@blindvault/storage';
-import { parseLocalConfig } from '@blindvault/vault';
+import { FUTURE_CLOCK_BOUND_MS, parseLocalConfig } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -2090,5 +2090,73 @@ describe('asset update offered only between flows (D152, D191)', () => {
     expect(third.status.kind).toBe('busy');
     expect(third.updateAllowed).toBe(false);
     await guard?.release();
+  });
+});
+
+describe('device clock gone back (§9.2, D73, D149, D221)', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const T0 = new Date(2026, 2, 4, 12).getTime();
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A vault written with the clock at `ahead`, unlocked again with the clock at T0. */
+  async function behind(ahead: number) {
+    let now = ahead;
+    const factory = new IDBFactory();
+    const c = controller(factory, undefined, undefined, () => now);
+    await c.start();
+    await createIn(c);
+    expect(c.clockNotice).toBeUndefined();
+    c.lock();
+    now = T0;
+    expect(c.clockNotice).toBeUndefined();
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    return {
+      c,
+      at: (t: number) => {
+        now = t;
+      },
+    };
+  }
+
+  it('says the vault is read-only until writing resumes, and shows it writable once it does', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // Writing resumes 12 hours later: within the bound, so no way out is offered.
+    const ahead = T0 + 1.5 * DAY;
+    const { c, at } = await behind(ahead);
+    const until = ahead - FUTURE_CLOCK_BOUND_MS;
+    expect(c.clockNotice).toEqual({ until, far: false, pairAgain: false });
+    const listener = vi.fn();
+    c.subscribe(listener);
+    at(until - 1);
+    vi.advanceTimersByTime(until - 1 - T0);
+    expect(listener).not.toHaveBeenCalled();
+    at(until);
+    vi.advanceTimersByTime(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(session(c).writable).toBe(true);
+    expect(c.clockNotice).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('waits for nothing once locked', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { c } = await behind(T0 + 3 * DAY);
+    expect(vi.getTimerCount()).toBe(1);
+    c.lock();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(c.clockNotice).toBeUndefined();
+  });
+
+  it('offers the ways out only when writing resumes more than the future-clock bound later (D149)', async () => {
+    const { c } = await behind(T0 + 400 * DAY);
+    expect(c.clockNotice).toEqual({
+      until: T0 + 400 * DAY - FUTURE_CLOCK_BOUND_MS,
+      far: true,
+      // The only device: nothing to pair again from.
+      pairAgain: false,
+    });
   });
 });

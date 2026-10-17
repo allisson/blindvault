@@ -113,8 +113,10 @@ export function RefoundVault({
     });
   };
   return (
-    <section className="flex flex-col gap-4" data-testid="refound">
-      <h2 className="font-semibold">{r.title}</h2>
+    <section className="flex flex-col gap-4" data-testid="refound" data-section="refound">
+      <h2 tabIndex={-1} className="font-semibold">
+        {r.title}
+      </h2>
       {step.kind === 'idle' ? (
         <>
           <p className="text-sm">{r.intro}</p>

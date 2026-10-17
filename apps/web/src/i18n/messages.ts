@@ -553,8 +553,12 @@ const en = {
     searchHint: 'Searches titles, tags, folders, notes and fields that are not secret.',
     results: 'Results',
     noResults: 'No items match.',
-    readOnlyVault:
-      "The vault is read-only: a record is dated ahead of this device's clock. Check the clock.",
+    clockBehind:
+      "This device's clock went back, so the vault is read-only until {date}. Sync still receives records.",
+    clockFar:
+      'Changes made while the clock was wrong exist only on this device, since your other devices rejected them, and stay readable so you can copy them by hand. To write before then, re-found the vault.',
+    clockPairAgain:
+      'Or pair this device again from another one: lock, then choose “Replace by pairing with another device…”.',
     reminderNever:
       'No backup has been made on this device: make one, so you can restore the vault if you lose this device.',
     reminderStale:
@@ -1495,8 +1499,12 @@ const ptBR: Messages = {
     searchHint: 'Busca em títulos, tags, pastas, notas e campos que não são secretos.',
     results: 'Resultados',
     noResults: 'Nenhum item corresponde.',
-    readOnlyVault:
-      'O cofre está somente leitura: um registro tem data à frente do relógio deste dispositivo. Confira o relógio.',
+    clockBehind:
+      'O relógio deste dispositivo voltou, então o cofre está somente leitura até {date}. A sincronização continua recebendo registros.',
+    clockFar:
+      'As alterações feitas com o relógio errado existem só neste dispositivo, porque os seus outros dispositivos as rejeitaram, e continuam legíveis para você copiá-las à mão. Para escrever antes disso, refunde o cofre.',
+    clockPairAgain:
+      'Ou pareie este dispositivo de novo a partir de outro: bloqueie e escolha “Substituir por pareamento com outro dispositivo…”.',
     reminderNever:
       'Nenhum backup foi feito neste dispositivo: faça um, para poder restaurar o cofre se perder este dispositivo.',
     reminderStale:

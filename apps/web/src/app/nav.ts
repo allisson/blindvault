@@ -11,7 +11,7 @@ export type ListScreen =
  * Where Settings puts the cursor: `backup` in the export's password field (D185, D188), the others
  * at their section, from "Vault ready" (D198).
  */
-export type SettingsFocus = 'backup' | 'passkey' | 'recovery' | 'devices';
+export type SettingsFocus = 'backup' | 'passkey' | 'recovery' | 'devices' | 'refound';
 
 export type Screen =
   | ListScreen
