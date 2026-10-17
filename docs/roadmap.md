@@ -313,7 +313,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Tasks
 
 - [x] `docs/sync-protocol.md`: reconnection payload, messages, summaries, ordering, idempotency, versioning (§3 to §14, D213)
-- [ ] Transport-agnostic reconnection payload, encrypted to the peer with `Noise_K` (D12, D17)
+- [x] Transport-agnostic reconnection payload, encrypted to the peer with `Noise_K` (D12, D17, D214)
 - [ ] Keep payload delivery behind an interface so a mailbox transport (Nostr, ntfy) can be added after v1 without protocol changes
 - [ ] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212)

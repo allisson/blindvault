@@ -54,6 +54,18 @@ export {
   encodePayload,
   encodePayloadText,
 } from './payload';
+export {
+  MAX_RECONNECTION_MESSAGE_LENGTH,
+  MIN_RECONNECTION_MESSAGE_LENGTH,
+  RECONNECTION_VERSION,
+  type Reconnection,
+  ReconnectionError,
+  type ReconnectionKeys,
+  type ReconnectionRejection,
+  type SealedReconnection,
+  openReconnection,
+  sealReconnection,
+} from './reconnect';
 export { type NonceExchangeOptions, type SasRejection, SasStage, exchangeNonces } from './sas';
 export {
   type DevicesHeld,

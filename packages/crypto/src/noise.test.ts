@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import noiseVectors from '../test-vectors/noise-v1.json' with { type: 'json' };
 import { DecryptionError, EncodingError, KeyWipedError } from './errors';
-import { generateDeviceIdentity } from './identity';
+import { type DeviceIdentity, generateDeviceIdentity, loadDeviceIdentity } from './identity';
 import { Keyring, privateKeyBytes } from './keys';
 import {
   HANDSHAKE_HASH_LENGTH,
@@ -12,6 +12,8 @@ import {
   type NoiseHandshake,
   type NoisePattern,
   type NoiseResult,
+  openNoiseK,
+  sealNoiseK,
   startNoise,
   startNoiseXX,
 } from './noise';
@@ -19,7 +21,7 @@ import { type Dh, createDh } from './noise/dh';
 import type { HandshakeState, Split } from './noise/handshake-state';
 import { type Noise, bindNoise } from './noise/index';
 import { initCrypto, lib } from './sodium';
-import { fromHex, toHex } from './test-helpers';
+import { fromHex, toHex, vectors as cryptoVectors } from './test-helpers';
 
 beforeAll(initCrypto);
 
@@ -416,5 +418,130 @@ describe('wiping (CRYPTO-INV-010)', () => {
     done(i).transport.wipe();
     done(r).transport.wipe();
     expect(splits.every((s) => lib().is_zero(s.tx) && lib().is_zero(s.rx))).toBe(true);
+  });
+});
+
+describe('Noise_K, the reconnection payload (sync-protocol.md §4.2, D214)', () => {
+  const v = cryptoVectors.transcripts.noiseK;
+
+  function loaded(keyring: Keyring, secretHex: string): DeviceIdentity {
+    const secret = fromHex(secretHex);
+    return loadDeviceIdentity(keyring, lib().crypto_scalarmult_base(secret), secret);
+  }
+
+  function vectorKeys() {
+    const keyring = new Keyring();
+    return { sender: loaded(keyring, v.senderStatic), receiver: loaded(keyring, v.receiverStatic) };
+  }
+
+  it('reproduces the vector with its ephemeral key, and opens it', () => {
+    const { sender, receiver } = vectorKeys();
+    const message = sealNoiseK(
+      {
+        identity: sender,
+        peerPublicKey: receiver.publicKey,
+        prologue: fromHex(v.prologue),
+        payload: fromHex(v.payload),
+      },
+      bindNoise(fixedDh([fromHex(v.ephemeral)])),
+    );
+    expect(toHex(message)).toBe(v.message);
+    const opened = openNoiseK({
+      identity: receiver,
+      peerPublicKey: sender.publicKey,
+      prologue: fromHex(v.prologue),
+      message,
+    });
+    expect(toHex(opened)).toBe(v.payload);
+  });
+
+  it('draws a new ephemeral key for each message', () => {
+    const { a, b } = identities();
+    const options = {
+      identity: a,
+      peerPublicKey: b.publicKey,
+      prologue,
+      payload: Uint8Array.of(1),
+    };
+    const first = sealNoiseK(options);
+    const second = sealNoiseK(options);
+    expect(toHex(first.subarray(0, 32))).not.toBe(toHex(second.subarray(0, 32)));
+    for (const message of [first, second]) {
+      expect(openNoiseK({ identity: b, peerPublicKey: a.publicKey, prologue, message })).toEqual(
+        Uint8Array.of(1),
+      );
+    }
+  });
+
+  describe('refuses with NoiseError', () => {
+    let a: DeviceIdentity, b: DeviceIdentity, c: DeviceIdentity, message: Uint8Array;
+    beforeAll(() => {
+      const keys = identities();
+      ({ a, b } = keys);
+      c = generateDeviceIdentity(keys.keyring);
+      message = sealNoiseK({
+        identity: a,
+        peerPublicKey: b.publicKey,
+        prologue,
+        payload: Uint8Array.of(1),
+      });
+    });
+    const open = (change: Partial<Parameters<typeof openNoiseK>[0]>) => () =>
+      openNoiseK({ identity: b, peerPublicKey: a.publicKey, prologue, message, ...change });
+
+    it("a message from another key than the picked peer's", () => {
+      expect(open({ peerPublicKey: c.publicKey })).toThrow(NoiseError);
+    });
+
+    it('a message to another device', () => {
+      expect(open({ identity: c })).toThrow(NoiseError);
+    });
+
+    it('a message under another prologue', () => {
+      const other = prologue.slice();
+      other[0] = 8;
+      expect(open({ prologue: other })).toThrow(NoiseError);
+    });
+
+    it.each([0, 31, 32, 48])('a message with byte %i changed', (index) => {
+      const t = message.slice();
+      t[index] = (t[index] ?? 0) ^ 1;
+      expect(open({ message: t })).toThrow(NoiseError);
+    });
+
+    it('a message truncated, one byte longer, or of a low-order ephemeral key', () => {
+      expect(open({ message: message.subarray(0, message.length - 1) })).toThrow(NoiseError);
+      expect(open({ message: Uint8Array.from([...message, 0]) })).toThrow(NoiseError);
+      const low = message.slice();
+      low.fill(0, 0, 32);
+      expect(open({ message: low })).toThrow(NoiseError);
+    });
+  });
+
+  it('refuses a peer key that is not 32 bytes', () => {
+    const { a } = identities();
+    const peerPublicKey = new Uint8Array(31);
+    expect(() =>
+      sealNoiseK({ identity: a, peerPublicKey, prologue, payload: Uint8Array.of(1) }),
+    ).toThrow(EncodingError);
+    expect(() =>
+      openNoiseK({ identity: a, peerPublicKey, prologue, message: new Uint8Array(64) }),
+    ).toThrow(EncodingError);
+  });
+
+  it('wipes the handshake state and both transport keys on each side', () => {
+    const { recorder, destroyed, splits } = recording();
+    const { a, b } = identities();
+    const message = sealNoiseK(
+      { identity: a, peerPublicKey: b.publicKey, prologue, payload: Uint8Array.of(1) },
+      recorder,
+    );
+    expect(splits).toHaveLength(1);
+    expect(splits.every((s) => lib().is_zero(s.tx) && lib().is_zero(s.rx))).toBe(true);
+    expect(destroyed).toHaveLength(1);
+    expect(allZero(destroyed[0] ?? [])).toBe(true);
+    openNoiseK({ identity: b, peerPublicKey: a.publicKey, prologue, message });
+    expect(lib().is_zero(privateKeyBytes(a.privateKey))).toBe(false);
+    expect(lib().is_zero(privateKeyBytes(b.privateKey))).toBe(false);
   });
 });

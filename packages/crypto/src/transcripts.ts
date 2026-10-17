@@ -1,10 +1,10 @@
 // Transcript inputs of crypto-spec.md §13: the Noise prologues, in layout encoding (D1, D10), the
-// pairing commitment and SAS of `pairing-protocol.md` §6 (D199), and the re-admission key
-// confirmation of §9 (D29).
+// pairing commitment and SAS of `pairing-protocol.md` §6 (D199), the re-admission key confirmation
+// of §9 (D29), and the reconnection payload's prologue of `sync-protocol.md` §4.2 (D213).
 
 import { EncodingError } from './errors';
 import { type SymmetricKey, keyBytes } from './keys';
-import { label, layout } from './layout';
+import { id, label, layout } from './layout';
 import { lib, randomBytes } from './sodium';
 
 const PAYLOAD_HASH_LENGTH = 32;
@@ -46,6 +46,17 @@ export function pairingPrologue(
     fingerprint(fingerprintInitiator),
     fingerprint(fingerprintResponder),
   );
+}
+
+/**
+ * `prologue_K = layout("bv.reconnect.v1", vaultId, role)`, `role` being the session role of the
+ * reconnection payload's sender (`sync-protocol.md` §4.2, D213).
+ */
+export function reconnectionPrologue(
+  vaultId: Uint8Array,
+  role: 'initiator' | 'responder',
+): Uint8Array {
+  return layout(label('bv.reconnect.v1'), id(vaultId), label(role));
 }
 
 /** `BLAKE2b-256(layout("bv.pairing.commit.v1", nonce_I))` */

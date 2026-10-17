@@ -1,0 +1,481 @@
+{
+  "description": "sync-protocol.md section 4: the reconnection payload v1, one Noise_K message (Noise_K_25519_ChaChaPoly_BLAKE2b) in base45",
+  "reconnection": {
+    "vaultId": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+    "minMessageLength": 133,
+    "maxMessageLength": 762,
+    "devices": {
+      "initiator": {
+        "staticSecret": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+        "publicKey": "5869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b"
+      },
+      "responder": {
+        "staticSecret": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+        "publicKey": "64b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d48466"
+      },
+      "other": {
+        "staticSecret": "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
+        "publicKey": "244fe3b963e899dd295baffce248d3530f3a9a7479ba063002680ebfe7adad49"
+      }
+    },
+    "valid": [
+      {
+        "case": "initiator: srflx, host and mDNS candidates",
+        "sender": "initiator",
+        "receiver": "responder",
+        "expect": {
+          "role": "initiator"
+        },
+        "payload": {
+          "role": "initiator",
+          "setup": "actpass",
+          "sessionId": "404142434445464748494a4b4c4d4e4f",
+          "fingerprint": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+          "ufrag": "Lh7R",
+          "pwd": "aB3+/cD4eF5gH6iJ7kL8mN9o",
+          "candidates": [
+            {
+              "kind": "srflx-ipv4",
+              "address": "cb007107",
+              "port": 61000
+            },
+            {
+              "kind": "host-ipv4",
+              "address": "c0a80114",
+              "port": 54321
+            },
+            {
+              "kind": "host-mdns",
+              "address": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+              "port": 50000
+            }
+          ]
+        },
+        "plaintext": "00404142434445464748494a4b4c4d4e4f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f044c683752186142332b2f634434654635674836694a376b4c386d4e396f0303cb007107ee4800c0a80114d431020f1e2d3c4b5a69788796a5b4c3d2e1f0c350",
+        "prologue": "0000000f62762e7265636f6e6e6563742e763100000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000009696e69746961746f72",
+        "ephemeral": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+        "message": "883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c778a6da13801aa5b50d6498336701527bda1f14fe77a1a4a099f24f262f8c6c1feb78084b67bf54225f57fa5ceb513c167118e2ccee5ecc3ec7bf71b9c6b8da701c008655d17af4c2596e2140c81f021df612571bad8818f1be9acce1b29ffef715190f59d4e8ccefba0ca5547e294cd95bfac7dd0e22b0bd792cea9324960cb1fa8",
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IC LEIQ*J5GBRU5Q3G6TAC404"
+      },
+      {
+        "case": "initiator: shortest credentials and one candidate, the shortest m",
+        "sender": "initiator",
+        "receiver": "responder",
+        "expect": {
+          "role": "initiator"
+        },
+        "payload": {
+          "role": "initiator",
+          "setup": "actpass",
+          "sessionId": "404142434445464748494a4b4c4d4e4f",
+          "fingerprint": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+          "ufrag": "abcd",
+          "pwd": "aaaaaaaaaaaaaaaaaaaaaa",
+          "candidates": [
+            {
+              "kind": "host-ipv4",
+              "address": "0a000002",
+              "port": 1
+            }
+          ]
+        },
+        "plaintext": "00404142434445464748494a4b4c4d4e4f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f0461626364166161616161616161616161616161616161616161616101000a0000020001",
+        "prologue": "0000000f62762e7265636f6e6e6563742e763100000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000009696e69746961746f72",
+        "ephemeral": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+        "message": "883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c778a6da13801aa5b50d6498336701527bda1f14fe77a1a4a099f24f262f8c6c1feb78084b67bf54225f57fa5ceb513c167118e01c4b1dacdec58a551d269a8f205e75c637440a767739ccf4d00aec84ed662ee73cbde893dd17ef57779322848b560e262e311",
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D%.H/%OXTRO*TL+K0RQ5GLQX0QUBFVEF7LVREE9Q*30NEPR4RN6UZYPXFHZLQJ1VLEF745$-M*RSYVS"
+      },
+      {
+        "case": "responder, setup passive, repeating the session",
+        "sender": "responder",
+        "receiver": "initiator",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "payload": {
+          "role": "responder",
+          "setup": "passive",
+          "sessionId": "404142434445464748494a4b4c4d4e4f",
+          "fingerprint": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+          "ufrag": "1a2b3c4d",
+          "pwd": "0123456789abcdef0123456789abcdef",
+          "candidates": [
+            {
+              "kind": "host-ipv6",
+              "address": "20010db8000000000000000000000001",
+              "port": 50123
+            }
+          ]
+        },
+        "plaintext": "05404142434445464748494a4b4c4d4e4fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf083161326233633464203031323334353637383961626364656630313233343536373839616263646566010120010db8000000000000000000000001c3cb",
+        "prologue": "0000000f62762e7265636f6e6e6563742e763100000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000009726573706f6e646572",
+        "ephemeral": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+        "message": "883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c77d6288d5911ba21584175a754a5c1008cac7925db175b9448b802571ac7ef187818c483e232873ab0fa46a705efab4b61a00b2c42afc9da973bbb150c2f990a13bd52cc5935a3e781df5a4ac66daa343403a3cfdbba598959088eeffa986cec5ad55ab841364f55c93d2e7d36bb34d73da0a8a4b1bff0d1b9327ab91cf12469",
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUX6FV55VBB*NN37BE*EOVA/HOCZH8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCPI1GJ8ENPF5JDTNEO1SFJDM21LAMCBJWK$IGTIB$3PCNL+P6+VK0ZRGEBMBB63IRUVTYDXLB4LB:A8E1A$JPL*5G-6RU6QZ7HEL8LM:JUPIN7NFTT36R4"
+      },
+      {
+        "case": "responder, setup active: longest credentials and 8 candidates, the longest m",
+        "sender": "responder",
+        "receiver": "initiator",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "payload": {
+          "role": "responder",
+          "setup": "active",
+          "sessionId": "404142434445464748494a4b4c4d4e4f",
+          "fingerprint": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+          "ufrag": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pwd": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////",
+          "candidates": [
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1000
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1001
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1002
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1003
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1004
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1005
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1006
+            },
+            {
+              "kind": "srflx-ipv6",
+              "address": "20010db8000100000000000000020003",
+              "port": 1007
+            }
+          ]
+        },
+        "plaintext": "03404142434445464748494a4b4c4d4e4fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfff414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141ff2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f080420010db800010000000000000002000303e80420010db800010000000000000002000303e90420010db800010000000000000002000303ea0420010db800010000000000000002000303eb0420010db800010000000000000002000303ec0420010db800010000000000000002000303ed0420010db800010000000000000002000303ee0420010db800010000000000000002000303ef",
+        "prologue": "0000000f62762e7265636f6e6e6563742e763100000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000009726573706f6e646572",
+        "ephemeral": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+        "message": "883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c77d0288d5911ba21584175a754a5c1008cac7925db175b9448b802571ac7ef187818c483e232873ab0fa46a705efab4b61a0fc5c62dceaa8b54e9e747d5fea7866c925ba204d83c4a3fa7e6db71dd9464177d4b9a2c279aa7b2daac8bad80dac162c1bf900770e14887c6f3c77fbb65d9d97bafb921275f900d7418bfe49b2668005c13aef352b5d890c641277af98a81c9477c52977061d81445716f7eacaf24b80875c55d4737a35259228c4265acead18bdb61f56bd90ea50e0520361c610d832cffcd4e50f1cb2a412e7e27c4c24afc7f55733ce6f07dfc83b9641ac8469686697ba3c953093163abfad232226e1ba9e6781ef2bfc19029f8e499da4bbeca36b21b3321727267219c7453de7413b44b7727270292621743f7003ac7c6430fb143a63bcb529ee2399e0797d998b0d24b78acbe081c37b883fd0a66057dd479a432ae10dd0c217032f8c9e7e415ff5872f73a1f2cd6f394af62cd8c004184620deb41bf9859331348d2282a0c2a94687847ee1169a0c03b03b6b8ffcb089989824a9b4e8bf3e7f36bf27724e37259410d671f85a2402d78b089426b60ebb09d3873fa36799f6d75733083291074e9017e01c6556629b7d3ebfe3adf8601fb458444a3e40a0482d05a8ed53dc1ebc5269aa2bba27eb83ff412d4ec39705f9fc824aa9b27623739225ea536d68501101a0282b8323a966f34a0131ea04c391db2a64f95d8d84398605f0c9ae3249c065f357cae8a5bbefd15cf9f0ffef3cf249868b07ac3346769c9e164ec51233f83791686e846498c53f42ed9ea91e5207bf27075b0cde192824316280dcc20fbcd0b0a41cb0a195aa69da17ec17cc24e3728788ea5d076ea94c01f3e32306ed66cb142086cb411442fc30a9522a9d2adeb51f4de53423e6cb71cf5103fad565bd1ca55ec46881f7d27c805a0407c0b70ec140eb00f54d792c6d76910ed606a5911b9f08f55ab2ed0938a0a48ec7f3734f99bb41d656e9e64e1d0a882874fa251c4bcd52d1ed3a5fb9fc5796e4",
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUR6FV55VBB*NN37BE*EOVA/HOCZH8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCT+VIMC.TTJ-MJ1KA%F*STX:CSY4Y34RTG%WKA:FW6N2LRJC87+Q-PK6HFXPFPQL.RNZW16 26O3T204Z1KBH 2EP7FK2NN-JWSN:KI6-EZ40*C8R6W+OMD8GBJO$AUVL5TEHDTC*5FKDJQR3G6F+A5ZY0HFGJ0BGFVOTPNO925HC%A.QEFW6LLI*ZOQLBW*LB:NC/3I/N:RT6GSAJ0Y1P-ER9DQ6-Q/+1CQMOH2KSS7S9:9MW0VWO6S1E3DS:N7RD8CXG-8D78JTT7F66K 2JAO*J48-4TQN$3DRAU7*V-E0K:H -J3YNUTKWB4/E6W.44JES8P7$74B8-U83LE38E- 4EVEA7EB L/TCGXV7H7O%NOD5NM40HSN*F2QH*S4QOH8HS3WO4AH:GQ38C$/RQMJ.I5QX17OO5I0/YHB/F+5C24H RECVUX2EKL95U5GCO433:64RYMMOVGRI/S6EG4OEK:HL.5H 1GQ%2FN1PCM+QDN.VYHHNAJJKL3JTO+7K-6I:4/*9ZX4Z52GIE HB7G0.PH WIV0N1TNGXQ128G4DB9V31BS112FI.-9$03OQ3J-APTJ/-7AZS:HVG0467BGH9T78R598W050UA$RF N5GDYN5425-UGZA83/964J6RV9LGHKL3.ELREVZ4ROAJ8DX625BKOM5*M4U0D0G9/D64R0YJI7G5RNV3+HBC7ZX0FMP3G6NEOFYUETP$.KDEU-XB0LU:AUFSUI0HT/0VL6Y:EF:J5/9OD23HV9HIW/DCWC5.OXK8R2KM$33:01.4/MBM3SG35.A63DG:NO6*N+EM9S3AJKKOLVPR4%TF P-XS16HCSTC.05IL4B07WSI*0Z:CMO2$1HAA83L8$66JHA4*J/6S3/3-/SAO4GWPI9QSM0:/Q$+NY+KF$OGJGJRQ8AG-M0FGO.%1E98K50XZ9XR5N:EI*1 $0MFIW4KZ0V+RMK71*DKB2I/YU$2ACUNF4RSPTH*9-E16552SV/P32/PBOQ3H72NNC3B35"
+      }
+    ],
+    "invalid": [
+      {
+        "case": "not base45",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "bb8"
+      },
+      {
+        "case": "empty",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": ""
+      },
+      {
+        "case": "version 0",
+        "reason": "version",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "130XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IC LEIQ*J5GBRU5Q3G6TAC404"
+      },
+      {
+        "case": "version 2",
+        "reason": "version",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "IE0XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IC LEIQ*J5GBRU5Q3G6TAC404"
+      },
+      {
+        "case": "version 2 and nothing else",
+        "reason": "version",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "20"
+      },
+      {
+        "case": "version 1 and no m",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "10"
+      },
+      {
+        "case": "m one byte shorter than the shortest",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D%.H/%OXTRO*TL+K0RQ5GLQX0QUBFVEF7LVREE9Q*30NEPR4RN6UZYPXFHZLQJ1VLEF745$-M*RS25"
+      },
+      {
+        "case": "m one byte longer than the longest",
+        "reason": "malformed",
+        "receiver": "initiator",
+        "peer": "responder",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUR6FV55VBB*NN37BE*EOVA/HOCZH8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCT+VIMC.TTJ-MJ1KA%F*STX:CSY4Y34RTG%WKA:FW6N2LRJC87+Q-PK6HFXPFPQL.RNZW16 26O3T204Z1KBH 2EP7FK2NN-JWSN:KI6-EZ40*C8R6W+OMD8GBJO$AUVL5TEHDTC*5FKDJQR3G6F+A5ZY0HFGJ0BGFVOTPNO925HC%A.QEFW6LLI*ZOQLBW*LB:NC/3I/N:RT6GSAJ0Y1P-ER9DQ6-Q/+1CQMOH2KSS7S9:9MW0VWO6S1E3DS:N7RD8CXG-8D78JTT7F66K 2JAO*J48-4TQN$3DRAU7*V-E0K:H -J3YNUTKWB4/E6W.44JES8P7$74B8-U83LE38E- 4EVEA7EB L/TCGXV7H7O%NOD5NM40HSN*F2QH*S4QOH8HS3WO4AH:GQ38C$/RQMJ.I5QX17OO5I0/YHB/F+5C24H RECVUX2EKL95U5GCO433:64RYMMOVGRI/S6EG4OEK:HL.5H 1GQ%2FN1PCM+QDN.VYHHNAJJKL3JTO+7K-6I:4/*9ZX4Z52GIE HB7G0.PH WIV0N1TNGXQ128G4DB9V31BS112FI.-9$03OQ3J-APTJ/-7AZS:HVG0467BGH9T78R598W050UA$RF N5GDYN5425-UGZA83/964J6RV9LGHKL3.ELREVZ4ROAJ8DX625BKOM5*M4U0D0G9/D64R0YJI7G5RNV3+HBC7ZX0FMP3G6NEOFYUETP$.KDEU-XB0LU:AUFSUI0HT/0VL6Y:EF:J5/9OD23HV9HIW/DCWC5.OXK8R2KM$33:01.4/MBM3SG35.A63DG:NO6*N+EM9S3AJKKOLVPR4%TF P-XS16HCSTC.05IL4B07WSI*0Z:CMO2$1HAA83L8$66JHA4*J/6S3/3-/SAO4GWPI9QSM0:/Q$+NY+KF$OGJGJRQ8AG-M0FGO.%1E98K50XZ9XR5N:EI*1 $0MFIW4KZ0V+RMK71*DKB2I/YU$2ACUNF4RSPTH*9-E16552SV/P32/PBOQ3H72NNC3B3$S"
+      },
+      {
+        "case": "a byte of m changed",
+        "reason": "not-from-peer",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IC LEIQ*J5GBRU5Q3G6TAC504"
+      },
+      {
+        "case": "from another device of the vault",
+        "reason": "not-from-peer",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUN7F9G516UG$U0FCW.OB$A5:UD0JG$0ADWMRLF3UQ5IZ8TU3DHG8SISRTPK9W$XSP88/8MW%44$76H602VR49ZCA9.FRBO*P7I+E0RNFI9VYPLUH:P4X/G.NL OBMP2Y7G95JQC8GX2IJVA7O6P4WFVC8I/62-/LWFO5 O6PMRH9M6R89L3CRZ:LDAL%B5PK6D95"
+      },
+      {
+        "case": "from the picked peer, to another device",
+        "reason": "not-from-peer",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUS4F*6FURHKE0G7LG76SFV$YNPBKM8M7+80CNB92 5GCNHO73C:HAN7%HPKYRFHPNTJE5S37CK+B%IH-FI6SFF5HV64IUG$-NRDE:U1QL9M-HQ7VBV6IU32ARJGP50W$5HYU4CK8-ZAVNK+PGQ*9+PGGIO 96QZPL3HAQLDPF:I7FX2834LL6$/E%O3$/VUOH.EU"
+      },
+      {
+        "case": "of another vault",
+        "reason": "not-from-peer",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IG4AK1LI73Q:GS95EP22ZA%G0"
+      },
+      {
+        "case": "the responder's payload sealed as the initiator's",
+        "reason": "not-from-peer",
+        "receiver": "initiator",
+        "peer": "responder",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUX6FV55VBB*NN37BE*EOVA/HOCZH8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCPI1GJ8ENPF5JDTNEO1SFJDM21LAMCBJWK$IGTIB$3PCNL+P6+VK0ZRGEBMBB63IRUVTYDXLB4LB:A8E1A$JPL*5G-6RU6G 5DFIOXF6$LIBD11T3882KU"
+      },
+      {
+        "case": "an initiator payload where the responder's is expected",
+        "reason": "not-from-peer",
+        "receiver": "initiator",
+        "peer": "responder",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUU6FV55VBB*NN37BE*EOVA/HOCZHJBB6YVXSF1AD3G44K7%8Q*6BV+S2OOS5L2EIC/C4Z46SHSC8S-0KP9+QVG*IB%T*K2.9U2K8CEAO95IWLG1RUOE8RJAIKBI0C0CNNI26RZI78O8GBUJ-F88B-4FDE18$4O.9AUH41VI+2F:3I:A5+9OPI5D1NDL3EQNMCTDM"
+      },
+      {
+        "case": "the picked peer's key is this device's own",
+        "reason": "not-from-peer",
+        "receiver": "responder",
+        "peer": "responder",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IC LEIQ*J5GBRU5Q3G6TAC404"
+      },
+      {
+        "case": "reserved flag bit 3, the pairing's holdsVault",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU*4FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-I.52EDWKMVYDI6AUPBU/91:NM"
+      },
+      {
+        "case": "reserved flag bit 7",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU92FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-ILZVQ2P/X018DJSSFMVVOU3X9"
+      },
+      {
+        "case": "setup 3",
+        "reason": "malformed",
+        "receiver": "initiator",
+        "peer": "responder",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUV6FV55VBB*NN37BE*EOVA/HOCZH8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCPI1GJ8ENPF5JDTNEO1SFJDM21LAMCBJWK$IGTIB$3PCNL+P6+VK0ZRGEBMBB63IRUVTYDXLB4LB:A8E1A$JPL*5G-6RU6H6BXBH.TT9BSK9L$QM%$NY4L"
+      },
+      {
+        "case": "initiator with setup active",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU05FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IN%G+P3KASS-GO*21JK2RPMZG"
+      },
+      {
+        "case": "responder with setup actpass",
+        "reason": "malformed",
+        "receiver": "initiator",
+        "peer": "responder",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUT6FV55VBB*NN37BE*EOVA/HOCZH8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCPI1GJ8ENPF5JDTNEO1SFJDM21LAMCBJWK$IGTIB$3PCNL+P6+VK0ZRGEBMBB63IRUVTYDXLB4LB:A8E1A$JPL*5G-6RU6*REI3DGM4J2QT*I8 TWTBG55"
+      },
+      {
+        "case": "role responder in flags, sealed as the initiator's",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU75FU%DR376OL*9A9D9V*6FU2Z/NKLQ49PEH7MC5JR0CK8K8TD6S*DKG0J-/Q8X0I3CC7U6P6009GLG3CPW-RB4UQAKNQGL V49AYI1OV5C7LBGEMVPKGAVZVYGTGFRN$UE%1H9FQFCB+199UWTEU:N*2R 1TSVFL6E1WG%5N16CCDDGO50$NNJAG6E8$A 25"
+      },
+      {
+        "case": "ufrag of 3 characters",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1DGFH07QM3L$7QFAU:EQY4WIH4TIBWK4OWHDHFZ:I%2631LHCS/3US PD15XXREX0IZRP+PE8CYGGAYHB*JLTTSVR+/AC.GE 0JODDA8UKVOPD8UG5X91/8$2"
+      },
+      {
+        "case": "pwd with a space",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q5.TE+TYAV%YJ%+H/90Y21QYBB7M$X46QSQS131LHCS/3US PD15XXREX0IZRP+PE8CYGGAYHB*JLTTSVR+/AC.G9%09KDS882*B W0:QQ5IU8*OS3"
+      },
+      {
+        "case": "no candidate",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUX%R9CUTHPEMDM6EQ-Q96O:5D%.SM.0R77/1T"
+      },
+      {
+        "case": "9 candidates",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GU-/QN-5USPDYNZN33%LNJ3.FW16OJ*N9C0H0TC$Q-PFY+M0/MN5B+REG2CIRJMKU:SK6/F0V9RR4JE5C15S*DV3EBT8H-D EEL44$XTF/E+GG0:MGU1C:KL01"
+      },
+      {
+        "case": "candidate kind 5",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUO:RN-5USPDYN$0FF7RO%DIY8B40-8J:/IP0N"
+      },
+      {
+        "case": "port 0",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUJ:RN-5USP+5EQ$PBM5VO32:9P$Q2GO7KP+OG"
+      },
+      {
+        "case": "a byte after the last field",
+        "reason": "malformed",
+        "receiver": "responder",
+        "peer": "initiator",
+        "expect": {
+          "role": "initiator"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHU25FU%DR376OL*9A9D9V*6FU2Z/NZMU%BTPE3X918U41NCV5P29W5BG53NB0V.Z476G.5QHM2F1D /H07Q--TE+TYAV%YJ%+H/90Y21QYBB7M$X46QS6Q13GUZAS0X4.RN2HGZN33%LNJ3:FWTEETEI+*J1 HL V2QP.39N I+-IB9LA+880I MU0NU2MP2IUXR9O0"
+      },
+      {
+        "case": "the responder's answer for another session",
+        "reason": "malformed",
+        "receiver": "initiator",
+        "peer": "responder",
+        "expect": {
+          "role": "responder",
+          "sessionId": "404142434445464748494a4b4c4d4e4f"
+        },
+        "text": "W80XB6YBNTYMWXB I8M.I5SJJ+OZ75Y-PJI9T59F-K1IOXHUX6FIB556BQTN2DBPXE7$AFCO5-H8EFHVR:PBV89ED0FH38AU98F.$O QSD4H GM.-8YX0LTLHFCPI1GJ8ENPF5JDTNEO1SFJDM21LAMCBJWK$IGTIB$3PCNL+P6+VK0ZRGEBMBB63IRUVTYDXLB4LB:A8E1A$JPL*5G-6RU60XPD9C++UKDB$X8P$JUFDS$4"
+      }
+    ]
+  }
+}

@@ -222,7 +222,11 @@ no replay protection, which comes from `Noise_KK` (section 12, D17).
 The receiver removes line breaks and tabs, decodes base45 strictly, and refuses the payload, before
 any connection and with nothing sent, when:
 
+- the text is empty or not base45 (`malformed`);
 - `version` is not 1 (`version`): the UI asks to update the app;
+- `m` is shorter than 133 bytes or longer than 762, the plaintext bounds of section 4.1 (85 to 714
+  bytes) plus the ephemeral key and the tag (`malformed`), checked before any decryption, so a
+  text cut short is not reported as a code from another device (D214);
 - `m` does not decrypt with the picked peer's public key, this device's identity and the expected
   `role` (`not-from-peer`): the UI says the code is not from {name} for this device, which covers
   a payload from another device, to another device, of another vault or of the wrong role;
@@ -231,7 +235,7 @@ any connection and with nothing sent, when:
   an unknown candidate kind, a port of 0, bytes left after the last field (`malformed`);
 - R's `sessionId` differs from the one I sent (`malformed`).
 
-The decoding is strict: one plaintext has exactly one encoding.
+The checks run in this order. The decoding is strict: one plaintext has exactly one encoding.
 
 ## 5. Connection and handshake
 
@@ -446,7 +450,9 @@ version never changes (D32).
 
 Gate D covers this document. The payload vectors (plaintext, `Noise_K` message under fixed keys and
 ephemeral, base45) and the summary and message vectors go to `packages/sync/test-vectors/sync-v1.json`,
-and `prologue_K` to the `transcripts` section of `packages/crypto/test-vectors/crypto-v1.json`.
+and `prologue_K` and one `Noise_K` message to the `transcripts` section of
+`packages/crypto/test-vectors/crypto-v1.json`, from a second `Noise_K` in `tests/vectors/generate.py`
+checked against the official vectors (D214).
 Over the in-memory transport: a payload under another peer's key, of another vault, of the wrong
 role, of an old session, and a bad version; a `Noise_KK` with a key other than the Device record's;
 a retired peer on each side, at the handshake and during the live session; summaries with a wrong

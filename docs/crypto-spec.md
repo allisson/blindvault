@@ -463,7 +463,9 @@ ciphertexts, whose associated data it is.
 `tests/vectors/generate.py` computes every vector with Python's `hashlib` (BLAKE2b, `crypto_kdf`)
 and PyNaCl (AEAD, Argon2id, `crypto_box_seed_keypair`, padding), independently of the TypeScript
 code, and writes `packages/crypto/test-vectors/crypto-v1.json`. Inputs are fixed bytes, nonces
-included, so the output is deterministic. Run:
+included, so the output is deterministic. It also holds a second `Noise_K` (HMAC-BLAKE2b from
+`hashlib`, X25519 and ChaChaPoly from PyNaCl), which must reproduce the official `Noise_K` vectors
+before it writes the reconnection payload vectors (`sync-protocol.md` §14, D214). Run:
 
 ```sh
 uv run tests/vectors/generate.py
