@@ -8,7 +8,9 @@
 // CRYPTO-INV-009, D218): ending the sync sends `abort` with `ended`, a lock with `locked`, and the
 // peer's `abort` ends it with its reason. Right after the handshake, a device that holds the peer's
 // Device record retired sends it only that record, as `retired`, then `abort` with `retired-peer`;
-// the peer merges it, which shows the D41 notice (§6, D31, D45, D219). The flow stays there: the
+// the peer merges it, which shows the D41 notice (§6, D31, D45, D219). The controller asks for the
+// same check again after each of its commits that may retire the peer, so a peer retired during the
+// session is told so too (D69, D220). The flow stays there: the
 // summaries and the transfer come with their tasks. The controller owns the flow and ends it on a
 // lock (D93); this module logs nothing.
 
@@ -115,6 +117,10 @@ export class Syncing {
   #session: SyncSession | undefined;
   #expiry: ReturnType<typeof setTimeout> | undefined;
   #over = false;
+  /** The checks of the peer's Device record, one at a time (§6). */
+  #checking: Promise<unknown> = Promise.resolve();
+  /** A check found the peer retired: this device is ending the session (§6). */
+  #retiring = false;
 
   constructor(options: SyncFlowOptions) {
     this.#options = options;
@@ -169,6 +175,19 @@ export class Syncing {
     this.#over = true;
     void this.#session?.abort(reason);
     this.#close();
+  }
+
+  /**
+   * Checks the peer's Device record again, after a commit that may have retired it: a local
+   * retirement or a backup merge (§6, D69, D220). Once `Noise_KK` completed, a retired one ends the
+   * session as right after the handshake; before it, that check is still to come.
+   */
+  recheck(): void {
+    const session = this.#session;
+    if (!session || this.#over) return;
+    this.#checkPeer(session).catch(() => {
+      this.#fail('error');
+    });
   }
 
   get #keys(): ReconnectionKeys {
@@ -269,21 +288,40 @@ export class Syncing {
     this.#transport = channel;
     const session = new SyncSession(channel);
     this.#session = session;
-    let retirement: Uint8Array | undefined;
-    try {
-      retirement = await grant.peerRetirement();
-    } catch (error) {
-      // The one refusal of `peerRetirement`: the record it was about to send failed verification.
-      if (!(error instanceof SyncRejectedError)) throw error;
-      await this.#retire(session, undefined, 'verification-failed');
-      return;
+    if (await this.#checkPeer(session)) return;
+    // A check asked for meanwhile runs before the sync shows as connected.
+    for (let tail: Promise<unknown> | undefined; tail !== this.#checking;) {
+      tail = this.#checking;
+      await tail;
     }
-    if (retirement) {
-      await this.#retire(session, retirement, 'retired-peer');
-      return;
-    }
+    // A flow ended otherwise sets nothing, and its session refuses to be read.
+    if (this.#retiring) return;
     this.#set({ kind: 'connected' });
     void this.#listen(session);
+  }
+
+  /**
+   * Reads the peer's Device record again and verifies it, after the checks before it (§6, D219):
+   * `true` once the session is over, or ending because the peer is retired.
+   */
+  #checkPeer(session: SyncSession): Promise<boolean> {
+    const check = this.#checking.then(async () => {
+      if (this.#over || this.#retiring) return true;
+      let retirement: Uint8Array | undefined;
+      try {
+        retirement = await this.#options.grant.peerRetirement();
+      } catch (error) {
+        // The one refusal of `peerRetirement`: the record it was about to send failed verification.
+        if (!(error instanceof SyncRejectedError)) throw error;
+        await this.#retire(session, undefined, 'verification-failed');
+        return true;
+      }
+      if (!retirement) return false;
+      await this.#retire(session, retirement, 'retired-peer');
+      return true;
+    });
+    this.#checking = check.catch(() => undefined);
+    return check;
   }
 
   /**
@@ -295,6 +333,7 @@ export class Syncing {
     retirement: Uint8Array | undefined,
     reason: 'retired-peer' | 'verification-failed',
   ): Promise<void> {
+    this.#retiring = true;
     try {
       if (retirement) await session.send({ t: 'retired', r: retirement });
     } catch (error) {
@@ -320,8 +359,9 @@ export class Syncing {
         else retired = await this.#mergeRetirement(session, message.r);
       }
     } catch (error) {
-      // A lock ended the flow during the merge, which the vault refused once locked.
-      if (this.#over) return;
+      // A lock ended the flow during the merge, which the vault refused once locked; or this device
+      // is ending the session with a peer retired meanwhile, and shows why itself.
+      if (this.#over || this.#retiring) return;
       if (!(error instanceof SyncError)) throw error;
       // Once its record merged, this device knows why the peer ends the session, however it ends.
       this.#fail(retired ? 'retired' : failureOf(error));

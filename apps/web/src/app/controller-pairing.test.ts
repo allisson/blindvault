@@ -1073,8 +1073,8 @@ describe('re-admission through the controller (§9, D206, D207)', () => {
 
 describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)', () => {
   /** A and B, paired: each holds the other's Device record. */
-  async function paired() {
-    const { a, b, net } = await toSas();
+  async function paired(vaultOnA?: (a: VaultController) => Promise<void>) {
+    const { a, b, net } = await toSas(true, vaultOnA);
     a.confirmSas();
     b.confirmSas();
     await stage(a, 'done');
@@ -1178,6 +1178,61 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     const answer = codeOf(await syncStage(b, 'answer'));
     await session(a).retireDevice(idB);
     expect(await a.syncPayload(answer)).toBe('ok');
+    expect(await syncStage(a, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(session(b).retired).toBe(true);
+  });
+
+  /** A and B connected, A showing its code first. */
+  async function connected(
+    a: VaultController,
+    b: VaultController,
+    idA: Uint8Array,
+    idB: Uint8Array,
+  ) {
+    expect(a.startSync(idB, 'initiator', { sameNetwork: true })).toBe('ok');
+    expect(b.startSync(idA, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(await b.syncPayload(codeOf(await syncStage(a, 'offer')))).toBe('ok');
+    expect(await a.syncPayload(codeOf(await syncStage(b, 'answer')))).toBe('ok');
+    await syncStage(a, 'connected');
+    await syncStage(b, 'connected');
+  }
+
+  it('ends an open sync when A retires B: B merges its record and shows the D41 notice (§6, D69, D220)', async () => {
+    const { a, b, idA, idB } = await paired();
+    await connected(a, b, idA, idB);
+    const before = session(b).lastSyncByPeer;
+    expect(await a.retireDevice(idB)).toBe('ok');
+    expect(await syncStage(a, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(session(b).retired).toBe(true);
+    expect(session(b).lastSyncByPeer).toEqual(before);
+  });
+
+  it('ends an open sync when a backup merged on A holds B retired (§6, D69, D220)', async () => {
+    let words: string | undefined;
+    const { a, b, idA, idB } = await paired(async (c) => {
+      await c.start();
+      words = c.newRecoveryPhrase();
+      await c.create(PASSWORD_A, 'Chrome on macOS');
+    });
+    if (!words) throw new Error('no phrase');
+    // C, restored from A's backup, retires B and makes a backup of its own.
+    const file = await a.exportBackup({ kind: 'password', password: PASSWORD_A });
+    if (file.kind !== 'ok') throw new Error(file.kind);
+    const c = controller('c', new IDBFactory());
+    await c.start();
+    expect(c.openBackupFile(file.bytes).kind).toBe('ok');
+    expect((await c.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
+    expect((await c.restore(PASSWORD_A)).kind).toBe('ok');
+    expect(await c.retireDevice(idB)).toBe('ok');
+    const retiring = await c.exportBackup({ kind: 'password', password: PASSWORD_A });
+    if (retiring.kind !== 'ok') throw new Error(retiring.kind);
+
+    await connected(a, b, idA, idB);
+    expect(a.openBackupFile(retiring.bytes).kind).toBe('ok');
+    expect((await a.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
+    expect((await a.mergeBackup()).kind).toBe('ok');
     expect(await syncStage(a, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
     expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
     expect(session(b).retired).toBe(true);

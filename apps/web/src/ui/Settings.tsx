@@ -507,10 +507,12 @@ function DeviceSettings({
   const [syncWith, setSyncWith] = useState<{ id: string; purpose: SyncPurpose }>();
   const devices = devicesOf(session);
   const syncs = devices.registered && !session.retired;
+  const isPeer = (d: { deviceId: Uint8Array }) => hex(d.deviceId) === syncWith?.id;
+  // A sync's peer retired during it stays found, so the sync shows why it ended (D220).
   const peer =
     syncWith?.purpose === 'retirement'
-      ? devices.retired.find((d) => hex(d.deviceId) === syncWith.id)
-      : devices.listed.find((d) => !d.own && hex(d.deviceId) === syncWith?.id);
+      ? devices.retired.find(isPeer)
+      : (devices.listed.find((d) => !d.own && isPeer(d)) ?? devices.retired.find(isPeer));
   const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' });
   return (
     <section className="flex flex-col gap-4" data-testid="devices" data-section="devices">

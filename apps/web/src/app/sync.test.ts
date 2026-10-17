@@ -2,7 +2,8 @@
 // own identity, over an in-memory link in place of WebRTC. The payload, the delivery, `Noise_KK` and
 // the session messages are tested in `packages/sync`; here, what the screens drive: the texts, the
 // refusals that keep the wait going, the handshake (D217), the connection and its end, by `abort`
-// once the session is open (D218), and a retired peer told so and nothing else (D219).
+// once the session is open (D218), and a retired peer told so and nothing else, right after the
+// handshake (D219) or once it becomes retired during the session (D220).
 
 import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import {
@@ -486,15 +487,21 @@ describe('retired peer (sync-protocol.md §6, D31, D45, D219)', () => {
       },
     });
     const { grant } = devices();
-    const make = (role: 'initiator' | 'responder', g: SyncGrant) =>
-      new Syncing({
+    // Every stage each flow went through.
+    const seen = { i: [] as string[], r: [] as string[] };
+    const make = (role: 'initiator' | 'responder', g: SyncGrant) => {
+      const flow: Syncing = new Syncing({
         port: net.port,
         sameNetwork: true,
         stun: { kind: 'default' },
         grant: g,
         role,
-        onChange: () => undefined,
+        onChange: () => {
+          seen[role === 'initiator' ? 'i' : 'r'].push(flow.stage.kind);
+        },
       });
+      return flow;
+    };
     const gi = grant('i', 'r');
     const gr = grant('r', 'i');
     const i = make('initiator', { ...gi, ...iGrant(gi) });
@@ -503,8 +510,37 @@ describe('retired peer (sync-protocol.md §6, D31, D45, D219)', () => {
     r.begin();
     expect(await r.submit(textOf(await stage(i, 'offer')))).toBe('ok');
     expect(await i.submit(textOf(await stage(r, 'answer')))).toBe('ok');
-    return { i, r, sent };
+    return { i, r, sent, seen };
   }
+
+  /** I's vault: the peer's record turns retired once `retire` is called; each read counted. */
+  function retirable() {
+    let held: Uint8Array | undefined;
+    let failing = false;
+    const reads = { count: 0 };
+    return {
+      reads,
+      retire: () => {
+        held = RETIRED;
+      },
+      fail: () => {
+        failing = true;
+      },
+      peerRetirement: () => {
+        reads.count++;
+        return failing
+          ? Promise.reject(new SyncRejectedError('verification-failed'))
+          : Promise.resolve(held?.slice());
+      },
+    };
+  }
+
+  const merging = (merged: Uint8Array[]) => () => ({
+    mergeOwnRetirement: (envelope: Uint8Array) => {
+      merged.push(envelope);
+      return Promise.resolve(MERGED);
+    },
+  });
 
   it('sends the peer only its retired record and abort, and the peer merges it (CRYPTO-INV-015)', async () => {
     const merged: Uint8Array[] = [];
@@ -582,5 +618,109 @@ describe('retired peer (sync-protocol.md §6, D31, D45, D219)', () => {
     release(undefined);
     await stage(i, 'connected');
     i.end();
+  });
+
+  describe('during the session (D69, D220)', () => {
+    it('sends the peer only its retired record and abort once it turns retired, and the peer merges it', async () => {
+      const vault = retirable();
+      const merged: Uint8Array[] = [];
+      const { i, r, sent } = await retiring(
+        () => ({ peerRetirement: vault.peerRetirement }),
+        merging(merged),
+      );
+      await stage(i, 'connected');
+      await stage(r, 'connected');
+      // Nothing changed: the check reads the record again and the session stays open.
+      i.recheck();
+      await vi.waitFor(() => {
+        expect(vault.reads.count).toBe(2);
+      });
+      expect(i.stage.kind).toBe('connected');
+      vault.retire();
+      i.recheck();
+      expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+      expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+      expect(merged).toEqual([RETIRED]);
+      expect(sent).toEqual(['a-to-b', 'b-to-a', 'a-to-b', 'a-to-b']);
+    });
+
+    it('sends one retired and one abort, and never shows connected, when it turns retired during the check after Noise_KK', async () => {
+      const vault = retirable();
+      let release!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const merged: Uint8Array[] = [];
+      const { i, r, sent, seen } = await retiring(
+        () => ({
+          peerRetirement: async () => {
+            // The first read waits, and finds the record not retired yet.
+            if (vault.reads.count === 0) {
+              vault.reads.count++;
+              await blocked;
+              return undefined;
+            }
+            return vault.peerRetirement();
+          },
+        }),
+        merging(merged),
+      );
+      await vi.waitFor(() => {
+        expect(vault.reads.count).toBe(1);
+      });
+      vault.retire();
+      i.recheck();
+      i.recheck();
+      release();
+      expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+      expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+      expect(seen.i).not.toContain('connected');
+      expect(merged).toEqual([RETIRED]);
+      expect(sent).toEqual(['a-to-b', 'b-to-a', 'a-to-b', 'a-to-b']);
+    });
+
+    it('sends nothing but abort when the record turns out to fail verification', async () => {
+      const vault = retirable();
+      const { i, r, sent } = await retiring(
+        () => ({ peerRetirement: vault.peerRetirement }),
+        () => ({}),
+      );
+      await stage(i, 'connected');
+      await stage(r, 'connected');
+      vault.fail();
+      i.recheck();
+      expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'verification-failed' });
+      expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'protocol-error' });
+      expect(sent).toEqual(['a-to-b', 'b-to-a', 'a-to-b']);
+    });
+
+    it('reads nothing before Noise_KK, which checks it anyway, nor once the flow ended', async () => {
+      const vault = retirable();
+      const early = new Syncing({
+        port: network().port,
+        sameNetwork: true,
+        stun: { kind: 'default' },
+        grant: { ...devices().grant('i', 'r'), peerRetirement: vault.peerRetirement },
+        role: 'initiator',
+        onChange: () => undefined,
+      });
+      early.begin();
+      await stage(early, 'offer');
+      early.recheck();
+      expect(vault.reads.count).toBe(0);
+      early.end();
+
+      const after = retirable();
+      const { i: ended, r } = await retiring(
+        () => ({ peerRetirement: after.peerRetirement }),
+        () => ({}),
+      );
+      await stage(ended, 'connected');
+      ended.end();
+      after.retire();
+      ended.recheck();
+      expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'ended' });
+      expect(after.reads.count).toBe(1);
+    });
   });
 });

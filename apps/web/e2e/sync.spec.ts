@@ -9,7 +9,8 @@ import { fillPassword } from './password';
 // both, one shows its code first, the codes are copied and pasted, the same network only (no STUN
 // server), and both connect, then prove their registered identities with Noise_KK (D217); closing
 // on one ends the other with `abort` (D218). A device that retired the other tells it so through the
-// same screens, sending it only its retired record (D219).
+// same screens, sending it only its retired record (D219), and a device retired during an open sync
+// is told so at once (D69, D220).
 
 // Creation, A's password again and B's password each run Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -160,4 +161,40 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   // B, now retired, offers no sync (D41, D45).
   await button(b, 'Start again').click();
   await expect(b.getByTestId('device-sync')).toHaveCount(0);
+});
+
+test('A retires B during an open sync: B merges its retired record and shows the D41 notice (D69, D220)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+
+  await a.getByTestId('device-sync').click();
+  const syncA = a.getByTestId('sync');
+  await syncA.getByTestId('pairing-same-network').check();
+  await syncA.getByTestId('sync-first').click();
+  const offer = syncA.getByTestId('pairing-text');
+  await expect(offer).not.toHaveValue('', { timeout: 30_000 });
+  await b.getByTestId('device-sync').click();
+  const syncB = b.getByTestId('sync');
+  await syncB.getByTestId('pairing-same-network').check();
+  await syncB.getByTestId('sync-read').click();
+  await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
+  await button(b, 'Next').click();
+  const answer = syncB.getByTestId('pairing-text');
+  await expect(answer).not.toHaveValue('', { timeout: 30_000 });
+  await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
+  await button(a, 'Connect').click();
+  await expect(a.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
+  await expect(b.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
+
+  // The sync stays on screen while A retires B from the list above it.
+  await a.getByTestId('device-retire').click();
+  await a.getByRole('button', { name: /^Retire / }).click();
+  await expect(a.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'retired-peer', {
+    timeout: 30_000,
+  });
+  await expect(b.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'retired', {
+    timeout: 30_000,
+  });
+  await expect(b.getByTestId('own-retired')).toBeVisible();
 });
