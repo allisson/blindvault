@@ -440,6 +440,13 @@ every project through the references in the root `tsconfig.json`.
   `not-from-peer` or `malformed`, and returns `m` for `prologue_KK`. The vectors come from
   `tests/vectors/generate.py`, which gains a `Noise_K` of its own over `hashlib` and PyNaCl, checked
   against the official vectors before it writes them. No new dependency.
+- **Payload delivery (Phase 5, `packages/sync`, D215).** `src/delivery.ts` defines
+  `PayloadDelivery` (send, receive each payload as an async iterable, close), `manualDelivery()`
+  (the text to show, `submit` for the text read or pasted) and `memoryDelivery()`, an in-memory pair
+  with `intercept` and `inject` that stands for a mailbox in the protocol tests.
+  `receiveReconnection` takes the first payload that opens and reports the others. `src/reconnect.ts`
+  now seals to and opens from the bytes `version ‖ m`; `encodeReconnectionText` and
+  `decodeReconnectionText` hold the base45 of the manual delivery. No new dependency.
 - **Pairing payload and connection (Phase 4, `packages/sync`).** `src/base45.ts` is RFC 9285 with
   strict decoding. `src/payload.ts` encodes and decodes the payload v1 of `pairing-protocol.md` §3
   as bytes, with `PayloadError.reason` `version` (the UI asks to update), `malformed`, `wrong-role`

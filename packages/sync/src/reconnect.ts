@@ -63,10 +63,13 @@ export interface ReconnectionKeys {
   readonly vaultId: Uint8Array;
 }
 
-/** A payload as transmitted: `m`, for `prologue_KK`, and the base45 text of `version ‖ m`. */
+/**
+ * A payload as delivered: `bytes` is `version ‖ m`, what any delivery carries (§4.4, D215), and
+ * `message` is `m`, for `prologue_KK`.
+ */
 export interface SealedReconnection {
+  readonly bytes: Uint8Array;
   readonly message: Uint8Array;
-  readonly text: string;
 }
 
 const malformed = (detail: string) => new ReconnectionError('malformed', detail);
@@ -105,19 +108,19 @@ export function sealReconnection(
   const bytes = new Uint8Array(1 + message.length);
   bytes[0] = RECONNECTION_VERSION;
   bytes.set(message, 1);
-  return { message, text: encodeBase45(bytes) };
+  return { bytes, message };
+}
+
+/** The payload as base45 text, for a QR code or copy/paste: the manual delivery's encoding. */
+export function encodeReconnectionText(bytes: Uint8Array): string {
+  return encodeBase45(bytes);
 }
 
 /**
- * Opens the peer's payload from base45 text, in the order of §4.3: the text, the version, the length
- * of `m`, `Noise_K` under the expected role, then the plaintext. Line breaks and tabs are removed;
- * spaces are kept, because they are base45 characters.
+ * The bytes of a payload read from a QR code or pasted. Line breaks and tabs are removed; spaces are
+ * kept, because they are base45 characters. A text that is not base45, or empty, is `malformed`.
  */
-export function openReconnection(
-  text: string,
-  keys: ReconnectionKeys,
-  expected: PayloadExpectation,
-): { readonly reconnection: Reconnection; readonly message: Uint8Array } {
+export function decodeReconnectionText(text: string): Uint8Array {
   let bytes: Uint8Array;
   try {
     bytes = decodeBase45(text.replace(/[\r\n\t]/g, ''));
@@ -126,6 +129,19 @@ export function openReconnection(
     /* v8 ignore next */
     throw error;
   }
+  if (bytes.length === 0) throw malformed('empty');
+  return bytes;
+}
+
+/**
+ * Opens the peer's payload, `version ‖ m` as delivered, in the order of §4.3: the version, the
+ * length of `m`, `Noise_K` under the expected role, then the plaintext.
+ */
+export function openReconnection(
+  bytes: Uint8Array,
+  keys: ReconnectionKeys,
+  expected: PayloadExpectation,
+): { readonly reconnection: Reconnection; readonly message: Uint8Array } {
   if (bytes.length === 0) throw malformed('empty');
   const version = bytes[0] ?? 0;
   if (version !== RECONNECTION_VERSION) {

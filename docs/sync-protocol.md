@@ -237,6 +237,34 @@ any connection and with nothing sent, when:
 
 The checks run in this order. The decoding is strict: one plaintext has exactly one encoding.
 
+### 4.4 Delivery
+
+The payload is defined apart from how it travels (D12). A **delivery** carries the bytes
+`version ‖ m` from one device to the other, and nothing above it depends on which one. `packages/sync`
+defines it as an interface: send this device's payload, receive each payload delivered to it, close
+(D215).
+
+- **v1: manual.** The device shows its payload as base45 text (section 4.1), as a QR code or to copy;
+  the user reads the peer's QR code or pastes its text. A text that is not base45, or empty, is
+  refused at once (`malformed`).
+- **After v1: a mailbox** (Nostr, ntfy, §9.1 of the overview) implements the same interface. Its
+  topic and adapters are designed then; the payload, `Noise_K`, `Noise_KK` and every message of this
+  document stay as they are.
+- **The pairing payload is never delivered this way.** It travels in the clear and is checked by the
+  SAS; it stays a QR code or copy/paste (`pairing-protocol.md` §3.4).
+
+A delivery may lose, duplicate, reorder or replay payloads, and carry bytes from anyone who can
+reach it. The receiver reads each delivered payload as in section 4.3 and takes the **first one that
+opens**; every refused payload, `version` included, is reported (the UI shows the reason on the
+manual delivery) and the wait goes on, until the delivery closes or the payload timeout of
+section 12 ends the session. This is safe without any help from the delivery:
+
+- a payload that does not open, from anyone, changes nothing;
+- R's answer of another session is `malformed`, because its `sessionId` differs (section 4.3);
+- an old offer from I opens, but the session it leads to fails at DTLS, whose fingerprint is I's
+  old certificate, or at `Noise_KK`, whose prologue binds that old payload, before any message
+  (section 5, D17).
+
 ## 5. Connection and handshake
 
 The connection is that of `pairing-protocol.md` §4: each side rebuilds the other's SDP from the
@@ -447,6 +475,8 @@ version never changes (D32).
 - CRYPTO-INV-018 and CRYPTO-INV-022: every received record verified, and none beyond the bound
   merged (section 9).
 - CRYPTO-INV-012: an unknown payload or message version refused (sections 4.3 and 11.1).
+- A delivery that loses, duplicates, reorders, replays or injects payloads leaves the first payload
+  that opens as the only one taken (section 4.4).
 
 Gate D covers this document. The payload vectors (plaintext, `Noise_K` message under fixed keys and
 ephemeral, base45) and the summary and message vectors go to `packages/sync/test-vectors/sync-v1.json`,

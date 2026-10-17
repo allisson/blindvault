@@ -18,8 +18,10 @@ import {
   ReconnectionError,
   type ReconnectionKeys,
   decodeReconnection,
+  decodeReconnectionText,
   encodeReconnection,
-  openReconnection,
+  encodeReconnectionText,
+  openReconnection as openBytes,
   sealReconnection,
 } from './reconnect';
 
@@ -92,6 +94,17 @@ function reason(fn: () => unknown): string {
   throw new Error('expected a ReconnectionError');
 }
 
+/** Opens a payload from its text, as the manual delivery and then the session do. */
+function openReconnection(text: string, k: ReconnectionKeys, expected: PayloadExpectation) {
+  return openBytes(decodeReconnectionText(text), k, expected);
+}
+
+/** Seals a payload and gives its text, as the manual delivery shows it. */
+function seal(r: Reconnection, k: ReconnectionKeys) {
+  const sealed = sealReconnection(r, k);
+  return { ...sealed, text: encodeReconnectionText(sealed.bytes) };
+}
+
 const [offerVector, , answerVector] = v.valid;
 if (!offerVector || !answerVector) throw new Error('missing vectors');
 const offer = reconnection(offerVector.payload);
@@ -124,18 +137,19 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
 
   describe('sealing', () => {
     it('seals to the peer, who opens it with this device as the picked peer', () => {
-      const sealed = sealReconnection(offer, keys('initiator', 'responder'));
+      const sealed = seal(offer, keys('initiator', 'responder'));
       const opened = openReconnection(sealed.text, keys('responder', 'initiator'), {
         role: 'initiator',
       });
       expect(opened.reconnection).toEqual(offer);
       expect(opened.message).toEqual(sealed.message);
+      expect(sealed.bytes).toEqual(Uint8Array.from([1, ...sealed.message]));
       expect(sealed.message.length).toBe(hex(offerVector.message).length);
     });
 
     it('draws a new ephemeral key for each payload, so no two texts are the same', () => {
-      const one = sealReconnection(answer, keys('responder', 'initiator'));
-      const two = sealReconnection(answer, keys('responder', 'initiator'));
+      const one = seal(answer, keys('responder', 'initiator'));
+      const two = seal(answer, keys('responder', 'initiator'));
       expect(one.text).not.toBe(two.text);
       const expected = { role: 'responder', sessionId: answer.sessionId } as const;
       for (const s of [one, two]) {
@@ -146,7 +160,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
     });
 
     it('binds the role: a payload handed back to its own sender is refused', () => {
-      const sealed = sealReconnection(offer, keys('initiator', 'responder'));
+      const sealed = seal(offer, keys('initiator', 'responder'));
       const expected = { role: 'responder', sessionId: offer.sessionId } as const;
       expect(
         reason(() => openReconnection(sealed.text, keys('initiator', 'responder'), expected)),
@@ -158,7 +172,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
       const otherVault = vaultId.map((b) => b ^ 1);
       const from = keys('initiator', 'responder');
       const to = keys('responder', 'initiator');
-      const sealed = sealReconnection(offer, { ...from, vaultId: otherVault });
+      const sealed = seal(offer, { ...from, vaultId: otherVault });
       expect(reason(() => openReconnection(sealed.text, to, { role: 'initiator' }))).toBe(
         'not-from-peer',
       );
@@ -170,7 +184,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
 
     it('refuses a payload from a device the user did not pick, even one of the vault', () => {
       const stranger = generateDeviceIdentity(new Keyring());
-      const sealed = sealReconnection(offer, {
+      const sealed = seal(offer, {
         ...keys('initiator', 'responder'),
         identity: stranger,
       });
@@ -214,7 +228,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
 
   describe('text', () => {
     it('ignores line breaks and tabs, which a text field or a chat may add', () => {
-      const { text } = sealReconnection(offer, keys('initiator', 'responder'));
+      const { text } = seal(offer, keys('initiator', 'responder'));
       const broken = `${text.slice(0, 10)}\r\n${text.slice(10, 20)}\n\t${text.slice(20)}\n`;
       expect(
         openReconnection(broken, keys('responder', 'initiator'), { role: 'initiator' })
@@ -223,7 +237,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
     });
 
     it("refuses a text cut short as malformed, not as another device's", () => {
-      const { text } = sealReconnection(offer, keys('initiator', 'responder'));
+      const { text } = seal(offer, keys('initiator', 'responder'));
       const cut = text.slice(0, 60);
       expect(
         reason(() => openReconnection(cut, keys('responder', 'initiator'), { role: 'initiator' })),
@@ -232,10 +246,24 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
   });
 
   it('lets a caller error through, not as a payload refusal: a peer key that is not 32 bytes', () => {
-    const { text } = sealReconnection(offer, keys('initiator', 'responder'));
+    const { text } = seal(offer, keys('initiator', 'responder'));
     const bad = { ...keys('responder', 'initiator'), peerPublicKey: new Uint8Array(31) };
     expect(() => openReconnection(text, bad, { role: 'initiator' })).toThrow(EncodingError);
     expect(() => openReconnection(text, bad, { role: 'initiator' })).not.toThrow(ReconnectionError);
+  });
+
+  it('opens the bytes a delivery carries, and refuses empty bytes as malformed', () => {
+    const [c] = v.valid;
+    if (!c) throw new Error('no vector');
+    const bytes = decodeReconnectionText(c.text);
+    expect(toHex(bytes)).toBe(`01${c.message}`);
+    expect(encodeReconnectionText(bytes)).toBe(c.text);
+    expect(
+      openBytes(bytes, keys(c.receiver, c.sender), expectation(c.expect)).reconnection,
+    ).toEqual(reconnection(c.payload));
+    expect(
+      reason(() => openBytes(new Uint8Array(0), keys(c.receiver, c.sender), { role: 'initiator' })),
+    ).toBe('malformed');
   });
 
   it('returns copies, so the caller cannot change the decoded payload through the input', () => {
