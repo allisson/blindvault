@@ -437,7 +437,9 @@ D68's task) and the peer's own Device record retired merges. After the merge, th
 session when this device's own record arrived retired (D69), otherwise runs the check of section 6
 again, then sends `committed`. The merge runs once over the whole transfer, so section 1.4 cuts
 history against each item's final copy: a restore from the trash reaching a device that purged the
-item keeps the versions arriving with it, in any order (D137).
+item keeps the versions arriving with it, in any order (D137). Both devices cut the union of the
+same versions, so one sync leaves them the same 20 per item (D6), and the sync result shows the
+notice of section 1.6 for a conflict loser this device wrote (D70).
 
 ## 10. Live session
 

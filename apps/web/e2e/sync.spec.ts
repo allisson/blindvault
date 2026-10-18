@@ -9,7 +9,8 @@ import { fillPassword } from './password';
 // both, one shows its code first, the codes are copied and pasted, the same network only (no STUN
 // server), and both connect, then prove their registered identities with Noise_KK (D217); closing
 // on one ends the other with `abort` (D218); between them, each gets the records the other lacks
-// (D222), and concurrent edits converge in that one sync, the loser in the history of both (D223). A
+// (D222), and concurrent edits converge in that one sync, the loser in the history of both (D223),
+// cut to the same 20 versions, the device whose edit the cut dropped telling its user (D6, D70). A
 // device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
@@ -290,5 +291,39 @@ test('concurrent edits converge in one sync: the newer wins on both, the other i
     await expect(versions).toHaveCount(2);
     await expect(versions.first()).toContainText('ACME on A');
     await expect(versions.last()).toContainText('ACME');
+  }
+});
+
+test('the history cut drops an edit of A in one sync: only A tells its user, and both keep 20 (D6, D70)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await newLogin(a, 'ACME');
+  await button(a, 'Settings').click();
+  await synced(a, b);
+  await closed(a, b);
+  await button(b, 'Open the vault').click();
+
+  // A's edit is older than B's 21, whose versions fill the history of 20.
+  await rename(a, 'ACME', 'ACME on A');
+  let title = 'ACME';
+  for (let i = 0; i <= 20; i++) {
+    await rename(b, title, `B ${String(i)}`);
+    title = `B ${String(i)}`;
+  }
+  for (const page of [a, b]) await button(page, 'Settings').click();
+  await synced(a, b);
+  const notice = 'An older edit made on this device no longer fits the history of: ACME on A.';
+  await expect(a.getByText(notice)).toBeVisible();
+  await expect(b.getByText(notice)).toHaveCount(0);
+
+  await closed(a, b);
+  for (const page of [a, b]) {
+    await button(page, title).click();
+    await button(page, 'History').click();
+    const versions = page.locator('article').getByRole('listitem');
+    await expect(versions).toHaveCount(20);
+    await expect(versions.filter({ hasText: 'ACME on A' })).toHaveCount(0);
   }
 });

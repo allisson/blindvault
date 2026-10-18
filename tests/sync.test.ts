@@ -15,6 +15,7 @@ import {
 import { VaultDatabase } from '@blindvault/storage';
 import { SyncSession, exchange, memoryPair, syncHandshake } from '@blindvault/sync';
 import {
+  HISTORY_LIMIT,
   type ItemInput,
   MAINTENANCE_INTERVAL_MS,
   type RecordStore,
@@ -296,5 +297,70 @@ describe('a purged item over a sync (sync-protocol.md §1.4, D137)', () => {
     expect(history(x, shared)).toHaveLength(3);
     expect(history(y, shared)).toEqual(history(x, shared));
     expect(held(x)).toEqual(held(y));
+  });
+});
+
+describe('the history cut over a sync (sync-protocol.md §1.4, D6, D70)', () => {
+  it('cuts both to the same 20 versions in one sync, telling only the device that wrote the dropped loser', async () => {
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await x.updateItem(shared, login('Edited on Laptop'));
+    for (let i = 0; i <= HISTORY_LIMIT; i++) {
+      clock.t = T0 + 2 * MINUTE + i;
+      await y.updateItem(shared, login(`Phone ${String(i)}`));
+    }
+    const [rx, ry] = await sync(x, y);
+    expect(rx.droppedLosers).toEqual([{ itemId: shared, title: 'Edited on Laptop' }]);
+    expect(ry.droppedLosers).toEqual([]);
+    for (const session of [x, y]) {
+      expect(titleOf(session, shared)).toBe(`Phone ${String(HISTORY_LIMIT)}`);
+      expect(history(session, shared)).toHaveLength(HISTORY_LIMIT);
+      expect(history(session, shared)).not.toContain('Edited on Laptop');
+    }
+    expect(history(x, shared)).toEqual(history(y, shared));
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('cuts two histories of fewer than 20 each to the same 20 of their union, with no notice', async () => {
+    const { clock, x, y, shared } = await peers();
+    const edits = 11;
+    for (let i = 0; i < edits; i++) {
+      clock.t = T0 + MINUTE + i;
+      await x.updateItem(shared, login(`Laptop ${String(i)}`));
+    }
+    for (let i = 0; i < edits; i++) {
+      clock.t = T0 + 2 * MINUTE + i;
+      await y.updateItem(shared, login(`Phone ${String(i)}`));
+    }
+    expect(history(x, shared)).toHaveLength(edits);
+    expect(history(y, shared)).toHaveLength(edits);
+    const results = await sync(x, y);
+    for (const result of results) expect(result.droppedLosers).toEqual([]);
+    for (const session of [x, y]) {
+      expect(history(session, shared)).toHaveLength(HISTORY_LIMIT);
+      // The two oldest of 22 go: the state both started from and the Laptop's first edit.
+      expect(history(session, shared)).not.toContain('Shared');
+      expect(history(session, shared)).not.toContain('Laptop 0');
+      // The Laptop's last edit lost, and is kept.
+      expect(history(session, shared)).toContain(`Laptop ${String(edits - 1)}`);
+    }
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('brings back nothing the cut dropped on a second sync', async () => {
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await x.updateItem(shared, login('Edited on Laptop'));
+    for (let i = 0; i <= HISTORY_LIMIT; i++) {
+      clock.t = T0 + 2 * MINUTE + i;
+      await y.updateItem(shared, login(`Phone ${String(i)}`));
+    }
+    await sync(x, y);
+    const before = held(x);
+    for (const result of await sync(x, y)) {
+      expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0, droppedLosers: [] });
+    }
+    expect(held(x)).toEqual(before);
+    expect(held(y)).toEqual(before);
   });
 });

@@ -462,6 +462,11 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **History cut over a sync (Phase 5, D6, D70).** No code change: `#transferMerge` cuts history
+  over held, received and losing versions, and the `synced` screen shows the D70 notice through
+  `MergeNotices`, shared with the backup merge. `tests/sync.test.ts` and `apps/web/e2e/sync.spec.ts`
+  cover one sync leaving both devices the same 20 versions, with the notice only on the device that
+  wrote the dropped loser. No new dependency.
 - **Purged items over a sync (Phase 5, D137).** No code change: `#transferMerge` in
   `packages/vault` cuts history against each item's final copy once the whole transfer is merged,
   and `exchange` merges once per transfer. `tests/sync.test.ts` covers a restore from the trash
