@@ -7,6 +7,7 @@ import { parseBackup, restoreWithPhrase } from '@blindvault/backup';
 import {
   Keyring,
   MEMLIMIT,
+  RecordType,
   type SymmetricKey,
   derivePrfKek,
   generateRecoveryPhrase,
@@ -74,9 +75,12 @@ function lazyStore(factory: IDBFactory): RecordStore {
   };
 }
 
-/** X created the vault with one item; Y restored its backup; both re-admitted: each holds the other. */
+/**
+ * X created the vault with one item; Y restored its backup; both re-admitted: each holds the other.
+ * Y's clock runs `clock.y` ms off X's.
+ */
 async function peers() {
-  const clock = { t: T0 };
+  const clock = { t: T0, y: 0 };
   const now = () => clock.t;
   const keyring = new Keyring();
   const phrase = generateRecoveryPhrase(keyring);
@@ -104,7 +108,7 @@ async function peers() {
     salt: new Uint8Array(16).fill(8),
     kdfParams: PARAMS,
     backup: restoreWithPhrase(restoring, parseBackup(file.bytes), phrase.words),
-    now,
+    now: () => clock.t + clock.y,
   });
   sessions.push(y);
 
@@ -362,5 +366,116 @@ describe('the history cut over a sync (sync-protocol.md §1.4, D6, D70)', () => 
     }
     expect(held(x)).toEqual(before);
     expect(held(y)).toEqual(before);
+  });
+});
+
+/** Runs the maintenance pass of every open session (D7), then waits for `check`: it commits to IndexedDB, whose timers are real. */
+async function maintenance(check: () => void): Promise<void> {
+  await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
+  await vi.waitFor(check);
+}
+
+/** The summary entry of an item, as the session would send it. */
+function entryOf(session: VaultSession, id: Uint8Array) {
+  const peer = session.devices().find((d) => !same(d.deviceId, session.deviceId));
+  if (!peer) throw new Error('no peer');
+  return session
+    .openSync(peer.deviceId)
+    .summary()
+    .find((e) => e.recordType === RecordType.item && same(e.recordId, id));
+}
+
+describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-013)', () => {
+  it("purges a stale device's older edit with the tombstone, keeping the tombstone on both and telling the writer", async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await y.updateItem(shared, login('Edited on Phone'));
+    clock.t = T0 + 2 * MINUTE;
+    await x.trashItem(shared);
+    clock.t = T0 + 32 * DAY;
+    await maintenance(() => {
+      expect(x.item(shared)).toBeUndefined();
+    });
+
+    const [rx, ry] = await sync(x, y);
+    expect(ry.droppedLosers).toEqual([{ itemId: shared, title: 'Edited on Phone' }]);
+    expect(rx.droppedLosers).toEqual([]);
+    for (const session of [x, y]) {
+      expect(session.item(shared)).toBeUndefined();
+      expect(session.versions(shared)).toEqual([]);
+      expect(entryOf(session, shared)).toMatchObject({ deleted: true });
+    }
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('trashes a folder and its item on both over older edits of either (D27)', async () => {
+    const { clock, x, y } = await peers();
+    const folder = await x.createFolder('Work');
+    const item = await x.createItem({ ...login('In Work'), folderId: folder });
+    await sync(x, y);
+    clock.t = T0 + MINUTE;
+    await y.renameFolder(folder, 'Work on Phone');
+    await y.updateItem(item, { ...login('Edited on Phone'), folderId: folder });
+    clock.t = T0 + 2 * MINUTE;
+    await x.trashFolder(folder);
+
+    await sync(x, y);
+    for (const session of [x, y]) {
+      expect(session.folder(folder)).toMatchObject({ inTrash: true, name: 'Work' });
+      expect(session.item(item)).toMatchObject({ inTrash: true });
+      expect(history(session, item)).toContain('Edited on Phone');
+    }
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('keeps a purged tombstone of an item it never held, and nothing changes on a second sync', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { clock, x, y } = await peers();
+    const later = await x.createItem(login('Created after the restore'));
+    await x.trashItem(later);
+    clock.t = T0 + 31 * DAY;
+    await maintenance(() => {
+      expect(x.item(later)).toBeUndefined();
+    });
+
+    const [, ry] = await sync(x, y);
+    expect(ry).toMatchObject({ added: 1, rejected: [] });
+    expect(y.item(later)).toBeUndefined();
+    expect(y.items().map((i) => i.item?.title)).toEqual(['Shared']);
+    expect(entryOf(y, later)).toMatchObject({ deleted: true });
+    expect(held(x)).toEqual(held(y));
+    for (const result of await sync(x, y)) {
+      expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
+    }
+  });
+
+  it("sends nothing between a purged and an unpurged copy of one tombstone, which converge at the slower device's own purge (§8)", async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await x.trashItem(shared);
+    await sync(x, y);
+    // X's clock is past the purge date; Y's, an hour behind, is not yet.
+    clock.y = -60 * MINUTE;
+    clock.t = T0 + MINUTE + 30 * DAY + 30 * MINUTE;
+    await maintenance(() => {
+      expect(x.item(shared)).toBeUndefined();
+    });
+    expect(titleOf(y, shared)).toBe('Shared');
+
+    // Identical entries: neither copy is sent (the residual risk of overview §9). Y's version of the
+    // item reaches X, which drops it for the purged item (D137).
+    expect(entryOf(x, shared)).toEqual(entryOf(y, shared));
+    for (const result of await sync(x, y)) {
+      expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0 });
+    }
+    expect(y.item(shared)).toMatchObject({ inTrash: true });
+
+    clock.y = 0;
+    await maintenance(() => {
+      expect(y.item(shared)).toBeUndefined();
+    });
+    expect(held(x)).toEqual(held(y));
   });
 });

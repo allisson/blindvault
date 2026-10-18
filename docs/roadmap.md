@@ -327,7 +327,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Per-item LWW merge, with the losing version stored in history; a differing Item is sent both ways, so one sync leaves the loser on both devices (D6, D56, §1.3, §8, D223)
 - [x] An Item Version is dropped for a purged item only once the whole transfer is merged, so a restore from the trash arriving with its versions keeps them (D137); the merge shared with the backup merge, run once per transfer
 - [x] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70); one sync leaves both devices the same 20, the notice on the sync result
-- [ ] Tombstones synchronized and kept indefinitely
+- [x] Tombstones synchronized and kept indefinitely; storage deletes nothing but Item Versions (D27, D224)
 - [ ] Trash with deterministic, automatic-only purge; no manual purge (D7, D94)
 - [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user, naming the superseded phrase and offering a new backup (D2, D145)
 - [ ] Live push of changes while the DataChannel is open; session ends on close or lock
