@@ -1,4 +1,4 @@
-import { DEFAULT_PREFERENCES, type ReadmissionResult, type VaultSession } from '@blindvault/vault';
+import { DEFAULT_PREFERENCES, type RejectedRecord, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { recordIdPrefix } from '../app/backup-file';
@@ -403,12 +403,18 @@ export function PasteText<C extends string>({
   );
 }
 
-/** Records the other device sent that a re-admission rejected, with why (D206, D207). */
-function Rejected({ result }: { readonly result: ReadmissionResult }) {
+/** Records the other device sent that a re-admission or a sync rejected, with why (D206, D207, D222). */
+export function Rejected({
+  rejected,
+  testId = 'readmission-rejected',
+}: {
+  readonly rejected: readonly RejectedRecord[];
+  readonly testId?: string;
+}) {
   const m = useMessages();
   const r = m.readmission;
-  if (result.rejected.length === 0) return null;
-  const records = result.rejected
+  if (rejected.length === 0) return null;
+  const records = rejected
     .map(({ reason, record }) =>
       record
         ? `${recordTypeName(m, record.recordType)} ${recordIdPrefix(record.recordId)} (${r.rejectedReasons[reason]})`
@@ -417,8 +423,8 @@ function Rejected({ result }: { readonly result: ReadmissionResult }) {
     .join(', ');
   return (
     <Notice>
-      <span data-testid="readmission-rejected">
-        {format(r.rejected, { n: String(result.rejected.length), records })}
+      <span data-testid={testId}>
+        {format(r.rejected, { n: String(rejected.length), records })}
       </span>
     </Notice>
   );
@@ -589,7 +595,7 @@ function Stage({
             recovery={session?.recovery}
             date={(at) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(at)}
           />
-          <Rejected result={stage.result} />
+          <Rejected rejected={stage.result.rejected} />
           <Button
             className="self-start"
             onClick={() => {

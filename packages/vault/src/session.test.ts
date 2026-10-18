@@ -5434,3 +5434,293 @@ describe('sync (sync-protocol.md §3, D113, D216)', () => {
     });
   });
 });
+
+describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', () => {
+  /** X created the vault; Y restored its backup, then both re-admitted: each holds the other. */
+  async function peers() {
+    const clock = new Clock();
+    const x = await create(clock);
+    await x.session.createItem(login('From X'));
+    const file = await x.session.exportBackup({ kek: kek(x.keyring), method: 'password' });
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const y = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 2),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      now: clock.now,
+    });
+    open.push(y);
+    const gx = x.session.openReadmission();
+    const gy = y.openReadmission();
+    await gx.admit({ own: false, peer: true }, gy.identity.publicKey, 'Y', 'X');
+    await gy.merge(await gx.records(), gx.identity.publicKey);
+    await gx.merge(await gy.records(), gy.identity.publicKey);
+    return {
+      clock,
+      x: { ...x, grant: x.session.openSync(y.deviceId) },
+      y: { session: y, store, grant: y.openSync(x.session.deviceId) },
+    };
+  }
+
+  const keyOf = (r: { recordType: number; recordId: Uint8Array }) =>
+    `${String(r.recordType)}:${idKey(r.recordId)}`;
+
+  function titles(session: VaultSession): (string | undefined)[] {
+    return session
+      .items()
+      .map((i) => i.item?.title)
+      .sort();
+  }
+
+  async function rejection(promise: Promise<unknown>): Promise<string> {
+    const error = await promise.catch((e: unknown) => e);
+    if (error instanceof SyncRejectedError) return error.reason;
+    throw error;
+  }
+
+  it('summarizes every record held by its header, but those kept aside as corrupt (§7)', async () => {
+    const { x } = await peers();
+    const stored = await x.store.records();
+    const summary = x.grant.summary();
+    expect(summary.map(keyOf).sort()).toEqual(stored.map(keyOf).sort());
+    for (const r of stored) {
+      const { header } = decodeEnvelope(r.envelope);
+      expect(summary.find((e) => keyOf(e) === keyOf(r))).toEqual({
+        recordFormatVersion: header.recordFormatVersion,
+        recordType: header.recordType,
+        recordId: header.recordId,
+        hlc: header.hlc,
+        deleted: header.deleted,
+        keyEpoch: header.keyEpoch,
+      });
+    }
+    const damaged = randomId();
+    x.store.put({
+      recordType: RecordType.item,
+      recordId: damaged,
+      envelope: Uint8Array.of(0xa0) as RecordEnvelope,
+    });
+    x.session.lock();
+    const again = await unlock(x.store, x.clock);
+    const ids = again
+      .openSync(must(again.devices().find((d) => !sameId(d.deviceId, again.deviceId))).deviceId)
+      .summary()
+      .map(keyOf);
+    expect(ids).toHaveLength(stored.length);
+    expect(ids).not.toContain(keyOf({ recordType: RecordType.item, recordId: damaged }));
+  });
+
+  function sameId(a: Uint8Array, b: Uint8Array): boolean {
+    return idKey(a) === idKey(b);
+  }
+
+  it('reads the records selected again and verifies them, skipping one gone meanwhile (§8, D181)', async () => {
+    const { x } = await peers();
+    const summary = x.grant.summary();
+    const items = summary.filter((e) => e.recordType === RecordType.item);
+    const gone = { ...must(items[0]), recordId: randomId() };
+    const envelopes = await x.grant.records([...items, gone]);
+    const stored = await x.store.records();
+    expect(envelopes).toEqual(
+      items.map((e) => must(stored.find((r) => keyOf(r) === keyOf(e))).envelope),
+    );
+
+    const target = must(stored.find((r) => r.recordType === RecordType.item));
+    const flipped = target.envelope.slice() as RecordEnvelope;
+    flipped[flipped.length - 1] = must(flipped[flipped.length - 1]) ^ 1;
+    x.store.put({ ...target, envelope: flipped });
+    const error = await x.grant.records(items).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SyncRejectedError);
+    expect(error).toMatchObject({
+      reason: 'verification-failed',
+      record: { recordType: RecordType.item, recordId: target.recordId },
+    });
+  });
+
+  it('merges the peer’s records both ways in one commit each, recording the sync (§9, D34)', async () => {
+    const { clock, x, y } = await peers();
+    const edited = must(y.session.items().find((i) => i.item?.title === 'From X')).id;
+    clock.t = T0 + DAY;
+    await y.session.updateItem(edited, login('Edited on Y'));
+    await y.session.createItem(login('New on Y'));
+    await x.session.createItem(login('New on X'));
+    const fromY = await y.grant.records(y.grant.summary());
+    const fromX = await x.grant.records(x.grant.summary());
+    clock.t = T0 + 2 * DAY;
+    const commits = x.store.commits.length;
+    const result = await x.grant.merge(fromY);
+    expect(x.store.commits).toHaveLength(commits + 1);
+    await y.grant.merge(fromX);
+    expect(titles(x.session)).toEqual(['Edited on Y', 'New on X', 'New on Y']);
+    expect(titles(y.session)).toEqual(['Edited on Y', 'New on X', 'New on Y']);
+    expect(result).toMatchObject({ added: 1, replaced: 1, rejected: [], ownRetired: false });
+    // The edit's loser went to history on Y already: X adds Y's version of it.
+    expect(result.versions).toBeGreaterThan(0);
+    expect(x.session.lastSyncByPeer).toEqual([[y.session.deviceId, T0 + 2 * DAY]]);
+    // A second exchange changes nothing but the date.
+    const again = await x.grant.merge(await y.grant.records(y.grant.summary()));
+    expect(again).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
+  });
+
+  it('rejects and reports a record that fails verification, is newer or breaks D42, merging the rest (§9, D68)', async () => {
+    const { x, y } = await peers();
+    await y.session.createItem(login('Good'));
+    const records = await y.grant.records(y.grant.summary());
+    const keys = keysOf(x.store);
+    const tampered = (await y.store.records()).find((r) => r.recordType === RecordType.item);
+    const flipped = must(tampered).envelope.slice();
+    flipped[flipped.length - 1] = must(flipped[flipped.length - 1]) ^ 1;
+    const newer = decodeCbor(must(records[0])) as CborMap;
+    newer.set('v', RECORD_FORMAT_VERSION + 1);
+    const forged = sealVaultKeyRecord(
+      {
+        recordFormatVersion: RECORD_FORMAT_VERSION,
+        recordType: RecordType.vaultKey,
+        recordId: vaultKeyRecordId(1),
+        keyEpoch: 1,
+        hlc: hlcAt(T0 + 10),
+        deleted: false,
+      },
+      keys.vaultId,
+      keys.subkeys.vaultKeyWrap,
+      generateKey(new Keyring()),
+    );
+    const sent = [
+      ...records.filter(
+        (r) =>
+          !sameId(decodeEnvelope(r).header.recordId, must(tampered).recordId) &&
+          decodeEnvelope(r).header.recordType !== RecordType.vaultKey,
+      ),
+      flipped,
+      encodeCbor(newer),
+      forged,
+    ];
+    const result = await x.grant.merge(sent);
+    expect(result.rejected.map((r) => [r.reason, r.record?.recordType ?? null]).sort()).toEqual(
+      [
+        ['immutable-record', RecordType.vaultKey],
+        ['unsupported-format', null],
+        ['verification-failed', RecordType.item],
+      ].sort(),
+    );
+    expect(titles(x.session)).toContain('Good');
+  });
+
+  it('rejects a record beyond the future-clock bound, then accepts it once the clock reaches it (§9, D19, D76)', async () => {
+    const { clock, x, y } = await peers();
+    const aheadId = randomId();
+    const at = T0 + FUTURE_CLOCK_BOUND_MS + DAY;
+    plant(
+      y.store,
+      keysOf(y.store, 2),
+      RecordType.item,
+      aheadId,
+      hlcAt(at),
+      false,
+      itemToCbor(login('Ahead'), false),
+    );
+    const sent = (await y.store.records()).map((r) => r.envelope);
+    const first = await x.grant.merge(sent);
+    expect(first.rejected).toEqual([
+      { reason: 'future-clock', record: { recordType: RecordType.item, recordId: aheadId } },
+    ]);
+    expect(x.session.item(aheadId)).toBeUndefined();
+    clock.t = at - FUTURE_CLOCK_BOUND_MS;
+    const second = await x.grant.merge(sent);
+    expect(second.rejected).toEqual([]);
+    expect(x.session.item(aheadId)?.item?.title).toBe('Ahead');
+  });
+
+  it('merges while read-only for a clock gone back, issuing no HLC (§1.5, D73, D109)', async () => {
+    const { clock, x, y } = await peers();
+    // X wrote with its clock 3 days ahead, then the clock came back: X's HLC state is beyond its cap.
+    clock.t = T0 + 3 * DAY;
+    await x.session.createItem(login('Ahead on X'));
+    clock.t = T0 + DAY;
+    const edited = must(y.session.items().find((i) => i.item?.title === 'From X')).id;
+    await y.session.updateItem(edited, login('Edited on Y'));
+    const sent = await y.grant.records(y.grant.summary());
+    x.session.lock();
+    const session = await unlock(x.store, clock);
+    expect(session.writable).toBe(false);
+    const grant = session.openSync(y.session.deviceId);
+    const commits = x.store.commits.length;
+    const result = await grant.merge(sent);
+    expect(result.rejected).toEqual([]);
+    expect(x.store.commits).toHaveLength(commits + 1);
+    // Every record written carries an HLC of the transfer, its loser's included: none is new.
+    const hlcKey = (h: Hlc) => `${String(h.physicalMs)}.${String(h.counter)}.${idKey(h.deviceId)}`;
+    const received = new Set(sent.map((r) => hlcKey(decodeEnvelope(r).header.hlc)));
+    const written = must(x.store.commits.at(-1)).put.map((r) => decodeEnvelope(r.envelope).header);
+    expect(written.length).toBeGreaterThan(0);
+    for (const header of written) expect(received.has(hlcKey(header.hlc))).toBe(true);
+    expect(titles(session)).toEqual(['Ahead on X', 'Edited on Y']);
+    expect(session.writable).toBe(false);
+  });
+
+  it('merges the peer’s own record retired in a transfer, so the check of §6 finds it (D69, D220)', async () => {
+    const { x, y } = await peers();
+    // A third device retired X; Y carries that record.
+    const xKey = must(y.session.devices().find((d) => sameId(d.deviceId, x.session.deviceId)))
+      .device.publicKey;
+    plant(
+      y.store,
+      keysOf(y.store, 2),
+      RecordType.device,
+      x.session.deviceId,
+      hlcAt(T0 + DAY),
+      false,
+      deviceToCbor({ publicKey: xKey, displayName: 'X', retired: true, registeredAt: T0 }),
+    );
+    const sent = (await y.store.records()).map((r) => r.envelope);
+    // Y merges X's records: nothing retires Y. X merges its own record retired.
+    const result = await x.grant.merge(sent);
+    expect(result.ownRetired).toBe(true);
+    expect(x.session.retired).toBe(true);
+    expect(x.session.lastSyncByPeer).toHaveLength(1);
+  });
+
+  it('merges the peer’s record retired, which peerRetirement then sends back (D69, D220)', async () => {
+    const { x, y } = await peers();
+    // Y cannot retire its peer through the grant: a third device's retirement of Y, carried by Y.
+    const yKey = must(x.session.devices().find((d) => sameId(d.deviceId, y.session.deviceId)))
+      .device.publicKey;
+    plant(
+      y.store,
+      keysOf(y.store, 2),
+      RecordType.device,
+      y.session.deviceId,
+      hlcAt(T0 + DAY),
+      false,
+      deviceToCbor({ publicKey: yKey, displayName: 'Y', retired: true, registeredAt: T0 }),
+    );
+    const sent = (await y.store.records()).map((r) => r.envelope);
+    const result = await x.grant.merge(sent);
+    expect(result.ownRetired).toBe(false);
+    expect(result.retiredDevices.map((d) => idKey(d.deviceId))).toContain(
+      idKey(y.session.deviceId),
+    );
+    expect(await x.grant.peerRetirement()).toBeInstanceOf(Uint8Array);
+  });
+
+  it('refuses two records of one identity (protocol-error), writing nothing (§2.1)', async () => {
+    const { x, y } = await peers();
+    const records = await y.grant.records(y.grant.summary());
+    const commits = x.store.commits.length;
+    expect(await rejection(x.grant.merge([...records, must(records[0])]))).toBe('protocol-error');
+    expect(x.store.commits).toHaveLength(commits);
+  });
+
+  it('does nothing once the vault locks (D93)', async () => {
+    const { x, y } = await peers();
+    const records = await y.grant.records(y.grant.summary());
+    x.session.lock();
+    expect(() => x.grant.summary()).toThrow(VaultLockedError);
+    await expect(x.grant.records([])).rejects.toThrow(VaultLockedError);
+    await expect(x.grant.merge(records)).rejects.toThrow(VaultLockedError);
+  });
+});

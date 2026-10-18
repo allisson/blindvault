@@ -8,9 +8,9 @@ import { fillPassword } from './password';
 // the screens alone (§9.1, sync-protocol.md §3 to §5, D216): the user picks the other device on
 // both, one shows its code first, the codes are copied and pasted, the same network only (no STUN
 // server), and both connect, then prove their registered identities with Noise_KK (D217); closing
-// on one ends the other with `abort` (D218). A device that retired the other tells it so through the
-// same screens, sending it only its retired record (D219), and a device retired during an open sync
-// is told so at once (D69, D220).
+// on one ends the other with `abort` (D218); between them, each gets the records the other lacks
+// (D222). A device that retired the other tells it so through the same screens, sending it only its
+// retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
 // Creation, A's password again and B's password each run Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -108,9 +108,9 @@ test('two paired devices connect from their sync codes, each with the other pick
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
   await button(a, 'Connect').click();
 
-  await expect(a.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
-  await expect(b.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
-  await expect(a.getByTestId('sync-connected')).toContainText('identity verified');
+  await expect(a.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
+  await expect(b.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
+  await expect(a.getByTestId('merge-result')).toContainText('Merged: 0 added, 0 replaced.');
 
   // Closing on A ends B's sync with A's abort, inside the Noise channel (§11.2, D218).
   await a.getByTestId('sync-close').click();
@@ -184,8 +184,8 @@ test('A retires B during an open sync: B merges its retired record and shows the
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
   await button(a, 'Connect').click();
-  await expect(a.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
-  await expect(b.getByTestId('sync-connected')).toBeVisible({ timeout: 30_000 });
+  await expect(a.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
+  await expect(b.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
 
   // The sync stays on screen while A retires B from the list above it.
   await a.getByTestId('device-retire').click();
@@ -197,4 +197,42 @@ test('A retires B during an open sync: B merges its retired record and shows the
     timeout: 30_000,
   });
   await expect(b.getByTestId('own-retired')).toBeVisible();
+});
+
+test('an item created on A reaches B through a sync, and B shows the merge (D222)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await button(a, 'New item').click();
+  await button(a, 'Login').click();
+  await a.getByTestId('item-title').fill('ACME');
+  await button(a, 'Save').click();
+  await button(a, 'Settings').click();
+
+  await a.getByTestId('device-sync').click();
+  const syncA = a.getByTestId('sync');
+  await syncA.getByTestId('pairing-same-network').check();
+  await syncA.getByTestId('sync-first').click();
+  const offer = syncA.getByTestId('pairing-text');
+  await expect(offer).not.toHaveValue('', { timeout: 30_000 });
+  await b.getByTestId('device-sync').click();
+  const syncB = b.getByTestId('sync');
+  await syncB.getByTestId('pairing-same-network').check();
+  await syncB.getByTestId('sync-read').click();
+  await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
+  await button(b, 'Next').click();
+  const answer = syncB.getByTestId('pairing-text');
+  await expect(answer).not.toHaveValue('', { timeout: 30_000 });
+  await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
+  await button(a, 'Connect').click();
+
+  await expect(b.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
+  await expect(b.getByTestId('merge-result')).toContainText('Merged: 1 added, 0 replaced.');
+  await expect(a.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
+  await b.getByTestId('sync-close').click();
+  await button(b, 'Back').click();
+  // B still shows "Vault ready" from its pairing (D198).
+  await button(b, 'Open the vault').click();
+  await expect(button(b, 'ACME')).toBeVisible();
 });

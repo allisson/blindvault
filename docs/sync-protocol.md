@@ -413,6 +413,18 @@ waiting for the peer's `committed`. The session becomes live once the device has
 
 A device that never received the peer's `records-end` commits nothing from that transfer.
 
+**Implementation (D222).** `packages/sync/src/exchange.ts` runs sections 7 to 9: `selectRecords` is
+the rule of section 8, and `exchange` sends both summaries and both transfers at the same time,
+then calls the merge. A `retired` may come in place of any of the peer's messages: it is merged as
+section 6 says, and the peer's `abort` follows. The session sends one message at a time, so the
+frames of two never interleave, and its `abort`, with `retired` before it for section 6, leaves
+after the message being sent and before any other. In `packages/vault`, `SyncGrant.summary`,
+`records` and `merge` are sections 7, 8 and 9: the merge is the re-admission's (§2.3), except that
+a record of an unknown format or type is rejected and reported (its Local Config record stays with
+D68's task) and the peer's own Device record retired merges. After the merge, the app ends the
+session when this device's own record arrived retired (D69), otherwise runs the check of section 6
+again, then sends `committed`.
+
 ## 10. Live session
 
 While the session is open (§9.1):
@@ -479,10 +491,11 @@ with the pairing messages: a pairing type is an unknown `t`, and a pairing `reas
 is decoded; `count`, duplicate identities and the order of this section are each stage's to check,
 with its task. `SyncSession` carries them over the Noise channel of `Noise_KK`, on the session the
 pairing uses: a refused message aborts with its reason, a received `abort` ends the session, and a
-closed link ends it as closed. Until the summaries exist, the app reads no message after the
-handshake but `retired` (section 6, D219): any other message but `abort` is refused with
-`protocol-error`; the check of section 6 runs again after a local commit that may retire the peer
-(D220). Ending the sync sends `abort`
+closed link ends it as closed. After the check of section 6 the app runs the exchange of
+section 9 (D222); once it has sent `committed`, it reads the peer's `committed` once and
+`retired`, and refuses any other message with `protocol-error` until the live session's task. The
+check of section 6 runs again after a local commit that may retire the peer (D220), and after the
+merge, before `committed`. Ending the sync sends `abort`
 with `ended`, a lock sends `locked`, and the connection closes once the `abort` had time to leave.
 
 ## 12. Timeouts, lock and replay

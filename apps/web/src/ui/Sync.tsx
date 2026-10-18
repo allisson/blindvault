@@ -2,20 +2,23 @@ import { type SyncPurpose, type VaultSession } from '@blindvault/vault';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { type SyncPeer, type SyncStart, type VaultController } from '../app/controller';
+import { recordIdPrefix } from '../app/backup-file';
 import { type SyncCheck, type SyncStage } from '../app/sync';
-import { useMessages } from '../i18n/context';
+import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Notice } from './components';
-import { PasteText, PayloadText, SameNetwork } from './Pairing';
+import { MergeNotices } from './MergeBackup';
+import { PasteText, PayloadText, Rejected, SameNetwork } from './Pairing';
+import { recordTypeName } from './Settings';
 
 // The sync screens (§9.1, D216): the user picks the peer in Settings › Devices on both devices, then
 // chooses on each whether it shows its code first or reads the other's. Each code is shown as a QR
 // code and as text, and the other device scans or pastes it (D208); a code that does not open says
 // why and the wait goes on (D215). The flow lives in the controller, so a lock ends it whatever is
-// on screen. It stays connected once `Noise_KK` has verified the peer (D217), until either side ends
-// it, which the other shows with its reason (D218): the exchange of records comes with its tasks. A
-// retired device is told it is retired through the same screens, which then send it only its retired
-// record (D219).
+// on screen. Once `Noise_KK` has verified the peer (D217), both exchange their records, and each shows
+// what its merge did, its notices and the records it rejected (D222); either side's end shows on the
+// other with its reason (D218). A retired device is told it is retired through the same screens,
+// which then send it only its retired record (D219).
 
 function sameId(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
@@ -50,18 +53,20 @@ function leavingText(m: Messages, session: VaultSession): string {
 
 function Stage({
   controller,
+  session,
   stage,
   name,
   leaving,
   onClose,
 }: {
   readonly controller: VaultController;
+  readonly session: VaultSession;
   readonly stage: SyncStage;
   readonly name: string;
   readonly leaving: string;
   readonly onClose: () => void;
 }) {
-  const m = useMessages();
+  const { messages: m, language } = useLanguage();
   const s = m.sync;
   const close = () => {
     controller.cancelSync();
@@ -133,6 +138,21 @@ function Stage({
           <p role="status" data-testid="sync-connected">
             {format(s.connected, { name })}
           </p>
+          {cancel}
+        </>
+      );
+    case 'synced':
+      return (
+        <>
+          <p role="status" data-testid="sync-done">
+            {format(s.synced, { name })}
+          </p>
+          <MergeNotices
+            result={stage.result}
+            recovery={session.recovery}
+            date={(at) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(at)}
+          />
+          <Rejected rejected={stage.result.rejected} testId="sync-rejected" />
           <Button className="self-start" onClick={close} data-testid="sync-close">
             {s.close}
           </Button>
@@ -147,7 +167,12 @@ function Stage({
             data-testid="sync-failed"
             data-reason={stage.reason}
           >
-            {format(s.failed[stage.reason], { name })}
+            {format(s.failed[stage.reason], {
+              name,
+              record: stage.record
+                ? `${recordTypeName(m, stage.record.recordType)} ${recordIdPrefix(stage.record.recordId)}`
+                : '',
+            })}
           </p>
           <Button
             className="self-start"
@@ -208,6 +233,7 @@ export function SyncDevice({
       {mine ? (
         <Stage
           controller={controller}
+          session={session}
           stage={mine}
           name={name}
           leaving={leavingText(m, session)}

@@ -10,9 +10,11 @@
 // Device record retired sends it only that record, as `retired`, then `abort` with `retired-peer`;
 // the peer merges it, which shows the D41 notice (§6, D31, D45, D219). The controller asks for the
 // same check again after each of its commits that may retire the peer, so a peer retired during the
-// session is told so too (D69, D220). The flow stays there: the
-// summaries and the transfer come with their tasks. The controller owns the flow and ends it on a
-// lock (D93); this module logs nothing.
+// session is told so too (D69, D220). Then both exchange their summaries and the records the other
+// lacks or holds older, and each merges what it received in one commit (§7 to §9, D222); a merge
+// that retired this device's own record ends the session (D69), and one that retired the peer runs
+// the check again before `committed`. The live session that follows comes with its task. The
+// controller owns the flow and ends it on a lock (D93); this module logs nothing.
 
 import { randomBytes } from '@blindvault/crypto';
 import {
@@ -29,15 +31,22 @@ import {
   SESSION_TIMEOUT_MS,
   type SessionPayload,
   SyncError,
+  SyncRefusal,
   SyncSession,
   type Transport,
   TransportClosedError,
+  exchange,
   manualDelivery,
   receiveReconnection,
   sealReconnection,
   syncHandshake,
 } from '@blindvault/sync';
-import { type SyncGrant, SyncRejectedError } from '@blindvault/vault';
+import {
+  type RecordKey,
+  type SyncGrant,
+  SyncRejectedError,
+  type SyncResult,
+} from '@blindvault/vault';
 
 import { DISCONNECT_GRACE_MS, iceServers } from './pairing';
 import { type StunSettings } from './stun-settings';
@@ -53,8 +62,10 @@ export interface SyncPort {
  * that did not prove the identity of its Device record in `Noise_KK` (D217), the peer that ended
  * the sync or locked (`ended`, `locked`), or a message of another version or out of the protocol,
  * from either side (§11.2, D218). `retired-peer`: this device holds the peer retired and told it
- * so; `retired`: the peer holds this device retired, and its record merged; `verification-failed`:
- * the peer's retired record held here failed verification, so nothing was sent (§6, D219).
+ * so; `retired`: this device's own record arrived retired and merged; `verification-failed`: the
+ * peer's retired record held here failed verification, so nothing was sent (§6, D219).
+ * `send-failed`: a record this device was about to send failed verification, named by the stage
+ * (§8, D181); `peer-verification-failed`: the peer's did (D222).
  */
 export type SyncFailure =
   | 'expired'
@@ -67,7 +78,9 @@ export type SyncFailure =
   | 'protocol-error'
   | 'retired-peer'
   | 'retired'
-  | 'verification-failed';
+  | 'verification-failed'
+  | 'send-failed'
+  | 'peer-verification-failed';
 
 /** What the sync screens show (D216). */
 export type SyncStage =
@@ -81,12 +94,12 @@ export type SyncStage =
   | { readonly kind: 'answer'; readonly text: string }
   /** The DataChannel opening, then `Noise_KK`. */
   | { readonly kind: 'connecting' }
-  /**
-   * `Noise_KK` completed and the peer is not retired: the session is open; the exchange of records
-   * comes with its tasks.
-   */
+  /** `Noise_KK` completed and the peer is not retired: the summaries and the transfer run (D222). */
   | { readonly kind: 'connected' }
-  | { readonly kind: 'failed'; readonly reason: SyncFailure };
+  /** This device merged what the peer sent and sent `committed` (§9). */
+  | { readonly kind: 'synced'; readonly result: SyncResult }
+  /** `record`: with `send-failed`, the record that failed verification. */
+  | { readonly kind: 'failed'; readonly reason: SyncFailure; readonly record?: RecordKey };
 
 /** A text read or pasted: `ok` once taken, why it was refused (§4.3), or not waiting for one. */
 export type SyncCheck = 'ok' | ReconnectionRejection | 'unavailable';
@@ -121,6 +134,10 @@ export class Syncing {
   #checking: Promise<unknown> = Promise.resolve();
   /** A check found the peer retired: this device is ending the session (§6). */
   #retiring = false;
+  /** This device's own record arrived retired and merged: the session ends as `retired` (D69). */
+  #retired = false;
+  /** The record that failed verification as this device was about to send it (§8). */
+  #unsent: RecordKey | undefined;
 
   constructor(options: SyncFlowOptions) {
     this.#options = options;
@@ -297,7 +314,57 @@ export class Syncing {
     // A flow ended otherwise sets nothing, and its session refuses to be read.
     if (this.#retiring) return;
     this.#set({ kind: 'connected' });
-    void this.#listen(session);
+    await this.#exchange(session);
+  }
+
+  /**
+   * §7 to §9 (D222): the summaries and the transfer, then the merge; after it, the check of §6 again
+   * before `committed`, since the transfer may have retired the peer (D220). A merge that retired
+   * this device's own record ends the session instead (D69).
+   */
+  async #exchange(session: SyncSession): Promise<void> {
+    const { grant } = this.#options;
+    let result: SyncResult;
+    try {
+      result = await exchange(session, {
+        summary: grant.summary(),
+        records: (selected) => this.#vault(() => grant.records(selected)),
+        merge: (records) => this.#vault(() => grant.merge(records)),
+        retired: async (envelope) => {
+          await this.#vault(() => grant.mergeOwnRetirement(envelope));
+          this.#retired = true;
+        },
+      });
+    } catch (error) {
+      this.#ended(error);
+      return;
+    }
+    if (result.ownRetired) {
+      this.#retired = true;
+      await session.abort('ended');
+      this.#fail('retired');
+      return;
+    }
+    if (await this.#checkPeer(session)) return;
+    try {
+      await session.send({ t: 'committed' });
+    } catch (error) {
+      this.#ended(error);
+      return;
+    }
+    this.#set({ kind: 'synced', result });
+    await this.#listen(session);
+  }
+
+  /** Runs a vault call; its refusal aborts the session with the reason it gives. */
+  async #vault<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      if (!(error instanceof SyncRejectedError)) throw error;
+      this.#unsent = error.record;
+      throw new SyncRefusal(error.reason, { cause: error });
+    }
   }
 
   /**
@@ -334,49 +401,61 @@ export class Syncing {
     reason: 'retired-peer' | 'verification-failed',
   ): Promise<void> {
     this.#retiring = true;
-    try {
-      if (retirement) await session.send({ t: 'retired', r: retirement });
-    } catch (error) {
-      if (!(error instanceof SyncError)) throw error;
-      this.#fail(failureOf(error));
-      return;
-    }
-    await session.abort(reason);
+    // After the message being sent and before any other: nothing follows the record (§6).
+    await (retirement ? session.retire(retirement) : session.abort(reason));
     this.#fail(reason);
   }
 
   /**
-   * Waits for the session's end: the peer's `abort` or a closed link. The one message read yet is
-   * `retired`, this device's own Device record retired, which the vault merges once (§6, D219); any
-   * other message is out of the protocol (§11.1): the summaries come with their task.
+   * After this device's `committed`: the peer's `committed`, once, which makes the session live
+   * (§9, §12), and `retired`, this device's own Device record retired, merged once (§6, D219). Any
+   * other message is out of the protocol (§11.1) until the live session's task.
    */
   async #listen(session: SyncSession): Promise<void> {
-    let retired = false;
+    let committed = false;
     try {
       for (;;) {
         const message = await session.receive();
-        if (message.t !== 'retired' || retired) await session.refuse('protocol-error');
-        else retired = await this.#mergeRetirement(session, message.r);
+        if (message.t === 'committed' && !committed) {
+          committed = true;
+          session.live();
+        } else if (message.t === 'retired' && !this.#retired) {
+          await this.#mergeRetirement(session, message.r);
+        } else {
+          await session.refuse('protocol-error');
+        }
       }
     } catch (error) {
-      // A lock ended the flow during the merge, which the vault refused once locked; or this device
-      // is ending the session with a peer retired meanwhile, and shows why itself.
-      if (this.#over || this.#retiring) return;
-      if (!(error instanceof SyncError)) throw error;
-      // Once its record merged, this device knows why the peer ends the session, however it ends.
-      this.#fail(retired ? 'retired' : failureOf(error));
+      this.#ended(error);
     }
   }
 
   /** Merges the peer's `retired`, or refuses it with the vault's reason, merging nothing. */
-  async #mergeRetirement(session: SyncSession, envelope: Uint8Array): Promise<true> {
+  async #mergeRetirement(session: SyncSession, envelope: Uint8Array): Promise<void> {
     try {
-      await this.#options.grant.mergeOwnRetirement(envelope);
+      await this.#vault(() => this.#options.grant.mergeOwnRetirement(envelope));
     } catch (error) {
-      if (!(error instanceof SyncRejectedError)) throw error;
-      return session.refuse(error.reason);
+      if (error instanceof SyncRefusal) await session.refuse(error.reason);
+      throw error;
     }
-    return true;
+    this.#retired = true;
+  }
+
+  /**
+   * The session ended: shows why, unless the flow is over or this device is ending it with a peer
+   * retired meanwhile, which shows why itself. Once its own record merged retired, this device knows
+   * why, however the session ends.
+   */
+  #ended(error: unknown): void {
+    if (this.#over || this.#retiring) return;
+    if (!(error instanceof SyncError)) {
+      this.#fail('error');
+      return;
+    }
+    if (this.#retired) this.#fail('retired');
+    else if (error.reason === 'verification-failed' && error.by === 'local' && this.#unsent) {
+      this.#fail('send-failed', this.#unsent);
+    } else this.#fail(failureOf(error));
   }
 
   #set(stage: SyncStage): void {
@@ -385,9 +464,9 @@ export class Syncing {
     this.#options.onChange();
   }
 
-  #fail(reason: SyncFailure): void {
+  #fail(reason: SyncFailure, record?: RecordKey): void {
     if (this.#over) return;
-    this.#stage = { kind: 'failed', reason };
+    this.#stage = { kind: 'failed', reason, ...(record ? { record } : {}) };
     this.#over = true;
     this.#close();
     this.#options.onChange();
@@ -420,8 +499,8 @@ export class Syncing {
 /**
  * What the screens show for a session that ended. `ended` and `locked` come only from the peer: a
  * local end closes the flow with no failure. The peer's `retired-peer` shows as `retired` only once
- * this device merged its record, and its `verification-failed` comes with the summaries' task:
- * until then, both read as `protocol-error`.
+ * this device merged its record, and reads as `protocol-error` otherwise; the peer's
+ * `verification-failed` is a record it could not send (§8).
  */
 function failureOf(error: SyncError): SyncFailure {
   switch (error.reason) {
@@ -432,6 +511,8 @@ function failureOf(error: SyncError): SyncFailure {
     case 'version':
     case 'protocol-error':
       return error.reason;
+    case 'verification-failed':
+      return error.by === 'remote' ? 'peer-verification-failed' : 'verification-failed';
     default:
       return 'protocol-error';
   }

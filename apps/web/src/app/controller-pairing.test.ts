@@ -17,6 +17,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { VaultController } from './controller';
+import { hex } from './ids';
 import { type PairingPort, type PairingStage, STUN_SERVERS } from './pairing';
 import { type PasskeyPort } from './passkey';
 import { type StunSettings } from './stun-settings';
@@ -1116,8 +1117,8 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     const answer = codeOf(await syncStage(a, 'answer'));
     expect(await b.syncPayload(offer)).toBe('not-from-peer');
     expect(await b.syncPayload(answer)).toBe('ok');
-    await syncStage(a, 'connected');
-    await syncStage(b, 'connected');
+    await syncStage(a, 'synced');
+    await syncStage(b, 'synced');
     expect(net.options.map((o) => o.iceServers)).toEqual([[], []]);
 
     // Closing on one ends the other's session, telling it why (§11.2, D218).
@@ -1133,8 +1134,8 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(a.startSync(idB, 'responder', { sameNetwork: true })).toBe('ok');
     expect(await a.syncPayload(codeOf(await syncStage(b, 'offer')))).toBe('ok');
     expect(await b.syncPayload(codeOf(await syncStage(a, 'answer')))).toBe('ok');
-    await syncStage(a, 'connected');
-    await syncStage(b, 'connected');
+    await syncStage(a, 'synced');
+    await syncStage(b, 'synced');
     a.lock();
     expect(a.sync).toBeUndefined();
     expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'locked' });
@@ -1183,7 +1184,7 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(session(b).retired).toBe(true);
   });
 
-  /** A and B connected, A showing its code first. */
+  /** A and B connected and synced, A showing its code first. */
   async function connected(
     a: VaultController,
     b: VaultController,
@@ -1194,9 +1195,44 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(b.startSync(idA, 'responder', { sameNetwork: true })).toBe('ok');
     expect(await b.syncPayload(codeOf(await syncStage(a, 'offer')))).toBe('ok');
     expect(await a.syncPayload(codeOf(await syncStage(b, 'answer')))).toBe('ok');
-    await syncStage(a, 'connected');
-    await syncStage(b, 'connected');
+    return { a: await syncStage(a, 'synced'), b: await syncStage(b, 'synced') };
   }
+
+  const item = (title: string) => ({
+    templateId: 'login',
+    templateVersion: 1,
+    title,
+    fields: [{ type: 'secret' as const, role: 'password' as const, value: 'correct horse' }],
+    tags: [],
+  });
+
+  const titles = (c: VaultController) =>
+    session(c)
+      .items()
+      .map((i) => i.item?.title)
+      .sort();
+
+  it('converges: each device gets the other’s new and newer records, and records the sync (§7 to §9, D34, D222)', async () => {
+    const { a, b, idA, idB } = await paired();
+    const shared = await session(a).createItem(item('Shared'));
+    await connected(a, b, idA, idB);
+    a.cancelSync();
+    await session(a).createItem(item('From A'));
+    await session(b).createItem(item('From B'));
+    await session(b).updateItem(shared, item('Shared, edited on B'));
+    const done = await connected(a, b, idA, idB);
+    // Bank came with the pairing.
+    expect(titles(a)).toEqual(['Bank', 'From A', 'From B', 'Shared, edited on B']);
+    expect(titles(b)).toEqual(['Bank', 'From A', 'From B', 'Shared, edited on B']);
+    if (done.a.kind !== 'synced' || done.b.kind !== 'synced') throw new Error('not synced');
+    expect(done.a.result).toMatchObject({ added: 1, replaced: 1, rejected: [] });
+    expect(done.b.result).toMatchObject({ added: 1, replaced: 0, rejected: [] });
+    // The edit's loser went to history on B, and its version reached A.
+    expect(session(a).versions(shared)).toHaveLength(1);
+    // The date itself is the vault's test: these controllers share one fixed clock.
+    expect(session(a).lastSyncByPeer.map(([id]) => hex(id))).toEqual([hex(idB)]);
+    a.cancelSync();
+  });
 
   it('ends an open sync when A retires B: B merges its record and shows the D41 notice (§6, D69, D220)', async () => {
     const { a, b, idA, idB } = await paired();

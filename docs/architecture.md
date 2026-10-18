@@ -462,6 +462,13 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Sync summaries and transfer (Phase 5, D222).** `packages/sync/src/exchange.ts` holds
+  `selectRecords` (§8) and `exchange` (§7 to §9), with `SyncRefusal` for its callbacks;
+  `ChannelSession` sends one message at a time, `abort` after the message being sent, and
+  `SyncSession` gains `exchanging`, `live` and `retire`. `SyncGrant` in `packages/vault` gains
+  `summary`, `records` and `merge`, the last on the re-admission merge refactored as
+  `#transferMerge`. `src/app/sync.ts` in `apps/web` runs the exchange after `connected` and shows
+  `synced` with the merge's result. No new dependency.
 - **Device clock gone back (Phase 5, D221).** `apps/web/src/app/clock.ts` holds `clockNoticeOf`,
   when writing resumes and whether D149's ways out apply, and `WritableTimer`, one `setTimeout`
   re-armed in steps past its limit; the controller exposes `clockNotice` and re-renders when the

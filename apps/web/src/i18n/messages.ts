@@ -253,6 +253,7 @@ const en = {
       'verification-failed': 'does not verify',
       'future-clock': 'dated ahead of this device’s clock',
       'immutable-record': 'a changed copy of a record that never changes',
+      'unsupported-format': 'from a newer version of BlindVault: update this device',
     },
     pastePeerNoVault:
       'This text comes from a device with no vault: pair it instead, with “Pair a new device…”.',
@@ -314,8 +315,9 @@ const en = {
     waiting: 'Waiting for the connection…',
     preparing: 'Preparing the connection…',
     connecting: 'Connecting…',
-    connected:
-      'Connected to {name}, its identity verified. Exchanging records comes in a later version: close the sync here.',
+    connected: 'Connected to {name}, its identity verified. Exchanging records…',
+    synced:
+      'Synced with {name}: each device now holds what the other had. Changes made from now on sync in a later version: close the sync here.',
     close: 'Close',
     again: 'Start again',
     leaving:
@@ -343,9 +345,13 @@ const en = {
       'retired-peer':
         '{name} is retired: this device told it so and sent it nothing else, and the sync ended.',
       retired:
-        '{name} holds this device as retired, so the sync ended. This device can no longer sync.',
+        'This device was retired on another device, and {name} passed that on, so the sync ended. This device can no longer sync.',
       'verification-failed':
         'The record of {name} on this device failed verification, so nothing was sent and the sync stopped.',
+      'send-failed':
+        'A record on this device, {record}, failed verification, so the sync stopped before sending it. Nothing was merged.',
+      'peer-verification-failed':
+        'A record on {name} failed verification, so the sync stopped: {name} names it. Nothing was merged.',
     },
   },
   ready: {
@@ -1195,6 +1201,7 @@ const ptBR: Messages = {
       'verification-failed': 'não verifica',
       'future-clock': 'datado à frente do relógio deste dispositivo',
       'immutable-record': 'uma cópia alterada de um registro que nunca muda',
+      'unsupported-format': 'de uma versão mais nova do BlindVault: atualize este dispositivo',
     },
     pastePeerNoVault:
       'Este texto vem de um dispositivo sem cofre: pareie-o em vez disso, com “Parear um dispositivo novo…”.',
@@ -1258,8 +1265,9 @@ const ptBR: Messages = {
     waiting: 'Esperando a conexão…',
     preparing: 'Preparando a conexão…',
     connecting: 'Conectando…',
-    connected:
-      'Conectado a {name}, com a identidade verificada. A troca de registros vem numa versão futura: feche a sincronização aqui.',
+    connected: 'Conectado a {name}, com a identidade verificada. Trocando registros…',
+    synced:
+      'Sincronizado com {name}: cada dispositivo agora tem o que o outro tinha. As alterações feitas daqui em diante sincronizam numa versão futura: feche a sincronização aqui.',
     close: 'Fechar',
     again: 'Começar de novo',
     leaving:
@@ -1288,9 +1296,13 @@ const ptBR: Messages = {
       'retired-peer':
         '{name} está aposentado: este dispositivo o avisou e não enviou mais nada, e a sincronização terminou.',
       retired:
-        '{name} tem este dispositivo como aposentado, então a sincronização terminou. Este dispositivo não pode mais sincronizar.',
+        'Este dispositivo foi aposentado em outro dispositivo, e {name} repassou isso, então a sincronização terminou. Este dispositivo não pode mais sincronizar.',
       'verification-failed':
         'O registro de {name} neste dispositivo falhou na verificação, então nada foi enviado e a sincronização parou.',
+      'send-failed':
+        'Um registro deste dispositivo, {record}, falhou na verificação, então a sincronização parou antes de enviá-lo. Nada foi mesclado.',
+      'peer-verification-failed':
+        'Um registro em {name} falhou na verificação, então a sincronização parou: {name} diz qual. Nada foi mesclado.',
     },
   },
   ready: {

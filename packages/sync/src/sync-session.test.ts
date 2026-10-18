@@ -224,3 +224,32 @@ describe('sync session (sync-protocol.md §11, CRYPTO-INV-009)', () => {
     expect(error.name).toBe('SyncError');
   });
 });
+
+describe('sends one at a time (D222)', () => {
+  it('never interleaves the frames of two messages sent at once', async () => {
+    const { a, b } = await sessions();
+    const big = new Uint8Array(200_000).fill(0x42);
+    await Promise.all([
+      a.send({ t: 'record', r: big }),
+      a.send({ t: 'committed' }),
+      a.send({ t: 'record', r: Uint8Array.of(7) }),
+    ]);
+    expect(await b.receive()).toEqual({ t: 'record', r: big });
+    expect(await b.receive()).toEqual({ t: 'committed' });
+    expect(await b.receive()).toEqual({ t: 'record', r: Uint8Array.of(7) });
+  });
+
+  it('retires the peer with its record then abort, after the message being sent and before any other (§6)', async () => {
+    const { a, b } = await sessions();
+    const big = new Uint8Array(200_000).fill(0x42);
+    const sending = a.send({ t: 'record', r: big });
+    const retiring = a.retire(Uint8Array.of(9));
+    const after = failure(a.send({ t: 'record', r: Uint8Array.of(1) }));
+    await sending;
+    expect(await retiring).toMatchObject({ reason: 'retired-peer', by: 'local' });
+    expect(await after).toEqual(['retired-peer', 'local']);
+    expect(await b.receive()).toEqual({ t: 'record', r: big });
+    expect(await b.receive()).toEqual({ t: 'retired', r: Uint8Array.of(9) });
+    expect(await failure(b.receive())).toEqual(['retired-peer', 'remote']);
+  });
+});
