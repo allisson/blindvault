@@ -379,6 +379,11 @@ and one sync leaves both with the same records. Sending only the winner would le
 the device that wrote it until the next sync. An older Item whose state the peer already holds in
 history changes nothing there.
 
+An Item Version's `itemId` is encrypted, so the selection cannot tell which item a version belongs
+to. A device that purged an item is therefore sent the versions of it that the peer still holds,
+at every sync until the peer runs its own purge, whose date is the same (`hlc` plus 30 days, D7).
+Section 1.4 drops them once the transfer is merged, writing nothing (D137).
+
 The last rule exists because a summary does not carry the `retired` flag: a retired Device record
 must reach a peer that holds a newer non-retired copy, forged or not, and a Vault Key record or
 envelope that differs must reach the peer so that it detects the immutability violation (D31, D42,
@@ -430,7 +435,9 @@ after the message being sent and before any other. In `packages/vault`, `SyncGra
 a record of an unknown format or type is rejected and reported (its Local Config record stays with
 D68's task) and the peer's own Device record retired merges. After the merge, the app ends the
 session when this device's own record arrived retired (D69), otherwise runs the check of section 6
-again, then sends `committed`.
+again, then sends `committed`. The merge runs once over the whole transfer, so section 1.4 cuts
+history against each item's final copy: a restore from the trash reaching a device that purged the
+item keeps the versions arriving with it, in any order (D137).
 
 ## 10. Live session
 
