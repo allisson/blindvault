@@ -165,3 +165,19 @@ describe('HLC receive and resume (D62, D109)', () => {
     expect(() => HlcClock.create(new Uint8Array(3), now)).toThrow(ContentInvalidError);
   });
 });
+
+describe('issued HLCs (D225)', () => {
+  it('counts the HLCs issued, a retirement included, and not those received', () => {
+    const clock = HlcClock.create(new Uint8Array(16).fill(1), () => 1_760_000_000_000);
+    expect(clock.issued).toBe(0);
+    clock.issue();
+    clock.receive({
+      physicalMs: 1_760_000_000_500,
+      counter: 0,
+      deviceId: new Uint8Array(16).fill(2),
+    });
+    expect(clock.issued).toBe(1);
+    clock.issueRetirement();
+    expect(clock.issued).toBe(2);
+  });
+});

@@ -5632,6 +5632,48 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     expect(titles(x.session)).toContain('Good');
   });
 
+  it('reports each local write to watch with the records it wrote, and no merge, purge or cut (§10, D225)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { clock, x, y } = await peers();
+    const seen: Map<string, string>[] = [];
+    const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+    const stop = x.grant.watch((envelopes) => {
+      seen.push(new Map(envelopes.map((e) => [keyOf(decodeEnvelope(e).header), hex(e)] as const)));
+    });
+    const stored = async () =>
+      new Map((await x.store.records()).map((r) => [keyOf(r), hex(r.envelope)] as const));
+    /** What `write` changed in storage: the records it added or replaced, as stored. */
+    const written = async (write: () => Promise<unknown>) => {
+      const before = await stored();
+      await write();
+      return new Map([...(await stored())].filter(([k, v]) => before.get(k) !== v));
+    };
+
+    const id = randomId();
+    const changes = [
+      await written(async () => {
+        id.set(await x.session.createItem(login('Live')));
+      }),
+      await written(() => x.session.updateItem(id, login('Live, edited'))),
+      await written(() => x.session.trashItem(id)),
+    ];
+    // Each local write reports exactly what it stored: the item, then the item and a version.
+    expect(seen).toEqual(changes);
+    expect(changes.map((c) => c.size)).toEqual([1, 2, 2]);
+
+    // A merge of the peer's records, the purge and the history cut issue no HLC: nothing reported.
+    await y.session.createItem(login('From Y'));
+    await x.grant.merge(await y.grant.records(y.grant.summary()));
+    clock.t += PURGE_DELAY_MS + DAY;
+    await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
+    expect(x.session.item(id)).toBeUndefined();
+    expect(seen).toHaveLength(3);
+
+    stop();
+    await x.session.createItem(login('Not watched'));
+    expect(seen).toHaveLength(3);
+  });
+
   it('rejects and reports a Recovery Envelope changed under the held phraseId, merging the rest (§1.3, D44)', async () => {
     const { x, y } = await peers();
     await y.session.createItem(login('Good'));

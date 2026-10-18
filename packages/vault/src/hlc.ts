@@ -45,6 +45,7 @@ function copy(hlc: Hlc): Hlc {
  */
 export class HlcClock {
   #state: Hlc;
+  #issued = 0;
   readonly #deviceId: Uint8Array;
   readonly #now: () => number;
 
@@ -80,6 +81,11 @@ export class HlcClock {
 
   get state(): Hlc {
     return copy(this.#state);
+  }
+
+  /** How many HLCs this clock issued: a write that issued one is a local write (D225). */
+  get issued(): number {
+    return this.#issued;
   }
 
   #cap(): number {
@@ -121,6 +127,7 @@ export class HlcClock {
       throw new HlcReadOnlyError();
     }
     this.#state = copy(next);
+    this.#issued += 1;
     return copy(next);
   }
 
@@ -136,6 +143,7 @@ export class HlcClock {
         : { physicalMs: physicalMs + 1, counter: 0, deviceId: this.#deviceId };
     checkHlc(next);
     this.#state = copy(next);
+    this.#issued += 1;
     return copy(next);
   }
 

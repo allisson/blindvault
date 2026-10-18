@@ -4,7 +4,7 @@
 // refusals that keep the wait going, the handshake (D217), the connection and its end, by `abort`
 // once the session is open (D218), and a retired peer told so and nothing else, right after the
 // handshake (D219) or once it becomes retired during the session (D220); the summaries, the transfer
-// and the commit that follow (D222).
+// and the commit that follow (D222), and the live session after them (D225).
 
 import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import {
@@ -30,7 +30,7 @@ import {
 } from '@blindvault/vault';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { type SyncPort, type SyncStage, Syncing } from './sync';
+import { type SyncPort, type SyncStage, Syncing, addResults } from './sync';
 
 beforeAll(initCrypto);
 
@@ -119,6 +119,7 @@ const EMPTY = {
   summary: () => [],
   records: () => Promise.resolve([]),
   merge: () => Promise.resolve(SYNCED),
+  watch: () => () => undefined,
 };
 
 function devices() {
@@ -853,8 +854,8 @@ describe('summaries and transfer (sync-protocol.md §7 to §9, D69, D222)', () =
         },
       }),
     );
-    expect(await stage(r, 'synced')).toEqual({ kind: 'synced', result });
-    expect(await stage(i, 'synced')).toEqual({ kind: 'synced', result: SYNCED });
+    expect(await stage(r, 'synced')).toMatchObject({ kind: 'synced', result });
+    expect(await stage(i, 'synced')).toMatchObject({ kind: 'synced', result: SYNCED });
     expect(selected).toEqual([ENTRY]);
     expect(merged).toEqual([[ENVELOPE]]);
     i.end();
@@ -961,5 +962,198 @@ describe('summaries and transfer (sync-protocol.md §7 to §9, D69, D222)', () =
     expect(merged).toEqual([RETIRED]);
     // From I after the check: `retired` and `abort`, and none of the records read meanwhile.
     expect(sent.filter((d) => d === 'a-to-b').length - before).toBe(2);
+  });
+});
+
+describe('live session (sync-protocol.md §10, D225)', () => {
+  const E = (fill: number) => new Uint8Array(40).fill(fill);
+
+  /** I's vault reports local writes to the flow through `watch`; R's merges are recorded. */
+  async function live(rMerge: (records: readonly Uint8Array[]) => SyncResult = () => SYNCED) {
+    let watcher: ((envelopes: readonly Uint8Array[]) => void) | undefined;
+    let stopped = 0;
+    let release!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const merged: Uint8Array[][] = [];
+    const net = network();
+    const { grant } = devices();
+    const make = (role: 'initiator' | 'responder', g: SyncGrant) =>
+      new Syncing({
+        port: net.port,
+        sameNetwork: true,
+        stun: { kind: 'default' },
+        grant: g,
+        role,
+        onChange: () => undefined,
+      });
+    const i = make('initiator', {
+      ...grant('i', 'r'),
+      watch: (w) => {
+        watcher = w;
+        return () => {
+          stopped++;
+        };
+      },
+      // A write committed between the summary and the selection: in neither (D225).
+      records: async () => {
+        watcher?.([E(1)]);
+        await reading;
+        return [];
+      },
+    });
+    const r = make('responder', {
+      ...grant('r', 'i'),
+      merge: (records) => {
+        merged.push([...records]);
+        return Promise.resolve(rMerge(records));
+      },
+    });
+    i.begin();
+    r.begin();
+    expect(await r.submit(textOf(await stage(i, 'offer')))).toBe('ok');
+    expect(await i.submit(textOf(await stage(r, 'answer')))).toBe('ok');
+    release();
+    await vi.waitFor(() => {
+      expect(i.stage).toMatchObject({ kind: 'synced', live: true });
+      expect(r.stage).toMatchObject({ kind: 'synced', live: true });
+    });
+    const write = (envelopes: Uint8Array[]) => {
+      watcher?.(envelopes);
+    };
+    return { i, r, merged, write, stopped: () => stopped };
+  }
+
+  it('sends each local write from the summary on once committed, and merges each transfer, adding up the result', async () => {
+    const { i, r, merged, write, stopped } = await live((records) => ({
+      ...SYNCED,
+      added: records.length,
+    }));
+    write([E(2), E(3)]);
+    await vi.waitFor(() => {
+      expect(merged).toHaveLength(3);
+    });
+    // The first transfer (empty), then the write made during the exchange, then the later one.
+    expect(merged).toEqual([[], [E(1)], [E(2), E(3)]]);
+    expect(r.stage).toMatchObject({ kind: 'synced', result: { added: 3 }, unseen: false });
+    i.end();
+    expect(stopped()).toBe(1);
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'ended' });
+  });
+
+  it('marks a live merge with a notice as unseen until the sync screen shows it', async () => {
+    let n = 0;
+    const loser = { itemId: new Uint8Array(16), title: 'ACME' };
+    const { i, r, write } = await live(() =>
+      n++ === 2 ? { ...SYNCED, droppedLosers: [loser] } : SYNCED,
+    );
+    expect(r.stage).toMatchObject({ unseen: false });
+    write([E(2)]);
+    await vi.waitFor(() => {
+      expect(r.stage).toMatchObject({ unseen: true, result: { droppedLosers: [loser] } });
+    });
+    r.seen();
+    expect(r.stage).toMatchObject({ unseen: false, result: { droppedLosers: [loser] } });
+    i.end();
+  });
+
+  it('sends a peer retired by a local write only its retired record and abort, never the write (CRYPTO-INV-015, D220)', async () => {
+    const RETIRED = new Uint8Array(40).fill(7);
+    let retired = false;
+    let watcher: ((envelopes: readonly Uint8Array[]) => void) | undefined;
+    const merged: Uint8Array[][] = [];
+    const ownRetirements: Uint8Array[] = [];
+    const net = network();
+    const { grant } = devices();
+    const make = (role: 'initiator' | 'responder', g: SyncGrant) =>
+      new Syncing({
+        port: net.port,
+        sameNetwork: true,
+        stun: { kind: 'default' },
+        grant: g,
+        role,
+        onChange: () => undefined,
+      });
+    const i = make('initiator', {
+      ...grant('i', 'r'),
+      watch: (w) => {
+        watcher = w;
+        return () => undefined;
+      },
+      peerRetirement: () => Promise.resolve(retired ? RETIRED.slice() : undefined),
+    });
+    const r = make('responder', {
+      ...grant('r', 'i'),
+      merge: (records) => {
+        merged.push([...records]);
+        return Promise.resolve(SYNCED);
+      },
+      mergeOwnRetirement: (envelope) => {
+        ownRetirements.push(envelope);
+        return Promise.resolve({} as MergeResult);
+      },
+    });
+    i.begin();
+    r.begin();
+    expect(await r.submit(textOf(await stage(i, 'offer')))).toBe('ok');
+    expect(await i.submit(textOf(await stage(r, 'answer')))).toBe('ok');
+    await vi.waitFor(() => {
+      expect(i.stage).toMatchObject({ kind: 'synced', live: true });
+    });
+    // The retirement commits and is reported before the controller asks for the check again.
+    retired = true;
+    watcher?.([E(9)]);
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(ownRetirements).toEqual([RETIRED]);
+    // Only the first transfer was merged: the write never left.
+    expect(merged).toEqual([[]]);
+  });
+
+  it('ends the session once a live merge retired this device’s own record (D69)', async () => {
+    let n = 0;
+    const { i, r, write } = await live(() =>
+      n++ === 2 ? { ...SYNCED, ownRetired: true } : SYNCED,
+    );
+    write([E(2)]);
+    expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
+    expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'ended' });
+  });
+});
+
+describe('adding up merges (D225)', () => {
+  it('sums counts and lists notices together, the superseded phrase taking the place of the change', () => {
+    const device = { deviceId: new Uint8Array(16) } as unknown as SyncResult['newDevices'][number];
+    const phrase = { phraseId: new Uint8Array(16), phraseCreatedAt: 1 };
+    const a: SyncResult = {
+      ...SYNCED,
+      added: 1,
+      replaced: 2,
+      versions: 3,
+      phraseChanged: true,
+      newDevices: [device],
+    };
+    const b: SyncResult = {
+      ...SYNCED,
+      added: 4,
+      phraseSuperseded: phrase,
+      retiredDevices: [device],
+      rejected: [{ reason: 'unsupported-format' }] as unknown as SyncResult['rejected'],
+      ownRetired: true,
+    };
+    expect(addResults(a, b)).toEqual({
+      ...SYNCED,
+      added: 5,
+      replaced: 2,
+      versions: 3,
+      phraseChanged: false,
+      phraseSuperseded: phrase,
+      newDevices: [device],
+      retiredDevices: [device],
+      rejected: b.rejected,
+      ownRetired: true,
+    });
+    expect(addResults(SYNCED, { ...SYNCED, phraseChanged: true }).phraseChanged).toBe(true);
   });
 });

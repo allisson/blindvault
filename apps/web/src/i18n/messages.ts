@@ -317,7 +317,11 @@ const en = {
     connecting: 'Connecting…',
     connected: 'Connected to {name}, its identity verified. Exchanging records…',
     synced:
-      'Synced with {name}: each device now holds what the other had. Changes made from now on sync in a later version: close the sync here.',
+      'Synced with {name}: each device now holds what the other had. While this sync stays open, a change made on either device reaches the other at once, anywhere in the vault.',
+    live: 'Live sync with {name}: changes made here reach it at once.',
+    liveNotices: 'The sync brought notices: show it to read them.',
+    liveShow: 'Show',
+    liveEnd: 'End',
     close: 'Close',
     again: 'Start again',
     leaving:
@@ -1267,7 +1271,11 @@ const ptBR: Messages = {
     connecting: 'Conectando…',
     connected: 'Conectado a {name}, com a identidade verificada. Trocando registros…',
     synced:
-      'Sincronizado com {name}: cada dispositivo agora tem o que o outro tinha. As alterações feitas daqui em diante sincronizam numa versão futura: feche a sincronização aqui.',
+      'Sincronizado com {name}: cada dispositivo agora tem o que o outro tinha. Enquanto esta sincronização ficar aberta, uma alteração feita num dispositivo chega ao outro na hora, em qualquer parte do cofre.',
+    live: 'Sincronização ao vivo com {name}: as alterações feitas aqui chegam a ele na hora.',
+    liveNotices: 'A sincronização trouxe avisos: mostre-a para lê-los.',
+    liveShow: 'Mostrar',
+    liveEnd: 'Encerrar',
     close: 'Fechar',
     again: 'Começar de novo',
     leaving:

@@ -508,7 +508,11 @@ function DeviceSettings({
 }) {
   const { messages: m, language } = useLanguage();
   const [retire, setRetire] = useState<RetireState>({ kind: 'idle' });
-  const [syncWith, setSyncWith] = useState<{ id: string; purpose: SyncPurpose }>();
+  // A live sync outlives this screen: back in it, its panel shows again (D225).
+  const [syncWith, setSyncWith] = useState<{ id: string; purpose: SyncPurpose } | undefined>(() => {
+    const peer = controller.syncPeer;
+    return peer ? { id: hex(peer.deviceId), purpose: 'sync' } : undefined;
+  });
   const devices = devicesOf(session);
   const syncs = devices.registered && !session.retired;
   const isPeer = (d: { deviceId: Uint8Array }) => hex(d.deviceId) === syncWith?.id;

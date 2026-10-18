@@ -462,6 +462,14 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Live sync session (Phase 5, D225).** `liveSession` in `packages/sync/src/exchange.ts` runs
+  §10 after the device's `committed`: the peer's `committed`, then its transfers and `retired`,
+  and the transfers pushed one at a time. `HlcClock` counts the HLCs it issues, so the vault session
+  reports a commit that issued one through `SyncGrant.watch`; a merge or the maintenance pass issues
+  none. `src/app/sync.ts` in `apps/web` watches from the summary on, pushes after `committed` and
+  adds each live merge's result to the sync's; the controller keeps a live sync when Settings
+  closes (`leaveSync`), `cancelPairing` ends only the pairing, and `VaultShell` shows the live bar.
+  No new dependency.
 - **Recovery Envelope over a sync (Phase 5, D2, D145).** No code change: the merge shared with the
   backup merge takes an envelope of another `phraseId` by last-write-wins, rejects one changed
   under the held `phraseId` (D44) and reports `phraseChanged` (D43) or `phraseSuperseded` (D145,

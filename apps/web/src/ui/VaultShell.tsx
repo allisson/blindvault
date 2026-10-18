@@ -125,6 +125,48 @@ function Header({
   );
 }
 
+/** The live sync session, wherever the user is in the vault (sync-protocol.md §10, D225). */
+function LiveSync({
+  controller,
+  nav,
+}: {
+  readonly controller: VaultController;
+  readonly nav: Navigation;
+}) {
+  const m = useMessages();
+  const stage = useSyncExternalStore(controller.subscribe, () => controller.sync);
+  const peer = useSyncExternalStore(controller.subscribe, () => controller.syncPeer);
+  if (stage?.kind !== 'synced' || !stage.live || !peer) return null;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-2 text-sm dark:border-zinc-800"
+      data-testid="live-sync"
+    >
+      <p role="status">{format(m.sync.live, { name: peer.name })}</p>
+      {stage.unseen ? <Notice>{m.sync.liveNotices}</Notice> : null}
+      <span className="flex-1" />
+      <Button
+        variant="quiet"
+        onClick={() => {
+          nav.open({ name: 'settings', focus: 'devices' });
+        }}
+        data-testid="live-sync-show"
+      >
+        {m.sync.liveShow}
+      </Button>
+      <Button
+        variant="quiet"
+        onClick={() => {
+          controller.cancelSync();
+        }}
+        data-testid="live-sync-end"
+      >
+        {m.sync.liveEnd}
+      </Button>
+    </div>
+  );
+}
+
 /** A text field types the key instead of taking it as a shortcut. */
 function editable(target: EventTarget | null): boolean {
   return (
@@ -326,6 +368,7 @@ export function VaultShell({
       <PreviewBanner />
       <UpdateBanner />
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
+      <LiveSync controller={controller} nav={nav} />
       <StorageWarningBanner controller={controller} session={session} />
       {clock ? (
         <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="clock-behind">

@@ -120,7 +120,10 @@ async function guarded<T>(session: SyncSession, run: () => Promise<T>): Promise<
  * The peer's next message. A `retired` may come in place of any (§6): it is merged, then the peer's
  * `abort` ends the session with its reason, and anything else is out of the protocol.
  */
-async function next<T>(session: SyncSession, options: ExchangeOptions<T>): Promise<SyncMessage> {
+async function next(
+  session: SyncSession,
+  options: Pick<ExchangeOptions<unknown>, 'retired'>,
+): Promise<SyncMessage> {
   const message = await session.receive();
   if (message.t !== 'retired') return message;
   await guarded(session, () => options.retired(message.r));
@@ -173,9 +176,9 @@ async function sendRecords(session: SyncSession, records: readonly Uint8Array[])
 }
 
 /** §9 with §2.1: the peer's records, unverified, in memory until `records-end`. */
-async function receiveRecords<T>(
+async function receiveRecords(
   session: SyncSession,
-  options: ExchangeOptions<T>,
+  options: Pick<ExchangeOptions<unknown>, 'retired'>,
 ): Promise<Uint8Array[]> {
   const begin = await next(session, options);
   if (begin.t !== 'records-begin') return session.refuse('protocol-error');
@@ -213,4 +216,51 @@ export async function exchange<T>(session: SyncSession, options: ExchangeOptions
   /* v8 ignore next */
   if (session.error) throw session.error;
   return guarded(session, () => options.merge(received));
+}
+
+export interface LiveOptions<T> {
+  /** The peer's `committed` arrived: the session is live (§9, §12). */
+  readonly live: () => void;
+  /** §10: merges one transfer of the peer as §9 does, in one commit that records the sync (D34). */
+  readonly merge: (records: readonly Uint8Array[]) => Promise<T>;
+  /** Each transfer merged, in order: the next is read once this resolves (§6, D69, D220). */
+  readonly merged: (result: T) => Promise<void>;
+  /** §6: as for `exchange`. */
+  readonly retired: (envelope: Uint8Array) => Promise<void>;
+}
+
+/** The live session of §10, once this device has sent its `committed`. */
+export interface LiveSession {
+  /**
+   * Queues one transfer of §2.1, sent once every transfer queued before it has left, so the messages
+   * of two never interleave. Rejects with `SyncError` once the session ended.
+   */
+  push(records: readonly Uint8Array[]): Promise<void>;
+  /**
+   * Reads the peer's `committed`, which makes the session live, then its transfers and `retired`,
+   * until the session ends: rejects with its `SyncError`. Anything else aborts (`protocol-error`).
+   */
+  readonly done: Promise<never>;
+}
+
+/** §10 (D225): run after this device sent `committed`. */
+export function liveSession<T>(session: SyncSession, options: LiveOptions<T>): LiveSession {
+  let sending: Promise<void> = Promise.resolve();
+  const push = (records: readonly Uint8Array[]): Promise<void> => {
+    const run = sending.then(() => sendRecords(session, records));
+    sending = run.catch(() => undefined);
+    return run;
+  };
+  const done = (async (): Promise<never> => {
+    const first = await next(session, options);
+    if (first.t !== 'committed') return session.refuse('protocol-error');
+    session.live();
+    options.live();
+    for (;;) {
+      const records = await receiveRecords(session, options);
+      const result = await guarded(session, () => options.merge(records));
+      await guarded(session, () => options.merged(result));
+    }
+  })();
+  return { push, done };
 }

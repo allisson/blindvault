@@ -14,7 +14,14 @@ import {
   initCrypto,
 } from '@blindvault/crypto';
 import { VaultDatabase } from '@blindvault/storage';
-import { SyncSession, exchange, memoryPair, syncHandshake } from '@blindvault/sync';
+import {
+  type LiveSession,
+  SyncSession,
+  exchange,
+  liveSession,
+  memoryPair,
+  syncHandshake,
+} from '@blindvault/sync';
 import {
   HISTORY_LIMIT,
   type ItemInput,
@@ -639,5 +646,148 @@ describe('the Recovery Envelope over a sync (sync-protocol.md §1.3, §1.6, D2, 
     expect(ry.phraseSuperseded).toBeUndefined();
     expect(ry.phraseChanged).toBe(false);
     expect(x.recovery).toEqual(y.recovery);
+  });
+});
+
+/**
+ * One sync between `x` and `y` that stays live (§10, D225): each side reports its local writes from
+ * its summary on, and pushes them once it has sent `committed`, as the app does. `during` runs on
+ * `x` between its summary and its selection.
+ */
+async function liveSync(x: VaultSession, y: VaultSession, during?: () => Promise<void>) {
+  const gx = x.openSync(y.deviceId);
+  const gy = y.openSync(x.deviceId);
+  const link = memoryPair();
+  const payload = (fill: number) => ({
+    message: new Uint8Array(140).fill(fill),
+    fingerprint: new Uint8Array(32).fill(fill + 1),
+  });
+  const both = { initiator: payload(0x10), responder: payload(0x30) };
+  const [hx, hy] = await Promise.all([
+    syncHandshake(link.a, {
+      role: 'initiator',
+      identity: gx.identity,
+      peerPublicKey: gx.peerPublicKey,
+      ...both,
+    }),
+    syncHandshake(link.b, {
+      role: 'responder',
+      identity: gy.identity,
+      peerPublicKey: gy.peerPublicKey,
+      ...both,
+    }),
+  ]);
+  const merges = { x: [] as SyncResult[], y: [] as SyncResult[] };
+  const open = async (
+    session: SyncSession,
+    grant: typeof gx,
+    merged: SyncResult[],
+    hook?: () => Promise<void>,
+  ) => {
+    const pending: (readonly Uint8Array[])[] = [];
+    let live: LiveSession | undefined = undefined;
+    const stop = grant.watch((envelopes) => {
+      if (live) live.push(envelopes).catch(() => undefined);
+      else pending.push(envelopes);
+    });
+    await exchange(session, {
+      summary: grant.summary(),
+      records: async (selected) => {
+        await hook?.();
+        return grant.records(selected);
+      },
+      merge: (records) => grant.merge(records),
+      retired: () => Promise.reject(new Error('no retirement here')),
+    });
+    await session.send({ t: 'committed' });
+    live = liveSession(session, {
+      live: () => undefined,
+      merge: (records) => grant.merge(records),
+      merged: (result) => {
+        merged.push(result);
+        return Promise.resolve();
+      },
+      retired: () => Promise.reject(new Error('no retirement here')),
+    });
+    for (const envelopes of pending.splice(0)) live.push(envelopes).catch(() => undefined);
+    live.done.catch(() => undefined);
+    return stop;
+  };
+  const sx = new SyncSession(hx.channel);
+  const sy = new SyncSession(hy.channel);
+  const stops = await Promise.all([open(sx, gx, merges.x, during), open(sy, gy, merges.y)]);
+  return {
+    merges,
+    end: async () => {
+      for (const stop of stops) stop();
+      await sx.abort('ended');
+    },
+  };
+}
+
+describe('the live session (sync-protocol.md §10, D225)', () => {
+  it('brings an edit, a trash and a regeneration made on either device to the other, with no new sync', async () => {
+    const { clock, x, y, shared } = await peers();
+    const live = await liveSync(x, y);
+    clock.t = T0 + MINUTE;
+    await x.updateItem(shared, login('Edited live on Laptop'));
+    await vi.waitFor(() => {
+      expect(titleOf(y, shared)).toBe('Edited live on Laptop');
+    });
+    // The Item Version of the state before the edit came with it.
+    expect(history(y, shared)).toEqual(history(x, shared));
+
+    clock.t = T0 + 2 * MINUTE;
+    const folder = await y.createFolder('Made on Phone');
+    await y.trashItem(shared);
+    await vi.waitFor(() => {
+      expect(x.item(shared)).toMatchObject({ inTrash: true });
+      expect(x.folder(folder)).toMatchObject({ name: 'Made on Phone' });
+    });
+
+    clock.t = T0 + 3 * MINUTE;
+    await regenerate(x, 1);
+    await vi.waitFor(() => {
+      expect(y.recovery).toEqual(x.recovery);
+    });
+    expect(live.merges.y.some((r) => r.phraseChanged)).toBe(true);
+    expect(held(x)).toEqual(held(y));
+    await live.end();
+
+    // Nothing was left for a sync to bring.
+    for (const result of await sync(x, y)) {
+      expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0 });
+    }
+  });
+
+  it('brings a record created between the summary and the selection, which neither carries', async () => {
+    const { x, y } = await peers();
+    let made: Uint8Array | undefined;
+    const live = await liveSync(x, y, async () => {
+      made ??= await x.createItem(login('Made during the exchange'));
+    });
+    await vi.waitFor(() => {
+      expect(made && titleOf(y, made)).toBe('Made during the exchange');
+    });
+    expect(held(x)).toEqual(held(y));
+    await live.end();
+  });
+
+  it('sends nothing for a merge, the purge or the history cut', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await x.trashItem(shared);
+    await sync(x, y);
+    const live = await liveSync(x, y);
+    clock.t = T0 + 31 * DAY;
+    await maintenance(() => {
+      expect(x.item(shared)).toBeUndefined();
+      expect(y.item(shared)).toBeUndefined();
+    });
+    // Each purged on its own clock: nothing crossed.
+    expect(live.merges.x).toEqual([]);
+    expect(live.merges.y).toEqual([]);
+    await live.end();
   });
 });
