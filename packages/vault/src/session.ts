@@ -506,6 +506,13 @@ export interface SyncGrant {
    * (`SyncRejectedError`, `protocol-error`) write nothing.
    */
   merge(envelopes: readonly Uint8Array[]): Promise<SyncResult>;
+  /**
+   * §10 (D225): calls `watcher` once each local write has committed, with the envelopes it wrote,
+   * Item Versions included: a write that issued an HLC. A merge, the purge and the history cut issue
+   * none and are not reported. Returns the call that stops it; a lock stops every one. `watcher`
+   * must not throw: the write has already committed.
+   */
+  watch(watcher: (envelopes: readonly Uint8Array[]) => void): () => void;
 }
 
 /** A sync, or a sync that only tells a retired peer it is retired (sync-protocol.md §3, D219). */
@@ -809,6 +816,8 @@ export class VaultSession {
   #state: State;
   readonly #now: () => number;
   #queue: Promise<unknown> = Promise.resolve();
+  /** Told the records of each local write once committed (sync-protocol.md §10, D225). */
+  readonly #watchers = new Set<(envelopes: readonly Uint8Array[]) => void>();
   #timer: ReturnType<typeof setInterval> | undefined;
   #locked = false;
   /** The keyrings of pairings started on this device, wiped on lock (D93, D202). */
@@ -1448,6 +1457,7 @@ export class VaultSession {
     this.#keyring.wipeAll();
     for (const grant of this.#grants) grant.wipeAll();
     this.#grants.clear();
+    this.#watchers.clear();
     this.#state = emptyState();
   }
 
@@ -2269,6 +2279,16 @@ export class VaultSession {
       },
       records: (selected) => this.#run(() => this.#syncRecords(selected)),
       merge: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id)),
+      watch: (watcher) => {
+        this.#unlocked();
+        const own = (envelopes: readonly Uint8Array[]) => {
+          watcher(envelopes);
+        };
+        this.#watchers.add(own);
+        return () => {
+          this.#watchers.delete(own);
+        };
+      },
     };
   }
 
@@ -3198,6 +3218,7 @@ export class VaultSession {
   #run<T>(build: () => Plan<T> | Promise<Plan<T>>): Promise<T> {
     const task = this.#queue.then(async () => {
       this.#unlocked();
+      const issued = this.#clock.issued;
       let plan: Plan<T>;
       try {
         plan = await build();
@@ -3235,6 +3256,10 @@ export class VaultSession {
       if (plan.cleartext) this.#cleartext = plan.cleartext;
       for (const d of plan.deletes) this.#forget(d);
       for (const w of plan.writes) this.#apply(w);
+      // A write that issued an HLC is a local one; a merge or the maintenance pass issues none (D73).
+      if (this.#clock.issued !== issued && plan.writes.length > 0) {
+        for (const watcher of this.#watchers) watcher(plan.writes.map((w) => w.envelope.slice()));
+      }
       return plan.result;
     });
     this.#queue = task.catch(() => undefined);

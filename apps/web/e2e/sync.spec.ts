@@ -14,7 +14,9 @@ import { fillPassword } from './password';
 // an older edit never brings a trashed item back (CRYPTO-INV-013), and an item trashed on one is in
 // the trash of both with the same purge date and no way to purge it by hand (D7, D94); a Recovery
 // Phrase regenerated on one reaches the other, which tells its user, and of two regenerations the
-// device whose phrase lost is warned and offered a backup (D43, D145, D185). A
+// device whose phrase lost is warned and offered a backup (D43, D145, D185); once both committed,
+// the session stays live outside Settings and an edit reaches the peer at once, until End or a lock
+// (D225). A
 // device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
@@ -459,4 +461,44 @@ test('of two regenerations, the later is kept on both and A, whose phrase lost, 
   for (const page of [a, b]) expect(await currentId(page)).toBe(kept);
   await warning.getByRole('button', { name: 'Make a backup now', exact: true }).click();
   await expect(a.getByTestId('backup-password')).toBeFocused();
+});
+
+test('a live sync outlives Settings: an item made in the vault reaches the peer at once, until End (D225)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await synced(a, b);
+  for (const page of [a, b]) {
+    await expect(page.getByTestId('live-sync')).toContainText('Live sync with', {
+      timeout: 30_000,
+    });
+  }
+  // Leaving Settings keeps it open.
+  await button(a, 'Back').click();
+  await button(b, 'Back').click();
+  await button(b, 'Open the vault').click();
+  await expect(a.getByTestId('live-sync')).toBeVisible();
+  await newLogin(a, 'Made while live');
+  await expect(button(b, 'Made while live')).toBeVisible({ timeout: 30_000 });
+  await expect(b.getByTestId('live-sync')).toBeVisible();
+
+  // Show opens the sync, with every merge added up.
+  await b.getByTestId('live-sync-show').click();
+  await expect(b.getByTestId('merge-result')).toContainText('Merged: 1 added');
+  await a.getByTestId('live-sync-end').click();
+  await expect(a.getByTestId('live-sync')).toHaveCount(0);
+  await expect(b.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'ended', {
+    timeout: 30_000,
+  });
+  await expect(b.getByTestId('live-sync')).toHaveCount(0);
+});
+
+test('a lock ends the live sync on both (D93, D225)', async ({ browser }) => {
+  const { a, b } = await paired(browser);
+  await synced(a, b);
+  await expect(a.getByTestId('live-sync')).toBeVisible({ timeout: 30_000 });
+  await button(a, 'Back').click();
+  await expect(a.getByTestId('live-sync')).toBeVisible();
+  await button(b, 'Lock').click();
+  await expect(a.getByTestId('live-sync')).toHaveCount(0, { timeout: 30_000 });
 });

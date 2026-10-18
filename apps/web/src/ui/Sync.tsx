@@ -212,15 +212,20 @@ export function SyncDevice({
   const current = useSyncExternalStore(controller.subscribe, () => controller.syncPeer);
   const [sameNetwork, setSameNetwork] = useState(false);
   const [outcome, setOutcome] = useState<SyncStart>();
-  // Picking another device, closing this one or leaving Settings ends the sync in progress.
+  // Picking another device, closing this one or leaving Settings ends the sync in progress, unless
+  // it is live (D225).
   useEffect(
     () => () => {
-      controller.cancelSync();
+      controller.leaveSync();
     },
     [controller],
   );
   const name = peer.name;
   const mine = current && sameId(current.deviceId, peer.deviceId) ? stage : undefined;
+  const unseen = mine?.kind === 'synced' && mine.unseen;
+  useEffect(() => {
+    if (unseen) controller.seenSync();
+  }, [controller, unseen]);
   const start = (role: 'initiator' | 'responder') => {
     setOutcome(controller.startSync(peer.deviceId, role, { sameNetwork }, purpose));
   };

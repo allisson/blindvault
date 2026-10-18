@@ -13,8 +13,11 @@
 // session is told so too (D69, D220). Then both exchange their summaries and the records the other
 // lacks or holds older, and each merges what it received in one commit (§7 to §9, D222); a merge
 // that retired this device's own record ends the session (D69), and one that retired the peer runs
-// the check again before `committed`. The live session that follows comes with its task. The
-// controller owns the flow and ends it on a lock (D93); this module logs nothing.
+// the check again before `committed`. Then the session is live (§10, D225): each local write from
+// the summary on goes to the peer as one transfer, once this device has committed, and each of the
+// peer's transfers merges as the first one did, its result added to the sync's. The controller owns
+// the flow, keeps it once live when the user leaves Settings, and ends it on a lock (D93); this
+// module logs nothing.
 
 import { randomBytes } from '@blindvault/crypto';
 import {
@@ -23,6 +26,7 @@ import {
   type LinkAnswer,
   type LinkFields,
   type LinkOffer,
+  type LiveSession,
   type PayloadExpectation,
   ReconnectionError,
   type ReconnectionKeys,
@@ -36,6 +40,7 @@ import {
   type Transport,
   TransportClosedError,
   exchange,
+  liveSession,
   manualDelivery,
   receiveReconnection,
   sealReconnection,
@@ -96,8 +101,17 @@ export type SyncStage =
   | { readonly kind: 'connecting' }
   /** `Noise_KK` completed and the peer is not retired: the summaries and the transfer run (D222). */
   | { readonly kind: 'connected' }
-  /** This device merged what the peer sent and sent `committed` (§9). */
-  | { readonly kind: 'synced'; readonly result: SyncResult }
+  /**
+   * This device merged what the peer sent and sent `committed` (§9). `live`: the peer's `committed`
+   * arrived (§10, D225); `result` adds up every merge of the session; `unseen`: a merge of the live
+   * session brought a notice the sync screen has not shown yet.
+   */
+  | {
+      readonly kind: 'synced';
+      readonly result: SyncResult;
+      readonly live: boolean;
+      readonly unseen: boolean;
+    }
   /** `record`: with `send-failed`, the record that failed verification. */
   | { readonly kind: 'failed'; readonly reason: SyncFailure; readonly record?: RecordKey };
 
@@ -138,6 +152,11 @@ export class Syncing {
   #retired = false;
   /** The record that failed verification as this device was about to send it (§8). */
   #unsent: RecordKey | undefined;
+  /** Stops reporting local writes (§10). */
+  #unwatch: (() => void) | undefined;
+  /** The local writes committed before this device's `committed`, sent right after it (D225). */
+  #pending: (readonly Uint8Array[])[] = [];
+  #live: LiveSession | undefined;
 
   constructor(options: SyncFlowOptions) {
     this.#options = options;
@@ -192,6 +211,12 @@ export class Syncing {
     this.#over = true;
     void this.#session?.abort(reason);
     this.#close();
+  }
+
+  /** The sync screen shows the stage: the notices of the live session are no longer new. */
+  seen(): void {
+    const stage = this.#stage;
+    if (stage.kind === 'synced' && stage.unseen) this.#set({ ...stage, unseen: false });
   }
 
   /**
@@ -320,29 +345,29 @@ export class Syncing {
   /**
    * §7 to §9 (D222): the summaries and the transfer, then the merge; after it, the check of §6 again
    * before `committed`, since the transfer may have retired the peer (D220). A merge that retired
-   * this device's own record ends the session instead (D69).
+   * this device's own record ends the session instead (D69). Then the live session of §10 (D225).
    */
   async #exchange(session: SyncSession): Promise<void> {
     const { grant } = this.#options;
+    // From the summary on: a record created before the selection is in neither (D225).
+    this.#unwatch = grant.watch((envelopes) => {
+      if (this.#live) this.#push(this.#live, envelopes);
+      else this.#pending.push(envelopes);
+    });
     let result: SyncResult;
     try {
       result = await exchange(session, {
         summary: grant.summary(),
         records: (selected) => this.#vault(() => grant.records(selected)),
         merge: (records) => this.#vault(() => grant.merge(records)),
-        retired: async (envelope) => {
-          await this.#vault(() => grant.mergeOwnRetirement(envelope));
-          this.#retired = true;
-        },
+        retired: (envelope) => this.#ownRetirement(envelope),
       });
     } catch (error) {
       this.#ended(error);
       return;
     }
     if (result.ownRetired) {
-      this.#retired = true;
-      await session.abort('ended');
-      this.#fail('retired');
+      await this.#endRetired(session);
       return;
     }
     if (await this.#checkPeer(session)) return;
@@ -352,8 +377,68 @@ export class Syncing {
       this.#ended(error);
       return;
     }
-    this.#set({ kind: 'synced', result });
-    await this.#listen(session);
+    const live = liveSession(session, {
+      live: () => {
+        const stage = this.#stage;
+        if (stage.kind === 'synced') this.#set({ ...stage, live: true });
+      },
+      merge: (records) => this.#vault(() => grant.merge(records)),
+      merged: (merged) => this.#merged(session, merged),
+      retired: (envelope) => this.#ownRetirement(envelope),
+    });
+    this.#live = live;
+    for (const envelopes of this.#pending.splice(0)) this.#push(live, envelopes);
+    this.#set({ kind: 'synced', result, live: false, unseen: false });
+    try {
+      await live.done;
+    } catch (error) {
+      this.#ended(error);
+    }
+  }
+
+  /**
+   * One local write to the peer, after the check of §6 in the order of the checks: a write that
+   * retired the peer sends it only its retired record and `abort`, never the write (CRYPTO-INV-015,
+   * D220). A session that ended meanwhile shows why through `done`.
+   */
+  #push(live: LiveSession, envelopes: readonly Uint8Array[]): void {
+    const session = this.#session;
+    if (!session) return;
+    this.#checkPeer(session)
+      .then((over) => (over ? undefined : live.push(envelopes)))
+      .catch(() => undefined);
+  }
+
+  /** A `retired` of the peer: this device's own record, merged (§6, D219). */
+  async #ownRetirement(envelope: Uint8Array): Promise<void> {
+    await this.#vault(() => this.#options.grant.mergeOwnRetirement(envelope));
+    this.#retired = true;
+  }
+
+  /** A merge retired this device's own record: the session ends (D69). */
+  async #endRetired(session: SyncSession): Promise<void> {
+    this.#retired = true;
+    await session.abort('ended');
+    this.#fail('retired');
+  }
+
+  /**
+   * A transfer of the live session merged (§10): its result adds to the sync's, then the checks
+   * that follow a merge run as after the first (D69, D220).
+   */
+  async #merged(session: SyncSession, merged: SyncResult): Promise<void> {
+    if (merged.ownRetired) {
+      await this.#endRetired(session);
+      return;
+    }
+    if (await this.#checkPeer(session)) return;
+    const stage = this.#stage;
+    if (stage.kind !== 'synced') return;
+    this.#set({
+      ...stage,
+      result: addResults(stage.result, merged),
+      unseen: stage.unseen || hasNotice(merged),
+    });
   }
 
   /** Runs a vault call; its refusal aborts the session with the reason it gives. */
@@ -407,41 +492,6 @@ export class Syncing {
   }
 
   /**
-   * After this device's `committed`: the peer's `committed`, once, which makes the session live
-   * (§9, §12), and `retired`, this device's own Device record retired, merged once (§6, D219). Any
-   * other message is out of the protocol (§11.1) until the live session's task.
-   */
-  async #listen(session: SyncSession): Promise<void> {
-    let committed = false;
-    try {
-      for (;;) {
-        const message = await session.receive();
-        if (message.t === 'committed' && !committed) {
-          committed = true;
-          session.live();
-        } else if (message.t === 'retired' && !this.#retired) {
-          await this.#mergeRetirement(session, message.r);
-        } else {
-          await session.refuse('protocol-error');
-        }
-      }
-    } catch (error) {
-      this.#ended(error);
-    }
-  }
-
-  /** Merges the peer's `retired`, or refuses it with the vault's reason, merging nothing. */
-  async #mergeRetirement(session: SyncSession, envelope: Uint8Array): Promise<void> {
-    try {
-      await this.#vault(() => this.#options.grant.mergeOwnRetirement(envelope));
-    } catch (error) {
-      if (error instanceof SyncRefusal) await session.refuse(error.reason);
-      throw error;
-    }
-    this.#retired = true;
-  }
-
-  /**
    * The session ended: shows why, unless the flow is over or this device is ending it with a peer
    * retired meanwhile, which shows why itself. Once its own record merged retired, this device knows
    * why, however the session ends.
@@ -473,6 +523,7 @@ export class Syncing {
   }
 
   #close(): void {
+    this.#unwatch?.();
     clearTimeout(this.#expiry);
     this.#delivery.close();
     this.#settle('unavailable');
@@ -494,6 +545,35 @@ export class Syncing {
   #settle(check: SyncCheck): void {
     for (const resolve of this.#checks.splice(0)) resolve(check);
   }
+}
+
+/** Two merges of one session as one: counts summed, notices and rejected records listed together. */
+export function addResults(a: SyncResult, b: SyncResult): SyncResult {
+  const superseded = b.phraseSuperseded ?? a.phraseSuperseded;
+  return {
+    added: a.added + b.added,
+    replaced: a.replaced + b.replaced,
+    versions: a.versions + b.versions,
+    phraseChanged: (a.phraseChanged || b.phraseChanged) && !superseded,
+    ...(superseded ? { phraseSuperseded: superseded } : {}),
+    newDevices: [...a.newDevices, ...b.newDevices],
+    retiredDevices: [...a.retiredDevices, ...b.retiredDevices],
+    droppedLosers: [...a.droppedLosers, ...b.droppedLosers],
+    rejected: [...a.rejected, ...b.rejected],
+    ownRetired: a.ownRetired || b.ownRetired,
+  };
+}
+
+/** Whether a merge calls for a notice of sync-protocol.md §1.6, or rejected a record. */
+function hasNotice(result: SyncResult): boolean {
+  return (
+    result.phraseChanged ||
+    result.phraseSuperseded !== undefined ||
+    result.newDevices.length > 0 ||
+    result.retiredDevices.length > 0 ||
+    result.droppedLosers.length > 0 ||
+    result.rejected.length > 0
+  );
 }
 
 /**

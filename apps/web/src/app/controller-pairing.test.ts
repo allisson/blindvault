@@ -1141,6 +1141,42 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'locked' });
   });
 
+  it('keeps a live sync when the user leaves its screen, pushing an edit made meanwhile; ends one not live yet (§10, D225)', async () => {
+    const { a, b, idA, idB } = await paired();
+    expect(b.startSync(idA, 'initiator', { sameNetwork: true })).toBe('ok');
+    expect(a.startSync(idB, 'responder', { sameNetwork: true })).toBe('ok');
+    expect(await a.syncPayload(codeOf(await syncStage(b, 'offer')))).toBe('ok');
+    expect(await b.syncPayload(codeOf(await syncStage(a, 'answer')))).toBe('ok');
+    await vi.waitFor(() => {
+      expect(a.sync).toMatchObject({ kind: 'synced', live: true });
+      expect(b.sync).toMatchObject({ kind: 'synced', live: true });
+    });
+    // Leaving Settings: its screens end their pairing, not the live sync.
+    a.leaveSync();
+    a.cancelPairing();
+    expect(a.sync).toMatchObject({ kind: 'synced', live: true });
+    const id = await session(a).createItem({
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Made while live',
+      fields: [],
+      tags: [],
+    });
+    await vi.waitFor(() => {
+      expect(session(b).item(id)?.item?.title).toBe('Made while live');
+    });
+    expect(b.sync).toMatchObject({ kind: 'synced', result: { added: 1 } });
+    a.seenSync();
+    a.cancelSync();
+    expect(await syncStage(b, 'failed')).toEqual({ kind: 'failed', reason: 'ended' });
+
+    // Not live yet: leaving the screen ends it.
+    expect(b.startSync(idA, 'initiator', { sameNetwork: true })).toBe('ok');
+    await syncStage(b, 'offer');
+    b.leaveSync();
+    expect(b.sync).toBeUndefined();
+  });
+
   it('refuses a peer it holds no record of, itself, and a retired peer (§3, D31)', async () => {
     const { a, idA, idB } = await paired();
     expect(a.startSync(new Uint8Array(16), 'initiator', { sameNetwork: true })).toBe(

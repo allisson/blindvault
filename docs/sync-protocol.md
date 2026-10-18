@@ -457,12 +457,24 @@ other device (D43); a second sync shows neither again.
 While the session is open (§9.1):
 
 - each storage commit of a local write that changes synchronized records (an edit, a move, a trash
-  or a restore from the trash, a rename, a retirement, a Recovery Phrase regeneration) sends those
-  records as one transfer of section 2.1, once the device has sent its own `committed`; a write
-  committed after the device read its records for section 8 is sent this way;
-- the receiver merges each transfer as section 9 does, in one storage transaction, and sends no
-  acknowledgement;
-- purge is local and sends nothing (D7).
+  or a restore from the trash, a rename, a retirement, a Recovery Phrase regeneration) sends the
+  records it wrote, the Item Versions included, as one transfer of section 2.1, once the device has
+  sent its own `committed`; a write committed after the device took its summary for section 7 is
+  sent this way, since a record created before the selection of section 8 is in neither the summary
+  nor the selection (D225);
+- transfers leave one at a time, in the order of the commits, so the messages of two never
+  interleave, each after the check of section 6: a write that retired the peer sends it only its
+  retired record and `abort`, never the write (CRYPTO-INV-015, D220);
+- a merge, of this sync or of a backup, sends nothing: the peer holds the records it merged, or
+  receives them at the next sync;
+- the receiver accepts, after the peer's `committed`, only transfers and `retired`; it merges each
+  transfer as section 9 does, in one storage transaction that records the sync again (D34), and
+  sends no acknowledgement; then it runs the check of section 6 again (D220), and a merge that
+  retired its own Device record ends the session (D69);
+- purge is local and sends nothing (D7), and the history cut sends nothing, since each device cuts
+  the same versions.
+
+The session stays open while the user leaves Settings, until it ends as section 12 says (D225).
 
 There is no acknowledgement and no retransmission at this layer: the Noise channel delivers every
 frame once, in order, or ends the session, and merging a record already held changes nothing, so a
@@ -491,7 +503,8 @@ other keys are exactly those listed:
 A message whose `v` is not 1 aborts (`version`). An unknown `t`, a missing or extra key, a wrong
 type or length, or a message out of the order of sections 6 to 10 aborts (`protocol-error`): no
 `records-begin` before the peer's `summary-end` has been received by the sender, no second
-`summary-begin`, no second `committed`, no transfer of section 10 before the sender's `committed`.
+`summary-begin`, no second `committed`, no transfer of section 10 before the sender's `committed`,
+nothing but a transfer of section 10 or `retired` after it.
 
 ### 11.2 Abort
 
@@ -519,8 +532,11 @@ is decoded; `count`, duplicate identities and the order of this section are each
 with its task. `SyncSession` carries them over the Noise channel of `Noise_KK`, on the session the
 pairing uses: a refused message aborts with its reason, a received `abort` ends the session, and a
 closed link ends it as closed. After the check of section 6 the app runs the exchange of
-section 9 (D222); once it has sent `committed`, it reads the peer's `committed` once and
-`retired`, and refuses any other message with `protocol-error` until the live session's task. The
+section 9 (D222); once it has sent `committed`, it runs the live session of section 10
+(D225): `liveSession` in `exchange.ts` reads the peer's `committed` once, then transfers and
+`retired`, refusing anything else with `protocol-error`, and sends the transfers the app queues one
+at a time. `SyncGrant.watch` in `packages/vault` reports the records of each local commit from the
+summary on, and the controller keeps the session open outside Settings. The
 check of section 6 runs again after a local commit that may retire the peer (D220), and after the
 merge, before `committed`. Ending the sync sends `abort`
 with `ended`, a lock sends `locked`, and the connection closes once the `abort` had time to leave.
@@ -531,8 +547,9 @@ with `ended`, a lock sends `locked`, and the connection closes once the `abort` 
   handshake completed, as in pairing (`pairing-protocol.md` §11).
 - **Initial exchange.** Until a device has sent its `committed` and received the peer's, it aborts
   (`expired`) after **60 seconds** without receiving a frame.
-- **Live session.** No timeout: it ends when the channel closes, when either vault locks, or when
-  the user ends it. A phone that hides the app locks it after the hidden-app delay (D54), which
+- **Live session.** No timeout: it ends when the channel closes, when either vault locks, when
+  the user ends it, or when another sync, pairing or re-admission starts; leaving Settings does not
+  end it (D225). A phone that hides the app locks it after the hidden-app delay (D54), which
   ends the session.
 - **Lock.** A lock on either device sends `abort` with `locked` when the channel is open and ends
   the session at once (D93).

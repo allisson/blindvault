@@ -95,7 +95,15 @@ export {
   encodeSyncMessage,
 } from './sync-messages';
 export { SyncError, SyncSession, type SyncSessionFailure } from './sync-session';
-export { type ExchangeOptions, SyncRefusal, exchange, selectRecords } from './exchange';
+export {
+  type ExchangeOptions,
+  type LiveOptions,
+  type LiveSession,
+  SyncRefusal,
+  exchange,
+  liveSession,
+  selectRecords,
+} from './exchange';
 export { SessionError } from './channel-session';
 export {
   type SessionPayload,

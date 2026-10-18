@@ -2062,15 +2062,21 @@ export class VaultController {
    * session is wiped.
    */
   cancelPairing(): void {
-    this.#dropPairing();
+    // Only the pairing: a live sync outlives Settings, whose screens cancel their pairing (D225).
+    this.#endPairing();
     if (this.#status.kind === 'joining') this.#set(this.#joined());
     else this.#set({ ...this.#status });
   }
 
+  /** Before another flow starts: one flow at a time, a sync included (D216, D225). */
   #dropPairing(): void {
+    this.#endPairing();
+    this.#dropSync();
+  }
+
+  #endPairing(): void {
     this.#pairing?.end('cancelled');
     this.#pairing = undefined;
-    this.#dropSync();
   }
 
   // --- sync ----------------------------------------------------------------------------------------
@@ -2132,6 +2138,21 @@ export class VaultController {
   cancelSync(): void {
     this.#dropSync();
     this.#set({ ...this.#status });
+  }
+
+  /**
+   * The user left the sync's screen: ends the sync, unless it is live, which stays open outside
+   * Settings until it is ended, a lock or another flow (sync-protocol.md §10, D225).
+   */
+  leaveSync(): void {
+    const stage = this.#sync?.flow.stage;
+    if (stage?.kind === 'synced' && stage.live) return;
+    this.cancelSync();
+  }
+
+  /** The sync screen showed the result: the live session's notices are no longer new (D225). */
+  seenSync(): void {
+    this.#sync?.flow.seen();
   }
 
   #dropSync(reason: 'ended' | 'locked' = 'ended'): void {

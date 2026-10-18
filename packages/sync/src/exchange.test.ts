@@ -4,7 +4,14 @@
 import { Keyring, RecordType, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { type ExchangeOptions, SyncRefusal, exchange, selectRecords } from './exchange';
+import {
+  type ExchangeOptions,
+  type LiveOptions,
+  SyncRefusal,
+  exchange,
+  liveSession,
+  selectRecords,
+} from './exchange';
 import { type MemoryPairOptions, memoryPair } from './memory';
 import { IDLE_TIMEOUT_MS } from './channel-session';
 import { MAX_SUMMARY_ENTRIES, type SummaryEntry } from './sync-messages';
@@ -483,5 +490,184 @@ describe('summaries and transfer (sync-protocol.md §7, §9, D222)', () => {
     expect(a.error).toBeNull();
     await b.send({ t: 'committed' });
     expect(await waiting).toEqual({ t: 'committed' });
+  });
+});
+
+describe('live session (sync-protocol.md §10, D225)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** What one side of a live session merged and was told, transfer by transfer. */
+  function liveSide(overrides: Partial<LiveOptions<string>> = {}) {
+    const seen = {
+      live: 0,
+      merged: [] as Uint8Array[][],
+      results: [] as string[],
+      retired: [] as Uint8Array[],
+    };
+    const options: LiveOptions<string> = {
+      live: () => {
+        seen.live += 1;
+      },
+      merge: (records) => {
+        seen.merged.push([...records]);
+        return Promise.resolve(`merged ${String(records.length)}`);
+      },
+      merged: (result) => {
+        seen.results.push(result);
+        return Promise.resolve();
+      },
+      retired: (envelope) => {
+        seen.retired.push(envelope);
+        return Promise.resolve();
+      },
+      ...overrides,
+    };
+    return { seen, options };
+  }
+
+  /** Both sides ran the exchange; `a` sent `committed` and runs its live session. */
+  async function afterExchange(overrides: Partial<LiveOptions<string>> = {}) {
+    const { a, b } = await sessions();
+    await Promise.all([exchange(a, side([]).options), exchange(b, side([]).options)]);
+    await a.send({ t: 'committed' });
+    const sideA = liveSide(overrides);
+    const live = liveSession(a, sideA.options);
+    return { a, b, live, seen: sideA.seen };
+  }
+
+  it('merges each transfer of the peer whole, in order, after its committed, and sends what is pushed', async () => {
+    const { a, b } = await sessions();
+    await Promise.all([exchange(a, side([]).options), exchange(b, side([]).options)]);
+    await Promise.all([a.send({ t: 'committed' }), b.send({ t: 'committed' })]);
+    const sideA = liveSide();
+    const sideB = liveSide();
+    const liveA = liveSession(a, sideA.options);
+    const liveB = liveSession(b, sideB.options);
+    const ended = Promise.all([failure(liveA.done), failure(liveB.done)]);
+    // Two pushes started together leave one after the other: their messages never interleave.
+    await Promise.all([
+      liveA.push([Uint8Array.of(1), Uint8Array.of(2)]),
+      liveA.push([Uint8Array.of(3)]),
+      liveB.push([]),
+    ]);
+    await vi.waitFor(() => {
+      expect(sideB.seen.merged).toHaveLength(2);
+      expect(sideA.seen.merged).toHaveLength(1);
+    });
+    expect(sideB.seen.merged).toEqual([[Uint8Array.of(1), Uint8Array.of(2)], [Uint8Array.of(3)]]);
+    expect([sideA.seen.live, sideB.seen.live]).toEqual([1, 1]);
+    expect(sideB.seen.results).toEqual(['merged 2', 'merged 1']);
+    expect(sideA.seen.merged).toEqual([[]]);
+    await a.abort('ended');
+    expect(await ended).toEqual([
+      ['ended', 'local'],
+      ['ended', 'remote'],
+    ]);
+    // Once ended, a push sends nothing.
+    expect(await failure(liveA.push([Uint8Array.of(4)]))).toEqual(['ended', 'local']);
+  });
+
+  it.each([
+    [
+      'a transfer before the peer’s committed',
+      async (b: SyncSession) => {
+        await b.send({ t: 'records-begin', count: 0 });
+      },
+    ],
+    [
+      'a second committed',
+      async (b: SyncSession) => {
+        await b.send({ t: 'committed' });
+        await b.send({ t: 'committed' });
+      },
+    ],
+    [
+      'a summary after committed',
+      async (b: SyncSession) => {
+        await b.send({ t: 'committed' });
+        await b.send({ t: 'summary-begin', count: 0 });
+      },
+    ],
+    [
+      'a record outside a transfer',
+      async (b: SyncSession) => {
+        await b.send({ t: 'committed' });
+        await b.send({ t: 'record', r: Uint8Array.of(1) });
+      },
+    ],
+    [
+      'committed inside a transfer',
+      async (b: SyncSession) => {
+        await b.send({ t: 'committed' });
+        await b.send({ t: 'records-begin', count: 1 });
+        await b.send({ t: 'committed' });
+      },
+    ],
+  ])('aborts on %s, merging nothing (§11.1)', async (_case, script) => {
+    const { b, live, seen } = await afterExchange();
+    const result = failure(live.done);
+    await script(b).catch(() => undefined);
+    expect(await result).toEqual(['protocol-error', 'local']);
+    expect(seen.merged).toEqual([]);
+    expect(seen.live).toBe(_case === 'a transfer before the peer’s committed' ? 0 : 1);
+  });
+
+  it('merges nothing of a transfer an abort cuts (§11.2)', async () => {
+    const { b, live, seen } = await afterExchange();
+    const result = failure(live.done);
+    await b.send({ t: 'committed' });
+    await b.send({ t: 'records-begin', count: 2 });
+    await b.send({ t: 'record', r: Uint8Array.of(1) });
+    await b.abort('locked');
+    expect(await result).toEqual(['locked', 'remote']);
+    expect(seen.merged).toEqual([]);
+  });
+
+  it('merges a retired, then ends with the peer’s abort (§6, D69)', async () => {
+    const { b, live, seen } = await afterExchange();
+    const result = failure(live.done);
+    await b.send({ t: 'committed' });
+    await b.retire(Uint8Array.of(9));
+    expect(await result).toEqual(['retired-peer', 'remote']);
+    expect(seen.retired).toEqual([Uint8Array.of(9)]);
+  });
+
+  it('aborts with the reason the merge refuses with', async () => {
+    const { b, live } = await afterExchange({
+      merge: () => Promise.reject(new SyncRefusal('verification-failed')),
+    });
+    const result = failure(live.done);
+    await b.send({ t: 'committed' });
+    await b.send({ t: 'records-begin', count: 0 });
+    await b.send({ t: 'records-end' });
+    expect(await result).toEqual(['verification-failed', 'local']);
+  });
+
+  it('has no timeout once the peer committed, and one until then (§12)', async () => {
+    const { a, b } = await sessions();
+    await Promise.all([exchange(a, side([]).options), exchange(b, side([]).options)]);
+    await a.send({ t: 'committed' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const live = liveSession(a, liveSide().options);
+    const ended = failure(live.done);
+    await b.send({ t: 'committed' });
+    await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS * 5);
+    expect(a.error).toBeNull();
+    await b.abort('ended');
+    expect(await ended).toEqual(['ended', 'remote']);
+
+    const waiting = await sessions();
+    vi.useRealTimers();
+    await Promise.all([
+      exchange(waiting.a, side([]).options),
+      exchange(waiting.b, side([]).options),
+    ]);
+    await waiting.a.send({ t: 'committed' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const expiring = failure(liveSession(waiting.a, liveSide().options).done);
+    await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS);
+    expect(await expiring).toEqual(['expired', 'local']);
   });
 });
