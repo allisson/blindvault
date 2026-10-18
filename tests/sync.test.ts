@@ -19,6 +19,7 @@ import {
   HISTORY_LIMIT,
   type ItemInput,
   MAINTENANCE_INTERVAL_MS,
+  PURGE_DELAY_MS,
   type RecordStore,
   type SyncResult,
   VaultSession,
@@ -375,14 +376,14 @@ async function maintenance(check: () => void): Promise<void> {
   await vi.waitFor(check);
 }
 
-/** The summary entry of an item, as the session would send it. */
-function entryOf(session: VaultSession, id: Uint8Array) {
+/** The summary entry of an item, or of a record of `type`, as the session would send it. */
+function entryOf(session: VaultSession, id: Uint8Array, type: RecordType = RecordType.item) {
   const peer = session.devices().find((d) => !same(d.deviceId, session.deviceId));
   if (!peer) throw new Error('no peer');
   return session
     .openSync(peer.deviceId)
     .summary()
-    .find((e) => e.recordType === RecordType.item && same(e.recordId, id));
+    .find((e) => e.recordType === type && same(e.recordId, id));
 }
 
 describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-013)', () => {
@@ -477,5 +478,65 @@ describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-0
       expect(y.item(shared)).toBeUndefined();
     });
     expect(held(x)).toEqual(held(y));
+  });
+});
+
+describe('the trash and its purge over a sync (sync-protocol.md §1.3, §1.4, D7, D27, D94)', () => {
+  it.each(['x', 'y'] as const)(
+    'shows the same purge date on both, from the HLC of the tombstone, whichever device trashed (%s)',
+    async (trasher) => {
+      const { clock, x, y, shared } = await peers();
+      // Y's clock runs an hour behind X's: the date comes from the tombstone, not from either clock.
+      clock.y = -60 * MINUTE;
+      clock.t = T0 + 2 * 60 * MINUTE;
+      const from = trasher === 'x' ? x : y;
+      await from.trashItem(shared);
+      await sync(x, y);
+      const tombstone = entryOf(from, shared);
+      for (const session of [x, y]) {
+        expect(session.item(shared)).toMatchObject({
+          inTrash: true,
+          purgeAt: (tombstone?.hlc.physicalMs ?? 0) + PURGE_DELAY_MS,
+        });
+      }
+      expect(held(x)).toEqual(held(y));
+    },
+  );
+
+  it('purges on arrival an item in the trash past its date that the sender has not purged yet, with its history (D137)', async () => {
+    const { clock, x, y } = await peers();
+    clock.t = T0 + MINUTE;
+    const later = await y.createItem(login('Created on Phone'));
+    await y.updateItem(later, login('Edited on Phone'));
+    await y.trashItem(later);
+    // X's clock is past the purge date; Y's, an hour behind, is not yet.
+    clock.y = -60 * MINUTE;
+    clock.t = T0 + MINUTE + PURGE_DELAY_MS + 30 * MINUTE;
+    expect(history(y, later)).toHaveLength(2);
+
+    const [rx] = await sync(x, y);
+    expect(rx).toMatchObject({ added: 1, rejected: [], droppedLosers: [] });
+    expect(x.item(later)).toBeUndefined();
+    expect(x.versions(later)).toEqual([]);
+    // The tombstone is kept, under the header Y sent.
+    expect(entryOf(x, later)).toMatchObject({ deleted: true });
+    expect(entryOf(x, later)).toEqual(entryOf(y, later));
+    expect(y.item(later)).toMatchObject({ inTrash: true });
+  });
+
+  it('purges on arrival a folder in the trash past its date that the sender has not purged yet', async () => {
+    const { clock, x, y } = await peers();
+    clock.t = T0 + MINUTE;
+    const folder = await y.createFolder('Created on Phone');
+    await y.trashFolder(folder);
+    clock.y = -60 * MINUTE;
+    clock.t = T0 + MINUTE + PURGE_DELAY_MS + 30 * MINUTE;
+
+    const [rx] = await sync(x, y);
+    expect(rx).toMatchObject({ rejected: [] });
+    expect(x.folder(folder)).toBeUndefined();
+    expect(entryOf(x, folder, RecordType.folder)).toMatchObject({ deleted: true });
+    expect(entryOf(x, folder, RecordType.folder)).toEqual(entryOf(y, folder, RecordType.folder));
+    expect(y.folder(folder)).toMatchObject({ inTrash: true, name: 'Created on Phone' });
   });
 });
