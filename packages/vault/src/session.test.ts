@@ -1932,6 +1932,28 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     expect(a.store.ofType(RecordType.itemVersion)).toEqual([]);
   });
 
+  it('keeps the versions of a restore from the trash at a device that purged the item (D137)', async () => {
+    vi.useFakeTimers();
+    const { a, clockA, b, id } = await twoDevices();
+    clockA.t = T0 + 1000;
+    await a.session.updateItem(id, login('Edited on A'));
+    await a.session.trashItem(id);
+    await b.session.mergeBackup(await backupOf(a.session, 1, a.words));
+    clockA.t = T0 + 29 * DAY;
+    await a.session.restoreItem(id);
+    b.clock.t = T0 + 31 * DAY;
+    await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
+    expect(b.session.item(id)).toBeUndefined();
+    expect(b.store.ofType(RecordType.itemVersion)).toEqual([]);
+
+    const result = await b.session.mergeBackup(await backupOf(a.session, 1, a.words));
+    expect(result.droppedLosers).toEqual([]);
+    expect(b.session.item(id)).toMatchObject({ inTrash: false, item: { title: 'Edited on A' } });
+    const history = (s: VaultSession) => s.versions(id).map((v) => [v.hlc, v.item?.title]);
+    expect(a.session.versions(id)).toHaveLength(3);
+    expect(history(b.session)).toEqual(history(a.session));
+  });
+
   it('applies the history cut across held, received and losing versions, naming an own loser cut (D6, D70)', async () => {
     const { a, clockA, b, id } = await twoDevices();
     clockA.t = T0 + 1;
@@ -5714,6 +5736,33 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     expect(await rejection(x.grant.merge([...records, must(records[0])]))).toBe('protocol-error');
     expect(x.store.commits).toHaveLength(commits);
   });
+
+  it.each(['in the order sent', 'reversed'])(
+    'keeps the versions of a restore from the trash at a device that purged the item, %s (§1.4, D137)',
+    async (order) => {
+      vi.useFakeTimers();
+      const { clock, x, y } = await peers();
+      const id = must(x.session.items().find((i) => i.item?.title === 'From X')).id;
+      clock.t = T0 + 1000;
+      await x.session.updateItem(id, login('Edited on X'));
+      await x.session.trashItem(id);
+      await y.grant.merge(await x.grant.records(x.grant.summary()));
+      clock.t = T0 + 29 * DAY;
+      await x.session.restoreItem(id);
+      clock.t = T0 + 31 * DAY;
+      await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
+      expect(y.session.item(id)).toBeUndefined();
+      expect(y.session.versions(id)).toEqual([]);
+
+      const records = await x.grant.records(x.grant.summary());
+      const result = await y.grant.merge(order === 'reversed' ? records.reverse() : records);
+      expect(result).toMatchObject({ rejected: [], droppedLosers: [] });
+      expect(y.session.item(id)).toMatchObject({ inTrash: false, item: { title: 'Edited on X' } });
+      const history = (s: VaultSession) => s.versions(id).map((v) => [v.hlc, v.item?.title]);
+      expect(x.session.versions(id)).toHaveLength(3);
+      expect(history(y.session)).toEqual(history(x.session));
+    },
+  );
 
   it('does nothing once the vault locks (D93)', async () => {
     const { x, y } = await peers();

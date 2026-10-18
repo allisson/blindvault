@@ -16,18 +16,20 @@ import { VaultDatabase } from '@blindvault/storage';
 import { SyncSession, exchange, memoryPair, syncHandshake } from '@blindvault/sync';
 import {
   type ItemInput,
+  MAINTENANCE_INTERVAL_MS,
   type RecordStore,
   type SyncResult,
   VaultSession,
   parseLocalConfig,
 } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 beforeAll(initCrypto);
 
 const T0 = 1_760_000_000_000;
 const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 const PARAMS = { opslimit: 2, memlimit: MEMLIMIT };
 
 /** A reproducible KEK: a PRF KEK of a fixed output, standing in for Argon2id here. */
@@ -51,6 +53,7 @@ const sessions: VaultSession[] = [];
 const opened: VaultDatabase[] = [];
 
 afterEach(() => {
+  vi.useRealTimers();
   for (const s of sessions.splice(0)) s.lock();
   for (const d of opened.splice(0)) d.close();
 });
@@ -263,5 +266,35 @@ describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, �
     }
     expect(held(x)).toEqual(before);
     expect(held(y)).toEqual(before);
+  });
+});
+
+describe('a purged item over a sync (sync-protocol.md §1.4, D137)', () => {
+  it('keeps the versions of a restore from the trash at a device that purged the item', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await x.updateItem(shared, login('Edited on Laptop'));
+    await x.trashItem(shared);
+    await sync(x, y);
+    clock.t = T0 + 29 * DAY;
+    await x.restoreItem(shared);
+    // Y's purge runs at the 30 days of the trash: its tombstone loses its content and history.
+    clock.t = T0 + 31 * DAY;
+    await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
+    // The pass commits to IndexedDB, whose timers are real.
+    await vi.waitFor(() => {
+      expect(y.item(shared)).toBeUndefined();
+    });
+    expect(y.versions(shared)).toEqual([]);
+
+    const [, ry] = await sync(x, y);
+    expect(ry).toMatchObject({ rejected: [], droppedLosers: [] });
+    expect(y.item(shared)).toMatchObject({ inTrash: false });
+    expect(titleOf(y, shared)).toBe('Edited on Laptop');
+    // Before the edit, before the trash and before the restore, on both.
+    expect(history(x, shared)).toHaveLength(3);
+    expect(history(y, shared)).toEqual(history(x, shared));
+    expect(held(x)).toEqual(held(y));
   });
 });

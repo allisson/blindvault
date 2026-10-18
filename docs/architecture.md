@@ -462,6 +462,11 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Purged items over a sync (Phase 5, D137).** No code change: `#transferMerge` in
+  `packages/vault` cuts history against each item's final copy once the whole transfer is merged,
+  and `exchange` merges once per transfer. `tests/sync.test.ts` covers a restore from the trash
+  reaching a device whose purge ran, and `session.test.ts` the same over a sync transfer in both
+  orders and over a backup merge. No new dependency.
 - **Item losers on both devices (Phase 5, D223).** `selectRecords` in
   `packages/sync/src/exchange.ts` sends an Item whose `hlc` or format differs from the peer's,
   older too; the merge is unchanged. `tests/sync.test.ts` runs the real `Noise_KK` and exchange
