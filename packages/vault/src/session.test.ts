@@ -5632,6 +5632,54 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     expect(titles(x.session)).toContain('Good');
   });
 
+  it('rejects and reports a Recovery Envelope changed under the held phraseId, merging the rest (§1.3, D44)', async () => {
+    const { x, y } = await peers();
+    await y.session.createItem(login('Good'));
+    const keys = keysOf(x.store);
+    const held = must(x.session.recovery);
+    const phrase = typed(x.words);
+    // Newer than the held envelope: it would win last-write-wins if it were not rejected.
+    const forged = sealRecoveryEnvelope(
+      {
+        recordFormatVersion: RECORD_FORMAT_VERSION,
+        recordType: RecordType.recoveryEnvelope,
+        recordId: recoveryEnvelopeRecordId(keys.vaultId),
+        keyEpoch: 1,
+        hlc: hlcAt(T0 + 5000),
+        deleted: false,
+      },
+      keys.vaultId,
+      keys.vaultKey,
+      phrase.envelopeKey,
+      keys.masterKey,
+      new Map<CborValue, CborValue>([
+        ['keyslotPublicKey', held.keyslotPublicKey],
+        ['phraseCreatedAt', held.phraseCreatedAt],
+        ['phraseId', held.phraseId],
+      ]),
+    );
+    const sent = [
+      ...(await y.grant.records(y.grant.summary())).filter(
+        (r) => decodeEnvelope(r).header.recordType !== RecordType.recoveryEnvelope,
+      ),
+      forged,
+    ];
+    const result = await x.grant.merge(sent);
+    expect(result.rejected).toEqual([
+      {
+        reason: 'immutable-record',
+        record: {
+          recordType: RecordType.recoveryEnvelope,
+          recordId: recoveryEnvelopeRecordId(keys.vaultId),
+        },
+      },
+    ]);
+    expect(titles(x.session)).toContain('Good');
+    expect(x.session.recovery).toEqual(held);
+    expect(x.session.lastPhraseId).toEqual(held.phraseId);
+    expect(result.phraseChanged).toBe(false);
+  });
+
   it('rejects a record beyond the future-clock bound, then accepts it once the clock reaches it (§9, D19, D76)', async () => {
     const { clock, x, y } = await peers();
     const aheadId = randomId();

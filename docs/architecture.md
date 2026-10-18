@@ -462,6 +462,13 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Recovery Envelope over a sync (Phase 5, D2, D145).** No code change: the merge shared with the
+  backup merge takes an envelope of another `phraseId` by last-write-wins, rejects one changed
+  under the held `phraseId` (D44) and reports `phraseChanged` (D43) or `phraseSuperseded` (D145,
+  D185), which the `synced` screen shows through `MergeNotices`. `tests/sync.test.ts` covers a
+  regeneration reaching the other device, two concurrent ones and a later one after a sync;
+  `session.test.ts` the D44 rejection over a sync transfer; `apps/web/e2e/sync.spec.ts` both
+  notices on screen. No new dependency.
 - **Trash and purge over a sync (Phase 5, D7, D94).** No code change: the merge shared with the
   backup merge purges on arrival a tombstone past its purge date, `purgeAt` comes from the
   tombstone's `hlc`, and the trash offers only restore (D143). `tests/sync.test.ts` covers the same
