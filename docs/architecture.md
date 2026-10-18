@@ -462,6 +462,12 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Trash and purge over a sync (Phase 5, D7, D94).** No code change: the merge shared with the
+  backup merge purges on arrival a tombstone past its purge date, `purgeAt` comes from the
+  tombstone's `hlc`, and the trash offers only restore (D143). `tests/sync.test.ts` covers the same
+  purge date on both devices and an item and a folder purged on arrival, `session.test.ts` the
+  purge on arrival while read-only for a clock gone back (D73), and `apps/web/e2e/sync.spec.ts` the
+  same date on both screens with no way to purge by hand. No new dependency.
 - **Tombstones over a sync (Phase 5, D224).** `VaultDatabase.commit` deletes only Item Versions.
   `tests/sync.test.ts` covers a stale edit against a purged tombstone, a trashed folder, a purged
   tombstone never held and a purged against an unpurged copy; `apps/web/e2e/sync.spec.ts` an edit

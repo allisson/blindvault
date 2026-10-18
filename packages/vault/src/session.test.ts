@@ -5684,6 +5684,38 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     expect(session.writable).toBe(false);
   });
 
+  it.each(['writable', 'read-only for a clock gone back'])(
+    'purges on arrival an item in the trash past its date, with its history, %s (§1.3, §1.4, D7, D73, D94)',
+    async (state) => {
+      const { clock, x, y } = await peers();
+      clock.t = T0 + 1000;
+      const id = await y.session.createItem(login('On Y'));
+      await y.session.updateItem(id, login('Edited on Y'));
+      await y.session.trashItem(id);
+      const sent = await y.grant.records(y.grant.summary());
+      if (state !== 'writable') {
+        // X wrote with its clock 40 days ahead, then the clock came back past the purge date.
+        clock.t = T0 + 40 * DAY;
+        await x.session.createItem(login('Ahead on X'));
+      }
+      clock.t = T0 + 1000 + PURGE_DELAY_MS;
+      x.session.lock();
+      const session = await unlock(x.store, clock);
+      expect(session.writable).toBe(state === 'writable');
+      const grant = session.openSync(y.session.deviceId);
+      const result = await grant.merge(sent);
+      expect(result).toMatchObject({ added: 1, rejected: [], droppedLosers: [] });
+      expect(session.item(id)).toBeUndefined();
+      expect(session.versions(id)).toEqual([]);
+      // The tombstone is kept, under the header Y sent.
+      const entry = grant
+        .summary()
+        .find((e) => e.recordType === RecordType.item && sameId(e.recordId, id));
+      expect(entry).toMatchObject({ deleted: true, hlc: must(y.session.item(id)).hlc });
+      expect(session.writable).toBe(state === 'writable');
+    },
+  );
+
   it('merges the peer’s own record retired in a transfer, so the check of §6 finds it (D69, D220)', async () => {
     const { x, y } = await peers();
     // A third device retired X; Y carries that record.

@@ -440,7 +440,11 @@ again, then sends `committed`. The merge runs once over the whole transfer, so s
 history against each item's final copy: a restore from the trash reaching a device that purged the
 item keeps the versions arriving with it, in any order (D137). Both devices cut the union of the
 same versions, so one sync leaves them the same 20 per item (D6), and the sync result shows the
-notice of section 1.6 for a conflict loser this device wrote (D70).
+notice of section 1.6 for a conflict loser this device wrote (D70). A tombstone with content past its purge date
+is purged on arrival by that same merge (section 1.3), the vault read-only for a clock gone back
+included (D73, D94), and its versions are dropped with it (D137). The purge date is the
+tombstone's `hlc` plus 30 days, never either device's clock, so both devices show the same date
+and purge at it, each by its own clock (D7); the trash offers no manual purge (D94).
 
 ## 10. Live session
 

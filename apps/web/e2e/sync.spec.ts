@@ -11,7 +11,8 @@ import { fillPassword } from './password';
 // on one ends the other with `abort` (D218); between them, each gets the records the other lacks
 // (D222), and concurrent edits converge in that one sync, the loser in the history of both (D223),
 // cut to the same 20 versions, the device whose edit the cut dropped telling its user (D6, D70);
-// an older edit never brings a trashed item back (CRYPTO-INV-013). A
+// an older edit never brings a trashed item back (CRYPTO-INV-013), and an item trashed on one is in
+// the trash of both with the same purge date and no way to purge it by hand (D7, D94). A
 // device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
@@ -361,4 +362,37 @@ test('an edit older than a trash never brings the item back: in the trash on bot
     const versions = page.locator('article').getByRole('listitem');
     await expect(versions.filter({ hasText: 'ACME on A' })).toHaveCount(1);
   }
+});
+
+test('an item trashed on A is in the trash of both with the same purge date, offering only restore (D7, D94, D143)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await newLogin(a, 'ACME');
+  await button(a, 'Settings').click();
+  await synced(a, b);
+  await closed(a, b);
+  await button(b, 'Open the vault').click();
+
+  await button(a, 'ACME').click();
+  await button(a, 'Move to trash').click();
+  await button(a, 'Settings').click();
+  await button(b, 'Settings').click();
+  await synced(a, b);
+
+  await closed(a, b);
+  const dates: string[] = [];
+  for (const page of [a, b]) {
+    await expect(page.getByText('No items yet.')).toBeVisible();
+    await button(page, 'Trash').click();
+    await button(page, 'ACME').click();
+    const notice = page.getByText(/It can only be restored; it is deleted for good on /);
+    await expect(notice).toBeVisible();
+    dates.push((await notice.textContent()) ?? '');
+    // Purge is automatic only: nothing deletes it by hand (D94).
+    await expect(button(page, 'Restore')).toBeVisible();
+    await expect(page.getByRole('button', { name: /delete|purge|empty/i })).toHaveCount(0);
+  }
+  expect(dates[1]).toBe(dates[0]);
 });
