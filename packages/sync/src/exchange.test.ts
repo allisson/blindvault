@@ -210,7 +210,8 @@ describe('summaries and transfer (sync-protocol.md §7, §9, D222)', () => {
     await Promise.all([exchange(a, sideA.options), exchange(b, sideB.options)]);
     expect(sideB.seen.merged[0]).toHaveLength(MAX_SUMMARY_ENTRIES + 1);
     expect(sideA.seen.merged).toEqual([[]]);
-  });
+    // Over 16,384 entries each way, under coverage: about 5 s on a CI runner, past the default.
+  }, 30_000);
 
   it('sends the summary in messages of at most 16,384 entries', async () => {
     const sizes: number[] = [];
