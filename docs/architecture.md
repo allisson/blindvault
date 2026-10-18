@@ -470,6 +470,11 @@ every project through the references in the root `tsconfig.json`.
   adds each live merge's result to the sync's; the controller keeps a live sync when Settings
   closes (`leaveSync`), `cancelPairing` ends only the pairing, and `VaultShell` shows the live bar.
   No new dependency.
+- **Sync state in the UI (Phase 5, D226).** `src/app/devices.ts` in `apps/web` gives `syncs` (a
+  sync offered at all), `lastSyncOf` (the latest sync with any peer and its name) and
+  `peerSyncState` (`syncing` or `live` from the sync's stage). Settings › Devices shows the state on
+  the peer's row, and `DeviceStorage` the latest sync below the last backup, both with the time. No
+  new dependency.
 - **Recovery Envelope over a sync (Phase 5, D2, D145).** No code change: the merge shared with the
   backup merge takes an envelope of another `phraseId` by last-write-wins, rejects one changed
   under the held `phraseId` (D44) and reports `phraseChanged` (D43) or `phraseSuperseded` (D145,

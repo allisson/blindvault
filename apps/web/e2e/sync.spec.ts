@@ -16,7 +16,7 @@ import { fillPassword } from './password';
 // Phrase regenerated on one reaches the other, which tells its user, and of two regenerations the
 // device whose phrase lost is warned and offered a backup (D43, D145, D185); once both committed,
 // the session stays live outside Settings and an edit reaches the peer at once, until End or a lock
-// (D225). A
+// (D225); Settings shows the sync on its peer's row and the last sync, with its time, on both (D226). A
 // device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
@@ -501,4 +501,34 @@ test('a lock ends the live sync on both (D93, D225)', async ({ browser }) => {
   await expect(a.getByTestId('live-sync')).toBeVisible();
   await button(b, 'Lock').click();
   await expect(a.getByTestId('live-sync')).toHaveCount(0, { timeout: 30_000 });
+});
+
+test('Settings shows the sync on the row of its peer while it runs, and the last sync with its time on both (D34, D226)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  // The pairing is the first completed sync (D34).
+  for (const page of [a, b]) {
+    await expect(page.getByTestId('device-last-sync-any')).toHaveText(/^Last sync: .+, with .+\.$/);
+    await expect(page.getByTestId('device-sync-state')).toHaveCount(0);
+  }
+  const before = await a.getByTestId('device-last-sync').innerText();
+  await synced(a, b);
+  for (const page of [a, b]) {
+    await expect(page.getByTestId('device-sync-state')).toHaveAttribute('data-state', 'live', {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId('device-sync-state')).toHaveText('Live sync');
+    await expect(page.getByTestId('device-last-sync')).toHaveText(
+      /^Last synced with this device: .+\d{1,2}:\d{2}/,
+    );
+    await expect(page.getByTestId('device-last-sync-any')).toHaveText(
+      /^Last sync: .+\d{1,2}:\d{2}.*, with .+\.$/,
+    );
+  }
+  expect(before).toMatch(/\d{1,2}:\d{2}/);
+  await a.getByTestId('sync-close').click();
+  for (const page of [a, b]) {
+    await expect(page.getByTestId('device-sync-state')).toHaveCount(0, { timeout: 30_000 });
+  }
 });

@@ -1,9 +1,9 @@
 import { RecordType } from '@blindvault/crypto';
 import { type Preferences, type SyncPurpose, type VaultSession } from '@blindvault/vault';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { download, phraseLabel } from '../app/backup-file';
-import { devicesOf, eraseAdvice } from '../app/devices';
+import { devicesOf, eraseAdvice, peerSyncState } from '../app/devices';
 import { type Navigation, type SettingsFocus } from '../app/nav';
 import {
   type BackupExport,
@@ -513,8 +513,11 @@ function DeviceSettings({
     const peer = controller.syncPeer;
     return peer ? { id: hex(peer.deviceId), purpose: 'sync' } : undefined;
   });
+  // The open sync on its peer's row, and its dates once it commits (D226).
+  const stage = useSyncExternalStore(controller.subscribe, () => controller.sync);
+  const syncing = useSyncExternalStore(controller.subscribe, () => controller.syncPeer);
   const devices = devicesOf(session);
-  const syncs = devices.registered && !session.retired;
+  const { syncs } = devices;
   const isPeer = (d: { deviceId: Uint8Array }) => hex(d.deviceId) === syncWith?.id;
   // A sync's peer retired during it stays found, so the sync shows why it ended (D220).
   const peer =
@@ -522,6 +525,9 @@ function DeviceSettings({
       ? devices.retired.find(isPeer)
       : (devices.listed.find((d) => !d.own && isPeer(d)) ?? devices.retired.find(isPeer));
   const date = new Intl.DateTimeFormat(language, { dateStyle: 'long' });
+  // Two syncs on one day are told apart, as the last backup is (D226).
+  const synced = new Intl.DateTimeFormat(language, { dateStyle: 'long', timeStyle: 'short' });
+  const state = peerSyncState(stage);
   return (
     <section className="flex flex-col gap-4" data-testid="devices" data-section="devices">
       <h2 tabIndex={-1} className="font-semibold">
@@ -560,9 +566,14 @@ function DeviceSettings({
                   <span className="text-zinc-500" data-testid="device-last-sync">
                     {d.lastSyncAt === undefined
                       ? m.settings.devicesNeverSynced
-                      : format(m.settings.devicesLastSync, { date: date.format(d.lastSyncAt) })}
+                      : format(m.settings.devicesLastSync, { date: synced.format(d.lastSyncAt) })}
                   </span>
                 )}
+                {state && syncing && !d.own && hex(syncing.deviceId) === id ? (
+                  <span role="status" data-testid="device-sync-state" data-state={state}>
+                    {state === 'live' ? m.settings.devicesLive : m.settings.devicesSyncing}
+                  </span>
+                ) : null}
                 {d.pending ? (
                   <span className="text-amber-700 dark:text-amber-400" data-testid="device-pending">
                     {m.settings.devicesPending}

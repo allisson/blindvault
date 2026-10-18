@@ -1,8 +1,11 @@
 // What Settings shows of the Device records (§8.4, D30, D34, D119, D186): the non-retired ones, this
 // device's first, with the last completed sync with each, the retired ones, which can be told they
-// are retired (D219), and the advice for an unregistered or only device.
+// are retired (D219), and the advice for an unregistered or only device; the sync state: the latest
+// sync with any peer, and the open sync on its peer's row (§13.2, D226).
 
 import { type DeviceView } from '@blindvault/vault';
+
+import { type SyncStage } from './sync';
 
 export interface ListedDevice extends DeviceView {
   /** This device's own record. */
@@ -25,6 +28,11 @@ export type DeviceAdvice = 'readmit' | 'only-device';
 
 export interface Devices {
   readonly registered: boolean;
+  /**
+   * A sync is offered with each other listed record, and a retirement notice with each retired one:
+   * this device holds its own Device record, not retired (D41, D113, D216, D219).
+   */
+  readonly syncs: boolean;
   readonly listed: readonly ListedDevice[];
   /** The retired Device records, by name. */
   readonly retired: readonly DeviceView[];
@@ -35,6 +43,8 @@ export interface Devices {
 export interface DeviceSource {
   readonly deviceId: Uint8Array;
   readonly registered: boolean;
+  /** This device's own Device record is retired (D41). */
+  readonly retired: boolean;
   devices(): readonly DeviceView[];
   readonly lastSyncByPeer: readonly (readonly [Uint8Array, number])[];
 }
@@ -66,6 +76,7 @@ export function devicesOf(session: DeviceSource): Devices {
   const { registered } = session;
   return {
     registered,
+    syncs: registered && !session.retired,
     listed,
     retired,
     retiredCount: retired.length,
@@ -87,4 +98,37 @@ export function eraseAdvice(devices: Devices | undefined): EraseAdvice {
   if (devices.advice === 'only-device') return { kind: 'only-device' };
   const own = devices.listed.find((d) => d.own);
   return own ? { kind: 'named', name: own.device.displayName } : { kind: 'unregistered' };
+}
+
+/** The latest completed sync with any peer, named by its Device record when held, retired or not. */
+export interface LastSync {
+  readonly at: number;
+  readonly name?: string;
+}
+
+export function lastSyncOf(session: DeviceSource): LastSync | undefined {
+  let latest: readonly [Uint8Array, number] | undefined;
+  for (const pair of session.lastSyncByPeer) if (!latest || pair[1] > latest[1]) latest = pair;
+  if (!latest) return undefined;
+  const [peer, at] = latest;
+  const name = session.devices().find((d) => sameId(d.deviceId, peer))?.device.displayName;
+  return name === undefined ? { at } : { at, name };
+}
+
+/**
+ * What the peer's row says of the sync with it (D225, D226): `syncing` once the connection opens
+ * until both committed, `live` after; nothing while the codes are exchanged or once it ended.
+ */
+export type PeerSyncState = 'syncing' | 'live';
+
+export function peerSyncState(stage: SyncStage | undefined): PeerSyncState | undefined {
+  switch (stage?.kind) {
+    case 'connecting':
+    case 'connected':
+      return 'syncing';
+    case 'synced':
+      return stage.live ? 'live' : 'syncing';
+    default:
+      return undefined;
+  }
 }

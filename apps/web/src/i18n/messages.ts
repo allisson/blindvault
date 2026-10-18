@@ -57,6 +57,9 @@ const en = {
     unknown: 'This browser does not say whether it keeps this vault’s storage.',
     usage: 'Storage used by BlindVault on this device: {used} of {quota} available ({percent}).',
     usageUnknown: 'This browser does not report how much storage BlindVault uses.',
+    syncLast: 'Last sync: {date}, with {name}.',
+    syncLastUnnamed: 'Last sync: {date}.',
+    syncNever: 'This device has not synced with another device yet.',
     ask: 'Ask the browser to keep the storage',
     refused:
       'The browser did not agree to keep the storage. Browsers decide this by their own rules, such as an installed app or a site used often.',
@@ -837,6 +840,8 @@ const en = {
     devicesRegistered: 'Registered on {date}',
     devicesLastSync: 'Last synced with this device: {date}',
     devicesNeverSynced: 'Last synced with this device: never',
+    devicesSyncing: 'Syncing now',
+    devicesLive: 'Live sync',
     devicesPending:
       'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
     devicesPendingRetire:
@@ -1004,6 +1009,9 @@ const ptBR: Messages = {
     usage:
       'Espaço usado pelo BlindVault neste dispositivo: {used} de {quota} disponíveis ({percent}).',
     usageUnknown: 'Este navegador não informa quanto espaço o BlindVault usa.',
+    syncLast: 'Última sincronização: {date}, com {name}.',
+    syncLastUnnamed: 'Última sincronização: {date}.',
+    syncNever: 'Este dispositivo ainda não sincronizou com outro dispositivo.',
     ask: 'Pedir ao navegador para manter o armazenamento',
     refused:
       'O navegador não aceitou manter o armazenamento. Os navegadores decidem isso por regras próprias, como uma app instalada ou um site usado com frequência.',
@@ -1792,6 +1800,8 @@ const ptBR: Messages = {
     devicesRegistered: 'Registrado em {date}',
     devicesLastSync: 'Última sincronização com este dispositivo: {date}',
     devicesNeverSynced: 'Última sincronização com este dispositivo: nunca',
+    devicesSyncing: 'Sincronizando agora',
+    devicesLive: 'Sincronização ao vivo',
     devicesPending:
       'Pareamento não concluído: este dispositivo nunca recebeu a confirmação de que o outro guardou o cofre.',
     devicesPendingRetire:

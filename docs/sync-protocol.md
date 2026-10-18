@@ -186,6 +186,11 @@ each whether it shows its code first (I) or reads the other's (R). No password i
 leaves the device. Each code is shown as a QR code and as text, and read with the camera or pasted
 (section 4.4). Only one flow runs at a time: a sync and a pairing or re-admission end each other.
 
+**State (D226).** Settings offers as peers only the Device records this device holds, not retired
+and not its own, so the user cannot pick a device `openSync` would refuse. The peer's row says
+"Syncing now" from the connection until both sent `committed`, then "Live sync" (section 10);
+"This device" shows the latest sync with any peer, with its time and the peer's name.
+
 ## 4. Reconnection payload
 
 ### 4.1 Bytes
