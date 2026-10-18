@@ -326,7 +326,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Summary exchange and transfer of divergent records only; its own Device record received retired in a transfer ends the session after its commit, and a merged transfer checks the peer's record again (D69, D220); the merge issues no HLC and runs while the vault is read-only for a clock gone back (D73, D109, D221); §7 to §9, D222
 - [x] Per-item LWW merge, with the losing version stored in history; a differing Item is sent both ways, so one sync leaves the loser on both devices (D6, D56, §1.3, §8, D223)
 - [x] An Item Version is dropped for a purged item only once the whole transfer is merged, so a restore from the trash arriving with its versions keeps them (D137); the merge shared with the backup merge, run once per transfer
-- [ ] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70)
+- [x] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70); one sync leaves both devices the same 20, the notice on the sync result
 - [ ] Tombstones synchronized and kept indefinitely
 - [ ] Trash with deterministic, automatic-only purge; no manual purge (D7, D94)
 - [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user, naming the superseded phrase and offering a new backup (D2, D145)
