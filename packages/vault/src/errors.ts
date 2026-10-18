@@ -207,16 +207,20 @@ export class SyncRefusedError extends VaultError {
 }
 
 /**
- * Why a sync session stops on this device (sync-protocol.md §6, §11.2, D219): the abort reason it
- * sends. `verification-failed`: the peer's retired record it was about to send fails verification;
- * `protocol-error`: a `retired` that is not this device's own Device record, retired and valid.
+ * Why a sync session stops on this device (sync-protocol.md §6, §8, §11.2, D219, D222): the abort
+ * reason it sends. `verification-failed`: a record it was about to send, named by `record`, or the
+ * peer's retired record, fails verification; `protocol-error`: a `retired` that is not this
+ * device's own Device record, retired and valid, or a transfer holding two records of one identity.
  * Nothing was written.
  */
 export type SyncRejection = 'verification-failed' | 'protocol-error';
 
 export class SyncRejectedError extends VaultError {
   override name = 'SyncRejectedError';
-  constructor(readonly reason: SyncRejection) {
+  constructor(
+    readonly reason: SyncRejection,
+    readonly record?: RecordKey,
+  ) {
     super(`sync rejected: ${reason}`);
   }
 }

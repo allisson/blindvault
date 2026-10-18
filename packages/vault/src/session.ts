@@ -395,9 +395,13 @@ export interface PairingGrant {
   wipe(): void;
 }
 
-/** A record a re-admission rejected and did not merge (sync-protocol.md §2.3, D206). */
+/**
+ * A record a re-admission or a sync rejected and did not merge (sync-protocol.md §2.3, §9, D206,
+ * D222). `unsupported-format` comes only from a sync: a re-admission aborts instead.
+ */
 export interface RejectedRecord {
-  readonly reason: 'verification-failed' | 'future-clock' | 'immutable-record';
+  readonly reason:
+    'verification-failed' | 'future-clock' | 'immutable-record' | 'unsupported-format';
   /** Absent for an envelope that does not even decode. */
   readonly record?: RecordKey;
 }
@@ -445,6 +449,22 @@ export interface ReadmissionGrant {
   merge(envelopes: readonly Uint8Array[], peerPublicKey: Uint8Array): Promise<ReadmissionResult>;
 }
 
+/** One record as a sync summary lists it (sync-protocol.md §7): the six fields of its header. */
+export interface RecordSummary {
+  readonly recordFormatVersion: number;
+  readonly recordType: number;
+  readonly recordId: Uint8Array;
+  readonly hlc: Hlc;
+  readonly deleted: boolean;
+  readonly keyEpoch: number;
+}
+
+/** A sync merge (sync-protocol.md §9, D222): what a re-admission reports, and whether it retired this device. */
+export interface SyncResult extends ReadmissionResult {
+  /** This device's own Device record arrived retired: the session ends after the commit (D69). */
+  readonly ownRetired: boolean;
+}
+
 /**
  * A sync with one peer on this device (sync-protocol.md §3, §4, D216): what the reconnection payload
  * and `Noise_KK` take. No key leaves the session but the identity's handle.
@@ -469,6 +489,23 @@ export interface SyncGrant {
    * Device record, retired, passing verification on receipt and within the future-clock bound.
    */
   mergeOwnRetirement(envelope: Uint8Array): Promise<MergeResult>;
+  /** §7: the header of every record held, but those kept aside as corrupt at unlock (D182). */
+  summary(): RecordSummary[];
+  /**
+   * §8: the stored envelopes of `selected`, in its order, read again and verified (D181); one no
+   * longer stored is skipped. `SyncRejectedError` (`verification-failed`) names a record that fails.
+   */
+  records(
+    selected: readonly { readonly recordType: number; readonly recordId: Uint8Array }[],
+  ): Promise<Uint8Array[]>;
+  /**
+   * §9: merges the peer's records by section 1 without 1.1 and records the completed sync with it,
+   * in one commit; issues no HLC, so it runs while the vault is read-only (D73). A record that fails
+   * verification, is of an unknown format or type, is beyond the future-clock bound or breaks D42 or
+   * D44 is rejected and reported, and the rest merges. Two records of one identity
+   * (`SyncRejectedError`, `protocol-error`) write nothing.
+   */
+  merge(envelopes: readonly Uint8Array[]): Promise<SyncResult>;
 }
 
 /** A sync, or a sync that only tells a retired peer it is retired (sync-protocol.md §3, D219). */
@@ -2226,7 +2263,63 @@ export class VaultSession {
       peerName: peer.device.value.displayName,
       peerRetirement: () => this.#run(() => this.#peerRetirement(id)),
       mergeOwnRetirement: (envelope) => this.#run(() => this.#ownRetirement(envelope)),
+      summary: () => {
+        this.#unlocked();
+        return this.#summary();
+      },
+      records: (selected) => this.#run(() => this.#syncRecords(selected)),
+      merge: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id)),
     };
+  }
+
+  /** §7: every header held; a record kept aside as corrupt is in none of these maps. */
+  #summary(): RecordSummary[] {
+    const state = this.#state;
+    const headers: RecordHeader[] = [
+      ...state.vaultKeyHeaders.values(),
+      ...[...state.items.values()].map((h) => h.header),
+      ...[...state.versions.values()].flatMap((byId) => [...byId.values()].map((h) => h.header)),
+      ...[...state.folders.values()].map((h) => h.header),
+      ...[...state.devices.values()].map((h) => h.header),
+      ...(state.recovery ? [state.recovery.header] : []),
+    ];
+    return headers.map((h) => ({
+      recordFormatVersion: h.recordFormatVersion,
+      recordType: h.recordType,
+      recordId: h.recordId.slice(),
+      hlc: copyHlc(h.hlc),
+      deleted: h.deleted,
+      keyEpoch: h.keyEpoch,
+    }));
+  }
+
+  /** §8 with D181: what is sent is read again from storage and verified, as an export does. */
+  async #syncRecords(
+    selected: readonly { readonly recordType: number; readonly recordId: Uint8Array }[],
+  ): Promise<Plan<Uint8Array[]>> {
+    const stored = new Map((await this.#store.records()).map((r) => [recordKeyOf(r), r]));
+    this.#unlocked();
+    const sent = selected.flatMap((k) => stored.get(recordKeyOf(k)) ?? []);
+    const scratch = new Keyring();
+    try {
+      this.#verifyAll(scratch, sent, (k) => new SyncRejectedError('verification-failed', k));
+    } finally {
+      scratch.wipeAll();
+    }
+    return { writes: [], deletes: [], result: sent.map((r) => r.envelope.slice()) };
+  }
+
+  /** §9: the merge of a re-admission, with what a sync does differently (D222). */
+  #syncMerge(envelopes: readonly Uint8Array[], peerId: Uint8Array): Plan<SyncResult> {
+    const plan = this.#transferMerge(envelopes, peerId, 'sync');
+    const own = idKey(this.#identity.deviceId);
+    const ownRetired = plan.writes.some(
+      (w) =>
+        w.header.recordType === (RecordType.device as number) &&
+        idKey(w.header.recordId) === own &&
+        this.#state.devices.get(own)?.device.value.retired !== true,
+    );
+    return { ...plan, result: { ...plan.result, ownRetired } };
   }
 
   /** §6: the peer's retired Device record as stored, verified again (D181), or nothing to send. */
@@ -2336,7 +2429,7 @@ export class VaultSession {
           return { writes: [], deletes: [], result: stored.map((r) => r.envelope) };
         }),
       merge: (envelopes, peerPublicKey) =>
-        this.#run(() => this.#readmissionMerge(envelopes, deviceId(peerPublicKey))),
+        this.#run(() => this.#transferMerge(envelopes, deviceId(peerPublicKey), 'readmission')),
     };
   }
 
@@ -2376,16 +2469,27 @@ export class VaultSession {
     });
   }
 
-  /** sync-protocol.md §2.3 with D206: reject and report, merge the rest, record the sync. */
-  #readmissionMerge(envelopes: readonly Uint8Array[], peerId: Uint8Array): Plan<ReadmissionResult> {
+  /**
+   * sync-protocol.md §2.3 with D206, and §9 with D222: reject and report, merge the rest, record the
+   * sync. A re-admission refuses the whole transfer for a newer record or the peer's own record
+   * retired; a sync rejects the one and merges the other, which the check of §6 then finds.
+   */
+  #transferMerge(
+    envelopes: readonly Uint8Array[],
+    peerId: Uint8Array,
+    kind: 'readmission' | 'sync',
+  ): Plan<ReadmissionResult> {
     const { vaultId } = this.#cleartext;
     const rejected: RejectedRecord[] = [];
-    // A newer record refuses the whole transfer before anything else (D206).
-    const decoded = envelopes.map((envelope): Envelope | undefined => {
+    const decoded = envelopes.map((envelope): Envelope | 'newer' | undefined => {
       try {
         return decodeEnvelope(envelope);
       } catch (error) {
-        if (error instanceof NewerRecordError) throw new JoinRejectedError('unsupported-format');
+        if (error instanceof NewerRecordError) {
+          // A re-admission refuses the whole transfer before anything else (D206).
+          if (kind === 'readmission') throw new JoinRejectedError('unsupported-format');
+          return 'newer';
+        }
         if (error instanceof RecordRejectedError) return undefined;
         throw error;
       }
@@ -2393,12 +2497,20 @@ export class VaultSession {
     const identities = new Set<string>();
     let candidates: StoredRecord[] = [];
     for (const e of decoded) {
+      if (e === 'newer') {
+        rejected.push({ reason: 'unsupported-format' });
+        continue;
+      }
       if (!e) {
         rejected.push({ reason: 'verification-failed' });
         continue;
       }
       const key = recordKeyOf(e.header);
-      if (identities.has(key)) throw new JoinRejectedError('protocol-error');
+      if (identities.has(key)) {
+        throw kind === 'sync'
+          ? new SyncRejectedError('protocol-error')
+          : new JoinRejectedError('protocol-error');
+      }
       identities.add(key);
       const recordKey = headerKey(e.header);
       if (this.#clock.beyondBound(e.header.hlc)) {
@@ -2431,7 +2543,10 @@ export class VaultSession {
           candidates = candidates.filter((c) => !bad.has(recordKeyOf(c)));
           continue;
         }
-        if (incoming.state.devices.get(idKey(peerId))?.device.value.retired) {
+        if (
+          kind === 'readmission' &&
+          incoming.state.devices.get(idKey(peerId))?.device.value.retired
+        ) {
           throw new JoinRejectedError('retired-peer');
         }
         const plan = this.#mergePlan(incoming.state, candidates);

@@ -3,6 +3,8 @@
 // Every failure ends the session on both sides at once: a local one sends `abort` with its reason
 // and closes the channel; a received `abort` closes it; a closed or broken link, a frame that fails
 // decryption included, ends it with no message. Once ended, every call rejects with the same error.
+// Messages leave one at a time, so the frames of two never interleave, and `abort` leaves after the
+// message being sent and before any other (D222).
 
 import { FrameError, FrameReader, toFrames } from './frames';
 import { MessageError, type MessageRejection } from './message-codec';
@@ -58,6 +60,8 @@ export class ChannelSession<M, R extends string, E extends SessionError<R>> {
   protected expiry: ReturnType<typeof setTimeout> | undefined;
   protected idle = false;
   private reading = false;
+  /** The message being sent, then each one waiting: sends run one at a time. */
+  private sending: Promise<void> = Promise.resolve();
   /** A message read ahead after the link closed while no stage was reading. */
   private ahead: Promise<M> | null = null;
   /** Resolves with the error once the session has ended, for whatever reason. */
@@ -92,21 +96,31 @@ export class ChannelSession<M, R extends string, E extends SessionError<R>> {
   }
 
   /**
-   * Sends `message`. Its encoding and frames are wiped once sent, since a message may hold a key
+   * Sends `message`, after every message whose send started before it; an `abort` started before it
+   * sends none of it. Its encoding and frames are wiped once sent, since a message may hold a key
    * (D202); `message` itself stays the caller's to wipe.
    */
   async send(message: M): Promise<void> {
     if (this.failure) throw this.failure;
     const bytes = this.protocol.encode(message);
     const frames = toFrames(bytes);
-    try {
-      for (const frame of frames) await this.channel.send(frame);
-    } catch (error) {
-      throw this.lost(error);
-    } finally {
-      bytes.fill(0);
-      for (const frame of frames) frame.fill(0);
-    }
+    await this.queue(async () => {
+      try {
+        for (const frame of frames) await this.channel.send(frame);
+      } catch (error) {
+        throw await this.refused(error);
+      } finally {
+        bytes.fill(0);
+        for (const frame of frames) frame.fill(0);
+      }
+    });
+  }
+
+  /** Runs `job` once every send before it has run. */
+  private queue(job: () => Promise<void>): Promise<void> {
+    const run = this.sending.then(job);
+    this.sending = run.catch(() => undefined);
+    return run;
   }
 
   /** The next message. A received `abort` ends the session and rejects with its reason. */
@@ -164,23 +178,28 @@ export class ChannelSession<M, R extends string, E extends SessionError<R>> {
   }
 
   /**
-   * Ends the session: sends `abort` with `reason` when the channel is still open, then closes it.
-   * Resolves with the error the session ended with, which is an earlier one if it had already
-   * ended.
+   * Ends the session: sends `last` when given, then `abort` with `reason`, when the channel is still
+   * open, then closes it. Both leave after the message being sent, and nothing after them. Resolves
+   * with the error the session ended with, which is an earlier one if it had already ended.
    */
-  async abort(reason: R | SessionReason, cause?: unknown): Promise<E> {
+  async abort(reason: R | SessionReason, cause?: unknown, last?: M): Promise<E> {
     if (this.failure) return this.failure;
     const error = this.end(
       this.protocol.error(reason, 'local', cause === undefined ? undefined : { cause }),
     );
-    try {
-      for (const frame of toFrames(this.protocol.encode(this.protocol.abort(reason)))) {
-        await this.channel.send(frame);
+    const messages = [...(last === undefined ? [] : [last]), this.protocol.abort(reason)];
+    await this.queue(async () => {
+      try {
+        for (const message of messages) {
+          for (const frame of toFrames(this.protocol.encode(message))) {
+            await this.channel.send(frame);
+          }
+        }
+      } catch {
+        // The link is already gone: the peer learns of the end from the close.
       }
-    } catch {
-      // The link is already gone: the peer learns of the end from the close.
-    }
-    this.channel.close();
+      this.channel.close();
+    });
     return error;
   }
 
@@ -202,6 +221,26 @@ export class ChannelSession<M, R extends string, E extends SessionError<R>> {
     return this.channel.receive().finally(() => {
       clearTimeout(timer);
     });
+  }
+
+  /**
+   * The error for a send the link refused. When the peer closed it, the frames still to read may
+   * hold its `abort`, whose reason stands over the close (§11.2).
+   */
+  private async refused(error: unknown): Promise<E> {
+    if (this.failure) return this.failure;
+    if (!(error instanceof TransportClosedError) || error.by === 'local') return this.lost(error);
+    // A stage reading ends the session itself, with the peer's reason or the close.
+    if (this.reading) return this.ended;
+    const ahead = this.ahead ?? this.read();
+    this.ahead = ahead;
+    try {
+      await ahead;
+    } catch {
+      // The session ended on what was left: its error is returned below.
+    }
+    // Read through the getter: the session may have ended while this waited.
+    return this.error ?? this.lost(error);
   }
 
   /** The error for a failed send or receive: the session's own, or the link's close. */
