@@ -3,7 +3,7 @@
 // IndexedDB (sync-protocol.md §1, §7 to §9, D6, D56, D222, D223). The app wires sync to the vault
 // the same way, with the checks of §6 and `committed` around it.
 
-import { parseBackup, restoreWithPhrase } from '@blindvault/backup';
+import { BackupRejectedError, parseBackup, restoreWithPhrase } from '@blindvault/backup';
 import {
   Keyring,
   MEMLIMIT,
@@ -118,7 +118,7 @@ async function peers() {
   await gx.admit({ own: false, peer: true }, gy.identity.publicKey, 'Phone', 'Laptop');
   await gy.merge(await gx.records(), gx.identity.publicKey);
   await gx.merge(await gy.records(), gy.identity.publicKey);
-  return { clock, x, y, shared };
+  return { clock, x, y, shared, words: phrase.words };
 }
 
 /** One sync between `x` and `y` through `Noise_KK`, the summaries and the transfer. */
@@ -538,5 +538,106 @@ describe('the trash and its purge over a sync (sync-protocol.md §1.3, §1.4, D7
     expect(entryOf(x, folder, RecordType.folder)).toMatchObject({ deleted: true });
     expect(entryOf(x, folder, RecordType.folder)).toEqual(entryOf(y, folder, RecordType.folder));
     expect(y.folder(folder)).toMatchObject({ inTrash: true, name: 'Created on Phone' });
+  });
+});
+
+/** Regenerates the Recovery Phrase on `session`, whose KEK seed is `seed`; returns the new words. */
+async function regenerate(session: VaultSession, seed: number): Promise<string> {
+  const caller = new Keyring();
+  const next = generateRecoveryPhrase(caller);
+  await session.regenerateRecoveryPhrase({
+    kek: kek(caller, seed),
+    method: 'password',
+    entropy: next.entropy,
+  });
+  caller.wipeAll();
+  return next.words;
+}
+
+/** Whether a backup `session` exports now opens with `words`. */
+async function opensWith(session: VaultSession, seed: number, words: string): Promise<boolean> {
+  const caller = new Keyring();
+  const file = await session.exportBackup({ kek: kek(caller, seed), method: 'password' });
+  caller.wipeAll();
+  try {
+    restoreWithPhrase(new Keyring(), parseBackup(file.bytes), words);
+    return true;
+  } catch (error) {
+    if (error instanceof BackupRejectedError) return false;
+    throw error;
+  }
+}
+
+describe('the Recovery Envelope over a sync (sync-protocol.md §1.3, §1.6, D2, D43, D145, D185)', () => {
+  it('brings a regeneration to the other device in one sync, which tells its user once (D43)', async () => {
+    const { clock, x, y, words: old } = await peers();
+    clock.t = T0 + MINUTE;
+    const words = await regenerate(x, 1);
+    const current = x.recovery;
+
+    const [rx, ry] = await sync(x, y);
+    expect(ry).toMatchObject({ phraseChanged: true, rejected: [] });
+    expect(ry.phraseSuperseded).toBeUndefined();
+    expect(rx).toMatchObject({ phraseChanged: false });
+    expect(rx.phraseSuperseded).toBeUndefined();
+    expect(y.recovery).toEqual(current);
+    expect(y.lastPhraseId).toEqual(current?.phraseId);
+    // A backup Y makes now opens with the new phrase only.
+    expect(await opensWith(y, 2, words)).toBe(true);
+    expect(await opensWith(y, 2, old)).toBe(false);
+    for (const result of await sync(x, y)) {
+      expect(result).toMatchObject({ added: 0, replaced: 0, phraseChanged: false });
+      expect(result.phraseSuperseded).toBeUndefined();
+    }
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('keeps the later of two concurrent regenerations on both, warning the device whose phrase lost (D145)', async () => {
+    const { clock, x, y } = await peers();
+    clock.t = T0 + MINUTE;
+    await regenerate(x, 1);
+    const lost = x.recovery;
+    clock.t = T0 + 2 * MINUTE;
+    const words = await regenerate(y, 2);
+    const kept = y.recovery;
+
+    const [rx, ry] = await sync(x, y);
+    expect(rx.phraseSuperseded).toEqual({
+      phraseId: lost?.phraseId,
+      phraseCreatedAt: lost?.phraseCreatedAt,
+    });
+    expect(rx).toMatchObject({ phraseChanged: false, replaced: 1, rejected: [] });
+    expect(ry).toMatchObject({ phraseChanged: false, replaced: 0, rejected: [] });
+    expect(ry.phraseSuperseded).toBeUndefined();
+    for (const session of [x, y]) {
+      expect(session.recovery).toEqual(kept);
+      expect(session.lastPhraseId).toEqual(kept?.phraseId);
+    }
+    expect(await opensWith(x, 1, words)).toBe(true);
+    for (const result of await sync(x, y)) {
+      expect(result).toMatchObject({ added: 0, replaced: 0, phraseChanged: false });
+      expect(result.phraseSuperseded).toBeUndefined();
+    }
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('warns the device that wrote the envelope a later regeneration replaced, synced in between (D185)', async () => {
+    const { clock, x, y } = await peers();
+    clock.t = T0 + MINUTE;
+    await regenerate(x, 1);
+    const replaced = x.recovery;
+    await sync(x, y);
+    clock.t = T0 + 2 * MINUTE;
+    await regenerate(y, 2);
+
+    const [rx, ry] = await sync(x, y);
+    expect(rx.phraseSuperseded).toEqual({
+      phraseId: replaced?.phraseId,
+      phraseCreatedAt: replaced?.phraseCreatedAt,
+    });
+    expect(rx.phraseChanged).toBe(false);
+    expect(ry.phraseSuperseded).toBeUndefined();
+    expect(ry.phraseChanged).toBe(false);
+    expect(x.recovery).toEqual(y.recovery);
   });
 });

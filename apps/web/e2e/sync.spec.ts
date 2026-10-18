@@ -1,6 +1,6 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen } from './create';
+import { answerConfirmation, createVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -12,7 +12,9 @@ import { fillPassword } from './password';
 // (D222), and concurrent edits converge in that one sync, the loser in the history of both (D223),
 // cut to the same 20 versions, the device whose edit the cut dropped telling its user (D6, D70);
 // an older edit never brings a trashed item back (CRYPTO-INV-013), and an item trashed on one is in
-// the trash of both with the same purge date and no way to purge it by hand (D7, D94). A
+// the trash of both with the same purge date and no way to purge it by hand (D7, D94); a Recovery
+// Phrase regenerated on one reaches the other, which tells its user, and of two regenerations the
+// device whose phrase lost is warned and offered a backup (D43, D145, D185). A
 // device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
@@ -395,4 +397,66 @@ test('an item trashed on A is in the trash of both with the same purge date, off
     await expect(page.getByRole('button', { name: /delete|purge|empty/i })).toHaveCount(0);
   }
   expect(dates[1]).toBe(dates[0]);
+});
+
+/** The 8 hex digits naming the current phrase in Settings (D185). */
+async function currentId(page: Page): Promise<string> {
+  const text = (await page.getByTestId('recovery-current').textContent()) ?? '';
+  return /\(([0-9a-f]{8})\)/.exec(text)?.[1] ?? '';
+}
+
+/** Regenerates the Recovery Phrase from Settings; returns the new phrase's name. */
+async function regenerate(page: Page, password: string): Promise<string> {
+  await page.getByTestId('regenerate-start').click();
+  await button(page, 'Show the new phrase').click();
+  await expect(page.getByTestId('recovery-phrase')).toBeVisible();
+  const words: string[] = [];
+  for (let n = 1; n <= 24; n++) {
+    words.push((await page.getByTestId(`phrase-word-${String(n)}`).textContent()) ?? '');
+  }
+  await button(page, 'I wrote them down').click();
+  await answerConfirmation(page, words);
+  await page.getByTestId('regenerate-password').fill(password);
+  await button(page, 'Regenerate').click();
+  await expect(page.getByTestId('regenerate-done')).toBeVisible({ timeout: 30_000 });
+  return currentId(page);
+}
+
+test('a phrase regenerated on A reaches B in one sync, which tells its user and that no backup made there opens with it (D43, D185)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await b.getByTestId('backup-password').fill(PASSWORD_B);
+  await Promise.all([b.waitForEvent('download', { timeout: 60_000 }), button(b, 'Export').click()]);
+  await expect(b.getByTestId('recovery-no-backup')).toHaveCount(0);
+  const id = await regenerate(a, PASSWORD_A);
+
+  await synced(a, b);
+  await expect(b.getByTestId('merge-result')).toContainText(
+    `The Recovery Phrase was regenerated on another device: the new one, ${id},`,
+  );
+  await expect(a.getByTestId('merge-result')).not.toContainText('Recovery Phrase');
+  expect(await currentId(b)).toBe(id);
+  // B's backup was made for the previous phrase.
+  await expect(b.getByTestId('recovery-no-backup')).toBeVisible();
+});
+
+test('of two regenerations, the later is kept on both and A, whose phrase lost, is warned and offered a backup (D145, D185)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  const lost = await regenerate(a, PASSWORD_A);
+  const kept = await regenerate(b, PASSWORD_B);
+  expect(kept).not.toBe(lost);
+
+  await synced(a, b);
+  const warning = a.getByTestId('phrase-superseded');
+  await expect(warning).toContainText(
+    `The Recovery Phrase you wrote down for this device, ${lost},`,
+  );
+  await expect(warning).toContainText('keep it until you have a new backup');
+  await expect(b.getByTestId('merge-result')).not.toContainText('Recovery Phrase');
+  for (const page of [a, b]) expect(await currentId(page)).toBe(kept);
+  await warning.getByRole('button', { name: 'Make a backup now', exact: true }).click();
+  await expect(a.getByTestId('backup-password')).toBeFocused();
 });

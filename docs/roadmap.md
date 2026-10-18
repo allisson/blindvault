@@ -329,7 +329,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] History pruned deterministically to the 20 greatest `(hlc, versionId)` per item (D6); the dropped-loser notice only for a state this device wrote (D70); one sync leaves both devices the same 20, the notice on the sync result
 - [x] Tombstones synchronized and kept indefinitely; storage deletes nothing but Item Versions (D27, D224)
 - [x] Trash with deterministic, automatic-only purge; no manual purge (D7, D94); the purge date from the tombstone's HLC, the same on both devices, and a tombstone past it purged on arrival, read-only vault included (D73)
-- [ ] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user, naming the superseded phrase and offering a new backup (D2, D145)
+- [x] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user, naming the superseded phrase and offering a new backup (D2, D145); the warning on the device whose own envelope lost, a later regeneration after a sync included, and the one-time notice elsewhere (D43, D185); an envelope changed under the held `phraseId` rejected and reported (D44)
 - [ ] Live push of changes while the DataChannel is open; session ends on close or lock
 - [ ] UI: sync state and last successful sync date; only devices with a known Device record are offered as peers
 

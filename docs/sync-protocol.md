@@ -445,6 +445,12 @@ is purged on arrival by that same merge (section 1.3), the vault read-only for a
 included (D73, D94), and its versions are dropped with it (D137). The purge date is the
 tombstone's `hlc` plus 30 days, never either device's clock, so both devices show the same date
 and purge at it, each by its own clock (D7); the trash offers no manual purge (D94).
+The Recovery Envelope is sent both ways whenever the two entries differ (section 8) and merges by
+section 1.3: the newer of two `phraseId`s is kept on both, and one changed under the held
+`phraseId` is rejected and reported, the rest merged (D44). The sync result shows the notices of
+section 1.6: the superseded-phrase warning on the device whose own envelope lost, whether the
+other regeneration was concurrent or came after a sync (D145, D185), and the one-time notice on the
+other device (D43); a second sync shows neither again.
 
 ## 10. Live session
 
