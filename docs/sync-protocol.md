@@ -366,13 +366,20 @@ on a `summary` outside `summary-begin` and `summary-end`. An unknown `recordForm
 Once a device has the peer's whole summary, it sends each record it holds for which:
 
 - the peer's summary has no entry of the same identity; or
-- for an **Item**, **Item Version** or **Folder**, its copy wins last-write-wins against the
-  peer's entry: a greater `hlc`, or an equal `hlc` and a higher `recordFormatVersion` (section
-  1.2); or
+- for an **Item**, the peer's entry has another `hlc` or `recordFormatVersion`, older or newer
+  (D223); or
+- for an **Item Version** or **Folder**, its copy wins last-write-wins against the peer's entry: a
+  greater `hlc`, or an equal `hlc` and a higher `recordFormatVersion` (section 1.2); or
 - for a **Device**, **Vault Key** or **Recovery Envelope** record, the peer's entry differs from
   its own in any field.
 
-The third rule exists because a summary does not carry the `retired` flag: a retired Device record
+The Item rule sends a losing copy too, so both devices apply section 1.3 to the same two copies:
+each keeps the same winner and stores the same loser as an Item Version with the same `versionId`,
+and one sync leaves both with the same records. Sending only the winner would leave the loser on
+the device that wrote it until the next sync. An older Item whose state the peer already holds in
+history changes nothing there.
+
+The last rule exists because a summary does not carry the `retired` flag: a retired Device record
 must reach a peer that holds a newer non-retired copy, forged or not, and a Vault Key record or
 envelope that differs must reach the peer so that it detects the immutability violation (D31, D42,
 D44). These records are few.
@@ -414,7 +421,7 @@ waiting for the peer's `committed`. The session becomes live once the device has
 A device that never received the peer's `records-end` commits nothing from that transfer.
 
 **Implementation (D222).** `packages/sync/src/exchange.ts` runs sections 7 to 9: `selectRecords` is
-the rule of section 8, and `exchange` sends both summaries and both transfers at the same time,
+the rule of section 8, with the Item rule of D223, and `exchange` sends both summaries and both transfers at the same time,
 then calls the merge. A `retired` may come in place of any of the peer's messages: it is merged as
 section 6 says, and the peer's `abort` follows. The session sends one message at a time, so the
 frames of two never interleave, and its `abort`, with `retired` before it for section 6, leaves
