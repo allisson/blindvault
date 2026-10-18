@@ -9,6 +9,7 @@ import {
   initCrypto,
   randomId,
   sealRecord,
+  versionId,
 } from '@blindvault/crypto';
 import { IDBFactory, IDBRequest } from 'fake-indexeddb';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,6 +59,39 @@ function folder(name = 'Taxes', recordId = randomId()): EncryptedRecord {
   );
   return { recordType: RecordType.folder, recordId, envelope };
 }
+
+/** An Item Version: the only record a commit may delete (D224). */
+function version(title: string): EncryptedRecord {
+  const itemId = randomId();
+  const hlc = { physicalMs: 1, counter: 0, deviceId: new Uint8Array(16).fill(1) };
+  const recordId = versionId(versionIdKey, itemId, hlc);
+  const item: CborMap = new Map<string, string | number>([
+    ['templateId', 'login'],
+    ['templateVersion', 1],
+    ['title', title],
+  ]);
+  const content: CborMap = new Map<string, CborMap | Uint8Array>([
+    ['item', item],
+    ['itemId', itemId],
+  ]);
+  const envelope = sealRecord(
+    {
+      recordFormatVersion: RECORD_FORMAT_VERSION,
+      recordType: RecordType.itemVersion,
+      recordId,
+      keyEpoch: 1,
+      hlc,
+      deleted: false,
+    },
+    { vaultId, versionIdKey },
+    vaultKey,
+    content,
+  );
+  return { recordType: RecordType.itemVersion, recordId, envelope };
+}
+
+/** A delete key that throws inside the transaction, after the deletes before it are queued. */
+const BROKEN = { recordType: RecordType.itemVersion, recordId: null as unknown as Uint8Array };
 
 const LOCAL_CONFIG = new Uint8Array([0xa1, 0x61, 0x76, 0x01]);
 
@@ -137,14 +171,14 @@ describe('vault database (D79, D82, D158)', () => {
     }
   });
 
-  it('deletes and replaces in the same commit as the new Local Config', async () => {
+  it('deletes an Item Version and replaces a record in the same commit as the new Local Config', async () => {
     const db = await VaultDatabase.open(vaultId, factory);
     const a = folder('a');
-    const b = folder('b');
-    await db.commit({ put: [a, b], delete: [], localConfig: LOCAL_CONFIG });
+    const v = version('v');
+    await db.commit({ put: [a, v], delete: [], localConfig: LOCAL_CONFIG });
     const a2 = folder('a2', a.recordId);
     const next = new Uint8Array([1, 2, 3]);
-    await db.commit({ put: [a2], delete: [b], localConfig: next });
+    await db.commit({ put: [a2], delete: [v], localConfig: next });
     const held = await db.records();
     expect(held.map((r) => r.envelope)).toEqual([a2.envelope]);
     expect(await db.localConfig()).toEqual(next);
@@ -153,13 +187,12 @@ describe('vault database (D79, D82, D158)', () => {
 
   it('writes nothing when the transaction fails', async () => {
     const db = await VaultDatabase.open(vaultId, factory);
-    const a = folder('a');
-    await db.commit({ put: [a], delete: [], localConfig: LOCAL_CONFIG });
-    // An invalid key (NaN) throws midway, after the delete of `a` is queued.
-    const bad = { ...folder('b'), recordType: Number.NaN as RecordType };
-    const failing = { put: [], delete: [a, bad], localConfig: new Uint8Array([9]) };
+    const v = version('v');
+    await db.commit({ put: [v], delete: [], localConfig: LOCAL_CONFIG });
+    // A key that is not bytes throws midway, after the delete of `v` is queued.
+    const failing = { put: [], delete: [v, BROKEN], localConfig: new Uint8Array([9]) };
     await expect(db.commit(failing)).rejects.toThrow();
-    expect((await db.records()).map((r) => r.envelope)).toEqual([a.envelope]);
+    expect((await db.records()).map((r) => r.envelope)).toEqual([v.envelope]);
     expect(await db.localConfig()).toEqual(LOCAL_CONFIG);
     db.close();
   });
@@ -184,14 +217,13 @@ describe('vault database (D79, D82, D158)', () => {
     const a = folder('a');
     await db.commit({ put: [a], delete: [], localConfig: LOCAL_CONFIG });
     const before = await raw(databaseName(vaultId));
-    // The put is refused before the transaction starts, and an invalid key throws within it.
+    // The put is refused before the transaction starts, and a key that is not bytes throws within it.
     const unsealed = { ...folder('b'), envelope: new Uint8Array([1]) as RecordEnvelope };
     await expect(
       db.commit({ put: [unsealed], delete: [], localConfig: new Uint8Array([9]), clear: true }),
     ).rejects.toThrow(StorageRejectedError);
-    const bad = { ...folder('b'), recordType: Number.NaN as RecordType };
     await expect(
-      db.commit({ put: [], delete: [bad], localConfig: new Uint8Array([9]), clear: true }),
+      db.commit({ put: [], delete: [BROKEN], localConfig: new Uint8Array([9]), clear: true }),
     ).rejects.toThrow();
     expect(await raw(databaseName(vaultId))).toEqual(before);
     db.close();
@@ -248,6 +280,30 @@ describe('vault database (D79, D82, D158)', () => {
         ).rejects.toThrow('record key does not match its header');
       }
       expect(await db.records()).toEqual([]);
+      db.close();
+    });
+
+    it('refuses to delete any record but an Item Version, writing nothing (CRYPTO-INV-013, D224)', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const tombstone = folder('Trashed');
+      const v = version('v');
+      await db.commit({ put: [tombstone, v], delete: [], localConfig: LOCAL_CONFIG });
+      const before = await raw(databaseName(vaultId));
+      const kept = [
+        RecordType.item,
+        RecordType.folder,
+        RecordType.device,
+        RecordType.vaultKey,
+        RecordType.recoveryEnvelope,
+        99 as RecordType,
+      ];
+      for (const recordType of kept) {
+        const key = { recordType, recordId: tombstone.recordId };
+        await expect(
+          db.commit({ put: [folder()], delete: [v, key], localConfig: new Uint8Array([9]) }),
+        ).rejects.toThrow(new StorageRejectedError('only an Item Version is ever deleted'));
+      }
+      expect(await raw(databaseName(vaultId))).toEqual(before);
       db.close();
     });
 

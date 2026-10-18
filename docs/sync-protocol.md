@@ -389,7 +389,8 @@ must reach a peer that holds a newer non-retired copy, forged or not, and a Vaul
 envelope that differs must reach the peer so that it detects the immutability violation (D31, D42,
 D44). These records are few.
 
-A record whose summaries are identical is never sent. This keeps the residual risk of §9.2: two
+A tombstone is sent as any Item or Folder is, and storage never deletes one (D224). A record whose
+summaries are identical is never sent. This keeps the residual risk of §9.2: two
 copies of one record with identical summaries, such as a purged and an unpurged copy of one
 tombstone, do not converge.
 

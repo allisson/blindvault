@@ -1,4 +1,7 @@
 // An in-memory `RecordStore` for tests: commits are atomic and recorded, and one can be made to fail.
+// Like `packages/storage`, it deletes nothing but Item Versions (CRYPTO-INV-013, D224).
+
+import { RecordType } from '@blindvault/crypto';
 
 import { idKey } from './ids';
 import { type Commit, type RecordKey, type RecordStore, type StoredRecord } from './store';
@@ -25,6 +28,9 @@ export class MemoryStore implements RecordStore {
     if (this.failNext) {
       this.failNext = false;
       throw new Error('storage failure');
+    }
+    if (commit.delete.some((d) => d.recordType !== RecordType.itemVersion)) {
+      throw new Error('only an Item Version is ever deleted');
     }
     this.commits.push(commit);
     for (const d of commit.delete) this.held.delete(key(d));

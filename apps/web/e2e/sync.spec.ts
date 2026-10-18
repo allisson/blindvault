@@ -10,7 +10,8 @@ import { fillPassword } from './password';
 // server), and both connect, then prove their registered identities with Noise_KK (D217); closing
 // on one ends the other with `abort` (D218); between them, each gets the records the other lacks
 // (D222), and concurrent edits converge in that one sync, the loser in the history of both (D223),
-// cut to the same 20 versions, the device whose edit the cut dropped telling its user (D6, D70). A
+// cut to the same 20 versions, the device whose edit the cut dropped telling its user (D6, D70);
+// an older edit never brings a trashed item back (CRYPTO-INV-013). A
 // device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
@@ -325,5 +326,39 @@ test('the history cut drops an edit of A in one sync: only A tells its user, and
     const versions = page.locator('article').getByRole('listitem');
     await expect(versions).toHaveCount(20);
     await expect(versions.filter({ hasText: 'ACME on A' })).toHaveCount(0);
+  }
+});
+
+test('an edit older than a trash never brings the item back: in the trash on both, the edit kept in its history (CRYPTO-INV-013)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await newLogin(a, 'ACME');
+  await button(a, 'Settings').click();
+  await synced(a, b);
+  await closed(a, b);
+  await button(b, 'Open the vault').click();
+
+  // A edits first, then B trashes, so the trash is the newer write.
+  await rename(a, 'ACME', 'ACME on A');
+  await button(b, 'ACME').click();
+  await button(b, 'Move to trash').click();
+  for (const page of [a, b]) await button(page, 'Settings').click();
+  await synced(a, b);
+
+  await closed(a, b);
+  for (const page of [a, b]) {
+    await expect(page.getByText('No items yet.')).toBeVisible();
+    await button(page, 'Trash').click();
+    await button(page, 'ACME').click();
+    // An item in the trash offers only restore (D143): restored, its history shows A's edit.
+    await button(page, 'Restore').click();
+    await expect(page.getByText('The trash is empty.')).toBeVisible();
+    await button(page, 'All items').click();
+    await button(page, 'ACME').click();
+    await button(page, 'History').click();
+    const versions = page.locator('article').getByRole('listitem');
+    await expect(versions.filter({ hasText: 'ACME on A' })).toHaveCount(1);
   }
 });

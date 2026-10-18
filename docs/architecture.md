@@ -462,6 +462,10 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Tombstones over a sync (Phase 5, D224).** `VaultDatabase.commit` deletes only Item Versions.
+  `tests/sync.test.ts` covers a stale edit against a purged tombstone, a trashed folder, a purged
+  tombstone never held and a purged against an unpurged copy; `apps/web/e2e/sync.spec.ts` an edit
+  older than a trash. No new dependency.
 - **History cut over a sync (Phase 5, D6, D70).** No code change: `#transferMerge` cuts history
   over held, received and losing versions, and the `synced` screen shows the D70 notice through
   `MergeNotices`, shared with the backup merge. `tests/sync.test.ts` and `apps/web/e2e/sync.spec.ts`
@@ -592,6 +596,9 @@ every project through the references in the root `tsconfig.json`.
     `crypto-spec.md` §9.5, nothing decrypted) and refuses one whose header is not its key, before
     any write. Each value is copied before it is written, since IndexedDB stores a view's whole
     underlying buffer.
+  - **Deletes (D224).** A commit refuses a delete of anything but an Item Version, before any
+    write, so no tombstone is ever removed (CRYPTO-INV-013); `clear` replaces the whole vault
+    (D153). `MemoryStore` in `packages/vault` applies the same rule.
   - **Commits.** One `readwrite` transaction with `durability: 'strict'`; a request that throws
     aborts it, so nothing queued before it commits. On `versionchange` (erase or upgrade in another
     app window) the connection closes instead of blocking it, and later calls throw

@@ -1,12 +1,13 @@
 // The vault database (architecture.md "IndexedDB layout", D79, D82, D158): `blindvault-<vaultId>`
 // with two object stores, `records` keyed by `[recordType, recordId]` and `localConfig`, written in
-// one transaction. Only sealed records and Local Config come in.
+// one transaction. Only sealed records and Local Config come in, and only Item Versions go out: a
+// tombstone is never removed (CRYPTO-INV-013, D224).
 
 import {
   type EncryptedRecord,
   ID_LENGTH,
   type RecordEnvelope,
-  type RecordType,
+  RecordType,
   decodeEnvelope,
 } from '@blindvault/crypto';
 
@@ -231,11 +232,17 @@ export class VaultDatabase {
 
   /**
    * Applies `commit` in one transaction: all of it or none of it. Every record put must be a
-   * sealed envelope whose header matches its key, checked before anything is written. With
-   * `clear`, the old vault stays whole until the transaction commits (D153).
+   * sealed envelope whose header matches its key, and every record deleted an Item Version (D224),
+   * both checked before anything is written. With `clear`, the old vault stays whole until the
+   * transaction commits (D153).
    */
   async commit(commit: StorageCommit): Promise<void> {
     commit.put.forEach(checkRecord);
+    for (const d of commit.delete) {
+      if (d.recordType !== RecordType.itemVersion) {
+        throw new StorageRejectedError('only an Item Version is ever deleted');
+      }
+    }
     if (!(commit.localConfig instanceof Uint8Array) || commit.localConfig.length === 0) {
       throw new StorageRejectedError('a commit writes the whole Local Config');
     }

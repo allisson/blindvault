@@ -350,12 +350,23 @@ describe('Recovery Phrase regeneration (§5.4, D104, D185)', () => {
     const envelope = must(
       (await db.records()).find((r) => r.recordType === RecordType.recoveryEnvelope),
     );
-    await db.commit({
-      put: [],
-      delete: [{ recordType: envelope.recordType, recordId: envelope.recordId }],
-      localConfig: must(await db.localConfig()),
-    });
     db.close();
+    // The envelope lost outside the app: storage itself never deletes it (D224).
+    await new Promise<void>((resolve, reject) => {
+      const request = factory.open(databaseName(vaultId));
+      request.onerror = () => {
+        reject(request.error ?? new Error('open failed'));
+      };
+      request.onsuccess = () => {
+        const raw = request.result;
+        const tx = raw.transaction('records', 'readwrite');
+        tx.objectStore('records').delete([envelope.recordType, envelope.recordId.slice()]);
+        tx.oncomplete = () => {
+          raw.close();
+          resolve();
+        };
+      };
+    });
     expect(await c.unlock(PASSWORD)).toBe('ok');
     log.length = 0;
     expect(c.newRegenerationPhrase()).toBeUndefined();
