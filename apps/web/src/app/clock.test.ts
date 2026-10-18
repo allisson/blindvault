@@ -25,6 +25,7 @@ function source(
     writableAt,
     deviceId: OWN,
     registered: true,
+    retired: false,
     devices: () => [device(OWN), ...others.map(([id, retired]) => device(id, retired))],
     lastSyncByPeer: [],
   };

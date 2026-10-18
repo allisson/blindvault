@@ -1,4 +1,5 @@
 // The storage state (overview §7, §13.2, D55, D119, D196): the "This device" section of Settings,
+// with the last backup and the last sync (D34, D226),
 // and the storage warning below the vault's header. The Safari warning before unlock is in
 // `components.tsx`, with the cards.
 
@@ -7,7 +8,7 @@ import { type VaultSession } from '@blindvault/vault';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { type VaultController } from '../app/controller';
-import { devicesOf } from '../app/devices';
+import { devicesOf, lastSyncOf } from '../app/devices';
 import { type StorageWarning, safariTab, storageWarnings } from '../app/storage-state';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
@@ -98,7 +99,7 @@ export function StorageWarningBanner({
   return <StorageAlert warning={first} text={warningText(m, language, first, status)} />;
 }
 
-/** "This device" in Settings: persistence, storage used, last backup, and every warning (D196). */
+/** "This device" in Settings: persistence, storage used, last backup and sync, and every warning (D196, D226). */
 export function DeviceStorage({
   controller,
   session,
@@ -112,6 +113,10 @@ export function DeviceStorage({
   const [asking, setAsking] = useState(false);
   const persisted = status?.persisted ?? null;
   const last = session.lastBackupAt;
+  // Read again as a sync commits (D225).
+  useSyncExternalStore(controller.subscribe, () => controller.sync);
+  const lastSync = lastSyncOf(session);
+  const when = new Intl.DateTimeFormat(language, { dateStyle: 'long', timeStyle: 'short' });
   const usage = status?.usage ?? null;
   const quota = status?.quota ?? null;
   return (
@@ -155,12 +160,14 @@ export function DeviceStorage({
       <p className="text-sm" data-testid="device-last-backup">
         {last === undefined
           ? m.settings.backupNever
-          : format(m.settings.backupLast, {
-              date: new Intl.DateTimeFormat(language, {
-                dateStyle: 'long',
-                timeStyle: 'short',
-              }).format(last),
-            })}
+          : format(m.settings.backupLast, { date: when.format(last) })}
+      </p>
+      <p className="text-sm" data-testid="device-last-sync-any">
+        {lastSync === undefined
+          ? m.storage.syncNever
+          : lastSync.name === undefined
+            ? format(m.storage.syncLastUnnamed, { date: when.format(lastSync.at) })
+            : format(m.storage.syncLast, { date: when.format(lastSync.at), name: lastSync.name })}
       </p>
       {warnings.length > 0 ? (
         <div className="flex flex-col gap-2" data-testid="storage-warnings">
