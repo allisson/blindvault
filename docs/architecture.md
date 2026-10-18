@@ -462,6 +462,10 @@ every project through the references in the root `tsconfig.json`.
   reusing `HandshakeError` (`closed`, `invalid`) and the pairing's `noiseChannel`. `src/app/sync.ts`
   in `apps/web` keeps what each side sealed and opened, runs the handshake before `connected`, and
   reports a failed one as `unverified`. No new dependency.
+- **Item losers on both devices (Phase 5, D223).** `selectRecords` in
+  `packages/sync/src/exchange.ts` sends an Item whose `hlc` or format differs from the peer's,
+  older too; the merge is unchanged. `tests/sync.test.ts` runs the real `Noise_KK` and exchange
+  between two vaults in IndexedDB. No new dependency.
 - **Sync summaries and transfer (Phase 5, D222).** `packages/sync/src/exchange.ts` holds
   `selectRecords` (§8) and `exchange` (§7 to §9), with `SyncRefusal` for its callbacks;
   `ChannelSession` sends one message at a time, `abort` after the message being sent, and

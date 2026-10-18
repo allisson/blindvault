@@ -9,7 +9,8 @@ import { fillPassword } from './password';
 // both, one shows its code first, the codes are copied and pasted, the same network only (no STUN
 // server), and both connect, then prove their registered identities with Noise_KK (D217); closing
 // on one ends the other with `abort` (D218); between them, each gets the records the other lacks
-// (D222). A device that retired the other tells it so through the same screens, sending it only its
+// (D222), and concurrent edits converge in that one sync, the loser in the history of both (D223). A
+// device that retired the other tells it so through the same screens, sending it only its
 // retired record (D219), and a device retired during an open sync is told so at once (D69, D220).
 
 // Creation, A's password again and B's password each run Argon2id at about 1 s (D9).
@@ -199,17 +200,8 @@ test('A retires B during an open sync: B merges its retired record and shows the
   await expect(b.getByTestId('own-retired')).toBeVisible();
 });
 
-test('an item created on A reaches B through a sync, and B shows the merge (D222)', async ({
-  browser,
-}) => {
-  const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'New item').click();
-  await button(a, 'Login').click();
-  await a.getByTestId('item-title').fill('ACME');
-  await button(a, 'Save').click();
-  await button(a, 'Settings').click();
-
+/** Syncs A and B from Settings › Devices, A showing its code first; both end on the merge result. */
+async function synced(a: Page, b: Page) {
   await a.getByTestId('device-sync').click();
   const syncA = a.getByTestId('sync');
   await syncA.getByTestId('pairing-same-network').check();
@@ -226,13 +218,77 @@ test('an item created on A reaches B through a sync, and B shows the merge (D222
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
   await button(a, 'Connect').click();
-
   await expect(b.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
-  await expect(b.getByTestId('merge-result')).toContainText('Merged: 1 added, 0 replaced.');
   await expect(a.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
+}
+
+/** B closes the sync, which ends A's with `ended` (D218); both go back to the vault. */
+async function closed(a: Page, b: Page) {
+  await b.getByTestId('sync-close').click();
+  await expect(a.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'ended');
+  await a.getByTestId('sync-again').click();
+  for (const page of [a, b]) await button(page, 'Back').click();
+}
+
+async function newLogin(page: Page, title: string) {
+  await button(page, 'New item').click();
+  await button(page, 'Login').click();
+  await page.getByTestId('item-title').fill(title);
+  await button(page, 'Save').click();
+}
+
+async function rename(page: Page, from: string, to: string) {
+  await button(page, from).click();
+  await button(page, 'Edit').click();
+  await page.getByTestId('item-title').fill(to);
+  await button(page, 'Save').click();
+}
+
+test('an item created on A reaches B through a sync, and B shows the merge (D222)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await newLogin(a, 'ACME');
+  await button(a, 'Settings').click();
+
+  await synced(a, b);
+  await expect(b.getByTestId('merge-result')).toContainText('Merged: 1 added, 0 replaced.');
   await b.getByTestId('sync-close').click();
   await button(b, 'Back').click();
   // B still shows "Vault ready" from its pairing (D198).
   await button(b, 'Open the vault').click();
   await expect(button(b, 'ACME')).toBeVisible();
+});
+
+test('concurrent edits converge in one sync: the newer wins on both, the other in the history of both (D6, D223)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await newLogin(a, 'ACME');
+  await button(a, 'Settings').click();
+  await synced(a, b);
+  await closed(a, b);
+  await button(b, 'Open the vault').click();
+
+  // A edits first, then B, so B's is the newer write.
+  await rename(a, 'ACME', 'ACME on A');
+  await rename(b, 'ACME', 'ACME on B');
+  for (const page of [a, b]) await button(page, 'Settings').click();
+  await synced(a, b);
+  await expect(a.getByTestId('merge-result')).toContainText('Merged: 0 added, 1 replaced.');
+  await expect(b.getByTestId('merge-result')).toContainText('Merged: 0 added, 0 replaced.');
+
+  await closed(a, b);
+  for (const page of [a, b]) {
+    await expect(button(page, 'ACME on A')).toHaveCount(0);
+    await button(page, 'ACME on B').click();
+    await button(page, 'History').click();
+    // A's edit lost on both, and both keep it, above the first state.
+    const versions = page.locator('article').getByRole('listitem');
+    await expect(versions).toHaveCount(2);
+    await expect(versions.first()).toContainText('ACME on A');
+    await expect(versions.last()).toContainText('ACME');
+  }
 });

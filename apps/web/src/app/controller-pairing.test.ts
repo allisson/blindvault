@@ -1234,6 +1234,29 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     a.cancelSync();
   });
 
+  it('converges on concurrent edits: one winner on both, the other edit in the history of both (§1.2, §8, D6, D223)', async () => {
+    const { a, b, idA, idB } = await paired();
+    const shared = await session(a).createItem(item('Shared'));
+    await connected(a, b, idA, idB);
+    a.cancelSync();
+    await session(a).updateItem(shared, item('Edited on A'));
+    await session(b).updateItem(shared, item('Edited on B'));
+    await connected(a, b, idA, idB);
+    const winner = session(a).item(shared)?.item?.title;
+    expect(['Edited on A', 'Edited on B']).toContain(winner);
+    expect(session(b).item(shared)?.item?.title).toBe(winner);
+    const loser = winner === 'Edited on A' ? 'Edited on B' : 'Edited on A';
+    for (const c of [a, b]) {
+      expect(
+        session(c)
+          .versions(shared)
+          .map((v) => v.item?.title)
+          .sort(),
+      ).toEqual([loser, 'Shared'].sort());
+    }
+    a.cancelSync();
+  });
+
   it('ends an open sync when A retires B: B merges its record and shows the D41 notice (§6, D69, D220)', async () => {
     const { a, b, idA, idB } = await paired();
     await connected(a, b, idA, idB);

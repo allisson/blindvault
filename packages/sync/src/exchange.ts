@@ -64,9 +64,10 @@ function sameEntry(a: SummaryEntry, b: SummaryEntry): boolean {
 }
 
 /**
- * §8: the entries of `mine` whose record goes to the peer: one the peer does not hold; an Item, Item
- * Version or Folder that wins last-write-wins against the peer's entry (§1.2); a Device, Vault Key
- * or Recovery Envelope record whose entry differs from the peer's in any field.
+ * §8: the entries of `mine` whose record goes to the peer: one the peer does not hold; an Item whose
+ * `hlc` or `recordFormatVersion` differs from the peer's entry (D223); an Item Version or Folder that
+ * wins last-write-wins against the peer's entry (§1.2); a Device, Vault Key or Recovery Envelope
+ * record whose entry differs from the peer's in any field.
  */
 export function selectRecords(
   mine: readonly SummaryEntry[],
@@ -77,6 +78,12 @@ export function selectRecords(
     const other = peer.get(identity(e));
     if (!other) return true;
     if (COMPARED_WHOLE.has(e.recordType)) return !sameEntry(e, other);
+    // An older Item goes too, so the winner stores the same loser as the peer (D6, D223).
+    if (e.recordType === RecordType.item) {
+      return (
+        compareHlc(e.hlc, other.hlc) !== 0 || e.recordFormatVersion !== other.recordFormatVersion
+      );
+    }
     const order = compareHlc(e.hlc, other.hlc);
     return order > 0 || (order === 0 && e.recordFormatVersion > other.recordFormatVersion);
   });

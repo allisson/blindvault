@@ -55,7 +55,7 @@ describe('what each side sends (sync-protocol.md §8)', () => {
     expect(selectRecords([], theirs)).toEqual([]);
   });
 
-  it.each([RecordType.item, RecordType.folder, RecordType.itemVersion])(
+  it.each([RecordType.folder, RecordType.itemVersion])(
     'sends a record of type %i only when it wins last-write-wins against the peer’s entry',
     (type) => {
       const mine = entry(type, 1, T0);
@@ -76,6 +76,22 @@ describe('what each side sends (sync-protocol.md §8)', () => {
     },
   );
 
+  it('sends an Item whose HLC or format differs from the peer’s entry, older too, so both keep its loser (D6, D223)', () => {
+    const mine = entry(RecordType.item, 1, T0);
+    const send = (other: SummaryEntry) => selectRecords([mine], [other]).length === 1;
+    expect(send(entry(RecordType.item, 1, T0 - 1))).toBe(true);
+    expect(send(entry(RecordType.item, 1, T0 + 1))).toBe(true);
+    expect(send(entry(RecordType.item, 1, T0, { hlc: { ...mine.hlc, counter: 1 } }))).toBe(true);
+    expect(send(entry(RecordType.item, 1, T0, { hlc: { ...mine.hlc, deviceId: DEVICE_B } }))).toBe(
+      true,
+    );
+    expect(send(entry(RecordType.item, 1, T0, { recordFormatVersion: 0 }))).toBe(true);
+    expect(send(entry(RecordType.item, 1, T0, { recordFormatVersion: 2 }))).toBe(true);
+    // Equal HLC and format: identical summaries, never sent, a tombstone or another epoch included.
+    expect(send(entry(RecordType.item, 1, T0))).toBe(false);
+    expect(send(entry(RecordType.item, 1, T0, { deleted: true, keyEpoch: 2 }))).toBe(false);
+  });
+
   it.each([RecordType.device, RecordType.vaultKey, RecordType.recoveryEnvelope])(
     'sends a record of type %i whose entry differs from the peer’s in any field, older too (D31, D42, D44)',
     (type) => {
@@ -93,9 +109,9 @@ describe('what each side sends (sync-protocol.md §8)', () => {
   );
 
   it('tells records apart by type and ID together (D158)', () => {
-    const mine = [entry(RecordType.item, 1), entry(RecordType.folder, 1)];
-    expect(selectRecords(mine, [entry(RecordType.item, 1, T0 + 1)])).toEqual([
-      entry(RecordType.folder, 1),
+    const mine = [entry(RecordType.folder, 1), entry(RecordType.itemVersion, 1)];
+    expect(selectRecords(mine, [entry(RecordType.folder, 1, T0 + 1)])).toEqual([
+      entry(RecordType.itemVersion, 1),
     ]);
   });
 });
@@ -163,20 +179,22 @@ describe('summaries and transfer (sync-protocol.md §7, §9, D222)', () => {
     vi.useRealTimers();
   });
 
-  it('exchanges both summaries, then sends each side only what the other lacks or holds older', async () => {
+  it('exchanges both summaries, then sends each side what the other lacks or holds older, and differing Items both ways (D223)', async () => {
     const { a, b } = await sessions();
     const shared = entry(RecordType.item, 1, T0);
-    const newerOnA = entry(RecordType.item, 2, T0 + 5);
-    const olderOnB = entry(RecordType.item, 2, T0);
+    const newerOnA = entry(RecordType.folder, 2, T0 + 5);
+    const olderOnB = entry(RecordType.folder, 2, T0);
     const onlyOnB = entry(RecordType.folder, 3, T0);
-    const sideA = side([shared, newerOnA]);
-    const sideB = side([shared, olderOnB, onlyOnB]);
+    const itemOnA = entry(RecordType.item, 4, T0 + 5);
+    const itemOnB = entry(RecordType.item, 4, T0);
+    const sideA = side([shared, newerOnA, itemOnA]);
+    const sideB = side([shared, olderOnB, onlyOnB, itemOnB]);
     const [ra, rb] = await Promise.all([exchange(a, sideA.options), exchange(b, sideB.options)]);
-    expect([ra, rb]).toEqual(['merged 1', 'merged 1']);
-    expect(sideA.seen.selected).toEqual([[newerOnA]]);
-    expect(sideB.seen.selected).toEqual([[onlyOnB]]);
-    expect(sideA.seen.merged).toEqual([[envelopeOf(onlyOnB)]]);
-    expect(sideB.seen.merged).toEqual([[envelopeOf(newerOnA)]]);
+    expect([ra, rb]).toEqual(['merged 2', 'merged 2']);
+    expect(sideA.seen.selected).toEqual([[newerOnA, itemOnA]]);
+    expect(sideB.seen.selected).toEqual([[onlyOnB, itemOnB]]);
+    expect(sideA.seen.merged).toEqual([[envelopeOf(onlyOnB), envelopeOf(itemOnB)]]);
+    expect(sideB.seen.merged).toEqual([[envelopeOf(newerOnA), envelopeOf(itemOnA)]]);
     // committed is the app's to send, after the checks of §6: the session stays open.
     expect(a.error).toBeNull();
     expect(b.error).toBeNull();
