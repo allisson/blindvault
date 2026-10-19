@@ -470,6 +470,13 @@ every project through the references in the root `tsconfig.json`.
   adds each live merge's result to the sync's; the controller keeps a live sync when Settings
   closes (`leaveSync`), `cancelPairing` ends only the pairing, and `VaultShell` shows the live bar.
   No new dependency.
+- **Records in a newer format over a sync (Phase 5, D68, D227).** `VaultSession` adds the peer
+  to `rejectedPeers` in Local Config, through the `seen` part of a merge plan, in the commit of a
+  sync merge that rejected a record for its format or type, and removes it after one that rejected
+  none; `SyncGrant.mergeLive`, which the live session uses, never removes it. A re-admission that
+  aborts with `unsupported-format` commits the Local Config alone first. `dismissRejectedPeer`
+  removes a peer at the user's word. In `apps/web`, `rejectedPeersOf` names the peers for the
+  export warning and `IncompleteBackup` offers the dismissal. No new dependency.
 - **Sync state in the UI (Phase 5, D226).** `src/app/devices.ts` in `apps/web` gives `syncs` (a
   sync offered at all), `lastSyncOf` (the latest sync with any peer and its name) and
   `peerSyncState` (`syncing` or `live` from the sync's stage). Settings › Devices shows the state on

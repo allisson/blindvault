@@ -2,7 +2,15 @@
 // own IndexedDB and Web Locks, over the in-memory transport in place of WebRTC. The protocol itself
 // is tested in `packages/sync` and `tests/pairing.test.ts`; here, the flow the screens drive.
 
-import { type KdfPort, MEMLIMIT, initCrypto } from '@blindvault/crypto';
+import {
+  type CborMap,
+  type KdfPort,
+  MEMLIMIT,
+  RECORD_FORMAT_VERSION,
+  decodeCbor,
+  encodeCbor,
+  initCrypto,
+} from '@blindvault/crypto';
 import {
   type ConnectionOptions,
   type MemoryPair,
@@ -1366,5 +1374,24 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     );
     expect(a.sync).toBeUndefined();
     a.cancelPairing();
+  });
+
+  it("lists a peer whose record was rejected for its format, and dismisses it at the user's word (D68, D115, D227)", async () => {
+    const { a, b, idA, idB } = await paired();
+    const fromA = session(a).openSync(idB);
+    const [first] = await fromA.records(fromA.summary());
+    const map = decodeCbor(first ?? new Uint8Array()) as CborMap;
+    map.set('v', RECORD_FORMAT_VERSION + 1);
+    await session(b)
+      .openSync(idA)
+      .merge([encodeCbor(map)]);
+    expect(session(b).backupMayBeIncomplete).toBe(true);
+    expect(session(b).rejectedPeers).toEqual([idA]);
+
+    expect(await b.dismissRejectedPeer(idA)).toBe('ok');
+    expect(session(b).rejectedPeers).toEqual([]);
+    expect(session(b).backupMayBeIncomplete).toBe(false);
+    b.lock();
+    expect(await b.dismissRejectedPeer(idA)).toBe('locked');
   });
 });

@@ -2355,6 +2355,23 @@ export class VaultController {
     return 'ok';
   }
 
+  /**
+   * Removes a peer from the incomplete-backup list, once the user confirmed it is lost or retired
+   * (D115, D227); no password, as a retirement.
+   */
+  async dismissRejectedPeer(deviceId: Uint8Array): Promise<'ok' | 'locked'> {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return 'locked';
+    try {
+      await status.session.dismissRejectedPeer(deviceId);
+    } catch (error) {
+      if (error instanceof VaultLockedError) return 'locked';
+      throw error;
+    }
+    this.#set({ ...status });
+    return 'ok';
+  }
+
   async setPreferences(preferences: Preferences): Promise<void> {
     const status = this.#status;
     if (status.kind !== 'unlocked') return;

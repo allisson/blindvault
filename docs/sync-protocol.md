@@ -158,8 +158,8 @@ and reported, not merged; the other records merge, and the re-admission complete
 result lists each rejected record with its reason (D206). A record of an unknown format or type
 aborts the re-admission instead (`unsupported-format`), before the merge of the side that
 received it, as a pairing does before its commit; the Device records already written and a merge
-the other side already committed stay: recording it for the incomplete-backup warning (D68, D81) waits for that task of
-Phase 5 (D206).
+the other side already committed stay. Before it aborts, the side that received it commits its
+Local Config alone with the peer in the incomplete-backup list (D68, D81, D206, D227).
 
 The merge writes in one storage transaction, with the completed sync with the peer (D34), and its
 notices are those of section 1.6.
@@ -438,8 +438,8 @@ section 6 says, and the peer's `abort` follows. The session sends one message at
 frames of two never interleave, and its `abort`, with `retired` before it for section 6, leaves
 after the message being sent and before any other. In `packages/vault`, `SyncGrant.summary`,
 `records` and `merge` are sections 7, 8 and 9: the merge is the re-admission's (§2.3), except that
-a record of an unknown format or type is rejected and reported (its Local Config record stays with
-D68's task) and the peer's own Device record retired merges. After the merge, the app ends the
+a record of an unknown format or type is rejected and reported, with the peer recorded for the
+export warning in the same commit (D227), and the peer's own Device record retired merges. After the merge, the app ends the
 session when this device's own record arrived retired (D69), otherwise runs the check of section 6
 again, then sends `committed`. The merge runs once over the whole transfer, so section 1.4 cuts
 history against each item's final copy: a restore from the trash reaching a device that purged the
@@ -480,6 +480,10 @@ While the session is open (§9.1):
   the same versions.
 
 The session stays open while the user leaves Settings, until it ends as section 12 says (D225).
+
+A live transfer records its peer for the export warning when one of its records is rejected for
+its format or type, as section 9 does, but never removes it: it holds only pushed writes, so only
+the transfer of section 9 proves the peer no longer sends such a record (D227).
 
 There is no acknowledgement and no retransmission at this layer: the Noise channel delivers every
 frame once, in order, or ends the session, and merging a record already held changes nothing, so a

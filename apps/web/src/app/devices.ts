@@ -132,3 +132,20 @@ export function peerSyncState(stage: SyncStage | undefined): PeerSyncState | und
       return undefined;
   }
 }
+
+/** A peer whose records were rejected for their format or type, named by its Device record if held. */
+export interface RejectedPeer {
+  readonly deviceId: Uint8Array;
+  readonly name?: string;
+}
+
+/** The incomplete-backup list, in its order, for the export warning and its dismissal (D115, D227). */
+export function rejectedPeersOf(
+  session: Pick<DeviceSource, 'devices'> & { readonly rejectedPeers: readonly Uint8Array[] },
+): RejectedPeer[] {
+  const all = session.devices();
+  return session.rejectedPeers.map((deviceId) => {
+    const name = all.find((d) => sameId(d.deviceId, deviceId))?.device.displayName;
+    return name === undefined ? { deviceId } : { deviceId, name };
+  });
+}

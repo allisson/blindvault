@@ -507,6 +507,11 @@ export interface SyncGrant {
    */
   merge(envelopes: readonly Uint8Array[]): Promise<SyncResult>;
   /**
+   * §10: merges a transfer of the live session as `merge` does, except that it never removes the
+   * peer from the incomplete-backup list: it holds only pushed writes (D225, D227).
+   */
+  mergeLive(envelopes: readonly Uint8Array[]): Promise<SyncResult>;
+  /**
    * §10 (D225): calls `watcher` once each local write has committed, with the envelopes it wrote,
    * Item Versions included: a write that issued an HLC. A merge, the purge and the history cut issue
    * none and are not reported. Returns the call that stops it; a lock stops every one. `watcher`
@@ -603,8 +608,14 @@ interface Carried {
   readonly items: readonly { readonly content: CborMap; readonly reading: ItemReading }[];
 }
 
-/** What a merge records in Local Config (sync-protocol.md §1.5, D43, D48). */
-type Seen = Pick<LocalConfigState, 'seenDevices' | 'seenRetiredDevices' | 'lastPhraseId'>;
+/**
+ * What a merge records in Local Config (sync-protocol.md §1.5, §9, D43, D48), with the peers whose
+ * records were rejected for their format or type (D68, D115, D227).
+ */
+type Seen = Pick<
+  LocalConfigState,
+  'seenDevices' | 'seenRetiredDevices' | 'lastPhraseId' | 'rejectedPeers'
+>;
 
 type Cleartext = Omit<LocalConfigCleartext, 'encrypted'>;
 
@@ -886,6 +897,44 @@ export class VaultSession {
   get rejectedPeers(): Uint8Array[] {
     this.#unlocked();
     return (this.#localState.rejectedPeers ?? []).map((id) => id.slice());
+  }
+
+  /**
+   * Removes `peer` from the incomplete-backup list at the user's explicit word, for a peer lost or
+   * retired, in a commit of the Local Config only; a peer not listed commits nothing (D115, D227).
+   */
+  dismissRejectedPeer(peer: Uint8Array): Promise<void> {
+    return this.#run(() => {
+      const rejectedPeers = this.#withRejected(peer, false);
+      return {
+        writes: [],
+        deletes: [],
+        result: undefined,
+        ...(rejectedPeers ? { seen: { rejectedPeers } } : {}),
+      };
+    });
+  }
+
+  /** A re-admission aborted for a newer record: `peer` recorded, nothing else (D206, D227). */
+  #recordRejected(peer: Uint8Array): Promise<void> {
+    return this.#run(() => {
+      const rejectedPeers = this.#withRejected(peer, true);
+      return {
+        writes: [],
+        deletes: [],
+        result: undefined,
+        ...(rejectedPeers ? { seen: { rejectedPeers } } : {}),
+      };
+    });
+  }
+
+  /** The incomplete-backup list with `peer` in it or out of it, or `undefined` when unchanged. */
+  #withRejected(peer: Uint8Array, listed: boolean): Uint8Array[] | undefined {
+    const held = this.#localState.rejectedPeers ?? [];
+    if (held.some((id) => sameBytes(id, peer)) === listed) return undefined;
+    return listed
+      ? sortedIds([...held, peer])
+      : held.filter((id) => !sameBytes(id, peer)).map((id) => id.slice());
   }
 
   /** What re-founding carries over, read now from the decrypted state (D60, D72, D86). */
@@ -2278,7 +2327,8 @@ export class VaultSession {
         return this.#summary();
       },
       records: (selected) => this.#run(() => this.#syncRecords(selected)),
-      merge: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id)),
+      merge: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id, false)),
+      mergeLive: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id, true)),
       watch: (watcher) => {
         this.#unlocked();
         const own = (envelopes: readonly Uint8Array[]) => {
@@ -2330,8 +2380,20 @@ export class VaultSession {
   }
 
   /** §9: the merge of a re-admission, with what a sync does differently (D222). */
-  #syncMerge(envelopes: readonly Uint8Array[], peerId: Uint8Array): Plan<SyncResult> {
-    const plan = this.#transferMerge(envelopes, peerId, 'sync');
+  #syncMerge(
+    envelopes: readonly Uint8Array[],
+    peerId: Uint8Array,
+    live: boolean,
+  ): Plan<SyncResult> {
+    const transfer = this.#transferMerge(envelopes, peerId, 'sync');
+    // §9 (D68, D115): recorded on a rejection for format or type, removed after a transfer with
+    // none, but never by a live one, which holds only pushed writes (D227).
+    const unsupported = transfer.result.rejected.some((r) => r.reason === 'unsupported-format');
+    const rejectedPeers =
+      unsupported || !live ? this.#withRejected(peerId, unsupported) : undefined;
+    const plan = rejectedPeers
+      ? { ...transfer, seen: { ...transfer.seen, rejectedPeers } }
+      : transfer;
     const own = idKey(this.#identity.deviceId);
     const ownRetired = plan.writes.some(
       (w) =>
@@ -2448,8 +2510,18 @@ export class VaultSession {
           }
           return { writes: [], deletes: [], result: stored.map((r) => r.envelope) };
         }),
-      merge: (envelopes, peerPublicKey) =>
-        this.#run(() => this.#transferMerge(envelopes, deviceId(peerPublicKey), 'readmission')),
+      merge: async (envelopes, peerPublicKey) => {
+        const peerId = deviceId(peerPublicKey);
+        try {
+          return await this.#run(() => this.#transferMerge(envelopes, peerId, 'readmission'));
+        } catch (error) {
+          // The abort writes no record, only the peer for the export warning (D68, D206, D227).
+          if (error instanceof JoinRejectedError && error.reason === 'unsupported-format') {
+            await this.#recordRejected(peerId);
+          }
+          throw error;
+        }
+      },
     };
   }
 

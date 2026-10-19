@@ -1,7 +1,7 @@
 import { type DeviceView, type SyncResult } from '@blindvault/vault';
 import { describe, expect, it } from 'vitest';
 
-import { devicesOf, eraseAdvice, lastSyncOf, peerSyncState } from './devices';
+import { devicesOf, eraseAdvice, lastSyncOf, peerSyncState, rejectedPeersOf } from './devices';
 
 const OWN = new Uint8Array(16).fill(1);
 
@@ -146,6 +146,21 @@ describe('the sync state for the UI (§13.2, D34, D216, D226)', () => {
     [{ kind: 'synced', result: RESULT, live: true, unseen: false }, 'live'],
   ] as const)('shows the sync with the peer from %o as %s (D225)', (stage, state) => {
     expect(peerSyncState(stage)).toBe(state);
+  });
+});
+
+describe('the incomplete-backup warning (D68, D115, D227)', () => {
+  it('names each peer listed by its Device record, retired included, and gives none a name it lacks', () => {
+    const s = {
+      ...session([view(1, false), view(2, false, 'Phone'), view(3, true, 'Old laptop')]),
+      rejectedPeers: [id(2), id(3), id(4)],
+    };
+    expect(rejectedPeersOf(s)).toEqual([
+      { deviceId: id(2), name: 'Phone' },
+      { deviceId: id(3), name: 'Old laptop' },
+      { deviceId: id(4) },
+    ]);
+    expect(rejectedPeersOf({ ...s, rejectedPeers: [] })).toEqual([]);
   });
 });
 

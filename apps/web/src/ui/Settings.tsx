@@ -2,8 +2,8 @@ import { RecordType } from '@blindvault/crypto';
 import { type Preferences, type SyncPurpose, type VaultSession } from '@blindvault/vault';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
-import { download, phraseLabel } from '../app/backup-file';
-import { devicesOf, eraseAdvice, peerSyncState } from '../app/devices';
+import { download, phraseLabel, recordIdPrefix } from '../app/backup-file';
+import { devicesOf, eraseAdvice, peerSyncState, rejectedPeersOf } from '../app/devices';
 import { type Navigation, type SettingsFocus } from '../app/nav';
 import {
   type BackupExport,
@@ -743,6 +743,78 @@ function exportError(m: Messages, outcome: BackupExport): string | undefined {
  * password is optional, with the warning that it yields the Master Key. The local password, or the
  * passkey, is asked for again. Shows the last backup made on this device (§13.4).
  */
+/**
+ * The export warning while peers' records were rejected for their format or type, naming the peers,
+ * each dismissable after a confirmation, for a device lost or retired (D68, D115, D227).
+ */
+function IncompleteBackup({
+  controller,
+  session,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+}) {
+  const { messages: m } = useLanguage();
+  const [confirm, setConfirm] = useState<string>();
+  const [working, setWorking] = useState(false);
+  const peers = rejectedPeersOf(session).map((p) => ({
+    ...p,
+    id: hex(p.deviceId),
+    label: p.name ?? recordIdPrefix(p.deviceId),
+  }));
+  const asked = peers.find((p) => p.id === confirm);
+  return (
+    <div className="flex flex-col gap-2" data-testid="backup-incomplete">
+      <Notice>
+        {format(m.settings.backupIncomplete, { names: peers.map((p) => p.label).join(', ') })}
+      </Notice>
+      {asked ? (
+        <div className="flex flex-col gap-2" data-testid="backup-incomplete-confirm">
+          <Notice>{format(m.settings.backupIncompleteWarning, { name: asked.label })}</Notice>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={working}
+              onClick={() => {
+                setWorking(true);
+                void controller.dismissRejectedPeer(asked.deviceId).then(() => {
+                  setWorking(false);
+                  setConfirm(undefined);
+                });
+              }}
+            >
+              {format(m.settings.backupIncompleteConfirm, { name: asked.label })}
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={working}
+              onClick={() => {
+                setConfirm(undefined);
+              }}
+            >
+              {m.settings.backupIncompleteCancel}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {peers.map((p) => (
+            <Button
+              key={p.id}
+              variant="quiet"
+              onClick={() => {
+                setConfirm(p.id);
+              }}
+              data-testid="backup-incomplete-dismiss"
+            >
+              {format(m.settings.backupIncompleteDismiss, { name: p.label })}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BackupSettings({
   controller,
   session,
@@ -810,7 +882,9 @@ function BackupSettings({
               }).format(last),
             })}
       </p>
-      {session.backupMayBeIncomplete ? <Notice>{m.settings.backupIncomplete}</Notice> : null}
+      {session.backupMayBeIncomplete ? (
+        <IncompleteBackup controller={controller} session={session} />
+      ) : null}
       <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
