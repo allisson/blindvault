@@ -119,6 +119,7 @@ const EMPTY = {
   summary: () => [],
   records: () => Promise.resolve([]),
   merge: () => Promise.resolve(SYNCED),
+  mergeLive: () => Promise.resolve(SYNCED),
   watch: () => () => undefined,
 };
 
@@ -977,6 +978,7 @@ describe('live session (sync-protocol.md §10, D225)', () => {
       release = resolve;
     });
     const merged: Uint8Array[][] = [];
+    const kinds: string[] = [];
     const net = network();
     const { grant } = devices();
     const make = (role: 'initiator' | 'responder', g: SyncGrant) =>
@@ -1007,6 +1009,12 @@ describe('live session (sync-protocol.md §10, D225)', () => {
       ...grant('r', 'i'),
       merge: (records) => {
         merged.push([...records]);
+        kinds.push('merge');
+        return Promise.resolve(rMerge(records));
+      },
+      mergeLive: (records) => {
+        merged.push([...records]);
+        kinds.push('mergeLive');
         return Promise.resolve(rMerge(records));
       },
     });
@@ -1022,11 +1030,11 @@ describe('live session (sync-protocol.md §10, D225)', () => {
     const write = (envelopes: Uint8Array[]) => {
       watcher?.(envelopes);
     };
-    return { i, r, merged, write, stopped: () => stopped };
+    return { i, r, merged, kinds, write, stopped: () => stopped };
   }
 
   it('sends each local write from the summary on once committed, and merges each transfer, adding up the result', async () => {
-    const { i, r, merged, write, stopped } = await live((records) => ({
+    const { i, r, merged, kinds, write, stopped } = await live((records) => ({
       ...SYNCED,
       added: records.length,
     }));
@@ -1036,6 +1044,8 @@ describe('live session (sync-protocol.md §10, D225)', () => {
     });
     // The first transfer (empty), then the write made during the exchange, then the later one.
     expect(merged).toEqual([[], [E(1)], [E(2), E(3)]]);
+    // Only the first is the transfer of §9: a live one never clears the incomplete-backup list (D227).
+    expect(kinds).toEqual(['merge', 'mergeLive', 'mergeLive']);
     expect(r.stage).toMatchObject({ kind: 'synced', result: { added: 3 }, unseen: false });
     i.end();
     expect(stopped()).toBe(1);
@@ -1086,6 +1096,10 @@ describe('live session (sync-protocol.md §10, D225)', () => {
     const r = make('responder', {
       ...grant('r', 'i'),
       merge: (records) => {
+        merged.push([...records]);
+        return Promise.resolve(SYNCED);
+      },
+      mergeLive: (records) => {
         merged.push([...records]);
         return Promise.resolve(SYNCED);
       },

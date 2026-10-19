@@ -382,7 +382,8 @@ export class Syncing {
         const stage = this.#stage;
         if (stage.kind === 'synced') this.#set({ ...stage, live: true });
       },
-      merge: (records) => this.#vault(() => grant.merge(records)),
+      // A live transfer never clears the peer from the incomplete-backup list (D227).
+      merge: (records) => this.#vault(() => grant.mergeLive(records)),
       merged: (merged) => this.#merged(session, merged),
       retired: (envelope) => this.#ownRetirement(envelope),
     });

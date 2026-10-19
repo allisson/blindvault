@@ -5,11 +5,15 @@
 
 import { BackupRejectedError, parseBackup, restoreWithPhrase } from '@blindvault/backup';
 import {
+  type CborMap,
   Keyring,
   MEMLIMIT,
+  RECORD_FORMAT_VERSION,
   RecordType,
   type SymmetricKey,
+  decodeCbor,
   derivePrfKek,
+  encodeCbor,
   generateRecoveryPhrase,
   initCrypto,
 } from '@blindvault/crypto';
@@ -128,8 +132,15 @@ async function peers() {
   return { clock, x, y, shared, words: phrase.words };
 }
 
-/** One sync between `x` and `y` through `Noise_KK`, the summaries and the transfer. */
-async function sync(x: VaultSession, y: VaultSession): Promise<[SyncResult, SyncResult]> {
+/**
+ * One sync between `x` and `y` through `Noise_KK`, the summaries and the transfer; `sent` changes
+ * what `x` sends, as a newer app would.
+ */
+async function sync(
+  x: VaultSession,
+  y: VaultSession,
+  sent: (records: Uint8Array[]) => Uint8Array[] = (records) => records,
+): Promise<[SyncResult, SyncResult]> {
   const gx = x.openSync(y.deviceId);
   const gy = y.openSync(x.deviceId);
   const link = memoryPair();
@@ -157,7 +168,8 @@ async function sync(x: VaultSession, y: VaultSession): Promise<[SyncResult, Sync
   const run = (session: SyncSession, grant: typeof gx) =>
     exchange(session, {
       summary: grant.summary(),
-      records: (selected) => grant.records(selected),
+      records: async (selected) =>
+        grant === gx ? sent(await grant.records(selected)) : grant.records(selected),
       merge: (records) => grant.merge(records),
       retired: () => Promise.reject(new Error('no retirement here')),
     });
@@ -702,7 +714,7 @@ async function liveSync(x: VaultSession, y: VaultSession, during?: () => Promise
     await session.send({ t: 'committed' });
     live = liveSession(session, {
       live: () => undefined,
-      merge: (records) => grant.merge(records),
+      merge: (records) => grant.mergeLive(records),
       merged: (result) => {
         merged.push(result);
         return Promise.resolve();
@@ -789,5 +801,37 @@ describe('the live session (sync-protocol.md §10, D225)', () => {
     expect(live.merges.x).toEqual([]);
     expect(live.merges.y).toEqual([]);
     await live.end();
+  });
+});
+
+describe('records in a newer format over a sync (sync-protocol.md §9, D68, D81, D115, D227)', () => {
+  /** A copy of `envelope` in a record format version this app does not know. */
+  function newer(envelope: Uint8Array): Uint8Array {
+    const map = decodeCbor(envelope) as CborMap;
+    map.set('v', RECORD_FORMAT_VERSION + 1);
+    return encodeCbor(map);
+  }
+
+  it('warns at export until a later sync with that peer brings no such record, merging the rest', async () => {
+    const { x, y } = await peers();
+    await x.createItem(login('Made on X'));
+    const [, toY] = await sync(x, y, (records) => [...records, ...records.slice(0, 1).map(newer)]);
+    expect(toY.rejected).toEqual([{ reason: 'unsupported-format' }]);
+    expect(
+      y
+        .items()
+        .map((i) => i.item?.title)
+        .sort(),
+    ).toEqual(['Made on X', 'Shared']);
+    expect(y.backupMayBeIncomplete).toBe(true);
+    expect(y.rejectedPeers).toEqual([x.deviceId]);
+    // X's side: nothing rejected, nothing recorded.
+    expect(x.backupMayBeIncomplete).toBe(false);
+
+    // The peer updated, or no longer holds it: the next sync clears the warning.
+    const [, again] = await sync(x, y);
+    expect(again.rejected).toEqual([]);
+    expect(y.backupMayBeIncomplete).toBe(false);
+    expect(y.rejectedPeers).toEqual([]);
   });
 });

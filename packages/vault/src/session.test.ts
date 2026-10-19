@@ -3898,6 +3898,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       exportBackup: () => session.exportBackup({ kek: kek(caller), method: 'password' }),
       lastBackupAt: () => session.lastBackupAt,
       backupMayBeIncomplete: () => session.backupMayBeIncomplete,
+      dismissRejectedPeer: () => session.dismissRejectedPeer(randomId()),
       writable: () => session.writable,
       writableAt: () => session.writableAt,
       items: () => session.items(),
@@ -5086,7 +5087,7 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
     expect(titles(y.session)).toEqual(['From X', 'From Y']);
   });
 
-  it('refuses a newer record, two of one identity, or a retired peer before writing anything (D45, D206)', async () => {
+  it("refuses a newer record, two of one identity, or a retired peer before writing any record, recording the newer one's peer (D45, D68, D206, D227)", async () => {
     const { x, y } = await devices();
     const gx = x.session.openReadmission();
     const gy = y.session.openReadmission();
@@ -5097,6 +5098,11 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
     expect(await rejection(gy.merge([...records, encodeCbor(map)], gx.identity.publicKey))).toBe(
       'unsupported-format',
     );
+    // A newer record writes no record, only X in Local Config for the export warning (D68, D227).
+    expect(y.store.commits).toHaveLength(commits + 1);
+    expect(y.store.commits.at(-1)?.put).toEqual([]);
+    expect(y.store.commits.at(-1)?.delete).toEqual([]);
+    expect(y.session.rejectedPeers).toEqual([deviceId(gx.identity.publicKey)]);
     expect(await rejection(gy.merge([...records, must(records[0])], gx.identity.publicKey))).toBe(
       'protocol-error',
     );
@@ -5104,7 +5110,7 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
     plantDevice(x.store, keysOf(x.store), gx.identity.publicKey, hlcAt(T0 + DAY), true);
     const retired = (await x.store.records()).map((r) => r.envelope);
     expect(await rejection(gy.merge(retired, gx.identity.publicKey))).toBe('retired-peer');
-    expect(y.store.commits).toHaveLength(commits);
+    expect(y.store.commits).toHaveLength(commits + 1);
     expect(y.session.registered).toBe(false);
   });
 
@@ -5630,6 +5636,103 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       ].sort(),
     );
     expect(titles(x.session)).toContain('Good');
+  });
+
+  /** `envelope` in a record format version or a record type this app does not know (D68, D81). */
+  function unknown(envelope: Uint8Array, key: 'v' | 't'): Uint8Array {
+    const map = decodeCbor(envelope) as CborMap;
+    map.set(key, key === 'v' ? RECORD_FORMAT_VERSION + 1 : 0x7f);
+    return encodeCbor(map);
+  }
+
+  /** Z restored X's backup, then re-admitted with Y: a third peer of Y. */
+  async function third(
+    clock: Clock,
+    x: { session: VaultSession; keyring: Keyring; words: string },
+    y: VaultSession,
+  ) {
+    const file = await x.session.exportBackup({ kek: kek(x.keyring), method: 'password' });
+    const keyring = new Keyring();
+    const store = new MemoryStore();
+    const z = await VaultSession.restore({
+      store,
+      keyring,
+      kek: kek(keyring, 3),
+      salt: SALT,
+      kdfParams: PARAMS,
+      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      now: clock.now,
+    });
+    open.push(z);
+    const gy = y.openReadmission();
+    const gz = z.openReadmission();
+    await gy.admit({ own: false, peer: true }, gz.identity.publicKey, 'Z', 'Y');
+    await gz.merge(await gy.records(), gy.identity.publicKey);
+    await gy.merge(await gz.records(), gz.identity.publicKey);
+    return z;
+  }
+
+  it.each(['v', 't'] as const)(
+    'records the peer of a record rejected for its unknown %s, and removes it after a transfer with none (D68, D81, D115)',
+    async (key) => {
+      const { clock, x, y } = await peers();
+      const records = (await x.store.records()).map((r) => r.envelope);
+      expect(y.session.rejectedPeers).toEqual([]);
+      const result = await y.grant.merge([...records, unknown(must(records[0]), key)]);
+      expect(result.rejected).toEqual([{ reason: 'unsupported-format' }]);
+      expect(y.session.rejectedPeers).toEqual([x.session.deviceId]);
+      expect(y.session.backupMayBeIncomplete).toBe(true);
+      // In the same commit as the sync, so it survives a lock (D34, D62).
+      y.session.lock();
+      const again = await unlock(y.store, clock, 2);
+      expect(again.rejectedPeers).toEqual([x.session.deviceId]);
+      const grant = again.openSync(x.session.deviceId);
+      expect((await grant.merge(records)).rejected).toEqual([]);
+      expect(again.rejectedPeers).toEqual([]);
+      expect(again.backupMayBeIncomplete).toBe(false);
+    },
+  );
+
+  it('removes only the peer of the transfer: a sync with another peer clears nothing (D115)', async () => {
+    const { clock, x, y } = await peers();
+    const z = await third(clock, x, y.session);
+    const records = (await x.store.records()).map((r) => r.envelope);
+    await y.grant.merge([unknown(must(records[0]), 'v')]);
+    const withZ = y.session.openSync(z.deviceId);
+    await withZ.merge([unknown(must(records[0]), 't')]);
+    expect(y.session.rejectedPeers.map(idKey).sort()).toEqual(
+      [x.session.deviceId, z.deviceId].map(idKey).sort(),
+    );
+    await withZ.merge(records);
+    expect(y.session.rejectedPeers).toEqual([x.session.deviceId]);
+  });
+
+  it('records a rejection in a live transfer, but never removes the peer there (§10, D225, D227)', async () => {
+    const { x, y } = await peers();
+    const records = (await x.store.records()).map((r) => r.envelope);
+    await y.grant.mergeLive([unknown(must(records[0]), 'v')]);
+    expect(y.session.rejectedPeers).toEqual([x.session.deviceId]);
+    // A live transfer holds only pushed writes: it proves nothing of the records rejected.
+    expect((await y.grant.mergeLive(records)).rejected).toEqual([]);
+    expect(y.session.rejectedPeers).toEqual([x.session.deviceId]);
+    await y.grant.merge(records);
+    expect(y.session.rejectedPeers).toEqual([]);
+  });
+
+  it("dismisses a listed peer at the user's word, in a commit of the Local Config only (D115, D227)", async () => {
+    const { clock, x, y } = await peers();
+    const records = (await x.store.records()).map((r) => r.envelope);
+    await y.grant.merge([unknown(must(records[0]), 'v')]);
+    const commits = y.store.commits.length;
+    await y.session.dismissRejectedPeer(randomId());
+    expect(y.store.commits).toHaveLength(commits);
+    await y.session.dismissRejectedPeer(x.session.deviceId);
+    expect(y.store.commits).toHaveLength(commits + 1);
+    expect(y.store.commits.at(-1)?.put).toEqual([]);
+    expect(y.session.rejectedPeers).toEqual([]);
+    expect(y.session.backupMayBeIncomplete).toBe(false);
+    y.session.lock();
+    expect((await unlock(y.store, clock, 2)).rejectedPeers).toEqual([]);
   });
 
   it('reports each local write to watch with the records it wrote, and no merge, purge or cut (§10, D225)', async () => {

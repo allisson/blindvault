@@ -802,7 +802,12 @@ const en = {
     backupLast: 'Last backup made on this device: {date}.',
     backupNever: 'No backup has been made on this device yet.',
     backupIncomplete:
-      'Some records from other devices were rejected because they need a newer app version, so this backup may be incomplete. Update the app and sync with them first.',
+      'Records from {names} were rejected because they need a newer app version, so this backup may be incomplete. Update the app and sync with them first.',
+    backupIncompleteDismiss: 'Dismiss for {name}…',
+    backupIncompleteWarning:
+      'The records of {name} that this app rejected are not on this device, and every backup made here will still lack them. Dismiss only for a device that is lost or retired.',
+    backupIncompleteConfirm: 'Dismiss the warning for {name}',
+    backupIncompleteCancel: 'Cancel',
     backupNone:
       'This vault has no Recovery Phrase: the preview build created it, so no backup of it could be opened. Create a new vault to get one.',
     backupProtect: 'Also protect it with an export password',
@@ -1762,7 +1767,12 @@ const ptBR: Messages = {
     backupLast: 'Último backup feito neste dispositivo: {date}.',
     backupNever: 'Nenhum backup foi feito neste dispositivo ainda.',
     backupIncomplete:
-      'Alguns registros de outros dispositivos foram rejeitados porque precisam de uma versão mais nova do app, então este backup pode estar incompleto. Atualize o app e sincronize com eles antes.',
+      'Registros de {names} foram rejeitados porque precisam de uma versão mais nova do app, então este backup pode estar incompleto. Atualize o app e sincronize com eles antes.',
+    backupIncompleteDismiss: 'Dispensar para {name}…',
+    backupIncompleteWarning:
+      'Os registros de {name} que este app rejeitou não estão neste dispositivo, e todo backup feito aqui continuará sem eles. Dispense só para um dispositivo perdido ou aposentado.',
+    backupIncompleteConfirm: 'Dispensar o aviso para {name}',
+    backupIncompleteCancel: 'Cancelar',
     backupNone:
       'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, então nenhum backup dele poderia ser aberto. Crie um novo cofre para ter uma.',
     backupProtect: 'Proteger também com uma senha de exportação',
