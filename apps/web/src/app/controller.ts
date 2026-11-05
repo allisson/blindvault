@@ -44,6 +44,7 @@ import {
 import {
   ContentInvalidError,
   ExportRejectedError,
+  HlcReadOnlyError,
   type LocalConfigCleartext,
   MergeRejectedError,
   type MergeResult,
@@ -52,6 +53,7 @@ import {
   type ReadmissionGrant,
   PasswordResetRejectedError,
   type Preferences,
+  RecordBlockedError,
   RecordNotFoundError,
   type RecordStore,
   type RecoveryView,
@@ -2351,6 +2353,30 @@ export class VaultController {
       throw error;
     }
     this.#sync?.flow.recheck();
+    this.#set({ ...status });
+    return 'ok';
+  }
+
+  /**
+   * Renames any Device record, this device's own included (D118); no password, as a retirement.
+   * `future-clock`: the held record is beyond the bound (D74); `read-only`: the clock went back
+   * (D73); `refused`: no such Device record. The name must already be valid (`folderNameOf`).
+   */
+  async renameDevice(
+    deviceId: Uint8Array,
+    name: string,
+  ): Promise<'ok' | 'refused' | 'future-clock' | 'read-only' | 'locked'> {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return 'locked';
+    try {
+      await status.session.renameDevice(deviceId, name);
+    } catch (error) {
+      if (error instanceof VaultLockedError) return 'locked';
+      if (error instanceof RecordNotFoundError) return 'refused';
+      if (error instanceof RecordBlockedError) return 'future-clock';
+      if (error instanceof HlcReadOnlyError) return 'read-only';
+      throw error;
+    }
     this.#set({ ...status });
     return 'ok';
   }

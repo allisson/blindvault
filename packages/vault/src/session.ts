@@ -2181,6 +2181,28 @@ export class VaultSession {
     });
   }
 
+  /**
+   * Renames any Device record, this device's own and a retired one included, by plain LWW (D118):
+   * one commit writes it under an HLC above the held one, keeping its other fields and unknown keys
+   * (D59). An unchanged name writes nothing. Throws `RecordNotFoundError` for a record not held as a
+   * Device, `RecordBlockedError('future-clock')` while the held record is beyond the bound (D74),
+   * `ContentInvalidError` for an invalid name and `HlcReadOnlyError` while the vault is read-only.
+   */
+  renameDevice(id: Uint8Array, displayName: string): Promise<boolean> {
+    return this.#run(() => {
+      const held = this.#state.devices.get(idKey(id));
+      if (!held) throw new RecordNotFoundError();
+      if (this.#clock.beyondBound(held.header.hlc)) throw new RecordBlockedError('future-clock');
+      if (held.device.value.displayName === displayName) {
+        return { writes: [], deletes: [], result: false };
+      }
+      const content = deviceToCbor({ ...held.device.value, displayName }, held.device.content);
+      const hlc = this.#clock.issue(held.header.hlc);
+      const write = this.#seal(RecordType.device, held.header.recordId, hlc, false, content);
+      return { writes: [write], deletes: [], result: true };
+    });
+  }
+
   /** The date of the last completed sync with each peer, ascending by `deviceId` (D34). */
   get lastSyncByPeer(): [Uint8Array, number][] {
     this.#unlocked();

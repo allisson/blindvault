@@ -668,6 +668,20 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     expect(await c.retireDevice(creator)).toBe('locked');
   });
 
+  it('renames any device, its own included, refuses an unknown one, and nothing once locked (D118)', async () => {
+    const source = await backup();
+    const c = await restored(source.bytes, source.words);
+    const seen: string[] = [];
+    c.subscribe(() => seen.push(c.status.kind));
+    const creator = must(session(c).devices()[0]).deviceId;
+    expect(await c.renameDevice(creator, 'Old laptop')).toBe('ok');
+    expect(seen).toEqual(['unlocked']);
+    expect(session(c).devices()[0]?.device.displayName).toBe('Old laptop');
+    expect(await c.renameDevice(session(c).deviceId, 'Phone')).toBe('refused');
+    c.lock();
+    expect(await c.renameDevice(creator, 'Laptop')).toBe('locked');
+  });
+
   it('reports a file that is not a backup, a phrase that is not one, and a wrong phrase', async () => {
     const source = await backup();
     const c = await empty();
