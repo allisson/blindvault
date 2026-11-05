@@ -337,23 +337,23 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Gate D
 
 - [ ] Identical vaults, one-way and bidirectional changes converge
-- [ ] Concurrent edits: winner by HLC, loser stored in history
-- [ ] Delete vs. edit and edit vs. delete follow the rule; a newer edit restores
-- [ ] A stale device does not resurrect a deleted item
+- [x] Concurrent edits: winner by HLC, loser stored in history
+- [x] Delete vs. edit and edit vs. delete follow the rule; a newer edit restores
+- [x] A stale device does not resurrect a deleted item
 - [ ] Concurrent moves creating a cycle produce the same tree on every device (D14)
 - [ ] Deleting a folder on one device while adding an item to it on another leaves the item visible at the root
 - [ ] A child received before its parent appears at the root, then moves under the parent when it arrives
 - [ ] Duplicate, out-of-order and repeated messages are idempotent
-- [ ] A corrupted record is rejected without affecting the others
-- [ ] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
+- [x] A corrupted record is rejected without affecting the others
+- [x] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
 - [x] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
 - [ ] An interrupted connection resumes without inconsistency
-- [ ] A peer without a registered identity cannot sync
+- [x] A peer without a registered identity cannot sync
 - [x] A device re-admitted in Phase 4 then syncs (D22, D211)
 - [ ] A retired peer cannot sync, and a forged newer non-retired Device record, even one claiming another device's HLC, never un-retires it (D31, CRYPTO-INV-015)
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected
-- [ ] During a sync session, an edit on one device reaches the other without a new exchange
-- [ ] Locking the vault on either side ends the sync session
+- [x] During a sync session, an edit on one device reaches the other without a new exchange
+- [x] Locking the vault on either side ends the sync session
 - [ ] Simulation with 3 or more devices and injected failures, over the in-memory transport
 
 ---
