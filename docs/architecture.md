@@ -487,6 +487,10 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **Sync after a re-admission (Phase 5, D211).** No code change: `tests/readmission.test.ts`
+  re-admits a restored device through `Noise_XX`, the SAS and step 4, then syncs it through
+  `Noise_KK`; neither device could open a sync before, and after it both hold the changes of both
+  in IndexedDB. No new dependency.
 - **Recovery Envelope over a sync (Phase 5, D2, D145).** No code change: the merge shared with the
   backup merge takes an envelope of another `phraseId` by last-write-wins, rejects one changed
   under the held `phraseId` (D44) and reports `phraseChanged` (D43) or `phraseSuperseded` (D145,
