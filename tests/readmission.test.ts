@@ -18,18 +18,23 @@ import {
   PairingError,
   PairingSession,
   type Role,
+  SyncSession,
   TransferRefusal,
   encodePayload,
+  exchange,
   exchangeNonces,
   memoryPair,
   pairingHandshake,
   readmit,
+  syncHandshake,
 } from '@blindvault/sync';
 import {
   type ItemInput,
   JoinRejectedError,
   PairingRefusedError,
   type RecordStore,
+  type SyncResult,
+  SyncRefusedError,
   VaultLockedError,
   VaultSession,
   parseLocalConfig,
@@ -249,6 +254,45 @@ async function readmission(i: Device, r: Device, run: Run = {}) {
   return { outI, outR };
 }
 
+/** One sync after the re-admission, through `Noise_KK`, the summaries and the transfer (Gate D). */
+async function sync(x: VaultSession, y: VaultSession): Promise<[SyncResult, SyncResult]> {
+  const gx = x.openSync(y.deviceId);
+  const gy = y.openSync(x.deviceId);
+  const link = memoryPair();
+  const payload = (fill: number) => ({
+    message: new Uint8Array(140).fill(fill),
+    fingerprint: new Uint8Array(32).fill(fill + 1),
+  });
+  const both = { initiator: payload(0x10), responder: payload(0x30) };
+  const [hx, hy] = await Promise.all([
+    syncHandshake(link.a, {
+      role: 'initiator',
+      identity: gx.identity,
+      peerPublicKey: gx.peerPublicKey,
+      ...both,
+    }),
+    syncHandshake(link.b, {
+      role: 'responder',
+      identity: gy.identity,
+      peerPublicKey: gy.peerPublicKey,
+      ...both,
+    }),
+  ]);
+  const sx = new SyncSession(hx.channel);
+  const sy = new SyncSession(hy.channel);
+  const run = (session: SyncSession, grant: typeof gx) =>
+    exchange(session, {
+      summary: grant.summary(),
+      records: (selected) => grant.records(selected),
+      merge: (records) => grant.merge(records),
+      retired: () => Promise.reject(new Error('no retirement here')),
+    });
+  const results = await Promise.all([run(sx, gx), run(sy, gy)]);
+  sx.close();
+  sy.close();
+  return results;
+}
+
 function reasonOf(outcome: PromiseSettledResult<unknown>): string {
   if (outcome.status === 'fulfilled') return 'completed';
   const error: unknown = outcome.reason;
@@ -307,6 +351,29 @@ describe('re-admission end to end (pairing-protocol.md §9, Gate C)', () => {
       expect(names(again)).toEqual(['Laptop', 'Restored phone']);
       expect(titles(again)).toEqual(['From Laptop', 'From Restored phone']);
       expect(again.lastSyncByPeer).toHaveLength(1);
+    }
+  });
+
+  it('a re-admitted device then syncs: no sync before, one after carries the changes of both, in IndexedDB (D22, D211, Gate D)', async () => {
+    const x = await created('Laptop');
+    const y = await restored(x, 'Restored phone', 2);
+    // Before: Y holds no record of its own, and X none of Y's (D41, D113).
+    expect(() => y.session.openSync(x.session.deviceId)).toThrow(SyncRefusedError);
+    expect(() => x.session.openSync(y.session.deviceId)).toThrow(SyncRefusedError);
+
+    expect(reasonOf((await readmission(y, x)).outI)).toBe('completed');
+    await x.session.createItem(login('Later on Laptop'));
+    await y.session.createItem(login('Later on phone'));
+
+    const [rx, ry] = await sync(x.session, y.session);
+    expect(rx.rejected).toEqual([]);
+    expect(ry.rejected).toEqual([]);
+    const all = ['From Laptop', 'From Restored phone', 'Later on Laptop', 'Later on phone'];
+    for (const device of [x, y]) {
+      const again = await reopened(device);
+      expect(again.registered).toBe(true);
+      expect(titles(again)).toEqual(all);
+      expect(names(again)).toEqual(['Laptop', 'Restored phone']);
     }
   });
 

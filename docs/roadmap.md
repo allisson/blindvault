@@ -349,7 +349,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
-- [ ] A device re-admitted in Phase 4 then syncs (D22, D211)
+- [x] A device re-admitted in Phase 4 then syncs (D22, D211)
 - [ ] A retired peer cannot sync, and a forged newer non-retired Device record, even one claiming another device's HLC, never un-retires it (D31, CRYPTO-INV-015)
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected
 - [ ] During a sync session, an edit on one device reaches the other without a new exchange
