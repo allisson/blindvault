@@ -19,7 +19,9 @@ import {
 } from '@blindvault/crypto';
 import { VaultDatabase } from '@blindvault/storage';
 import {
+  type Direction,
   type LiveSession,
+  type MemoryPair,
   SyncSession,
   exchange,
   liveSession,
@@ -140,10 +142,10 @@ async function sync(
   x: VaultSession,
   y: VaultSession,
   sent: (records: Uint8Array[]) => Uint8Array[] = (records) => records,
+  link: MemoryPair = memoryPair(),
 ): Promise<[SyncResult, SyncResult]> {
   const gx = x.openSync(y.deviceId);
   const gy = y.openSync(x.deviceId);
-  const link = memoryPair();
   const payload = (fill: number) => ({
     message: new Uint8Array(140).fill(fill),
     fingerprint: new Uint8Array(32).fill(fill + 1),
@@ -666,10 +668,14 @@ describe('the Recovery Envelope over a sync (sync-protocol.md §1.3, §1.6, D2, 
  * its summary on, and pushes them once it has sent `committed`, as the app does. `during` runs on
  * `x` between its summary and its selection.
  */
-async function liveSync(x: VaultSession, y: VaultSession, during?: () => Promise<void>) {
+async function liveSync(
+  x: VaultSession,
+  y: VaultSession,
+  during?: () => Promise<void>,
+  link: MemoryPair = memoryPair(),
+) {
   const gx = x.openSync(y.deviceId);
   const gy = y.openSync(x.deviceId);
-  const link = memoryPair();
   const payload = (fill: number) => ({
     message: new Uint8Array(140).fill(fill),
     fingerprint: new Uint8Array(32).fill(fill + 1),
@@ -833,5 +839,111 @@ describe('records in a newer format over a sync (sync-protocol.md §9, D68, D81,
     expect(again.rejected).toEqual([]);
     expect(y.backupMayBeIncomplete).toBe(false);
     expect(y.rejectedPeers).toEqual([]);
+  });
+});
+
+/**
+ * A link that breaks at the `at`-th message sent in `direction` from the moment `armed` returns
+ * true, the handshake's included, delivering neither that message nor any after it.
+ */
+function cutAt(direction: Direction, at: number, armed: () => boolean = () => true) {
+  let seen = 0;
+  let cut = false;
+  const link: MemoryPair = memoryPair({
+    intercept: (d, message) => {
+      if (cut) return [];
+      if (d === direction && armed() && ++seen === at) {
+        cut = true;
+        link.breakLink();
+        return [];
+      }
+      return [message];
+    },
+  });
+  return { link, cut: () => cut };
+}
+
+function titles(session: VaultSession): string[] {
+  return session
+    .items()
+    .map((i) => i.item?.title ?? '')
+    .sort();
+}
+
+describe('an interrupted connection (sync-protocol.md §9, §10, §12, Gate D)', () => {
+  it.each(['a-to-b', 'b-to-a'] as const)(
+    'cut at each message %s in turn, its receiver commits nothing, the sender all or nothing, and the next sync converges',
+    async (direction) => {
+      const { x, y } = await peers();
+      for (let at = 1; ; at++) {
+        for (const [name, session] of [
+          ['Laptop', x],
+          ['Phone', y],
+        ] as const) {
+          for (const n of [1, 2, 3]) {
+            await session.createItem(login(`${name} ${direction} ${String(at)}.${String(n)}`));
+          }
+        }
+        const before = { x: titles(x), y: titles(y) };
+        const union = [...new Set([...before.x, ...before.y])].sort();
+        const { link, cut } = cutAt(direction, at);
+        const outcome = await sync(x, y, undefined, link).then(
+          () => 'synced',
+          () => 'cut',
+        );
+        if (!cut()) {
+          // Past the last message: the sync ran whole.
+          expect(outcome).toBe('synced');
+          expect(at).toBeGreaterThan(3);
+          break;
+        }
+        // Every message cut in `direction` comes before or is the sender's records-end: its
+        // receiver commits nothing (§9). The sender, one commit per transfer, all or nothing.
+        const [receiver, sender] =
+          direction === 'a-to-b' ? (['y', 'x'] as const) : (['x', 'y'] as const);
+        const now = { x: titles(x), y: titles(y) };
+        expect(now[receiver]).toEqual(before[receiver]);
+        expect([before[sender], union]).toContainEqual(now[sender]);
+
+        await sync(x, y);
+        expect(titles(x)).toEqual(union);
+        expect(titles(y)).toEqual(union);
+        expect(held(x)).toEqual(held(y));
+      }
+    },
+  );
+
+  it('a live transfer cut at any message is not merged, and the next sync brings it (§10)', async () => {
+    const { clock, x, y, shared } = await peers();
+    for (let at = 1; ; at++) {
+      let editing = false;
+      const { link, cut } = cutAt('a-to-b', at, () => editing);
+      const live = await liveSync(x, y, undefined, link);
+      const title = `Edited live ${String(at)}`;
+      const before = titleOf(y, shared);
+      editing = true;
+      clock.t = T0 + at * MINUTE;
+      await x.updateItem(shared, login(title));
+      // The transfer leaves after the commit: either it arrives whole, or the link breaks.
+      await vi.waitFor(() => {
+        expect(cut() || titleOf(y, shared) === title).toBe(true);
+      });
+      if (!cut()) {
+        expect(held(x)).toEqual(held(y));
+        await live.end();
+        expect(at).toBeGreaterThan(2);
+        break;
+      }
+      await link.b.closed;
+      expect(live.merges.y).toEqual([]);
+      expect(titleOf(y, shared)).toBe(before);
+      expect(history(y, shared)).not.toContain(title);
+
+      const [, ry] = await sync(x, y);
+      expect(ry).toMatchObject({ rejected: [] });
+      expect(titleOf(y, shared)).toBe(title);
+      expect(history(y, shared)).toEqual(history(x, shared));
+      expect(held(x)).toEqual(held(y));
+    }
   });
 });

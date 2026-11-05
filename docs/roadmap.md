@@ -347,7 +347,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] A corrupted record is rejected without affecting the others
 - [x] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
 - [x] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
-- [ ] An interrupted connection resumes without inconsistency
+- [x] An interrupted connection resumes without inconsistency
 - [x] A peer without a registered identity cannot sync
 - [x] A device re-admitted in Phase 4 then syncs (D22, D211)
 - [ ] A retired peer cannot sync, and a forged newer non-retired Device record, even one claiming another device's HLC, never un-retires it (D31, CRYPTO-INV-015)
