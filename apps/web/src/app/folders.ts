@@ -21,11 +21,12 @@ export type FolderNameResult =
   | { readonly ok: false; readonly error: 'required' | 'too-long' | 'single-line' };
 
 /** A typed folder name as stored: trimmed, single-line, 1 to 256 code points. */
-export function folderNameOf(text: string): FolderNameResult {
+/** A trimmed single-line name of at most `max` code points: a folder's, or a device's (D118). */
+export function folderNameOf(text: string, max = FOLDER_NAME_MAX): FolderNameResult {
   const name = text.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '');
   if (name === '') return { ok: false, error: 'required' };
   if (/[\n\r]/.test(name)) return { ok: false, error: 'single-line' };
-  if (codePointLength(name) > FOLDER_NAME_MAX) return { ok: false, error: 'too-long' };
+  if (codePointLength(name) > max) return { ok: false, error: 'too-long' };
   return { ok: true, name };
 }
 

@@ -331,6 +331,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Trash with deterministic, automatic-only purge; no manual purge (D7, D94); the purge date from the tombstone's HLC, the same on both devices, and a tombstone past it purged on arrival, read-only vault included (D73)
 - [x] Recovery Envelope synchronization; a device superseded by a concurrent regeneration warns the user, naming the superseded phrase and offering a new backup (D2, D145); the warning on the device whose own envelope lost, a later regeneration after a sync included, and the one-time notice elsewhere (D43, D185); an envelope changed under the held `phraseId` rejected and reported (D44)
 - [x] Live push of changes while the DataChannel is open; session ends on close or lock; the session outlives Settings once both committed, with a bar in the vault, and the window opens at the summary (§10, D225)
+- [x] Device rename: any Device record, its own included, by plain LWW, from Settings; blocked while the held record is beyond the future-clock bound or the vault is read-only (D74, D118)
 - [x] UI: sync state and last successful sync date; only devices with a known Device record are offered as peers; the open sync on its peer's row, and the latest sync, with its time and peer, in This device (D34, D226)
 
 ### Gate D
@@ -345,7 +346,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Duplicate, out-of-order and repeated messages are idempotent
 - [ ] A corrupted record is rejected without affecting the others
 - [ ] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
-- [ ] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
+- [x] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
 - [ ] An interrupted connection resumes without inconsistency
 - [ ] A peer without a registered identity cannot sync
 - [ ] A device re-admitted in Phase 4 then syncs (D22, D211)

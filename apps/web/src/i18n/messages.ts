@@ -866,6 +866,15 @@ const en = {
     devicesRetiredNotify:
       'A retired device learns it is retired only when told: sync with it from here, and it receives only its retired record.',
     devicesNotify: 'Tell {name}',
+    devicesRename: 'Rename',
+    devicesName: 'Device name',
+    devicesNameSave: 'Save',
+    devicesNameRequired: 'Enter a device name.',
+    devicesNameTooLong: 'The name is longer than 64 characters.',
+    devicesNameSingleLine: 'The name takes a single line.',
+    devicesRenameBlocked:
+      'This device cannot rename it yet: its clock is behind the last change to that name. Try again later.',
+    devicesRenameRefused: 'That device is no longer in this vault.',
     devicesRefused: 'That device cannot be retired: it is this device, or it is already retired.',
     recordTypes: {
       item: 'Item',
@@ -1831,6 +1840,15 @@ const ptBR: Messages = {
     devicesRetiredNotify:
       'Um dispositivo aposentado só fica sabendo quando é avisado: sincronize com ele daqui, e ele recebe só o registro aposentado dele.',
     devicesNotify: 'Avisar {name}',
+    devicesRename: 'Renomear',
+    devicesName: 'Nome do dispositivo',
+    devicesNameSave: 'Salvar',
+    devicesNameRequired: 'Digite um nome para o dispositivo.',
+    devicesNameTooLong: 'O nome passa de 64 caracteres.',
+    devicesNameSingleLine: 'O nome aceita uma única linha.',
+    devicesRenameBlocked:
+      'Este dispositivo ainda não pode renomeá-lo: o relógio dele está atrás da última mudança desse nome. Tente mais tarde.',
+    devicesRenameRefused: 'Esse dispositivo não está mais neste cofre.',
     devicesRefused:
       'Esse dispositivo não pode ser aposentado: é este dispositivo, ou já está aposentado.',
     recordTypes: {

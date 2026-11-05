@@ -56,7 +56,9 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(devices.getByTestId('device')).toContainText('(this device)');
   await expect(devices.getByTestId('devices-only')).toBeVisible();
   await expect(devices.getByTestId('device-retire')).toHaveCount(0);
-  const name = ((await devices.getByTestId('device').locator('.font-medium').textContent()) ?? '')
+  const name = (
+    (await devices.getByTestId('device').locator('span.font-medium').textContent()) ?? ''
+  )
     .replace(' (this device)', '')
     .trim();
   expect(name).not.toBe('');

@@ -79,7 +79,7 @@ import {
   UnlockRejectedError,
   VaultLockedError,
 } from './errors';
-import { deviceToCbor } from './folder';
+import { DISPLAY_NAME_MAX, deviceToCbor } from './folder';
 import { FUTURE_CLOCK_BOUND_MS, compareHlc } from './hlc';
 import { idKey } from './ids';
 import { TITLE_MAX, itemToCbor } from './item';
@@ -2863,6 +2863,96 @@ describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
     expect(behind.writable).toBe(false);
     await expect(behind.createItem(login())).rejects.toThrow(HlcReadOnlyError);
   });
+
+  it('renames any Device record, its own included, in one commit keeping its unknown keys (D59, D118)', async () => {
+    const { store, clock } = await create();
+    const phone = plantDevice(store, hlcAt(T0 + 10), { extra: true });
+    const session = await unlock(store, clock);
+    const before = must(deviceOf(session, phone));
+    const commits = store.commits.length;
+
+    expect(await session.renameDevice(phone, 'Old phone')).toBe(true);
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)?.put.map((r) => [r.recordType, idKey(r.recordId)])).toEqual([
+      [RecordType.device, idKey(phone)],
+    ]);
+    const after = must(deviceOf(session, phone));
+    expect(after.device).toEqual({ ...before.device, displayName: 'Old phone' });
+    expect(after.unknownKeys).toEqual(['color']);
+    expect(compareHlc(after.hlc, before.hlc)).toBeGreaterThan(0);
+
+    expect(await session.renameDevice(session.deviceId, 'Laptop')).toBe(true);
+    session.lock();
+    const again = await unlock(store, clock);
+    expect(deviceOf(again, phone)).toMatchObject({
+      device: { displayName: 'Old phone', retired: false },
+      unknownKeys: ['color'],
+    });
+    expect(deviceOf(again, again.deviceId)?.device.displayName).toBe('Laptop');
+  });
+
+  it('renames a retired record, which stays retired (D31, D118)', async () => {
+    const { store, clock } = await create();
+    const gone = plantDevice(store, hlcAt(T0 + 10), { retired: true });
+    const session = await unlock(store, clock);
+    expect(await session.renameDevice(gone, 'Lost phone')).toBe(true);
+    expect(deviceOf(session, gone)?.device).toMatchObject({
+      displayName: 'Lost phone',
+      retired: true,
+    });
+  });
+
+  it('writes nothing for an unchanged name, and refuses an invalid name, an unknown or corrupt record', async () => {
+    const { store, clock } = await create();
+    const phone = plantDevice(store, hlcAt(T0 + 10));
+    const broken = plantDevice(store, hlcAt(T0 + 11));
+    const key = { recordType: RecordType.device, recordId: broken };
+    const envelope = must(store.get(key)).envelope.slice() as RecordEnvelope;
+    envelope[envelope.length - 1] = (envelope[envelope.length - 1] ?? 0) ^ 1;
+    store.put({ ...key, envelope });
+    const session = await unlock(store, clock);
+    const hlc = localState(store).hlc;
+    const commits = store.commits.length;
+
+    expect(await session.renameDevice(phone, 'Phone')).toBe(false);
+    await expect(session.renameDevice(phone, '')).rejects.toThrow(ContentInvalidError);
+    await expect(session.renameDevice(phone, 'x'.repeat(DISPLAY_NAME_MAX + 1))).rejects.toThrow(
+      ContentInvalidError,
+    );
+    await expect(session.renameDevice(phone, 'two\nlines')).rejects.toThrow(ContentInvalidError);
+    await expect(session.renameDevice(randomId(), 'Tablet')).rejects.toThrow(RecordNotFoundError);
+    await expect(session.renameDevice(broken, 'Tablet')).rejects.toThrow(RecordNotFoundError);
+    expect(store.commits).toHaveLength(commits);
+    expect(localState(store).hlc).toEqual(hlc);
+  });
+
+  it('is blocked while the held record is beyond the future-clock bound, until within it (D74)', async () => {
+    const { store, clock } = await create();
+    const phone = plantDevice(store, hlcAt(T0 + FUTURE_CLOCK_BOUND_MS + 1));
+    const session = await unlock(store, clock);
+    const commits = store.commits.length;
+    await expect(session.renameDevice(phone, 'Tablet')).rejects.toThrow(
+      new RecordBlockedError('future-clock'),
+    );
+    expect(store.commits).toHaveLength(commits);
+
+    clock.t = T0 + 2;
+    expect(await session.renameDevice(phone, 'Tablet')).toBe(true);
+  });
+
+  it('is refused while the vault is read-only for a clock gone back, and once locked (D73, CRYPTO-INV-010)', async () => {
+    const clock = new Clock(T0 + 2 * DAY);
+    const { store } = await create(clock);
+    const phone = plantDevice(store, hlcAt(T0 + 10));
+    clock.t = T0;
+    const behind = await unlock(store, clock);
+    expect(behind.writable).toBe(false);
+    const commits = store.commits.length;
+    await expect(behind.renameDevice(phone, 'Tablet')).rejects.toThrow(HlcReadOnlyError);
+    behind.lock();
+    await expect(behind.renameDevice(phone, 'Tablet')).rejects.toThrow(VaultLockedError);
+    expect(store.commits).toHaveLength(commits);
+  });
 });
 
 describe('re-founding (§14, D28, D40, D60, D72, D86, D99, D187)', () => {
@@ -3925,6 +4015,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       retired: () => session.retired,
       registered: () => session.registered,
       retireDevice: () => session.retireDevice(new Uint8Array(16)),
+      renameDevice: () => session.renameDevice(new Uint8Array(16), 'x'),
       lastSyncByPeer: () => session.lastSyncByPeer,
       openPairing: () => session.openPairing({ kek: kek(caller), method: 'password' }),
       openReadmission: () => session.openReadmission(),

@@ -1,9 +1,15 @@
 import { RecordType } from '@blindvault/crypto';
-import { type Preferences, type SyncPurpose, type VaultSession } from '@blindvault/vault';
+import {
+  DISPLAY_NAME_MAX,
+  type Preferences,
+  type SyncPurpose,
+  type VaultSession,
+} from '@blindvault/vault';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { download, phraseLabel, recordIdPrefix } from '../app/backup-file';
 import { devicesOf, eraseAdvice, peerSyncState, rejectedPeersOf } from '../app/devices';
+import { folderNameOf } from '../app/folders';
 import { type Navigation, type SettingsFocus } from '../app/nav';
 import {
   type BackupExport,
@@ -486,6 +492,74 @@ function hex(id: Uint8Array): string {
   return Array.from(id, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Renames a Device record, this device's own included (D118); no password, as a retirement. */
+function DeviceNameForm({
+  controller,
+  deviceId,
+  initial,
+  onDone,
+}: {
+  readonly controller: VaultController;
+  readonly deviceId: Uint8Array;
+  readonly initial: string;
+  readonly onDone: () => void;
+}) {
+  const { messages: m } = useLanguage();
+  const [name, setName] = useState(initial);
+  const [error, setError] = useState<string>();
+  const [failure, setFailure] = useState<string>();
+  return (
+    <form
+      noValidate
+      className="flex w-full flex-col gap-2"
+      data-testid="device-rename-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const result = folderNameOf(name, DISPLAY_NAME_MAX);
+        if (!result.ok) {
+          setError(
+            result.error === 'required'
+              ? m.settings.devicesNameRequired
+              : result.error === 'too-long'
+                ? m.settings.devicesNameTooLong
+                : m.settings.devicesNameSingleLine,
+          );
+          return;
+        }
+        void controller.renameDevice(deviceId, result.name).then((outcome) => {
+          if (outcome === 'ok' || outcome === 'locked') onDone();
+          else if (outcome === 'refused') setFailure(m.settings.devicesRenameRefused);
+          else setFailure(m.settings.devicesRenameBlocked);
+        });
+      }}
+    >
+      <Field
+        label={m.settings.devicesName}
+        value={name}
+        error={error}
+        autoFocus
+        onChange={(e) => {
+          setName(e.target.value);
+          setError(undefined);
+          setFailure(undefined);
+        }}
+        data-testid="device-name"
+      />
+      {failure ? (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          {failure}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        <Button type="submit">{m.settings.devicesNameSave}</Button>
+        <Button variant="quiet" onClick={onDone}>
+          {m.settings.devicesRetireCancel}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 type RetireState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'confirm' | 'working' | 'done'; readonly id: string; readonly name: string }
@@ -508,6 +582,7 @@ function DeviceSettings({
 }) {
   const { messages: m, language } = useLanguage();
   const [retire, setRetire] = useState<RetireState>({ kind: 'idle' });
+  const [renaming, setRenaming] = useState<string>();
   // A live sync outlives this screen: back in it, its panel shows again (D225).
   const [syncWith, setSyncWith] = useState<{ id: string; purpose: SyncPurpose } | undefined>(() => {
     const peer = controller.syncPeer;
@@ -591,6 +666,15 @@ function DeviceSettings({
                   {m.sync.start}
                 </Button>
               )}
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setRenaming(id);
+                }}
+                data-testid="device-rename"
+              >
+                {m.settings.devicesRename}
+              </Button>
               {d.own ? null : (
                 <Button
                   variant="quiet"
@@ -603,6 +687,17 @@ function DeviceSettings({
                   {m.settings.devicesRetire}
                 </Button>
               )}
+              {renaming === id ? (
+                <DeviceNameForm
+                  key={id}
+                  controller={controller}
+                  deviceId={d.deviceId}
+                  initial={name}
+                  onDone={() => {
+                    setRenaming(undefined);
+                  }}
+                />
+              ) : null}
             </li>
           );
         })}

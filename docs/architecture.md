@@ -482,6 +482,11 @@ every project through the references in the root `tsconfig.json`.
   `peerSyncState` (`syncing` or `live` from the sync's stage). Settings › Devices shows the state on
   the peer's row, and `DeviceStorage` the latest sync below the last backup, both with the time. No
   new dependency.
+- **Device rename (Phase 5, D74, D118).** `VaultSession.renameDevice` writes any Device record,
+  this device's own and a retired one included, under an HLC above the held one, keeping its other
+  fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
+  bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
+  name is checked as a folder name is, at 64 code points. No new dependency.
 - **Recovery Envelope over a sync (Phase 5, D2, D145).** No code change: the merge shared with the
   backup merge takes an envelope of another `phraseId` by last-write-wins, rejects one changed
   under the held `phraseId` (D44) and reports `phraseChanged` (D43) or `phraseSuperseded` (D145,
