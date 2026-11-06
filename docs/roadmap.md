@@ -365,9 +365,9 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Tasks
 
-- [ ] Record the decision in the overview: Cloudflare Pages replaces GitHub Pages as the official host of `https://blindvault.allisson.dev`, the same origin, so no vault moves (D90); amends D90, D194 and D195
-- [ ] Release workflow: the tag's single build uploaded by direct upload (`wrangler pages deploy`), never built by Cloudflare; the GitHub Release, the attestations and the post-deployment checks unchanged (D194); `wrangler` justified in `docs/architecture.md`
-- [ ] `_headers` generated from `apps/web/build/csp.ts`: the `<meta>` policy with `frame-ancestors 'none'`, `Referrer-Policy`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, and `no-cache` outside `assets/` (D195); a unit test requires its policy to be the build's, as for `deploy/`
+- [x] Record the decision in the overview: Cloudflare Pages replaces GitHub Pages as the official host of `https://blindvault.allisson.dev`, the same origin, so no vault moves (D90); amends D90, D194 and D195 (D228)
+- [ ] Release workflow: the tag's single build uploaded by direct upload (`wrangler pages deploy`), never built by Cloudflare; the GitHub Release and the attestations unchanged, the post-deployment check following the redirect of `/index.html` to `/` (D194, D228); `wrangler` justified in `docs/architecture.md`
+- [ ] `_headers` generated from `apps/web/build/csp.ts`: the `<meta>` policy with `frame-ancestors 'none'`, `Referrer-Policy`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, and `no-cache` outside `assets/`, with Pages' default `Access-Control-Allow-Origin: *` detached (D195, D228); a unit test requires its policy to be the build's, as for `deploy/`
 - [ ] No fallback to `index.html`: the build ships a `404.html`, so an unknown path answers 404 (D195)
 - [ ] Zone settings that rewrite responses turned off (Rocket Loader, Email Obfuscation, automatic Web Analytics, minification), recorded in `docs/deployment.md`
 - [ ] The `pages.dev` hostname and preview deployments redirected to the official origin or blocked, so the app is served at one origin only (D90)
