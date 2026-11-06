@@ -62,8 +62,9 @@ summary. The reference build is CI's (Ubuntu); a build on another OS is not yet 
 ## Releases
 
 A tag `v<version>` runs `.github/workflows/release.yml` (D194). It builds the tag once, with
-`SOURCE_DATE_EPOCH` set to the commit time, and that build is both the GitHub Release and the
-deployment at `https://blindvault.allisson.dev`.
+`SOURCE_DATE_EPOCH` set to the commit time, and that build is both the GitHub Release and, from the
+release's attested archive, the Cloudflare Pages deployment at `https://blindvault.allisson.dev`
+(D230, `deployment.md`).
 
 - The tag must be `v` followed by the version in `version.txt`, from `apps/web/package.json`.
 - The release notes are `docs/releases/<tag>.md`. When `apps/web/public/sw.js` differs from the
@@ -72,7 +73,8 @@ deployment at `https://blindvault.allisson.dev`.
   archived with sorted names, the commit time and no owner, each with a build provenance
   attestation. Its body ends with the version, both hashes and whether `sw.js` changed.
 - After the deployment, the workflow requires the served `asset-manifest.txt` and `sw.js` to equal
-  the release's, and checks every listed file with `sha256sum -c`.
+  the release's, and checks every listed file with `sha256sum -c`, at the origin in the `ORIGIN`
+  variable of the `cloudflare-pages` environment, following redirects.
 
 To check a release's files:
 

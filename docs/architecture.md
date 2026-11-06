@@ -221,6 +221,13 @@ every project through the references in the root `tsconfig.json`.
   `asset-manifest.ts` leaves `_headers` out, since Pages does not serve it, and the `reproducible`
   CI job compares it between both builds. `public/404.html` is static, with no script and no style,
   so Pages answers an unknown path with 404 instead of the app.
+- **Pages release workflow (Phase 6, D230).** The `deploy` job of `.github/workflows/release.yml`
+  downloads the release's archive, runs `gh attestation verify` on it against the release workflow,
+  extracts it to `site/` and runs `wrangler pages deploy ../site` from `wrangler/`, where
+  `wrangler-action` installs wrangler, so nothing but the archive is uploaded. The `verify` job
+  takes the origin from the `deploy` job, which reads and checks the `ORIGIN` variable of the
+  `cloudflare-pages` environment, and follows redirects. `docs/deployment.md` records the Cloudflare
+  and GitHub setup.
 - **State UI (Phase 3, D196).** `src/app/storage-state.ts` holds the rules: Safari by user agent,
   a plain tab by `display-mode: standalone` and `navigator.standalone`, nearly full at 80% of the
   quota, and the warnings in their order. Its `StorageMonitor`, owned by the controller as
@@ -831,6 +838,7 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 | Dependency | Where | Justification |
 | --- | --- | --- |
 | `actions/attest-build-provenance` v4.2.2 | `.github/workflows/release.yml` | Signs the release files with a build provenance attestation (Sigstore, through GitHub), the signing of overview §12 (D194). Anyone can check a file with `gh attestation verify`, with no key of the project to distribute. Phase 3. |
+| `cloudflare/wrangler-action` v4.1.3, `wrangler` 4.152.0 | `.github/workflows/release.yml`, job `deploy` | Uploads the release's archive to Cloudflare Pages by direct upload (D228, D230), Cloudflare's own action and CLI. The action is pinned by commit; it installs the exact `wranglerVersion` with npm, without a lockfile, in a directory that is not uploaded, and `WRANGLER_SEND_METRICS=false` turns off wrangler's usage data. It holds the Pages token only in that job, under the `cloudflare-pages` environment. Phase 6. |
 | `nginx` 1.30.5 (Alpine image) | `apps/web/e2e/self-hosting/serve.sh`, CI job `self-hosting` | Serves the build with `deploy/nginx/blindvault.conf` for the self-hosting test (D195). Pinned by digest; the stable line. Test only. Phase 3. |
 | `caddy` 2.11.4 (Alpine image) | `apps/web/e2e/self-hosting/serve.sh`, CI job `self-hosting` | Serves the build with `deploy/Caddyfile` for the self-hosting test (D195). Pinned by digest. Test only. Phase 3. |
 
