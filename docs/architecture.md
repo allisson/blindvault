@@ -487,6 +487,11 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **Concurrent moves creating a cycle (Phase 5, D14, D171).** No code change: `tests/sync.test.ts`
+  moves A into B on one device and B into A on the other, each allowed where it is written, then
+  syncs; both devices show the same tree, the folder of the cycle with the greater `hlc` at the
+  root and the other below it with its items, whichever device moved last. A cycle of three folders
+  written on two devices breaks the same way. No new dependency.
 - **Three-device simulation (Phase 5, Gate D).** No code change: `tests/simulation.test.ts` runs
   three devices of one vault in IndexedDB, with seeded random writes to items and folders (create,
   edit, trash, restore, move) and syncs in random pairs whose link is cut, tampered with or

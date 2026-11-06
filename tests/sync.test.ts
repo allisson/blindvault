@@ -947,3 +947,65 @@ describe('an interrupted connection (sync-protocol.md §9, §10, §12, Gate D)',
     }
   });
 });
+
+/** Every folder and item of the displayed tree as its path from the root, in display order. */
+function paths(session: VaultSession): string[] {
+  const out: string[] = [];
+  const walk = (node: ReturnType<VaultSession['tree']>, prefix: string) => {
+    for (const child of node.folders) {
+      const path = `${prefix}${child.folder?.name ?? ''}/`;
+      out.push(path);
+      walk(child, path);
+    }
+    for (const item of node.items) out.push(`${prefix}${item.name}`);
+  };
+  walk(session.tree(), '');
+  return out;
+}
+
+describe('concurrent moves creating a cycle (overview §9.3, D14, D171, Gate D)', () => {
+  it.each([
+    ['the Phone moves B into A', 'B/', 'B/A/', 'B/A/In A'],
+    ['the Laptop moves A into B', 'A/', 'A/B/', 'A/In A'],
+  ])(
+    'shows the same tree on both when %s last: the folder of the cycle with the greater hlc at the root',
+    async (last, ...expected) => {
+      const { clock, x, y } = await peers();
+      const a = await x.createFolder('A');
+      const b = await x.createFolder('B');
+      await x.createItem({ ...login('In A'), folderId: a });
+      await sync(x, y);
+      // Neither move makes a cycle on its own device (D171); together they do.
+      const laptop = () => x.moveFolder(a, b);
+      const phone = () => y.moveFolder(b, a);
+      const [first, second] = last.startsWith('the Phone') ? [laptop, phone] : [phone, laptop];
+      clock.t = T0 + MINUTE;
+      await first();
+      clock.t = T0 + 2 * MINUTE;
+      await second();
+      await sync(x, y);
+      for (const session of [x, y]) expect(paths(session)).toEqual([...expected, 'Shared']);
+      expect(held(x)).toEqual(held(y));
+    },
+  );
+
+  it('breaks a cycle of three folders written on two devices at the one with the greatest hlc', async () => {
+    const { clock, x, y } = await peers();
+    const a = await x.createFolder('A');
+    const b = await x.createFolder('B');
+    const c = await x.createFolder('C');
+    await sync(x, y);
+    clock.t = T0 + MINUTE;
+    await x.moveFolder(a, b);
+    clock.t = T0 + 2 * MINUTE;
+    await y.moveFolder(c, a);
+    clock.t = T0 + 3 * MINUTE;
+    await x.moveFolder(b, c);
+    // A in B, B in C, C in A: B moved last, so B is at the root, A in B and C in A.
+    await sync(y, x);
+    for (const session of [x, y]) {
+      expect(paths(session)).toEqual(['B/', 'B/A/', 'B/A/C/', 'Shared']);
+    }
+    expect(held(x)).toEqual(held(y));
+  });
+});
