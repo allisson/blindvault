@@ -27,10 +27,16 @@ import {
   type Direction,
   type LiveSession,
   type MemoryPair,
+  type Reconnection,
+  type ReconnectionKeys,
+  type SealedReconnection,
   SyncSession,
   exchange,
   liveSession,
+  memoryDelivery,
   memoryPair,
+  receiveReconnection,
+  sealReconnection,
   syncHandshake,
 } from '@blindvault/sync';
 import {
@@ -1282,6 +1288,58 @@ describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, 
   );
 });
 
+function retiredOf(session: VaultSession, id: Uint8Array): boolean | undefined {
+  return session.devices().find((d) => same(d.deviceId, id))?.device.retired;
+}
+
+/**
+ * X and Y hold a third device, the Tablet; `forge` seals a Tablet Device record with the vault's
+ * keys, as anyone holding the vault could.
+ */
+async function withTablet() {
+  const { clock, x, y, words } = await peers();
+  const keyring = new Keyring();
+  const caller = new Keyring();
+  const file = await x.exportBackup({ kek: kek(caller, 1), method: 'password' });
+  caller.wipeAll();
+  const backup = restoreWithPhrase(keyring, parseBackup(file.bytes), words);
+  const subkeys = deriveMasterSubkeys(keyring, backup.masterKey);
+  const wrapped = backup.records.find((r) => r.recordType === RecordType.vaultKey);
+  const { vaultKey } = verifyRecord(keyring, wrapped?.envelope ?? new Uint8Array(0), {
+    vaultId: backup.vaultId,
+    vaultKey: () => undefined,
+    vaultKeyWrapKey: subkeys.vaultKeyWrap,
+    versionIdKey: subkeys.versionId,
+  });
+  if (!vaultKey) throw new Error('no vault key');
+  const tablet = generateDeviceIdentity(new Keyring());
+  const forge = (physicalMs: number, writer: Uint8Array, retired: boolean) =>
+    sealRecord(
+      {
+        recordFormatVersion: RECORD_FORMAT_VERSION,
+        recordType: RecordType.device,
+        recordId: tablet.deviceId,
+        keyEpoch: 1,
+        hlc: { physicalMs, counter: 0, deviceId: writer },
+        deleted: false,
+      },
+      { vaultId: backup.vaultId, versionIdKey: subkeys.versionId },
+      vaultKey,
+      deviceToCbor({
+        publicKey: tablet.publicKey,
+        displayName: 'Tablet',
+        retired,
+        registeredAt: T0,
+      }),
+    );
+  const registered = forge(T0 + 1, x.deviceId, false);
+  // Y gets it from X's transfer, then X from Y's own selection.
+  await sync(x, y, (records) => [...records, registered]);
+  await sync(y, x);
+  expect([retiredOf(x, tablet.deviceId), retiredOf(y, tablet.deviceId)]).toEqual([false, false]);
+  return { clock, x, y, tablet: tablet.deviceId, tabletIdentity: tablet, forge };
+}
+
 describe('a retired peer (overview §10, D31, D41, D45, CRYPTO-INV-015, Gate D)', () => {
   function refusal(open: () => unknown): string | undefined {
     try {
@@ -1291,10 +1349,6 @@ describe('a retired peer (overview §10, D31, D41, D45, CRYPTO-INV-015, Gate D)'
       throw error;
     }
     return undefined;
-  }
-
-  function retiredOf(session: VaultSession, id: Uint8Array): boolean | undefined {
-    return session.devices().find((d) => same(d.deviceId, id))?.device.retired;
   }
 
   it('refuses a sync either way once X retired Y and told it so', async () => {
@@ -1308,54 +1362,6 @@ describe('a retired peer (overview §10, D31, D41, D45, CRYPTO-INV-015, Gate D)'
     expect(refusal(() => y.openSync(x.deviceId))).toBe('retired');
     expect(refusal(() => x.openSync(y.deviceId))).toBe('retired-peer');
   });
-
-  /**
-   * X and Y hold a third device, the Tablet; `forge` seals a Tablet Device record with the vault's
-   * keys, as anyone holding the vault could.
-   */
-  async function withTablet() {
-    const { clock, x, y, words } = await peers();
-    const keyring = new Keyring();
-    const caller = new Keyring();
-    const file = await x.exportBackup({ kek: kek(caller, 1), method: 'password' });
-    caller.wipeAll();
-    const backup = restoreWithPhrase(keyring, parseBackup(file.bytes), words);
-    const subkeys = deriveMasterSubkeys(keyring, backup.masterKey);
-    const wrapped = backup.records.find((r) => r.recordType === RecordType.vaultKey);
-    const { vaultKey } = verifyRecord(keyring, wrapped?.envelope ?? new Uint8Array(0), {
-      vaultId: backup.vaultId,
-      vaultKey: () => undefined,
-      vaultKeyWrapKey: subkeys.vaultKeyWrap,
-      versionIdKey: subkeys.versionId,
-    });
-    if (!vaultKey) throw new Error('no vault key');
-    const tablet = generateDeviceIdentity(new Keyring());
-    const forge = (physicalMs: number, writer: Uint8Array, retired: boolean) =>
-      sealRecord(
-        {
-          recordFormatVersion: RECORD_FORMAT_VERSION,
-          recordType: RecordType.device,
-          recordId: tablet.deviceId,
-          keyEpoch: 1,
-          hlc: { physicalMs, counter: 0, deviceId: writer },
-          deleted: false,
-        },
-        { vaultId: backup.vaultId, versionIdKey: subkeys.versionId },
-        vaultKey,
-        deviceToCbor({
-          publicKey: tablet.publicKey,
-          displayName: 'Tablet',
-          retired,
-          registeredAt: T0,
-        }),
-      );
-    const registered = forge(T0 + 1, x.deviceId, false);
-    // Y gets it from X's transfer, then X from Y's own selection.
-    await sync(x, y, (records) => [...records, registered]);
-    await sync(y, x);
-    expect([retiredOf(x, tablet.deviceId), retiredOf(y, tablet.deviceId)]).toEqual([false, false]);
-    return { clock, x, y, tablet: tablet.deviceId, forge };
-  }
 
   it.each([
     ['the Tablet', 'tablet'],
@@ -1397,5 +1403,173 @@ describe('a retired peer (overview §10, D31, D41, D45, CRYPTO-INV-015, Gate D)'
     await sync(x, y);
     for (const session of [x, y]) expect(retiredOf(session, tablet)).toBe(true);
     expect(refusal(() => y.openSync(tablet))).toBe('retired-peer');
+  });
+});
+
+describe('a reconnection payload of another session or to another device (sync-protocol.md §4, §5, Gate D)', () => {
+  type Grant = ReturnType<VaultSession['openSync']>;
+  type Role = Reconnection['role'];
+
+  const keys = (grant: Grant): ReconnectionKeys => ({
+    identity: grant.identity,
+    peerPublicKey: grant.peerPublicKey,
+    vaultId: grant.vaultId,
+  });
+
+  let gathered = 0;
+  /** One side's link fields, as the connection gathers them: new for every payload. */
+  function link(role: Role, sessionId: Uint8Array): Reconnection {
+    gathered += 1;
+    return {
+      role,
+      setup: role === 'initiator' ? 'actpass' : 'active',
+      sessionId,
+      fingerprint: new Uint8Array(32).fill(gathered),
+      ufrag: `ufrag${String(gathered)}`,
+      pwd: 'p'.repeat(24),
+      candidates: [
+        { kind: 'host-ipv4', address: new Uint8Array([192, 168, 1, gathered]), port: 50_000 },
+      ],
+    };
+  }
+
+  function seal(grant: Grant, role: Role, sessionId: Uint8Array) {
+    const fields = link(role, sessionId);
+    return { ...sealReconnection(fields, keys(grant)), fingerprint: fields.fingerprint };
+  }
+
+  /**
+   * The payloads `delivered` to a device, in order, then the delivery closes: the first that opens,
+   * and the reasons of those refused before it.
+   */
+  async function receive(
+    grant: Grant | ReconnectionKeys,
+    expected: { role: 'initiator' } | { role: 'responder'; sessionId: Uint8Array },
+    delivered: readonly SealedReconnection[],
+  ) {
+    const delivery = memoryDelivery();
+    for (const payload of delivered) delivery.inject('a-to-b', payload.bytes);
+    delivery.b.close();
+    const refused: string[] = [];
+    const opened = await receiveReconnection(
+      delivery.b,
+      'identity' in grant && 'peerName' in grant ? keys(grant) : grant,
+      expected,
+      (error) => refused.push(error.reason),
+    );
+    return { message: opened?.message, refused };
+  }
+
+  interface Bound {
+    message: Uint8Array;
+    fingerprint: Uint8Array;
+  }
+  /** `Noise_KK` with what each side bound: its own payload and the peer's it took. */
+  async function handshake(
+    gi: Grant,
+    gr: Grant,
+    atI: { initiator: Bound; responder: Bound },
+    atR: { initiator: Bound; responder: Bound },
+  ) {
+    const pipe = memoryPair();
+    const results = await Promise.allSettled([
+      syncHandshake(pipe.a, {
+        role: 'initiator',
+        identity: gi.identity,
+        peerPublicKey: gi.peerPublicKey,
+        ...atI,
+      }),
+      syncHandshake(pipe.b, {
+        role: 'responder',
+        identity: gr.identity,
+        peerPublicKey: gr.peerPublicKey,
+        ...atR,
+      }),
+    ]);
+    for (const r of results) if (r.status === 'fulfilled') r.value.channel.close();
+    return results.map((r) => r.status);
+  }
+
+  const sessionId = () => crypto.getRandomValues(new Uint8Array(16));
+
+  it("connects from this session's payloads, each side taking the other's (control)", async () => {
+    const { x, y } = await peers();
+    const gx = x.openSync(y.deviceId);
+    const gy = y.openSync(x.deviceId);
+    const id = sessionId();
+    const offer = seal(gx, 'initiator', id);
+    const atY = await receive(gy, { role: 'initiator' }, [offer]);
+    expect(atY).toEqual({ message: offer.message, refused: [] });
+    const answer = seal(gy, 'responder', id);
+    const atX = await receive(gx, { role: 'responder', sessionId: id }, [answer]);
+    expect(atX).toEqual({ message: answer.message, refused: [] });
+    const both = { initiator: offer, responder: answer };
+    expect(await handshake(gx, gy, both, both)).toEqual(['fulfilled', 'fulfilled']);
+  });
+
+  it("refuses Y's answer of an earlier session (malformed), then takes this session's", async () => {
+    const { x, y } = await peers();
+    const gx = x.openSync(y.deviceId);
+    const gy = y.openSync(x.deviceId);
+    const earlier = sessionId();
+    seal(gx, 'initiator', earlier);
+    const old = seal(gy, 'responder', earlier);
+    const id = sessionId();
+    const offer = seal(gx, 'initiator', id);
+    const answer = seal(gy, 'responder', id);
+    const atX = await receive(gx, { role: 'responder', sessionId: id }, [old, answer]);
+    expect(atX).toEqual({ message: answer.message, refused: ['malformed'] });
+    const both = { initiator: offer, responder: answer };
+    expect(await handshake(gx, gy, both, both)).toEqual(['fulfilled', 'fulfilled']);
+  });
+
+  it("opens X's offer of an earlier session at Y, whose answer X refuses, and Noise_KK fails on it", async () => {
+    const { x, y } = await peers();
+    const gx = x.openSync(y.deviceId);
+    const gy = y.openSync(x.deviceId);
+    const earlier = sessionId();
+    const old = seal(gx, 'initiator', earlier);
+    const id = sessionId();
+    const offer = seal(gx, 'initiator', id);
+    // The old offer, replayed, reaches Y first: it opens, since Noise_K gives no replay protection.
+    const atY = await receive(gy, { role: 'initiator' }, [old, offer]);
+    expect(atY).toEqual({ message: old.message, refused: [] });
+    const answer = seal(gy, 'responder', earlier);
+    // X waits for an answer to this session: Y's is for the old one.
+    const atX = await receive(gx, { role: 'responder', sessionId: id }, [answer]);
+    expect(atX).toEqual({ message: undefined, refused: ['malformed'] });
+    // Connected anyway, each binds a different offer: Noise_KK fails on both sides.
+    expect(
+      await handshake(
+        gx,
+        gy,
+        { initiator: offer, responder: answer },
+        { initiator: old, responder: answer },
+      ),
+    ).toEqual(['rejected', 'rejected']);
+  });
+
+  it('refuses a payload addressed to another device (not-from-peer), each way, then takes its own', async () => {
+    const { x, y, tablet, tabletIdentity } = await withTablet();
+    const gx = x.openSync(y.deviceId);
+    const gy = y.openSync(x.deviceId);
+    const id = sessionId();
+    // X's offer to the Tablet reaches Y before X's offer to Y.
+    const toTablet = seal(x.openSync(tablet), 'initiator', id);
+    const offer = seal(gx, 'initiator', id);
+    const atY = await receive(gy, { role: 'initiator' }, [toTablet, offer]);
+    expect(atY).toEqual({ message: offer.message, refused: ['not-from-peer'] });
+    // The Tablet opens it: it was sealed to the Tablet, not broken.
+    const atTablet = await receive(
+      { identity: tabletIdentity, peerPublicKey: gx.identity.publicKey, vaultId: gx.vaultId },
+      { role: 'initiator' },
+      [toTablet],
+    );
+    expect(atTablet).toEqual({ message: toTablet.message, refused: [] });
+    // Y's answer to the Tablet reaches X before Y's answer to X.
+    const answerToTablet = seal(y.openSync(tablet), 'responder', id);
+    const answer = seal(gy, 'responder', id);
+    const atX = await receive(gx, { role: 'responder', sessionId: id }, [answerToTablet, answer]);
+    expect(atX).toEqual({ message: answer.message, refused: ['not-from-peer'] });
   });
 });
