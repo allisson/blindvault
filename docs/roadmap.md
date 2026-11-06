@@ -343,7 +343,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Concurrent moves creating a cycle produce the same tree on every device (D14)
 - [x] Deleting a folder on one device while adding an item to it on another leaves the item visible at the root
 - [x] A child received before its parent appears at the root, then moves under the parent when it arrives
-- [ ] Duplicate, out-of-order and repeated messages are idempotent
+- [x] Duplicate, out-of-order and repeated messages are idempotent
 - [x] A corrupted record is rejected without affecting the others
 - [x] An HLC timestamp beyond the future-clock bound is rejected, then accepted once within the bound (D19)
 - [x] A Device rename and a Recovery Phrase regeneration are blocked while the held record is beyond the bound; retirement is not (D74)
