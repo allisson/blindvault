@@ -354,7 +354,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] A reconnection payload from an old session, or addressed to another device, is rejected
 - [x] During a sync session, an edit on one device reaches the other without a new exchange
 - [x] Locking the vault on either side ends the sync session
-- [ ] Simulation with 3 or more devices and injected failures, over the in-memory transport
+- [x] Simulation with 3 or more devices and injected failures, over the in-memory transport
 
 ---
 
