@@ -487,6 +487,10 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **Child received before its parent (Phase 5, D14).** No code change: `tests/sync.test.ts` syncs
+  a subfolder and an item while holding back their parent folder from the transfer; the receiver
+  shows both at the root, and once the next sync brings the parent, both devices show them under
+  it. No new dependency.
 - **Folder trashed while an item is added to it (Phase 5, D14).** No code change:
   `tests/sync.test.ts` trashes a folder on one device while the other adds an item to it, with the
   trash before or after the item by `hlc`, then syncs. On both devices the folder and its earlier
