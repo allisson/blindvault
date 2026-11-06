@@ -12,6 +12,7 @@ import {
   RecordType,
   type SymmetricKey,
   decodeCbor,
+  decodeEnvelope,
   derivePrfKek,
   encodeCbor,
   generateRecoveryPhrase,
@@ -1046,4 +1047,28 @@ describe('a folder trashed while an item is added to it (overview §9.3, D14, Ga
       expect(held(x)).toEqual(held(y));
     },
   );
+});
+
+describe('a child received before its parent (overview §9.3, D14, Gate D)', () => {
+  it('shows a folder and an item at the root until their parent folder arrives, then under it', async () => {
+    const { x, y } = await peers();
+    const parent = await x.createFolder('Parent');
+    await x.createFolder('Child', parent);
+    await x.createItem({ ...login('In Parent'), folderId: parent });
+    // The first sync carries the children but not their parent, as a cut transfer or a later
+    // write of the parent would.
+    const withoutParent = (records: Uint8Array[]) =>
+      records.filter((r) => !same(decodeEnvelope(r).header.recordId, parent));
+    const [, first] = await sync(x, y, withoutParent);
+    expect(first).toMatchObject({ added: 2, rejected: [] });
+    expect(y.folder(parent)).toBeUndefined();
+    expect(paths(y)).toEqual(['Child/', 'In Parent', 'Shared']);
+
+    const [, second] = await sync(x, y);
+    expect(second).toMatchObject({ added: 1, rejected: [] });
+    for (const session of [x, y]) {
+      expect(paths(session)).toEqual(['Parent/', 'Parent/Child/', 'Parent/In Parent', 'Shared']);
+    }
+    expect(held(x)).toEqual(held(y));
+  });
 });
