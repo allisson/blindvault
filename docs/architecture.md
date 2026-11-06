@@ -922,9 +922,9 @@ is copied, adapted to the overview, and gets the same tests and review as new co
 | `packages/crypto/src/lib/totp.ts` (`otpauth`) | Do not reuse | Own RFC 6238 implementation over WebCrypto HMAC (D127), tested with the RFC 6238 vectors; `otpauth` only as a dev-time cross-check. |
 | `packages/vault` item schemas (Zod) | Do not reuse | BlindPass has fixed keys per item type; BlindVault has typed fields with roles (D165, `record-content.md`). Content is checked by hand-written validators, not Zod, because unknown keys must be detected and kept byte for byte (D52, D59), which is the central rule. The BlindPass schemas are a reference for field lists only. |
 | `packages/vault/src/item/cryptoWallet/bip39.ts` | Reuse with changes, Phase 1 | Word-list and checksum helpers for the seed-phrase field; a bad checksum warns instead of refusing (`record-content.md` §4). |
-| `apps/web/src/lib/totp.ts` (`parseOtpauthUri`) | Reuse with changes, Phase 1 | The `otpauth://` parser (D127), moved to `packages/crypto`, writing defaults explicitly. The lenient import parser (`apps/web/src/lib/import/totp.ts`) is copied in Phase 6. |
-| `packages/vault/src/export` (`.json`, `.blindpass`) | Reuse decoding only, Phase 6 | BlindPass input format (D123); documented in `docs/blindpass-format.md` when first needed. |
-| `apps/web/src/lib/import/parsers/*` (Chrome, LastPass, Bitwarden, Apple Keychain, KeePassXC, Proton Pass, 1Password, Dashlane) | Reuse with changes, Phase 6 | D124, D125. |
+| `apps/web/src/lib/totp.ts` (`parseOtpauthUri`) | Reuse with changes, Phase 1 | The `otpauth://` parser (D127), moved to `packages/crypto`, writing defaults explicitly. The lenient import parser (`apps/web/src/lib/import/totp.ts`) is copied in Phase 8. |
+| `packages/vault/src/export` (`.json`, `.blindpass`) | Reuse decoding only, Phase 8 | BlindPass input format (D123); documented in `docs/blindpass-format.md` when first needed. |
+| `apps/web/src/lib/import/parsers/*` (Chrome, LastPass, Bitwarden, Apple Keychain, KeePassXC, Proton Pass, 1Password, Dashlane) | Reuse with changes, Phase 8 | D124, D125. |
 | `apps/web/src/lib/biometric/*` (WebAuthn PRF) | Reuse with changes | Add the UV flag check (D75), the BE flag notice (D84) and AAD on the local wrap (D121). |
 | `apps/web/src/lib/vaultCache.ts` (raw IndexedDB) | Do not reuse | Different schema (D79, D82). The raw IndexedDB API without a wrapper library is kept as the approach. |
 | `@zxcvbn-ts/core` and language packs | Reuse | D71 and D134 need the guess estimate, which it exposes. |
@@ -951,6 +951,6 @@ is copied, adapted to the overview, and gets the same tests and review as new co
 - BIP39 vectors and negative cases (`packages/vault/src/item/cryptoWallet/bip39.test.ts`).
 - Negative patterns: wrong key, wrong key pair, wrong mnemonic, tampered ciphertext, unknown type
   and version (`packages/crypto`, `packages/vault/src/__tests__`, `export.test.ts`).
-- Import parser fixtures and tests (`apps/web/src/lib/import/__tests__/`), Phase 6.
+- Import parser fixtures and tests (`apps/web/src/lib/import/__tests__/`), Phase 8.
 - BlindPass has no known-answer vectors for libsodium primitives and no tamper tests at the
   primitive level; BlindVault writes these new.
