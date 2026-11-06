@@ -366,12 +366,12 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Tasks
 
 - [x] Record the decision in the overview: Cloudflare Pages replaces GitHub Pages as the official host of `https://blindvault.allisson.dev`, the same origin, so no vault moves (D90); amends D90, D194 and D195 (D228)
-- [ ] Release workflow: the tag's single build uploaded by direct upload (`wrangler pages deploy`), never built by Cloudflare; the GitHub Release and the attestations unchanged, the post-deployment check following the redirect of `/index.html` to `/` (D194, D228); `wrangler` justified in `docs/architecture.md`
+- [x] Release workflow: the tag's single build uploaded by direct upload (`wrangler pages deploy`), never built by Cloudflare; the GitHub Release and the attestations unchanged, the post-deployment check following the redirect of `/index.html` to `/` (D194, D228); `wrangler` justified in `docs/architecture.md`; the release's attested archive is what goes live, and the check reads its origin from the environment (D230)
 - [x] `_headers` generated from `apps/web/build/csp.ts`: the `<meta>` policy with `frame-ancestors 'none'`, `Referrer-Policy`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, and `no-cache` outside `assets/`, with Pages' default `Access-Control-Allow-Origin: *` detached (D195, D228); a unit test requires its policy to be the build's, as for `deploy/`; the asset manifest leaves it out, since Pages does not serve it (D229)
 - [x] No fallback to `index.html`: the build ships a `404.html`, so an unknown path answers 404 (D195, D229)
-- [ ] Zone settings that rewrite responses turned off (Rocket Loader, Email Obfuscation, automatic Web Analytics, minification), recorded in `docs/deployment.md`
-- [ ] The `pages.dev` hostname and preview deployments redirected to the official origin or blocked, so the app is served at one origin only (D90)
-- [ ] API token scoped to the Pages project, held as a secret of a GitHub environment that allows only `v*` tags
+- [x] Zone settings that rewrite responses turned off (Rocket Loader, Email Obfuscation, automatic Web Analytics, minification, Automatic HTTPS Rewrites), recorded in `docs/deployment.md`; Server-Side Excludes stays on, inert (D230)
+- [ ] The `pages.dev` hostname and preview deployments redirected to the official origin or blocked, so the app is served at one origin only (D90); previews are behind Cloudflare Access, and the `pages.dev` redirect comes with the DNS move (D230)
+- [x] API token with the account permission Cloudflare Pages Edit, the narrowest Cloudflare offers (D228, D230), held as a secret of the GitHub environment `cloudflare-pages`, which allows only `v*` tags
 - [ ] DNS of `blindvault.allisson.dev` moved to the Pages project; the GitHub Pages deployment and the `github-pages` environment removed
 
 ### Deploy Gate
