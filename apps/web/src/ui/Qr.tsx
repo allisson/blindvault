@@ -21,7 +21,7 @@ export function QrCode({ text, label }: { readonly text: string; readonly label:
       shapeRendering="crispEdges"
       role="img"
       aria-label={label}
-      className="w-full max-w-72 self-center rounded-md"
+      className="w-full max-w-72 self-center rounded-control"
       data-testid="pairing-qr"
     >
       <rect width={size} height={size} fill="#fff" />
@@ -48,7 +48,7 @@ export function QrScanner({ onRead }: { readonly onRead: (text: string) => Promi
   const [problem, setProblem] = useState<Problem>();
   const [available] = useState(() => cameraAvailable(navigator));
   if (!available || problem === 'none') {
-    return <p className="text-sm text-zinc-500">{m.noCamera}</p>;
+    return <p className="text-sm text-muted">{m.noCamera}</p>;
   }
   return (
     <div className="flex flex-col gap-2">
@@ -62,11 +62,7 @@ export function QrScanner({ onRead }: { readonly onRead: (text: string) => Promi
         />
       ) : null}
       {problem ? (
-        <p
-          role="alert"
-          className="text-sm text-red-700 dark:text-red-400"
-          data-testid="scan-problem"
-        >
+        <p role="alert" className="text-sm text-danger" data-testid="scan-problem">
           {problem === 'denied'
             ? m.cameraDenied
             : problem === 'reader'
@@ -176,7 +172,7 @@ function Viewfinder({
         ref={video}
         muted
         playsInline
-        className="w-full max-w-72 self-center rounded-md bg-black"
+        className="w-full max-w-72 self-center rounded-control bg-subtle"
         data-testid="scan-video"
       />
       <p role="status" className="text-sm">

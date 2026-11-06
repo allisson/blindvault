@@ -179,7 +179,7 @@ function TemplatePicker({ onPick }: { readonly onPick: (draft: Draft) => void })
           <li key={t.id}>
             <Button
               variant="quiet"
-              className="w-full border border-zinc-200 text-left dark:border-zinc-800"
+              className="w-full border border-line text-left"
               onClick={() => {
                 onPick(newDraft(t));
               }}
@@ -377,7 +377,7 @@ export function ItemEditor({
         data-testid="item-notes"
       />
       {failure ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {failure}
         </p>
       ) : null}

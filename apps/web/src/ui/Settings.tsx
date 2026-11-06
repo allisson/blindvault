@@ -7,6 +7,13 @@ import {
 } from '@blindvault/vault';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
+import {
+  ACCENTS,
+  type Appearance,
+  THEMES,
+  currentAppearance,
+  setAppearance,
+} from '../app/appearance';
 import { download, phraseLabel, recordIdPrefix } from '../app/backup-file';
 import { devicesOf, eraseAdvice, peerSyncState, rejectedPeersOf } from '../app/devices';
 import { folderNameOf } from '../app/folders';
@@ -67,6 +74,7 @@ export function Settings({
       <LockSettings controller={controller} preferences={session.preferences} />
       <RefoundVault controller={controller} session={session} nav={nav} />
       <EraseSettings controller={controller} session={session} />
+      <AppearanceSettings />
       <section className="flex flex-col gap-4">
         <h2 className="font-semibold">{m.about.title}</h2>
         <AboutBuild />
@@ -86,6 +94,59 @@ export function Settings({
         </select>
       </label>
     </div>
+  );
+}
+
+/** Theme and accent (D231): applied at once and kept for the installation, never synchronized. */
+function AppearanceSettings() {
+  const m = useLanguage().messages;
+  const [appearance, setState] = useState(currentAppearance);
+  const choose = (next: Appearance) => {
+    setAppearance(next);
+    setState(next);
+  };
+  return (
+    <section className="flex flex-col gap-4" data-section="appearance">
+      <h2 className="font-semibold">{m.settings.appearance}</h2>
+      <fieldset className="flex flex-col">
+        <legend className="text-sm font-medium">{m.settings.theme}</legend>
+        {THEMES.map((theme) => (
+          <label key={theme} className={`${TARGET} flex items-center gap-2`}>
+            <input
+              type="radio"
+              name="appearance-theme"
+              checked={appearance.theme === theme}
+              onChange={() => {
+                choose({ ...appearance, theme });
+              }}
+            />
+            {m.settings.themes[theme]}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="flex flex-col">
+        <legend className="text-sm font-medium">{m.settings.accent}</legend>
+        {ACCENTS.map((accent) => (
+          <label key={accent} className={`${TARGET} flex items-center gap-2`}>
+            <input
+              type="radio"
+              name="appearance-accent"
+              checked={appearance.accent === accent}
+              onChange={() => {
+                choose({ ...appearance, accent });
+              }}
+            />
+            {/* Scoped by `data-accent`, the swatch shows its own accent in the current theme. */}
+            <span
+              aria-hidden="true"
+              data-accent={accent}
+              className="size-4 rounded-full bg-accent"
+            />
+            {m.settings.accents[accent]}
+          </label>
+        ))}
+      </fieldset>
+    </section>
   );
 }
 
@@ -203,13 +264,13 @@ function LockSettings({
       {field('autoLockMinutes', m.settings.autoLock, 1, 60)}
       {field('hiddenLockSeconds', m.settings.hiddenLock, 0, 900)}
       {values.hiddenLockSeconds === '0' ? (
-        <p className="text-sm text-zinc-500">{m.settings.hiddenImmediate}</p>
+        <p className="text-sm text-muted">{m.settings.hiddenImmediate}</p>
       ) : null}
       {field('clipboardClearSeconds', m.settings.clipboard, 10, 120)}
       <Button type="submit">{m.settings.save}</Button>
       {state === 'saved' ? <p role="status">{m.settings.saved}</p> : null}
       {state === 'invalid' ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {m.settings.outOfRange}
         </p>
       ) : null}
@@ -312,7 +373,7 @@ function PasskeySettings({
         {m.settings.passkey}
       </h2>
       {!supported && !on ? (
-        <p className="text-sm text-zinc-500">{m.settings.passkeyUnsupported}</p>
+        <p className="text-sm text-muted">{m.settings.passkeyUnsupported}</p>
       ) : null}
       {state.kind === 'done' ? <p role="status">{m.settings.passkeyDone}</p> : null}
       {state.kind === 'done' && state.backupEligible ? (
@@ -477,7 +538,7 @@ function RecoveryPhraseSettings({
           </Button>
           {result?.ok ? <p role="status">{result.text}</p> : null}
           {result && !result.ok && result.text !== '' ? (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {result.text}
             </p>
           ) : null}
@@ -546,7 +607,7 @@ function DeviceNameForm({
         data-testid="device-name"
       />
       {failure ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {failure}
         </p>
       ) : null}
@@ -632,13 +693,13 @@ function DeviceSettings({
                 <span className="font-medium">
                   {d.own ? format(m.settings.devicesThis, { name }) : name}
                 </span>
-                <span className="text-zinc-500">
+                <span className="text-muted">
                   {format(m.settings.devicesRegistered, {
                     date: date.format(Number(d.device.registeredAt)),
                   })}
                 </span>
                 {d.own ? null : (
-                  <span className="text-zinc-500" data-testid="device-last-sync">
+                  <span className="text-muted" data-testid="device-last-sync">
                     {d.lastSyncAt === undefined
                       ? m.settings.devicesNeverSynced
                       : format(m.settings.devicesLastSync, { date: synced.format(d.lastSyncAt) })}
@@ -650,7 +711,7 @@ function DeviceSettings({
                   </span>
                 ) : null}
                 {d.pending ? (
-                  <span className="text-amber-700 dark:text-amber-400" data-testid="device-pending">
+                  <span className="text-warning" data-testid="device-pending">
                     {m.settings.devicesPending}
                   </span>
                 ) : null}
@@ -703,14 +764,14 @@ function DeviceSettings({
         })}
       </ul>
       {devices.retiredCount > 0 ? (
-        <p className="text-sm text-zinc-500" data-testid="devices-retired-count">
+        <p className="text-sm text-muted" data-testid="devices-retired-count">
           {format(m.settings.devicesRetiredCount, { n: String(devices.retiredCount) })}
         </p>
       ) : null}
       {syncs && devices.retired.length > 0 ? (
         <details className="text-sm" data-testid="retired-devices">
           <summary className="cursor-pointer">{m.settings.devicesRetiredList}</summary>
-          <p className="text-zinc-500">{m.settings.devicesRetiredNotify}</p>
+          <p className="text-muted">{m.settings.devicesRetiredNotify}</p>
           <ul className="mt-2 flex flex-col gap-2">
             {devices.retired.map((d) => {
               const id = hex(d.deviceId);
@@ -776,7 +837,7 @@ function DeviceSettings({
         <p role="status">{format(m.settings.devicesRetired, { name: retire.name })}</p>
       ) : null}
       {retire.kind === 'refused' ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {m.settings.devicesRefused}
         </p>
       ) : null}
@@ -1012,7 +1073,7 @@ function BackupSettings({
         data-testid="backup-password"
       />
       {session.preferences.hiddenLockSeconds === 0 ? (
-        <p className="text-sm text-zinc-500">{m.settings.backupHidden}</p>
+        <p className="text-sm text-muted">{m.settings.backupHidden}</p>
       ) : null}
       <Button type="submit" disabled={!ready || password === ''}>
         {working ? m.settings.backupExporting : m.settings.backupExport}
@@ -1039,7 +1100,7 @@ function BackupSettings({
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}

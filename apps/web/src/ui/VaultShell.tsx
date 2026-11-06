@@ -45,7 +45,7 @@ function DetailPane({
   if (!isDetail(screen)) {
     return (
       <section aria-label={m.vault.detail} className="flex flex-1 items-center justify-center p-4">
-        <p className="text-sm text-zinc-500">{m.vault.nothingSelected}</p>
+        <p className="text-sm text-muted">{m.vault.nothingSelected}</p>
       </section>
     );
   }
@@ -88,7 +88,7 @@ function Header({
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const back = mobile ? screen.name !== 'vault' : screen.name === 'settings';
   return (
-    <header className="flex items-center gap-2 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+    <header className="flex items-center gap-2 border-b border-line px-4 py-2">
       {back ? (
         <Button
           variant="quiet"
@@ -139,7 +139,7 @@ function LiveSync({
   if (stage?.kind !== 'synced' || !stage.live || !peer) return null;
   return (
     <div
-      className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-2 text-sm dark:border-zinc-800"
+      className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 text-sm"
       data-testid="live-sync"
     >
       <p role="status">{format(m.sync.live, { name: peer.name })}</p>
@@ -303,13 +303,12 @@ export function VaultShell({
     mobile: 'flex flex-col',
   }[layout];
   const folderPlace = {
-    desktop: 'border-r border-zinc-200 dark:border-zinc-800',
+    desktop: 'border-r border-line',
     tablet:
-      'absolute inset-y-0 left-0 z-20 w-72 overflow-y-auto border-r border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950',
+      'absolute inset-y-0 left-0 z-20 w-72 overflow-y-auto border-r border-line bg-raised shadow-raised',
     mobile: '',
   }[layout];
-  const listPlace =
-    layout === 'mobile' ? 'flex-1' : 'border-r border-zinc-200 dark:border-zinc-800';
+  const listPlace = layout === 'mobile' ? 'flex-1' : 'border-r border-line';
   const body = (
     <>
       {ready && !settings ? (
@@ -321,7 +320,7 @@ export function VaultShell({
           <div
             aria-hidden="true"
             data-testid="drawer-backdrop"
-            className="absolute inset-0 z-10 bg-zinc-950/30"
+            className="absolute inset-0 z-10 bg-scrim"
             onClick={() => {
               setDrawer(false);
             }}
@@ -360,10 +359,7 @@ export function VaultShell({
   );
 
   return (
-    <div
-      data-layout={layout}
-      className="flex min-h-dvh flex-col bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100"
-    >
+    <div data-layout={layout} className="flex min-h-dvh flex-col bg-surface text-fg">
       <SharedOriginWarning />
       <PreviewBanner />
       <UpdateBanner />
@@ -474,7 +470,7 @@ export function VaultShell({
       ) : null}
       <main className="flex flex-1 flex-col">{body}</main>
       {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
-        <footer className="flex justify-around border-t border-zinc-200 p-2 dark:border-zinc-800">
+        <footer className="flex justify-around border-t border-line p-2">
           <Button
             variant="quiet"
             aria-current={screen.name === 'vault' ? 'page' : undefined}

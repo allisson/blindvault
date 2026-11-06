@@ -163,7 +163,7 @@ function Stage({
         <>
           <p
             role="alert"
-            className="text-sm text-red-700 dark:text-red-400"
+            className="text-sm text-danger"
             data-testid="sync-failed"
             data-reason={stage.reason}
           >
@@ -251,7 +251,7 @@ export function SyncDevice({
           </p>
           <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
           {error ? (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           ) : null}

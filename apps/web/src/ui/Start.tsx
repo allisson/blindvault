@@ -40,7 +40,7 @@ export function Start({
       return (
         <Card title={m.app.name}>
           <p>{m.start.elsewhere}</p>
-          <p className="text-sm text-zinc-500">{m.start.takeOverNote}</p>
+          <p className="text-sm text-muted">{m.start.takeOverNote}</p>
           <Button onClick={() => void controller.takeOver()}>{m.start.takeOver}</Button>
         </Card>
       );
@@ -201,7 +201,7 @@ function Unlock({
     <Card title={m.unlock.title}>
       {eraseFailure ? (
         <div className="flex flex-wrap items-center gap-2" data-testid="erase-failure">
-          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          <p role="alert" className="text-sm text-danger">
             {eraseFailure === 'busy' ? m.erase.busy : m.erase.failed}
           </p>
           <Button
@@ -228,7 +228,7 @@ function Unlock({
             {m.unlock.passkey}
           </Button>
           {passkeyError ? (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {passkeyError}
             </p>
           ) : null}

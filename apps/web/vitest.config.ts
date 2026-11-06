@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'build/**/*.test.ts'],
     environment: 'node',
+    // The contrast test reads the tokens as text (src/ui/contrast.test.ts, D231).
+    css: { include: [/src\/index\.css/] },
   },
 });

@@ -153,15 +153,11 @@ export function SameNetwork({
         {m.pairing.sameNetwork}
       </label>
       {forced ? (
-        <p
-          role="alert"
-          className="text-sm text-red-700 dark:text-red-400"
-          data-testid="stun-unreadable"
-        >
+        <p role="alert" className="text-sm text-danger" data-testid="stun-unreadable">
           {m.stun.unreadable}
         </p>
       ) : (
-        <p className="text-sm text-zinc-500" data-testid="same-network-hint">
+        <p className="text-sm text-muted" data-testid="same-network-hint">
           {format(m.pairing.sameNetworkHint, { hosts: stunHosts(urls).join(', ') })}
         </p>
       )}
@@ -250,7 +246,7 @@ function StunServers({
           ))}
         </ul>
       )}
-      {settings.kind === 'default' ? <p className="text-sm text-zinc-500">{s.defaults}</p> : null}
+      {settings.kind === 'default' ? <p className="text-sm text-muted">{s.defaults}</p> : null}
       {editing ? (
         <>
           <TextArea
@@ -344,7 +340,7 @@ export function PayloadText({
       >
         {copied ? m.pairing.copied : m.pairing.copy}
       </Button>
-      <p className="text-sm text-zinc-500">{channel ?? m.pairing.channel}</p>
+      <p className="text-sm text-muted">{channel ?? m.pairing.channel}</p>
     </div>
   );
 }
@@ -612,7 +608,7 @@ function Stage({
         <>
           <p
             role="alert"
-            className="text-sm text-red-700 dark:text-red-400"
+            className="text-sm text-danger"
             data-testid="pairing-failed"
             data-reason={stage.reason}
           >
@@ -999,7 +995,7 @@ export function ReadmitDevice({
           <p className="text-sm">{r.how}</p>
           <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
           {error ? (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           ) : null}

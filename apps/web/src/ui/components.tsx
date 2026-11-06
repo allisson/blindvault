@@ -19,7 +19,7 @@ import { useUpdates } from './update-context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
 export const TARGET = 'min-h-10 pointer-coarse:min-h-11';
-export const INPUT = `${TARGET} rounded-md border border-zinc-300 bg-white px-3 text-base dark:border-zinc-700 dark:bg-zinc-900`;
+export const INPUT = `${TARGET} rounded-control border border-control bg-raised px-3 text-base`;
 
 export function Button({
   variant = 'primary',
@@ -28,12 +28,12 @@ export function Button({
 }: ComponentProps<'button'> & { readonly variant?: 'primary' | 'quiet' }) {
   const look =
     variant === 'primary'
-      ? 'bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300'
-      : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800';
+      ? 'bg-accent text-accent-ink hover:bg-accent-hover'
+      : 'text-fg hover:bg-subtle';
   return (
     <button
       type="button"
-      className={`${TARGET} rounded-md px-4 text-sm font-medium disabled:opacity-50 ${look} ${className}`}
+      className={`${TARGET} rounded-control px-4 text-sm font-medium disabled:opacity-50 ${look} ${className}`}
       {...props}
     />
   );
@@ -79,12 +79,12 @@ function Message({
 }) {
   if (error) {
     return (
-      <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+      <p role="alert" className="text-sm text-danger">
         {error}
       </p>
     );
   }
-  return hint ? <p className="text-sm text-zinc-500">{hint}</p> : null;
+  return hint ? <p className="text-sm text-muted">{hint}</p> : null;
 }
 
 export function TextArea({
@@ -120,10 +120,7 @@ export function TextArea({
 /** A notice in the item views: why something cannot be done, or a warning. */
 export function Notice({ children }: { readonly children: ReactNode }) {
   return (
-    <p
-      role="note"
-      className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-    >
+    <p role="note" className="rounded-control bg-subtle px-3 py-2 text-sm text-fg">
       {children}
     </p>
   );
@@ -136,9 +133,7 @@ export function LockState({ unlocked }: { readonly unlocked: boolean }) {
     <span
       data-testid="lock-state"
       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-        unlocked
-          ? 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100'
-          : 'bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200'
+        unlocked ? 'bg-warning-soft text-warning-text' : 'bg-subtle text-fg'
       }`}
     >
       {unlocked ? m.app.unlocked : m.app.locked}
@@ -153,7 +148,7 @@ export function PreviewBanner() {
     <p
       role="note"
       data-testid="preview-banner"
-      className="bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+      className="bg-warning-soft px-4 py-2 text-sm text-warning-text"
     >
       {m.preview.banner}
     </p>
@@ -182,7 +177,7 @@ export function UpdateBanner() {
     <section
       role="status"
       data-testid="update-banner"
-      className="flex flex-col gap-2 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:bg-sky-950 dark:text-sky-50"
+      className="flex flex-col gap-2 bg-info-soft px-4 py-3 text-sm text-info-text"
     >
       <p>{format(m.update.available, { current: __APP_VERSION__, next: offer.version })}</p>
       <p>
@@ -213,7 +208,7 @@ export function SharedOriginWarning() {
     <p
       role="alert"
       data-testid="shared-origin"
-      className="bg-red-50 px-4 py-2 text-sm text-red-900 dark:bg-red-950 dark:text-red-100"
+      className="bg-danger-soft px-4 py-2 text-sm text-danger-text"
     >
       {m.origin.shared}
     </p>
@@ -233,7 +228,7 @@ export function StorageAlert({
       role="alert"
       data-testid="storage-warning"
       data-warning={warning}
-      className="bg-red-50 px-4 py-2 text-sm text-red-900 dark:bg-red-950 dark:text-red-100"
+      className="bg-danger-soft px-4 py-2 text-sm text-danger-text"
     >
       {text}
     </p>
@@ -279,13 +274,13 @@ export function Card({
     () => updates?.controller.holdsPhrase ?? false,
   );
   return (
-    <div className="flex min-h-dvh flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="flex min-h-dvh flex-col bg-surface text-fg">
       <SharedOriginWarning />
       <SafariTabWarning />
       <PreviewBanner />
       <UpdateBanner />
       <main className="flex flex-1 items-center justify-center p-4">
-        <section className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-white p-6 shadow-sm dark:bg-zinc-900">
+        <section className="flex w-full max-w-sm flex-col gap-4 rounded-card bg-raised p-6 shadow-raised">
           <header className="flex items-center justify-between">
             <span className="text-sm font-semibold">{m.app.name}</span>
             <LockState unlocked={false} />
@@ -308,7 +303,7 @@ export function Card({
           {/* Hidden, not unmounted: a flow in progress keeps what was typed (D192). */}
           <div className={about ? 'hidden' : 'contents'}>{children}</div>
           <footer className="flex items-center justify-between">
-            <p className="text-xs text-zinc-500">v{__APP_VERSION__}</p>
+            <p className="text-xs text-muted">v{__APP_VERSION__}</p>
             {about || holdsPhrase ? null : (
               <Button
                 variant="quiet"

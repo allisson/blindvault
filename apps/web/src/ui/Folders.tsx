@@ -30,7 +30,7 @@ export function FailureMessage({
   const m = useMessages();
   if (!failure) return null;
   return (
-    <div role="alert" className="flex flex-col gap-1 text-sm text-red-700 dark:text-red-400">
+    <div role="alert" className="flex flex-col gap-1 text-sm text-danger">
       {failure.kind === 'message' ? (
         <p>{failure.text}</p>
       ) : (
@@ -130,7 +130,7 @@ function ListEntry({
   return (
     <Button
       variant="quiet"
-      className="justify-start truncate text-left aria-[current]:bg-zinc-100 dark:aria-[current]:bg-zinc-800"
+      className="justify-start truncate text-left aria-[current]:bg-accent-soft"
       style={{ paddingLeft: `${String(1 + depth)}rem` }}
       aria-current={selected ? 'true' : undefined}
       onClick={() => {
@@ -157,7 +157,7 @@ export function FolderPane({
   const rows = folderRows(session.tree(new Intl.Collator(language).compare));
   return (
     <nav aria-label={m.vault.folders} className="flex flex-col gap-1 p-3">
-      <h2 className="px-2 text-xs font-semibold uppercase text-zinc-500">{m.vault.folders}</h2>
+      <h2 className="px-2 text-xs font-semibold uppercase text-muted">{m.vault.folders}</h2>
       <ListEntry nav={nav} list={{ name: 'vault' }}>
         {m.vault.allItems}
       </ListEntry>
@@ -367,7 +367,7 @@ export function TrashedFolder({
     <div className="flex flex-col gap-1 px-2 py-1">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm">
-          <span className="text-zinc-500">{m.folders.folder}: </span>
+          <span className="text-muted">{m.folders.folder}: </span>
           {name}
         </span>
         {restorable ? (

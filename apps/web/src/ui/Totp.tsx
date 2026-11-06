@@ -68,7 +68,7 @@ export function TotpView({
           >
             {current ? grouped(current) : '\u00a0'}
           </span>
-          <span className="text-xs text-zinc-500" data-testid={`totp-expires-${name}`}>
+          <span className="text-xs text-muted" data-testid={`totp-expires-${name}`}>
             {format(m.items.totpExpires, {
               seconds: String(totpSecondsRemaining(period, now)),
             })}
@@ -85,9 +85,9 @@ export function TotpView({
         ) : null}
       </div>
       {status}
-      {account !== '' ? <p className="text-sm break-words text-zinc-500">{account}</p> : null}
+      {account !== '' ? <p className="text-sm break-words text-muted">{account}</p> : null}
       <div className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-zinc-500">{m.items.totpSecret}</span>
+        <span className="text-xs font-medium text-muted">{m.items.totpSecret}</span>
         <SecretView value={value.secret} label={name} clearSeconds={clearSeconds} />
       </div>
     </div>
