@@ -336,7 +336,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Gate D
 
-- [ ] Identical vaults, one-way and bidirectional changes converge
+- [x] Identical vaults, one-way and bidirectional changes converge
 - [x] Concurrent edits: winner by HLC, loser stored in history
 - [x] Delete vs. edit and edit vs. delete follow the rule; a newer edit restores
 - [x] A stale device does not resurrect a deleted item

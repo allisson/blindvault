@@ -487,6 +487,12 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **Identical vaults, one-way and bidirectional changes (Phase 5, §7 to §9).** No code change:
+  `tests/sync.test.ts` syncs two identical vaults, which send no record either way and change
+  nothing; one device's changes, which reach the other while its older copy of the edited item,
+  sent under D223, changes nothing back; and changes on both, which each reach the other in one
+  sync. Each case counts the records added, replaced and stored as versions, compares the tree and
+  the records held, and a sync after it sends nothing. No new dependency.
 - **Child received before its parent (Phase 5, D14).** No code change: `tests/sync.test.ts` syncs
   a subfolder and an item while holding back their parent folder from the transfer; the receiver
   shows both at the root, and once the next sync brings the parent, both devices show them under
