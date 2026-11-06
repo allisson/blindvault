@@ -487,6 +487,13 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **Duplicate, out-of-order and repeated messages (Phase 5, §2.1, §10, §12).** No code change:
+  `tests/sync.test.ts` sends a transfer in reverse order, which merges as the plain one; a transfer
+  holding one record twice, refused (`protocol-error`, D158) with nothing written; and the records
+  of a sync again in a later session, which change nothing. Over the in-memory transport it
+  duplicates, holds back past the next one, or replays the first of, each message from one device:
+  the session ends, the receiver commits nothing before the last message and all or nothing at it,
+  and the next sync converges. No new dependency.
 - **Identical vaults, one-way and bidirectional changes (Phase 5, §7 to §9).** No code change:
   `tests/sync.test.ts` syncs two identical vaults, which send no record either way and change
   nothing; one device's changes, which reach the other while its older copy of the edited item,

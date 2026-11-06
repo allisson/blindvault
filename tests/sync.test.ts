@@ -1156,3 +1156,122 @@ describe('identical vaults, one-way and bidirectional changes (sync-protocol.md 
     expect((await counted(y, x)).sent).toBe(0);
   });
 });
+
+describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, §12, Gate D)', () => {
+  /** Peers where X has changes for Y: a folder with an item, and an edit of Shared. */
+  async function changed() {
+    const p = await peers();
+    p.clock.t = T0 + MINUTE;
+    const work = await p.x.createFolder('Work');
+    await p.x.createItem({ ...login('In Work'), folderId: work });
+    await p.x.updateItem(p.shared, login('Edited on Laptop'));
+    return p;
+  }
+
+  it('merges a transfer in reverse order as the plain one (§2.1)', async () => {
+    const plain = await changed();
+    const [, inOrder] = await sync(plain.x, plain.y);
+    const { x, y } = await changed();
+    const [, reversed] = await sync(x, y, (records) => [...records].reverse());
+    expect(reversed).toEqual(inOrder);
+    expect(paths(y)).toEqual(paths(plain.y));
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('aborts a transfer holding one record twice, Y writing nothing, then converges (§2.1, D158)', async () => {
+    const { x, y } = await changed();
+    const before = held(y);
+    await expect(
+      sync(x, y, (records) => [...records, ...records.slice(0, 1)]),
+    ).rejects.toMatchObject({ reason: 'protocol-error' });
+    expect(held(y)).toEqual(before);
+    await sync(x, y);
+    expect(held(x)).toEqual(held(y));
+  });
+
+  it('changes nothing when a later session sends the same records again', async () => {
+    const { x, y } = await changed();
+    let first: Uint8Array[] = [];
+    await sync(x, y, (records) => {
+      first = records;
+      return records;
+    });
+    const before = held(y);
+    const [, again] = await sync(x, y, () => first);
+    expect(first.length).toBeGreaterThan(0);
+    expect(again).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
+    expect(held(y)).toEqual(before);
+  });
+
+  type Fault = 'duplicate' | 'reorder' | 'replay';
+
+  /**
+   * A link that, at the `at`-th message from X to Y, delivers it twice, holds it back until after
+   * the next one, or delivers the first message of the session again after it.
+   */
+  function faulty(fault: Fault, at: number): MemoryPair {
+    let seen = 0;
+    let first: Uint8Array | undefined;
+    let withheld: Uint8Array | undefined;
+    return memoryPair({
+      intercept: (direction, message) => {
+        if (direction !== 'a-to-b') return [message];
+        seen += 1;
+        first ??= message;
+        if (withheld) {
+          const late = withheld;
+          withheld = undefined;
+          return [message, late];
+        }
+        if (seen !== at) return [message];
+        if (fault === 'duplicate') return [message, message];
+        if (fault === 'replay') return [message, first];
+        withheld = message;
+        return [];
+      },
+    });
+  }
+
+  it.each(['duplicate', 'reorder', 'replay'] as const)(
+    'ends the session on a %s message from X, Y merging nothing before the last, then converges',
+    async (fault) => {
+      let total = 0;
+      const counting = await changed();
+      await sync(
+        counting.x,
+        counting.y,
+        (records) => records,
+        memoryPair({
+          intercept: (direction, message) => {
+            if (direction === 'a-to-b') total += 1;
+            return [message];
+          },
+        }),
+      );
+      // The second message from X is its first after Noise_KK; a reorder needs a next message, and
+      // X sends one without waiting for Y only from there.
+      const from = fault === 'duplicate' ? 1 : 2;
+      const to = fault === 'reorder' ? total - 1 : total;
+      expect(to - from).toBeGreaterThan(3);
+      for (let at = from; at <= to; at++) {
+        const { x, y } = await changed();
+        const before = held(y);
+        const ended = await sync(x, y, (records) => records, faulty(fault, at)).then(
+          () => false,
+          () => true,
+        );
+        const now = held(y);
+        await sync(x, y);
+        const after = held(y);
+        expect(held(x)).toEqual(after);
+        if (at < total) {
+          expect(ended).toBe(true);
+          expect(now).toEqual(before);
+        } else {
+          // The last message: Y may have merged the whole transfer before the fault reached it.
+          expect([before, after]).toContainEqual(now);
+        }
+      }
+    },
+  );
+});
