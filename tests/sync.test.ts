@@ -1009,3 +1009,41 @@ describe('concurrent moves creating a cycle (overview §9.3, D14, D171, Gate D)'
     expect(held(x)).toEqual(held(y));
   });
 });
+
+describe('a folder trashed while an item is added to it (overview §9.3, D14, Gate D)', () => {
+  it.each([
+    ['before', MINUTE, 2 * MINUTE],
+    ['after', 2 * MINUTE, MINUTE],
+  ])(
+    'shows the new item at the root on both when the trash comes %s the item',
+    async (_, trashAt, addAt) => {
+      const { clock, x, y } = await peers();
+      const folder = await x.createFolder('Work');
+      const old = await x.createItem({ ...login('In Work'), folderId: folder });
+      await sync(x, y);
+      clock.t = T0 + trashAt;
+      await x.trashFolder(folder);
+      clock.t = T0 + addAt;
+      const added = await y.createItem({ ...login('Added on Phone'), folderId: folder });
+
+      await sync(x, y);
+      for (const session of [x, y]) {
+        expect(session.folder(folder)).toMatchObject({ inTrash: true });
+        expect(session.item(old)).toMatchObject({ inTrash: true });
+        // Not in the trash operation, the new item stays out of the trash, its parent a tombstone.
+        expect(session.item(added)).toMatchObject({ inTrash: false });
+        expect(paths(session)).toEqual(['Added on Phone', 'Shared']);
+      }
+      expect(held(x)).toEqual(held(y));
+
+      // Restored from the trash, the folder is live again and the new item shows inside it.
+      clock.t = T0 + 3 * MINUTE;
+      await y.restoreFolder(folder);
+      await sync(x, y);
+      for (const session of [x, y]) {
+        expect(paths(session)).toEqual(['Work/', 'Work/Added on Phone', 'Work/In Work', 'Shared']);
+      }
+      expect(held(x)).toEqual(held(y));
+    },
+  );
+});
