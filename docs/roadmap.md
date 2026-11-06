@@ -340,7 +340,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Concurrent edits: winner by HLC, loser stored in history
 - [x] Delete vs. edit and edit vs. delete follow the rule; a newer edit restores
 - [x] A stale device does not resurrect a deleted item
-- [ ] Concurrent moves creating a cycle produce the same tree on every device (D14)
+- [x] Concurrent moves creating a cycle produce the same tree on every device (D14)
 - [ ] Deleting a folder on one device while adding an item to it on another leaves the item visible at the root
 - [ ] A child received before its parent appears at the root, then moves under the parent when it arrives
 - [ ] Duplicate, out-of-order and repeated messages are idempotent
