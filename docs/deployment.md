@@ -11,7 +11,10 @@ Self-hosting is described in `self-hosting.md`.
 | --- | --- |
 | Pages project | `blindvault`, created by `wrangler pages project create blindvault --production-branch main`, with no Git integration, so its creation deployed nothing. wrangler hands the creation of a new project to Workers when it detects an AI agent; the project was created with `--force`, the documented opt-out, and wrangler never delegates for a project that exists (D230). |
 | Production branch | `main`. The release deploys with `--branch=main`; any other branch would be a preview. |
+| Custom domain | `blindvault.allisson.dev`, the only origin that serves the app (D90). Adding it replaced the zone's CNAME to `allisson.github.io` with a proxied CNAME to `blindvault.pages.dev`. |
 | Preview access | Restricted: a Cloudflare Access application on `*.blindvault.pages.dev` admits only the account owner. It does not cover `blindvault.pages.dev`. |
+| `pages.dev` redirect | The account Bulk Redirect list `blindvault_pages_dev`, enabled by the rule `blindvault pages.dev redirect`: `blindvault.pages.dev/` to `https://blindvault.allisson.dev/`, 301, with subpath matching and the path suffix and query string kept. Include subdomains is off, so previews and deployment URLs stay behind Access instead of reaching production (D230). |
+| 404 caching | On a 404, Pages serves `Cache-Control: no-store` instead of the `no-cache` of `_headers`; the other headers are the rule's. The 404 page is not in the asset manifest. |
 | API token | `blindvault release (GitHub Actions)`: the account permission Cloudflare Pages Edit, on this account only, no IP filter, no expiry. Cloudflare offers no narrower scope (D228). |
 
 ### Zone `allisson.dev`
@@ -40,21 +43,21 @@ The environment `cloudflare-pages` allows only tags `v*` and holds:
 | --- | --- | --- |
 | `CLOUDFLARE_API_TOKEN` | secret | the token above, pasted by the owner |
 | `CLOUDFLARE_ACCOUNT_ID` | secret | the account ID |
-| `ORIGIN` | variable | the origin the post-deployment check reads: `https://blindvault.pages.dev` until the move below, then `https://blindvault.allisson.dev` |
+| `ORIGIN` | variable | the origin the post-deployment check reads: `https://blindvault.allisson.dev` (it was `https://blindvault.pages.dev` for v0.5.0, before the move below) |
 
 The workflow accepts no other value of `ORIGIN`.
 
 ## Moving the official origin
 
-The official origin stays on GitHub Pages until a release deploys to Cloudflare Pages and its check
-passes against `blindvault.pages.dev`. Then, in this order (D230):
+Done on 2026-11-06, after v0.5.0 deployed to Cloudflare Pages and its check passed against
+`blindvault.pages.dev`, in this order (D230):
 
-1. Add `blindvault.allisson.dev` as a custom domain of the project, which replaces its DNS record
-   (today a CNAME to `allisson.github.io`, not proxied).
+1. Add `blindvault.allisson.dev` as a custom domain of the project, which replaced its DNS record
+   (a CNAME to `allisson.github.io`, not proxied).
 2. Set `ORIGIN` to `https://blindvault.allisson.dev`.
 3. Add an account Bulk Redirect from `blindvault.pages.dev` to `https://blindvault.allisson.dev`
    (301, preserving the path and the query string). Not earlier: the check of the first release
-   would follow it to GitHub Pages.
+   would have followed it to GitHub Pages.
 4. Remove the GitHub Pages deployment and the `github-pages` environment.
 
 ## Rotating the token
