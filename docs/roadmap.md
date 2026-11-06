@@ -20,7 +20,9 @@ Phase 2 Backup and recovery ──► Gate B
 Phase 3 PWA and integrity ──► PWA Gate
 Phase 4 Pairing ──► Gate C
 Phase 5 Synchronization ──► Gate D
-Phase 6 Import and final review ──► Security Gate ──► v1.0
+Phase 6 Deployment on Cloudflare Pages ──► Deploy Gate
+Phase 7 User experience ──► UX Gate
+Phase 8 Import and final review ──► Security Gate ──► v1.0
 ```
 
 ---
@@ -316,7 +318,6 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Transport-agnostic reconnection payload, encrypted to the peer with `Noise_K` (D12, D17, D214)
 - [x] Keep payload delivery behind an interface so a mailbox transport (Nostr, ntfy) can be added after v1 without protocol changes (§4.4, D215)
 - [x] Manual sync flow: start sync on both devices, exchange the reconnection payload by QR or copy/paste in both directions (§3, D216)
-- [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212)
 - [x] `Noise_KK` handshake with the registered identities (CRYPTO-INV-008, §5, D217)
 - [x] End the session right after `Noise_KK` when the peer's Device record is retired; a retired Device record always beats a non-retired one in merge (D31, CRYPTO-INV-015, §6, D219)
 - [x] End an open session when the peer's Device record becomes retired, after sending it that record, or when this device receives its own record as retired (D69, CRYPTO-INV-015, §6, D220)
@@ -358,7 +359,58 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ---
 
-## Phase 6 — Import and final review
+## Phase 6 — Deployment on Cloudflare Pages
+
+**Goal:** the official build is served by Cloudflare Pages at the same dedicated origin, with the security headers that `<meta>` alone cannot set.
+
+### Tasks
+
+- [ ] Record the decision in the overview: Cloudflare Pages replaces GitHub Pages as the official host of `https://blindvault.allisson.dev`, the same origin, so no vault moves (D90); amends D90, D194 and D195
+- [ ] Release workflow: the tag's single build uploaded by direct upload (`wrangler pages deploy`), never built by Cloudflare; the GitHub Release, the attestations and the post-deployment checks unchanged (D194); `wrangler` justified in `docs/architecture.md`
+- [ ] `_headers` generated from `apps/web/build/csp.ts`: the `<meta>` policy with `frame-ancestors 'none'`, `Referrer-Policy`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, and `no-cache` outside `assets/` (D195); a unit test requires its policy to be the build's, as for `deploy/`
+- [ ] No fallback to `index.html`: the build ships a `404.html`, so an unknown path answers 404 (D195)
+- [ ] Zone settings that rewrite responses turned off (Rocket Loader, Email Obfuscation, automatic Web Analytics, minification), recorded in `docs/deployment.md`
+- [ ] The `pages.dev` hostname and preview deployments redirected to the official origin or blocked, so the app is served at one origin only (D90)
+- [ ] API token scoped to the Pages project, held as a secret of a GitHub environment that allows only `v*` tags
+- [ ] DNS of `blindvault.allisson.dev` moved to the Pages project; the GitHub Pages deployment and the `github-pages` environment removed
+
+### Deploy Gate
+
+- [ ] A release tag deploys to Cloudflare Pages, and the post-deployment check finds the served `asset-manifest.txt` and `sw.js` equal to the release's
+- [ ] The served headers equal `_headers`, `frame-ancestors 'none'` and `Cross-Origin-Opener-Policy` included
+- [ ] An unknown path answers 404, not the app
+- [ ] The `pages.dev` hostname does not serve the app
+- [ ] An installed copy served by GitHub Pages takes the Cloudflare build only after confirmation, and keeps its vault (D63, D191)
+- [ ] No push to `main` and no manual run deploys anything
+
+---
+
+## Phase 7 — User experience
+
+**Goal:** the app gets its own visual identity and clearer flows, accessible on every layout, without hiding any security decision (section 13.5).
+
+### Tasks
+
+- [ ] Record the UX decisions in the overview: design tokens, component set, motion rules
+- [ ] Design tokens in Tailwind (color, type, spacing, radius, elevation), light and dark themes; the theme preference stays in `localStorage`
+- [ ] Own components replacing the template's (buttons, fields, dialogs, lists, banners, notices), each with its hover, focus, disabled, error and loading states
+- [ ] Flow review: onboarding (create, restore, join), item creation and editing, pairing, re-admission and sync; fewer steps only where no security decision is lost, every warning still explicit (section 13.5)
+- [ ] Copy review against `GLOSSARY.md`, in every supported language
+- [ ] Microinteractions: loading states, transitions and copy feedback, in CSS, none under `prefers-reduced-motion`
+- [ ] Accessibility to WCAG 2.2 AA: contrast, visible focus, labels, screen reader and keyboard on every layout
+- [ ] Automated accessibility checks with `@axe-core/playwright` on every screen, justified in `docs/architecture.md`
+
+### UX Gate
+
+- [ ] axe reports no violation on any screen, in both themes, at the three layout widths
+- [ ] Every flow completes with the keyboard alone, and with a screen reader on one browser per platform (manual run, recorded)
+- [ ] Every security warning and confirmation is still shown and still asserted by the tests
+- [ ] Under `prefers-reduced-motion`, no animation runs
+- [ ] Visual and flow tests pass at the three layout widths, including resizing across breakpoints without losing state (D197)
+
+---
+
+## Phase 8 — Import and final review
 
 **Goal:** Import from BlindPass and other password managers, and security validation before v1.0.
 
@@ -375,6 +427,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Dependency review
 - [ ] Threat-model review against what was implemented
 - [ ] User documentation: limitations (memory zeroization, revocation, TOFU, old backups and old phrase, permanent loss)
+- [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212, then from Phase 5)
 
 ### Security Gate → v1.0
 
