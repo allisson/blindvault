@@ -1072,3 +1072,87 @@ describe('a child received before its parent (overview §9.3, D14, Gate D)', () 
     expect(held(x)).toEqual(held(y));
   });
 });
+
+describe('identical vaults, one-way and bidirectional changes (sync-protocol.md §7 to §9, Gate D)', () => {
+  /** `sync(from, to)`, counting the records `from` sends. */
+  async function counted(from: VaultSession, to: VaultSession) {
+    let sent = -1;
+    const results = await sync(from, to, (records) => {
+      sent = records.length;
+      return records;
+    });
+    return { sent, results };
+  }
+
+  const nothing = { added: 0, replaced: 0, versions: 0, rejected: [] };
+
+  it('sends and changes nothing between identical vaults, either way', async () => {
+    const { x, y } = await peers();
+    const before = held(x);
+    expect(held(y)).toEqual(before);
+    for (const [from, to] of [
+      [x, y],
+      [y, x],
+    ] as const) {
+      const { sent, results } = await counted(from, to);
+      expect(sent).toBe(0);
+      for (const result of results) expect(result).toMatchObject(nothing);
+    }
+    expect(held(x)).toEqual(before);
+    expect(held(y)).toEqual(before);
+  });
+
+  it("brings one device's changes to the other, whose older copy of the edited item changes nothing back (D223)", async () => {
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    const work = await x.createFolder('Work');
+    await x.createItem({ ...login('In Work'), folderId: work });
+    await x.updateItem(shared, login('Edited on Laptop'));
+    const gone = await x.createItem(login('Gone'));
+    await x.trashItem(gone);
+
+    const { sent, results } = await counted(y, x);
+    // Y holds only an older copy of the edited item, sent so both store the same loser (§8).
+    expect(sent).toBe(1);
+    const [toY, toX] = results;
+    // Work, In Work and Gone added; Shared replaced; the versions of Shared and of Gone untrashed.
+    expect(toY).toMatchObject({ added: 3, replaced: 1, versions: 2, rejected: [] });
+    expect(toX).toMatchObject(nothing);
+    for (const session of [x, y]) {
+      expect(paths(session)).toEqual(['Work/', 'Work/In Work', 'Edited on Laptop']);
+      expect(session.item(gone)).toMatchObject({ inTrash: true });
+      expect(history(session, shared)).toEqual(['Shared']);
+    }
+    expect(held(x)).toEqual(held(y));
+    expect((await counted(x, y)).sent).toBe(0);
+  });
+
+  it("brings each device's changes to the other in one sync", async () => {
+    const { clock, x, y, shared } = await peers();
+    clock.t = T0 + MINUTE;
+    await x.createItem(login('Made on Laptop'));
+    const work = await x.createFolder('Work');
+    clock.t = T0 + 2 * MINUTE;
+    await y.createItem(login('Made on Phone'));
+    await y.updateItem(shared, login('Edited on Phone'));
+    await y.createFolder('Home');
+
+    const { results } = await counted(x, y);
+    // Each adds the other's new item and folder; only X replaces Shared and keeps its old state.
+    expect(results[0]).toMatchObject({ added: 2, replaced: 1, versions: 1, rejected: [] });
+    expect(results[1]).toMatchObject({ added: 2, replaced: 0, versions: 0, rejected: [] });
+    for (const session of [x, y]) {
+      expect(paths(session)).toEqual([
+        'Home/',
+        'Work/',
+        'Edited on Phone',
+        'Made on Laptop',
+        'Made on Phone',
+      ]);
+      expect(session.folder(work)).toMatchObject({ name: 'Work' });
+    }
+    expect(held(x)).toEqual(held(y));
+    expect((await counted(x, y)).sent).toBe(0);
+    expect((await counted(y, x)).sent).toBe(0);
+  });
+});
