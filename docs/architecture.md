@@ -487,6 +487,13 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **A retired peer and a forged Device record (Phase 5, D31, D41, D45, CRYPTO-INV-015).** No
+  code change: `tests/sync.test.ts` retires one of two devices and tells it, after which neither
+  opens a sync with the other. With a third Device record held by both, it seals a newer
+  non-retired copy of that record with the vault's keys, as anyone holding the vault could, under an
+  `hlc` claiming that device, the device that retired it, or the receiver, and sends it in a sync
+  transfer each way: each device keeps its retired copy and still refuses that device. A forged
+  copy received before the older retirement loses to it at the next sync. No new dependency.
 - **Duplicate, out-of-order and repeated messages (Phase 5, §2.1, §10, §12).** No code change:
   `tests/sync.test.ts` sends a transfer in reverse order, which merges as the plain one; a transfer
   holding one record twice, refused (`protocol-error`, D158) with nothing written; and the records

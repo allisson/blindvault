@@ -13,10 +13,14 @@ import {
   type SymmetricKey,
   decodeCbor,
   decodeEnvelope,
+  deriveMasterSubkeys,
   derivePrfKek,
   encodeCbor,
+  generateDeviceIdentity,
   generateRecoveryPhrase,
   initCrypto,
+  sealRecord,
+  verifyRecord,
 } from '@blindvault/crypto';
 import { VaultDatabase } from '@blindvault/storage';
 import {
@@ -36,7 +40,9 @@ import {
   PURGE_DELAY_MS,
   type RecordStore,
   type SyncResult,
+  SyncRefusedError,
   VaultSession,
+  deviceToCbor,
   parseLocalConfig,
 } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
@@ -1274,4 +1280,122 @@ describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, 
       }
     },
   );
+});
+
+describe('a retired peer (overview §10, D31, D41, D45, CRYPTO-INV-015, Gate D)', () => {
+  function refusal(open: () => unknown): string | undefined {
+    try {
+      open();
+    } catch (error) {
+      if (error instanceof SyncRefusedError) return error.reason;
+      throw error;
+    }
+    return undefined;
+  }
+
+  function retiredOf(session: VaultSession, id: Uint8Array): boolean | undefined {
+    return session.devices().find((d) => same(d.deviceId, id))?.device.retired;
+  }
+
+  it('refuses a sync either way once X retired Y and told it so', async () => {
+    const { x, y } = await peers();
+    await x.retireDevice(y.deviceId);
+    expect(refusal(() => x.openSync(y.deviceId))).toBe('retired-peer');
+    // X tells Y, sending nothing but its retired record (D45); Y merges it.
+    const notice = await x.openSync(y.deviceId, 'retirement').peerRetirement();
+    await y.openSync(x.deviceId).mergeOwnRetirement(notice ?? new Uint8Array(0));
+    expect(y.retired).toBe(true);
+    expect(refusal(() => y.openSync(x.deviceId))).toBe('retired');
+    expect(refusal(() => x.openSync(y.deviceId))).toBe('retired-peer');
+  });
+
+  /**
+   * X and Y hold a third device, the Tablet; `forge` seals a Tablet Device record with the vault's
+   * keys, as anyone holding the vault could.
+   */
+  async function withTablet() {
+    const { clock, x, y, words } = await peers();
+    const keyring = new Keyring();
+    const caller = new Keyring();
+    const file = await x.exportBackup({ kek: kek(caller, 1), method: 'password' });
+    caller.wipeAll();
+    const backup = restoreWithPhrase(keyring, parseBackup(file.bytes), words);
+    const subkeys = deriveMasterSubkeys(keyring, backup.masterKey);
+    const wrapped = backup.records.find((r) => r.recordType === RecordType.vaultKey);
+    const { vaultKey } = verifyRecord(keyring, wrapped?.envelope ?? new Uint8Array(0), {
+      vaultId: backup.vaultId,
+      vaultKey: () => undefined,
+      vaultKeyWrapKey: subkeys.vaultKeyWrap,
+      versionIdKey: subkeys.versionId,
+    });
+    if (!vaultKey) throw new Error('no vault key');
+    const tablet = generateDeviceIdentity(new Keyring());
+    const forge = (physicalMs: number, writer: Uint8Array, retired: boolean) =>
+      sealRecord(
+        {
+          recordFormatVersion: RECORD_FORMAT_VERSION,
+          recordType: RecordType.device,
+          recordId: tablet.deviceId,
+          keyEpoch: 1,
+          hlc: { physicalMs, counter: 0, deviceId: writer },
+          deleted: false,
+        },
+        { vaultId: backup.vaultId, versionIdKey: subkeys.versionId },
+        vaultKey,
+        deviceToCbor({
+          publicKey: tablet.publicKey,
+          displayName: 'Tablet',
+          retired,
+          registeredAt: T0,
+        }),
+      );
+    const registered = forge(T0 + 1, x.deviceId, false);
+    // Y gets it from X's transfer, then X from Y's own selection.
+    await sync(x, y, (records) => [...records, registered]);
+    await sync(y, x);
+    expect([retiredOf(x, tablet.deviceId), retiredOf(y, tablet.deviceId)]).toEqual([false, false]);
+    return { clock, x, y, tablet: tablet.deviceId, forge };
+  }
+
+  it.each([
+    ['the Tablet', 'tablet'],
+    ['X, which retired it', 'x'],
+    ['Y', 'y'],
+  ] as const)(
+    'never un-retires the Tablet for a forged newer non-retired record claiming the hlc of %s',
+    async (_, claimed) => {
+      const { clock, x, y, tablet, forge } = await withTablet();
+      clock.t = T0 + MINUTE;
+      await x.retireDevice(tablet);
+      await sync(x, y);
+      const retirement = x.devices().find((d) => same(d.deviceId, tablet))?.hlc;
+      const writer = { tablet, x: x.deviceId, y: y.deviceId }[claimed];
+      const forged = forge(T0 + DAY, writer, false);
+      // Sent to X by Y, then to Y by X, each holding the retirement.
+      const [, toX] = await sync(y, x, (records) => [...records, forged]);
+      const [, toY] = await sync(x, y, (records) => [...records, forged]);
+      // Each keeps its copy: nothing replaced, no device announced.
+      for (const result of [toX, toY]) {
+        expect(result).toMatchObject({ added: 0, replaced: 0, newDevices: [], retiredDevices: [] });
+      }
+      for (const session of [x, y]) {
+        expect(retiredOf(session, tablet)).toBe(true);
+        expect(session.devices().find((d) => same(d.deviceId, tablet))?.hlc).toEqual(retirement);
+      }
+      expect(refusal(() => x.openSync(tablet))).toBe('retired-peer');
+      expect(refusal(() => y.openSync(tablet))).toBe('retired-peer');
+    },
+  );
+
+  it('retires the Tablet at Y even when the forged record reached Y before the older retirement', async () => {
+    const { clock, x, y, tablet, forge } = await withTablet();
+    clock.t = T0 + MINUTE;
+    await x.retireDevice(tablet);
+    // Y holds the forged copy, newer than the retirement, when the retirement arrives.
+    await sync(x, y, () => [forge(T0 + DAY, y.deviceId, false)]);
+    expect(retiredOf(y, tablet)).toBe(false);
+    await sync(x, y);
+    for (const session of [x, y]) expect(retiredOf(session, tablet)).toBe(true);
+    expect(refusal(() => y.openSync(tablet))).toBe('retired-peer');
+  });
 });
