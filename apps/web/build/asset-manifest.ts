@@ -1,6 +1,6 @@
 // The asset manifest of the build (overview §11, D189, docs/build.md): `asset-manifest.txt` at the
-// output root, one `shasum -a 256` line per file in byte order of the paths, leaving out itself and
-// `sw.js`; its hash is the SHA-256 of its bytes. The build runs only under the Node of `.nvmrc`.
+// output root, one `shasum -a 256` line per file in byte order of the paths, leaving out itself,
+// `sw.js` and `_headers` (D229); its hash is the SHA-256 of its bytes. The build runs only under the Node of `.nvmrc`.
 
 import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
@@ -13,6 +13,9 @@ export const MANIFEST = 'asset-manifest.txt';
 /** Updated by the browser on its own, outside the asset bundle (D63). */
 const SERVICE_WORKER = 'sw.js';
 
+/** Read by Cloudflare Pages and never served (D229). */
+const PAGES_HEADERS = '_headers';
+
 export interface BuildFile {
   /** Relative to the output root, with `/` separators. */
   readonly path: string;
@@ -24,7 +27,9 @@ function sha256(bytes: Uint8Array | string): string {
 }
 
 export function manifestOf(files: readonly BuildFile[]): string {
-  const listed = files.filter((f) => f.path !== MANIFEST && f.path !== SERVICE_WORKER);
+  const listed = files.filter(
+    (f) => f.path !== MANIFEST && f.path !== SERVICE_WORKER && f.path !== PAGES_HEADERS,
+  );
   for (const { path } of listed) {
     // shasum escapes these, so the line would no longer be the path.
     if (path.includes('\n') || path.includes('\\')) {

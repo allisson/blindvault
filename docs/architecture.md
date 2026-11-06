@@ -214,6 +214,13 @@ every project through the references in the root `tsconfig.json`.
   also uses. `e2e/self-hosting/serve.sh` serves `dist/` with either in Docker, and
   `playwright.self-hosting.config.ts` runs `self-hosting.spec.ts` (excluded from the main suite)
   with the smoke, PWA and About specs against it, in the CI job `self-hosting`.
+- **Cloudflare Pages headers and 404 page (Phase 6, D228, D229).** `build/pages.ts` is a Vite
+  plugin, applied to `vite build` only, that emits `_headers`: one rule, `/*`, with `HEADER_CSP`
+  of `build/csp.ts`, the other headers of `deploy/`, `Cache-Control: no-cache` and the detach of
+  Pages' default `Access-Control-Allow-Origin`; `build/pages.test.ts` requires that exact text.
+  `asset-manifest.ts` leaves `_headers` out, since Pages does not serve it, and the `reproducible`
+  CI job compares it between both builds. `public/404.html` is static, with no script and no style,
+  so Pages answers an unknown path with 404 instead of the app.
 - **State UI (Phase 3, D196).** `src/app/storage-state.ts` holds the rules: Safari by user agent,
   a plain tab by `display-mode: standalone` and `navigator.standalone`, nearly full at 80% of the
   quota, and the warnings in their order. Its `StorageMonitor`, owned by the controller as

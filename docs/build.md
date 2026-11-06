@@ -26,7 +26,7 @@ The build writes `asset-manifest.txt` at the root of its output (`apps/web/dist`
 
 - Lines are in byte order of the UTF-8 paths.
 - It lists every file except itself and `sw.js`, which the browser updates on its own outside the
-  asset bundle (D63).
+  asset bundle (D63), and `_headers`, which Cloudflare Pages reads and does not serve (D229).
 - A path that holds a newline or a backslash fails the build, since `shasum` would escape it.
 
 The **manifest hash** is the SHA-256 of the manifest's bytes. The build prints it:
