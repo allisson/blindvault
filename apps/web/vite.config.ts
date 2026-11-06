@@ -5,6 +5,7 @@ import { type Plugin, defineConfig } from 'vite';
 
 import { assetManifest } from './build/asset-manifest';
 import { META_CSP } from './build/csp';
+import { pagesHeadersFile } from './build/pages';
 import { versionText } from './build/version';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
@@ -32,6 +33,7 @@ export default defineConfig({
     tailwindcss(),
     csp(),
     versionText(pkg.version),
+    pagesHeadersFile(),
     assetManifest(new URL('../../.nvmrc', import.meta.url)),
   ],
   // The Argon2id worker is built as a module, as the dev server serves it (app/kdf.ts).

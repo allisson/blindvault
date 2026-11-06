@@ -66,6 +66,8 @@ jobs:
       - name: Compare the asset manifests
         run: |
           diff first/apps/web/dist/asset-manifest.txt second/elsewhere/apps/web/dist/asset-manifest.txt
+          # Left out of the manifest, which Pages does not serve (D229).
+          diff first/apps/web/dist/_headers second/elsewhere/apps/web/dist/_headers
           (cd first/apps/web/dist && sha256sum -c --quiet asset-manifest.txt)
           hash=$(sha256sum first/apps/web/dist/asset-manifest.txt | cut -d' ' -f1)
           {

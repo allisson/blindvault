@@ -51,6 +51,11 @@ describe('asset manifest (D189)', () => {
     expect(text).toBe(`${sha('not the service worker')}  assets/sw.js\n`);
   });
 
+  it('leaves out _headers at the root only, which Pages reads and does not serve (D229)', () => {
+    const text = manifestOf([file('_headers', '/*'), file('assets/_headers', 'a file')]);
+    expect(text).toBe(`${sha('a file')}  assets/_headers\n`);
+  });
+
   it('refuses a path that shasum would escape, and a duplicate path', () => {
     expect(() => manifestOf([file('a\nb.js', '')])).toThrow(/a\\nb\.js|path/);
     expect(() => manifestOf([file('a\\b.js', '')])).toThrow(/path/);
