@@ -370,18 +370,18 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `_headers` generated from `apps/web/build/csp.ts`: the `<meta>` policy with `frame-ancestors 'none'`, `Referrer-Policy`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, and `no-cache` outside `assets/`, with Pages' default `Access-Control-Allow-Origin: *` detached (D195, D228); a unit test requires its policy to be the build's, as for `deploy/`; the asset manifest leaves it out, since Pages does not serve it (D229)
 - [x] No fallback to `index.html`: the build ships a `404.html`, so an unknown path answers 404 (D195, D229)
 - [x] Zone settings that rewrite responses turned off (Rocket Loader, Email Obfuscation, automatic Web Analytics, minification, Automatic HTTPS Rewrites), recorded in `docs/deployment.md`; Server-Side Excludes stays on, inert (D230)
-- [ ] The `pages.dev` hostname and preview deployments redirected to the official origin or blocked, so the app is served at one origin only (D90); previews are behind Cloudflare Access, and the `pages.dev` redirect comes with the DNS move (D230)
+- [x] The `pages.dev` hostname and preview deployments redirected to the official origin or blocked, so the app is served at one origin only (D90); previews are behind Cloudflare Access, and the `pages.dev` redirect, an account Bulk Redirect without subdomains, came with the DNS move (D230)
 - [x] API token with the account permission Cloudflare Pages Edit, the narrowest Cloudflare offers (D228, D230), held as a secret of the GitHub environment `cloudflare-pages`, which allows only `v*` tags
-- [ ] DNS of `blindvault.allisson.dev` moved to the Pages project; the GitHub Pages deployment and the `github-pages` environment removed
+- [x] DNS of `blindvault.allisson.dev` moved to the Pages project; the GitHub Pages deployment and the `github-pages` environment removed
 
 ### Deploy Gate
 
-- [ ] A release tag deploys to Cloudflare Pages, and the post-deployment check finds the served `asset-manifest.txt` and `sw.js` equal to the release's
-- [ ] The served headers equal `_headers`, `frame-ancestors 'none'` and `Cross-Origin-Opener-Policy` included
-- [ ] An unknown path answers 404, not the app
-- [ ] The `pages.dev` hostname does not serve the app
-- [ ] An installed copy served by GitHub Pages takes the Cloudflare build only after confirmation, and keeps its vault (D63, D191)
-- [ ] No push to `main` and no manual run deploys anything
+- [x] A release tag deploys to Cloudflare Pages, and the post-deployment check finds the served `asset-manifest.txt` and `sw.js` equal to the release's (v0.5.0)
+- [x] The served headers equal `_headers`, `frame-ancestors 'none'` and `Cross-Origin-Opener-Policy` included; on a 404 Pages serves `Cache-Control: no-store`, stricter than `no-cache` (`docs/deployment.md`)
+- [x] An unknown path answers 404, not the app
+- [x] The `pages.dev` hostname does not serve the app: it answers 301 to the official origin, and previews ask for Cloudflare Access
+- [x] An installed copy served by GitHub Pages takes the Cloudflare build only after confirmation, and keeps its vault (D63, D191): v0.4.0 to v0.5.0 on the owner's device
+- [x] No push to `main` and no manual run deploys anything: the release runs only on `v*` tags, with no `workflow_dispatch`, the `cloudflare-pages` environment admits only `v*` tags, and the project has no Git integration
 
 ---
 

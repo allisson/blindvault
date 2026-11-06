@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 6 — Deployment on Cloudflare Pages. Update this line when a gate passes.
+Phase 7 — User experience. Update this line when a gate passes.
 
 ## Repository layout
 
