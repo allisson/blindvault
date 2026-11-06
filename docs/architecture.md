@@ -487,6 +487,15 @@ every project through the references in the root `tsconfig.json`.
   fields and unknown keys (D59); it is blocked while the held record is beyond the future-clock
   bound and while the vault is read-only. Settings › Devices has Rename on each listed row, and the
   name is checked as a folder name is, at 64 code points. No new dependency.
+- **A reconnection payload of another session or to another device (Phase 5, §4, §5,
+  CRYPTO-INV-008).** No code change: `tests/sync.test.ts` seals the payloads of two vaults in
+  IndexedDB with the identities and keys their sync grants hold, and delivers them over the
+  in-memory delivery before `Noise_KK` on the in-memory transport. The responder's answer of an
+  earlier session is refused (`malformed`) and this session's is taken. The initiator's offer of an
+  earlier session, replayed first, opens at the responder, as §4.4 allows; the initiator refuses the
+  answer to it, and `Noise_KK` fails on both sides, each binding a different offer. A payload sealed
+  to a third device, offer or answer, is refused (`not-from-peer`) and the one sealed to this device
+  is taken, while the third device opens it. No new dependency.
 - **A retired peer and a forged Device record (Phase 5, D31, D41, D45, CRYPTO-INV-015).** No
   code change: `tests/sync.test.ts` retires one of two devices and tells it, after which neither
   opens a sync with the other. With a third Device record held by both, it seals a newer
