@@ -70,7 +70,7 @@ test('adds a TOTP field from an otpauth:// link, masks its TOTP secret and shows
   await expect(page.getByRole('heading', { name: 'ACME', exact: true })).toBeVisible();
 
   // The TOTP secret is masked by default, the current code shown (overview §13.2).
-  await expect(page.getByTestId('secret-2FA')).toHaveText('••••••••');
+  await expect(page.getByTestId('secret-2FA')).toHaveText('••••••••Hidden');
   await expect(page.getByText(SECRET)).toHaveCount(0);
   await expect(page.getByText('ACME · ana@acme.example')).toBeVisible();
   const shown = page.getByTestId('totp-2FA');
@@ -122,7 +122,7 @@ test('copies a TOTP code and a secret, then clears the clipboard after the timeo
 
   // The secret is copied without being shown, and cleared on lock before its timeout.
   await page.getByRole('button', { name: 'Copy: Password', exact: true }).click();
-  await expect(page.getByTestId('secret-Password')).toHaveText('••••••••');
+  await expect(page.getByTestId('secret-Password')).toHaveText('••••••••Hidden');
   expect((await writes(page)).at(-1)).toBe('Tulip-Orbit-5528-Granite');
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.getByTestId('unlock-password')).toBeVisible();

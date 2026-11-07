@@ -3,11 +3,20 @@ import { useId, useState } from 'react';
 import { clipboard } from '../app/clipboard';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
-import { Button, CopyCheck, INPUT, useCheck } from './components';
+import { Button, CopyCheck, INPUT, Message, useCheck } from './components';
 
 // Secrets are masked by default in every layout; revealing takes an explicit action, and the
-// mask never shows the value's length (overview §13.1, §13.2).
-const MASK = '••••••••';
+// mask never shows the value's length (overview §13.1, §13.2). A screen reader hears "hidden", not
+// the dots.
+function Mask() {
+  const m = useMessages();
+  return (
+    <>
+      <span aria-hidden="true">••••••••</span>
+      <span className="sr-only">{m.items.masked}</span>
+    </>
+  );
+}
 
 function Toggle({ shown, onToggle }: { readonly shown: boolean; readonly onToggle: () => void }) {
   const m = useMessages();
@@ -89,7 +98,7 @@ export function SecretView({
           data-testid={`secret-${label}`}
           className="min-w-0 flex-1 font-mono text-sm break-all whitespace-pre-wrap"
         >
-          {shown ? value : MASK}
+          {shown ? value : <Mask />}
         </span>
         <Toggle
           shown={shown}
@@ -143,6 +152,7 @@ export function SecretInput({
   const common = {
     id,
     'aria-invalid': error ? true : undefined,
+    'aria-describedby': error || hint ? `${id}-message` : undefined,
     autoComplete: 'off',
     spellCheck: false,
     'data-testid': `input-${label}`,
@@ -164,7 +174,9 @@ export function SecretInput({
             }}
           />
         ) : multiLine ? (
-          <span className={`${INPUT} flex min-w-0 flex-1 items-center font-mono`}>{MASK}</span>
+          <span className={`${INPUT} flex min-w-0 flex-1 items-center font-mono`}>
+            <Mask />
+          </span>
         ) : (
           <input
             {...common}
@@ -183,13 +195,11 @@ export function SecretInput({
           }}
         />
       </div>
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : hint || (multiLine && !shown) ? (
-        <p className="text-sm text-muted">{hint ?? m.items.multiLine}</p>
-      ) : null}
+      <Message
+        id={`${id}-message`}
+        error={error}
+        hint={hint ?? (multiLine && !shown ? m.items.multiLine : undefined)}
+      />
     </div>
   );
 }

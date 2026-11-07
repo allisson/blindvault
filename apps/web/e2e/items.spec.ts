@@ -59,7 +59,7 @@ for (const [layout, width] of WIDTHS) {
     await newLogin(page);
     // Masked by default; revealing takes an explicit action (overview §13.2).
     const secret = page.getByTestId('secret-Password');
-    await expect(secret).toHaveText('••••••••');
+    await expect(secret).toHaveText('••••••••Hidden');
     await expect(page.getByText(SECRET)).toHaveCount(0);
     await page.getByRole('button', { name: 'Show', exact: true }).click();
     await expect(secret).toHaveText(SECRET);
@@ -72,7 +72,7 @@ for (const [layout, width] of WIDTHS) {
     await page.getByTestId('input-Username').fill('ana.lima.0042');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('ana.lima.0042')).toBeVisible();
-    await expect(page.getByTestId('secret-Password')).toHaveText('••••••••');
+    await expect(page.getByTestId('secret-Password')).toHaveText('••••••••Hidden');
 
     await page.getByRole('button', { name: 'Move to trash', exact: true }).click();
     await expect(page.getByRole('heading', { name: TITLE })).toHaveCount(0);

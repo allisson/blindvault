@@ -606,6 +606,7 @@ const en = {
     restore: 'Restore from the trash',
     show: 'Show',
     hide: 'Hide',
+    masked: 'Hidden',
     open: 'Open',
     newerTitle: 'Item from a newer version',
     readOnlyNewer:
@@ -694,6 +695,7 @@ const en = {
     'seed-phrase': 'Seed phrase',
   },
   generator: {
+    title: 'Password generator',
     generate: 'Generate',
     characters: 'Characters',
     words: 'Words',
@@ -1600,6 +1602,7 @@ const ptBR: Messages = {
     restore: 'Restaurar da lixeira',
     show: 'Mostrar',
     hide: 'Ocultar',
+    masked: 'Oculto',
     open: 'Abrir',
     newerTitle: 'Item de uma versão mais nova',
     readOnlyNewer:
@@ -1687,6 +1690,7 @@ const ptBR: Messages = {
     'seed-phrase': 'Frase-semente',
   },
   generator: {
+    title: 'Gerador de senhas',
     generate: 'Gerar',
     characters: 'Caracteres',
     words: 'Palavras',
