@@ -1,5 +1,7 @@
+import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
+import { corruptRecords } from './corrupt';
 import { answerConfirmation, createVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
@@ -207,8 +209,8 @@ test('A retires B during an open sync: B merges its retired record and shows the
   await expect(b.getByTestId('own-retired')).toBeVisible();
 });
 
-/** Syncs A and B from Settings › Devices, A showing its code first; both end on the merge result. */
-async function synced(a: Page, b: Page) {
+/** Connects A and B from Settings › Devices, A showing its code first. */
+async function connect(a: Page, b: Page) {
   await a.getByTestId('device-sync').click();
   const syncA = a.getByTestId('sync');
   await syncA.getByTestId('pairing-same-network').check();
@@ -225,6 +227,11 @@ async function synced(a: Page, b: Page) {
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
   await button(a, 'Connect').click();
+}
+
+/** Syncs A and B as `connect` does; both end on the merge result. */
+async function synced(a: Page, b: Page) {
+  await connect(a, b);
   await expect(b.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
   await expect(a.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
 }
@@ -266,6 +273,78 @@ test('an item created on A reaches B through a sync, and B shows the merge (D222
   // B still shows "Vault ready" from its pairing (D198).
   await button(b, 'Open the vault').click();
   await expect(button(b, 'ACME')).toBeVisible();
+});
+
+test('a record of A that fails verification stops the sync before it is sent: A names it, B is told, nothing merges (§8, D181, CRYPTO-INV-018)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await button(a, 'Back').click();
+  await newLogin(a, 'ACME');
+  await button(a, 'Settings').click();
+  // B lacks the item, so A reads it again from storage and verifies it before sending (D181).
+  expect(await corruptRecords(a, RecordType.item)).toBeGreaterThan(0);
+
+  await connect(a, b);
+  const failedA = a.getByTestId('sync-failed');
+  await expect(failedA).toHaveAttribute('data-reason', 'send-failed', { timeout: 30_000 });
+  await expect(failedA).toHaveText(
+    /^A record on this device, \S+ [0-9a-f]+, failed verification, so the sync stopped before sending it\. Nothing was merged\.$/,
+  );
+  const failedB = b.getByTestId('sync-failed');
+  await expect(failedB).toHaveAttribute('data-reason', 'peer-verification-failed', {
+    timeout: 30_000,
+  });
+  await expect(failedB).toContainText('failed verification, so the sync stopped');
+  await expect(failedB).toContainText('Nothing was merged.');
+
+  await b.getByTestId('sync-again').click();
+  await button(b, 'Back').click();
+  await button(b, 'Open the vault').click();
+  await expect(button(b, 'ACME')).toHaveCount(0);
+});
+
+test('the stored record of a retired B that fails verification: A sends nothing, B is not retired (§6, D181, CRYPTO-INV-018)', async ({
+  browser,
+}) => {
+  const { a, b } = await paired(browser);
+  await a.getByTestId('device-retire').click();
+  await a.getByRole('button', { name: /^Retire / }).click();
+  await expect(a.getByTestId('device')).toHaveCount(1);
+  // A sends a retired device only its record, read again from storage and verified (§6, D181).
+  expect(await corruptRecords(a, RecordType.device)).toBeGreaterThan(0);
+  const retired = a.getByTestId('retired-devices');
+  await retired.locator('summary').click();
+  await retired.getByTestId('device-notify').click();
+  const syncA = a.getByTestId('sync');
+  await syncA.getByTestId('pairing-same-network').check();
+  await syncA.getByTestId('sync-first').click();
+  const offer = syncA.getByTestId('pairing-text');
+  await expect(offer).not.toHaveValue('', { timeout: 30_000 });
+  await b.getByTestId('device-sync').click();
+  const syncB = b.getByTestId('sync');
+  await syncB.getByTestId('pairing-same-network').check();
+  await syncB.getByTestId('sync-read').click();
+  await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
+  await button(b, 'Show my answer').click();
+  const answer = syncB.getByTestId('pairing-text');
+  await expect(answer).not.toHaveValue('', { timeout: 30_000 });
+  await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
+  await button(a, 'Connect').click();
+
+  const failedA = a.getByTestId('sync-failed');
+  await expect(failedA).toHaveAttribute('data-reason', 'verification-failed', { timeout: 30_000 });
+  await expect(failedA).toHaveText(
+    /^The record of .+ on this device failed verification, so nothing was sent and the sync stopped\.$/,
+  );
+  await expect(b.getByTestId('sync-failed')).toHaveAttribute(
+    'data-reason',
+    'peer-verification-failed',
+    { timeout: 30_000 },
+  );
+  await expect(b.getByTestId('own-retired')).toHaveCount(0);
+  await b.getByTestId('sync-again').click();
+  await expect(b.getByTestId('device-sync')).toHaveCount(1);
 });
 
 test('concurrent edits converge in one sync: the newer wins on both, the other in the history of both (D6, D223)', async ({
