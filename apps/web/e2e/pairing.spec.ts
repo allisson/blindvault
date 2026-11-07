@@ -1,5 +1,7 @@
+import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
+import { corruptRecords } from './corrupt';
 import { createVault, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
@@ -137,6 +139,27 @@ test('numbers said to differ stop the pairing on both, and B keeps nothing (§6.
   // Again: a new session, from B's password step.
   await button(b, 'Start again').click();
   await expect(b.getByTestId('new-password')).toBeVisible();
+});
+
+test('a record of A that fails verification stops the pairing on both, and B keeps nothing (D181, CRYPTO-INV-018)', async ({
+  browser,
+}) => {
+  const { a, b } = await toSas(browser);
+  // After the SAS, A reads every record again from storage and verifies it before sending (D181).
+  expect(await corruptRecords(a, RecordType.item)).toBeGreaterThan(0);
+  await button(a, 'Yes, the same').click();
+  await button(b, 'Yes, the same').click();
+  for (const page of [a, b]) {
+    const failed = page.getByTestId('pairing-failed');
+    await expect(failed).toHaveAttribute('data-reason', 'verification-failed', { timeout: 60_000 });
+    await expect(failed).toContainText(
+      'A record failed verification, so the pairing stopped and the other device kept nothing.',
+    );
+  }
+  // A admitted B before the transfer, so it lists B as a pairing not completed (D34).
+  await expect(a.getByTestId('device')).toHaveCount(2);
+  await expect(a.getByTestId('device-pending')).toBeVisible();
+  expect(await b.evaluate(async () => (await indexedDB.databases()).length)).toBe(0);
 });
 
 test('a lock on A while the numbers are shown stops the pairing on B (D93)', async ({

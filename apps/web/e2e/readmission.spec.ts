@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
+import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
+import { corruptRecords } from './corrupt';
 import { createVault, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
@@ -185,6 +187,31 @@ test('numbers said to differ stop the re-admission on both, and nothing is merge
   // Neither knows the other, and neither holds the other's item.
   await expect(a.getByTestId('device')).toHaveCount(1);
   await expect(b.getByTestId('devices-readmit')).toBeVisible();
+  await button(a, 'Back').click();
+  await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
+});
+
+test('a stored record of A that fails verification stops the re-admission on both before the merge (§9, D181, CRYPTO-INV-018)', async ({
+  browser,
+}) => {
+  const logged: string[] = [];
+  const { a, b } = await restored(browser, logged);
+  // Every record is read again from storage and verified before it is sent (D181).
+  expect(await corruptRecords(a, RecordType.item)).toBeGreaterThan(0);
+  await toSas(a, b);
+  await button(a, 'Yes, the same').click();
+  await button(b, 'Yes, the same').click();
+  for (const page of [a, b]) {
+    const failed = page.getByTestId('pairing-failed');
+    await expect(failed).toHaveAttribute('data-reason', 'verification-failed', { timeout: 60_000 });
+    await expect(failed).toContainText(
+      'A stored record failed verification, so the re-admission stopped before the merge.',
+    );
+  }
+
+  // A admitted B before the transfer, so it lists B as not completed, and holds nothing of B.
+  await expect(a.getByTestId('device')).toHaveCount(2);
+  await expect(a.getByTestId('device-pending')).toBeVisible();
   await button(a, 'Back').click();
   await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });
