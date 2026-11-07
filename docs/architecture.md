@@ -823,7 +823,7 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `typescript` 6.0 | root | Strict typing (stack). Held on 6.0 because `typescript-eslint` 8 supports `<6.1`. |
 | `eslint`, `@eslint/js`, `typescript-eslint`, `globals` | root | Linting with type information (`strictTypeChecked`) and the package-boundary rule. |
 | `prettier` | root | Formatting. Markdown is excluded so the normative docs keep their hand formatting. |
-| `@types/node` 24 | root, `apps/web` | Types for config files and tests running in Node. Matches the pinned Node major. |
+| `@types/node` 26 | root, `apps/web` | Types for config files and tests running in Node. Matches the pinned Node major. |
 | `vitest`, `@vitest/coverage-v8` | each package, `tests`, `apps/web` (`vitest` only) | Unit tests (stack) and the 95% coverage gate on `packages/*`. |
 | `@playwright/test` | `apps/web` | End-to-end tests on Chromium, Firefox and WebKit (stack). |
 | `vite`, `@vitejs/plugin-react` | `apps/web` | Build and dev server (stack). |

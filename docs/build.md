@@ -6,7 +6,7 @@ deployment (overview §11, D5, D63, D189).
 ## Pinned inputs
 
 - **Node:** the exact version in `.nvmrc`. `vite build` refuses any other version, since it is the
-  build that publishes a hash. `engines` in `package.json` accepts any 24.x for development and
+  build that publishes a hash. `engines` in `package.json` accepts any 26.x for development and
   tests.
 - **pnpm:** the version in `packageManager`, through corepack (`corepack enable pnpm`).
 - **Dependencies:** `pnpm-lock.yaml`, installed with `pnpm install --frozen-lockfile`.

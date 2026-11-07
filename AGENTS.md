@@ -60,7 +60,7 @@ Package boundaries:
 
 ## Commands
 
-Node `24.21.0` (`.nvmrc`) and pnpm `10.33.0` (`packageManager`, through corepack: `corepack enable pnpm`).
+Node `26.13.0` LTS (`.nvmrc`) and pnpm `10.33.0` (`packageManager`, through corepack: `corepack enable pnpm`).
 `minimumReleaseAge` in `pnpm-workspace.yaml` refuses versions published less than 14 days ago, and
 `.npmrc` saves exact versions.
 
