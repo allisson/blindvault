@@ -12,7 +12,8 @@ test.setTimeout(120_000);
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
 const TITLE = 'Harbor Credit Union';
 const SECRET = 'Tulip-Orbit-5528-Granite';
-const MASK = '••••••••';
+// The dots, then the text a screen reader hears instead of them.
+const MASK = '••••••••Hidden';
 const WIDTHS = [
   ['mobile', 390],
   ['tablet', 800],

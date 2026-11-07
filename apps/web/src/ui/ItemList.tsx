@@ -153,7 +153,8 @@ export function ItemList({
                   nav.showList({ name: 'folder', id: row.id });
                 }}
               >
-                ▸ {row.name}
+                <span aria-hidden="true">▸ </span>
+                {row.name}
               </button>
             </li>
           ))}

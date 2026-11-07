@@ -61,9 +61,10 @@ export function TotpView({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-col">
+          {/* A name on a plain span is not read: the label is text a screen reader reaches. */}
+          <span className="sr-only">{m.items.totpCode}</span>
           <span
             data-testid={`totp-${name}`}
-            aria-label={m.items.totpCode}
             className="font-mono text-2xl tracking-wider tabular-nums"
           >
             {current ? grouped(current) : '\u00a0'}

@@ -46,7 +46,8 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
   const bits = entropy(settings);
   return (
     <fieldset className="flex flex-col gap-3 rounded-control border border-line p-3">
-      <div className="flex gap-4 text-sm" role="radiogroup">
+      <legend className="sr-only">{m.generator.title}</legend>
+      <div className="flex gap-4 text-sm">
         {(['characters', 'words'] as const).map((mode) => (
           <label key={mode} className={`${TARGET} flex items-center gap-2`}>
             <input

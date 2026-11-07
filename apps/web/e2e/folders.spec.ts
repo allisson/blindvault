@@ -19,6 +19,11 @@ function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
 }
 
+/** A subfolder in the list: its ▸ is hidden from screen readers, the list is named Folders. */
+function subfolder(page: Page, name: string) {
+  return page.getByRole('list', { name: 'Folders' }).getByRole('button', { name, exact: true });
+}
+
 /** Shows the folder pane: on the root screen on mobile, in the drawer on tablet. */
 async function folders(page: Page, layout: Layout) {
   if (layout === 'mobile') {
@@ -54,7 +59,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByRole('heading', { name: 'Clients', level: 2 })).toBeVisible();
     await folders(page, layout);
     await button(page, 'Work').click();
-    await expect(button(page, '▸ Clients')).toBeVisible();
+    await expect(subfolder(page, 'Clients')).toBeVisible();
     await button(page, 'New item').click();
     await button(page, 'Secure note').click();
     await expect(page.getByTestId('item-folder')).toHaveValue(/.+/);
@@ -76,13 +81,13 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Move').first().click();
 
     // Move Clients to the root, then the item into Clients.
-    await button(page, '▸ Clients').click();
+    await subfolder(page, 'Clients').click();
     await button(page, 'Move').click();
     await page.getByTestId('move-target').selectOption({ label: 'No folder (vault root)' });
     await button(page, 'Move').last().click();
     await folders(page, layout);
     await button(page, 'Office').click();
-    await expect(button(page, '▸ Clients')).toHaveCount(0);
+    await expect(subfolder(page, 'Clients')).toHaveCount(0);
     await button(page, 'Contract').click();
     await button(page, 'Edit').click();
     await page.getByTestId('item-folder').selectOption({ label: 'Clients' });

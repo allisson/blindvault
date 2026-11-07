@@ -218,30 +218,38 @@ export function Field({
         id={id}
         className={INPUT}
         aria-invalid={error ? true : undefined}
+        aria-describedby={error || hint ? `${id}-message` : undefined}
         autoComplete="off"
         spellCheck={false}
         {...props}
       />
-      <Message error={error} hint={hint} />
+      <Message id={`${id}-message`} error={error} hint={hint} />
     </div>
   );
 }
 
-function Message({
+/** A field's error or hint, which the field names as its description (`aria-describedby`). */
+export function Message({
+  id,
   error,
   hint,
 }: {
+  readonly id: string;
   readonly error?: string | undefined;
   readonly hint?: ReactNode;
 }) {
   if (error) {
     return (
-      <p role="alert" className="text-sm text-danger">
+      <p id={id} role="alert" className="text-sm text-danger">
         {error}
       </p>
     );
   }
-  return hint ? <p className="text-sm text-muted">{hint}</p> : null;
+  return hint ? (
+    <p id={id} className="text-sm text-muted">
+      {hint}
+    </p>
+  ) : null;
 }
 
 export function TextArea({
@@ -265,11 +273,12 @@ export function TextArea({
         rows={4}
         className={`${INPUT} py-2`}
         aria-invalid={error ? true : undefined}
+        aria-describedby={error || hint ? `${id}-message` : undefined}
         autoComplete="off"
         spellCheck={false}
         {...props}
       />
-      <Message error={error} hint={hint} />
+      <Message id={`${id}-message`} error={error} hint={hint} />
     </div>
   );
 }

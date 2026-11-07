@@ -89,7 +89,7 @@ function Header({
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const back = mobile ? screen.name !== 'vault' : screen.name === 'settings';
   return (
-    <header className="flex items-center gap-2 border-b border-line px-4 py-2">
+    <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
       {back ? (
         <Button
           variant="quiet"
