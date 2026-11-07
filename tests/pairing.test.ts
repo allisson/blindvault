@@ -301,7 +301,7 @@ function names(session: VaultSession): string[] {
 
 /** Whether `needle` appears anywhere in `haystack`. */
 function holds(haystack: Uint8Array, needle: Uint8Array): boolean {
-  return Buffer.from(haystack).indexOf(Buffer.from(needle)) !== -1;
+  return Buffer.from(haystack).includes(Buffer.from(needle));
 }
 
 /**
