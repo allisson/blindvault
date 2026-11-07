@@ -110,6 +110,8 @@ test('two paired devices connect from their sync codes, each with the other pick
   await button(b, 'Show my answer').click();
   const answer = syncB.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
+  await expect(syncB).toContainText('encrypted for');
+  await expect(syncB).not.toContainText('network addresses');
 
   // A's own code handed back to it is refused, and A keeps waiting (§4.3, D215).
   await syncA.getByTestId('pairing-paste').fill(offerText);
