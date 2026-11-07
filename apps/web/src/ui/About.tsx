@@ -39,7 +39,8 @@ export function AboutBuild() {
       </dl>
       <p>{m.about.informational}</p>
       <p>
-        {m.about.verify} <code>shasum -a 256 -c asset-manifest.txt</code>
+        {m.about.verify}{' '}
+        <code className="whitespace-nowrap">shasum -a 256 -c asset-manifest.txt</code>
       </p>
       <a
         href={RELEASES_URL}

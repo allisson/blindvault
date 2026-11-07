@@ -8,7 +8,8 @@
  * (ui/contrast.test.ts) reads this file and checks every accent in both themes.
  */
 
-@theme {
+/* Inline, so a utility reads --bv-* where it is used: a `data-accent` swatch shows its own accent. */
+@theme inline {
   --color-*: initial;
   --color-transparent: transparent;
   --color-current: currentColor;

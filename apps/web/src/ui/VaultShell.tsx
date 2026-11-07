@@ -300,18 +300,21 @@ export function VaultShell({
     list: layout !== 'mobile' || !detailShown,
     detail: layout !== 'mobile' || detailShown,
   };
+  // Tablet and desktop: the panes fill the frame and each scrolls on its own. Mobile: one pane at
+  // a time, scrolled with the notices between the header and the bottom navigation.
+  const fill = layout !== 'mobile' && !settings && !ready;
   const panes = {
-    desktop: 'grid grid-cols-[16rem_20rem_1fr]',
-    tablet: 'relative grid grid-cols-[18rem_1fr]',
+    desktop: 'grid min-h-0 grid-cols-[16rem_20rem_1fr] grid-rows-[minmax(0,1fr)]',
+    tablet: 'relative grid min-h-0 grid-cols-[18rem_1fr] grid-rows-[minmax(0,1fr)]',
     mobile: 'flex flex-col',
   }[layout];
   const folderPlace = {
-    desktop: 'border-r border-line',
+    desktop: 'overflow-y-auto border-r border-line',
     tablet:
       'absolute inset-y-0 left-0 z-20 w-72 overflow-y-auto border-r border-line bg-raised shadow-raised',
     mobile: '',
   }[layout];
-  const listPlace = layout === 'mobile' ? 'flex-1' : 'border-r border-line';
+  const listPlace = layout === 'mobile' ? 'flex-1' : 'min-h-0 border-r border-line';
   const body = (
     <>
       {ready && !settings ? (
@@ -351,7 +354,11 @@ export function VaultShell({
               {m.vault.folders}
             </Button>
           ) : null}
-          {list}
+          {/* The tablet's Folders button stays above the list, which scrolls under it. On mobile the
+              whole screen scrolls, so the list's sticky top sticks to it. */}
+          <div className={`min-h-0 flex-1 ${layout === 'mobile' ? '' : 'overflow-y-auto'}`}>
+            {list}
+          </div>
         </div>
         <div className={`flex min-w-0 flex-1 ${shown.detail ? '' : 'hidden'}`}>{detail}</div>
       </div>
@@ -362,116 +369,124 @@ export function VaultShell({
   );
 
   return (
-    <div data-layout={layout} className="flex min-h-dvh flex-col bg-surface text-fg">
-      <SharedOriginWarning />
-      <PreviewBanner />
-      <UpdateBanner />
+    <div data-layout={layout} className="flex h-dvh flex-col overflow-hidden bg-surface text-fg">
       <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
       <LiveSync controller={controller} nav={nav} />
-      <StorageWarningBanner controller={controller} session={session} />
-      {clock ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="clock-behind">
-          <Notice>
-            {format(m.vault.clockBehind, {
-              date: new Intl.DateTimeFormat(language, {
-                dateStyle: 'long',
-                timeStyle: 'short',
-              }).format(clock.until),
-            })}
-          </Notice>
-          {clock.far ? (
-            <>
-              <Notice>{m.vault.clockFar}</Notice>
-              <Button
-                variant="quiet"
-                data-testid="clock-refound"
-                onClick={() => {
-                  nav.open({ name: 'settings', focus: 'refound' });
-                }}
-              >
-                {m.refound.title}
-              </Button>
-              {clock.pairAgain ? <Notice>{m.vault.clockPairAgain}</Notice> : null}
-            </>
-          ) : null}
-        </div>
-      ) : null}
-      {session.retired ? (
-        <div className="px-4 py-2" data-testid="own-retired">
-          <Notice>{m.merge.ownRetired}</Notice>
-        </div>
-      ) : null}
-      {controller.afterRestore === 'check-phrase' && !ready ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="after-restore">
-          <Notice>{m.restore.checkPhrase}</Notice>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissAfterRestore();
-            }}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
+        <SharedOriginWarning />
+        <PreviewBanner />
+        <UpdateBanner />
+        <StorageWarningBanner controller={controller} session={session} />
+        {clock ? (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="clock-behind">
+            <Notice>
+              {format(m.vault.clockBehind, {
+                date: new Intl.DateTimeFormat(language, {
+                  dateStyle: 'long',
+                  timeStyle: 'short',
+                }).format(clock.until),
+              })}
+            </Notice>
+            {clock.far ? (
+              <>
+                <Notice>{m.vault.clockFar}</Notice>
+                <Button
+                  variant="quiet"
+                  data-testid="clock-refound"
+                  onClick={() => {
+                    nav.open({ name: 'settings', focus: 'refound' });
+                  }}
+                >
+                  {m.refound.title}
+                </Button>
+                {clock.pairAgain ? <Notice>{m.vault.clockPairAgain}</Notice> : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        {session.retired ? (
+          <div className="px-4 py-2" data-testid="own-retired">
+            <Notice>{m.merge.ownRetired}</Notice>
+          </div>
+        ) : null}
+        {controller.afterRestore === 'check-phrase' && !ready ? (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="after-restore">
+            <Notice>{m.restore.checkPhrase}</Notice>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                controller.dismissAfterRestore();
+              }}
+            >
+              {m.restore.dismiss}
+            </Button>
+          </div>
+        ) : null}
+        {controller.afterRefounding ? (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="refounded">
+            <Notice>{m.refound.done}</Notice>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                controller.dismissRefounded();
+                nav.open({ name: 'settings' });
+              }}
+            >
+              {m.restore.openSettings}
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                controller.dismissRefounded();
+              }}
+            >
+              {m.restore.dismiss}
+            </Button>
+          </div>
+        ) : null}
+        {reminder ? (
+          <div
+            className="flex flex-wrap items-center gap-2 px-4 py-2"
+            data-testid="backup-reminder"
           >
-            {m.restore.dismiss}
-          </Button>
-        </div>
-      ) : null}
-      {controller.afterRefounding ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="refounded">
-          <Notice>{m.refound.done}</Notice>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissRefounded();
-              nav.open({ name: 'settings' });
-            }}
+            <Notice>{reminderText(m, language, reminder)}</Notice>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                if (screen.name === 'settings') focusBackup();
+                else nav.open({ name: 'settings', focus: 'backup' });
+              }}
+            >
+              {m.vault.reminderBackup}
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                controller.dismissBackupReminder();
+              }}
+            >
+              {m.restore.dismiss}
+            </Button>
+          </div>
+        ) : null}
+        {controller.leftoverPasskey ? (
+          <div
+            className="flex flex-wrap items-center gap-2 px-4 py-2"
+            data-testid="leftover-passkey"
           >
-            {m.restore.openSettings}
-          </Button>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissRefounded();
-            }}
-          >
-            {m.restore.dismiss}
-          </Button>
-        </div>
-      ) : null}
-      {reminder ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="backup-reminder">
-          <Notice>{reminderText(m, language, reminder)}</Notice>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              if (screen.name === 'settings') focusBackup();
-              else nav.open({ name: 'settings', focus: 'backup' });
-            }}
-          >
-            {m.vault.reminderBackup}
-          </Button>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissBackupReminder();
-            }}
-          >
-            {m.restore.dismiss}
-          </Button>
-        </div>
-      ) : null}
-      {controller.leftoverPasskey ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="leftover-passkey">
-          <Notice>{m.replace.leftoverPasskey}</Notice>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              controller.dismissLeftoverPasskey();
-            }}
-          >
-            {m.restore.dismiss}
-          </Button>
-        </div>
-      ) : null}
-      <main className="flex flex-1 flex-col">{body}</main>
+            <Notice>{m.replace.leftoverPasskey}</Notice>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                controller.dismissLeftoverPasskey();
+              }}
+            >
+              {m.restore.dismiss}
+            </Button>
+          </div>
+        ) : null}
+        <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>{body}</main>
+      </div>
       {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
         <footer className="flex justify-around border-t border-line p-2">
           <Button
