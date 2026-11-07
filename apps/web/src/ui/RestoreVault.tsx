@@ -371,7 +371,7 @@ export function openingError(
   }
 }
 
-function restoreError(m: Messages, outcome: RestoreOutcome): string | undefined {
+export function restoreError(m: Messages, outcome: RestoreOutcome): string | undefined {
   switch (outcome.kind) {
     case 'ok':
       return undefined;

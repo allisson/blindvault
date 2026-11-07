@@ -98,7 +98,7 @@ export function ResetPassword({
   );
 }
 
-function resetError(m: Messages, outcome: PasswordReset): string | undefined {
+export function resetError(m: Messages, outcome: PasswordReset): string | undefined {
   switch (outcome.kind) {
     case 'ok':
     case 'unavailable':
