@@ -29,6 +29,8 @@ test.use({ baseURL: PAIRING_URL });
 const PASSWORD_A = 'quartz-lantern-velvet-harbor-9214';
 const PASSWORD_B = 'meadow-copper-signal-anchor-3071';
 const TITLE = 'Harbor Bank';
+const CHANNEL =
+  'Whoever sees this code, or whatever carries this text, a message or an email, sees this device’s network addresses. Nothing else: the numbers compared next protect the pairing.';
 
 function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
@@ -57,6 +59,8 @@ async function invite(a: Page): Promise<string> {
   await button(a, 'Start pairing').click();
   const text = a.getByTestId('pairing-text');
   await expect(text).not.toHaveValue('', { timeout: 30_000 });
+  // What the code or the text carries shows this device's network addresses (D208).
+  await expect(a.getByText(CHANNEL)).toBeVisible();
   return text.inputValue();
 }
 
@@ -72,6 +76,7 @@ async function join(b: Page, offer: string): Promise<string> {
   await button(b, 'Show my answer').click();
   const text = b.getByTestId('pairing-text');
   await expect(text).not.toHaveValue('', { timeout: 30_000 });
+  await expect(b.getByText(CHANNEL)).toBeVisible();
   return text.inputValue();
 }
 
