@@ -117,7 +117,7 @@ export function ChooseFile({
         accept=".bvault"
         disabled={reading}
         error={error}
-        className="py-2 text-sm"
+        className="py-2 text-sm file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-control file:border file:border-control file:bg-raised file:px-4 file:text-sm file:font-medium file:text-fg enabled:hover:file:bg-subtle"
         data-testid="restore-file"
         onChange={(e) => {
           const file = e.target.files?.[0];

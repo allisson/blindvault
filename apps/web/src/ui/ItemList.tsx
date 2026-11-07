@@ -98,39 +98,42 @@ export function ItemList({
   const nothing = items.length + subfolders.length + trashedFolders.length === 0;
   return (
     <section aria-label={heading} className="flex min-w-0 flex-col gap-2 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="truncate text-sm font-semibold">{heading}</h2>
-        {list.name !== 'trash' && session.writable ? (
-          <Button
-            title={`${m.items.new} (N)`}
-            aria-keyshortcuts="N"
-            onClick={() => {
-              nav.select({ name: 'new' });
+      {/* Stays at the top of its scrolling pane, so New item and search are always at hand. */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 bg-surface px-4 pt-4 pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="truncate text-sm font-semibold">{heading}</h2>
+          {list.name !== 'trash' && session.writable ? (
+            <Button
+              title={`${m.items.new} (N)`}
+              aria-keyshortcuts="N"
+              onClick={() => {
+                nav.select({ name: 'new' });
+              }}
+            >
+              <Icon name="plus" className="me-1.5" />
+              {m.items.new}
+            </Button>
+          ) : null}
+        </div>
+        {list.name !== 'trash' ? (
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label={m.vault.search}
+            title={m.vault.searchHint}
+            placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
+            aria-keyshortcuts="Control+K Meta+K"
+            autoComplete="off"
+            spellCheck={false}
+            className={INPUT}
+            value={query}
+            onChange={(e) => {
+              onQuery(e.target.value);
             }}
-          >
-            <Icon name="plus" className="me-1.5" />
-            {m.items.new}
-          </Button>
+            data-testid="search"
+          />
         ) : null}
       </div>
-      {list.name !== 'trash' ? (
-        <input
-          ref={searchRef}
-          type="search"
-          aria-label={m.vault.search}
-          title={m.vault.searchHint}
-          placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
-          aria-keyshortcuts="Control+K Meta+K"
-          autoComplete="off"
-          spellCheck={false}
-          className={INPUT}
-          value={query}
-          onChange={(e) => {
-            onQuery(e.target.value);
-          }}
-          data-testid="search"
-        />
-      ) : null}
       {list.name === 'folder' && !searching ? (
         <FolderActions
           // Keyed by folder: an open form never carries to another folder.

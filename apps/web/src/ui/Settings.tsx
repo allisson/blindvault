@@ -81,10 +81,6 @@ export function Settings({
       <RefoundVault controller={controller} session={session} nav={nav} />
       <EraseSettings controller={controller} session={session} />
       <AppearanceSettings />
-      <section className="flex flex-col gap-4">
-        <h2 className="font-semibold">{m.about.title}</h2>
-        <AboutBuild />
-      </section>
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.settings.language}
         <select
@@ -99,6 +95,10 @@ export function Settings({
           <option value="pt-BR">Português (Brasil)</option>
         </select>
       </label>
+      <section className="flex flex-col gap-4">
+        <h2 className="font-semibold">{m.about.title}</h2>
+        <AboutBuild />
+      </section>
     </div>
   );
 }

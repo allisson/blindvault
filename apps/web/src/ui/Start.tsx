@@ -262,16 +262,21 @@ function Unlock({
           {working ? m.unlock.working : m.unlock.submit}
         </Button>
       </form>
-      <Button variant="quiet" className="self-start" disabled={working} onClick={onReset}>
+      <Button variant="quiet" className="self-start text-left" disabled={working} onClick={onReset}>
         {m.reset.forgot}
       </Button>
-      <Button variant="quiet" className="self-start" disabled={working} onClick={onReplace}>
+      <Button
+        variant="quiet"
+        className="self-start text-left"
+        disabled={working}
+        onClick={onReplace}
+      >
         {m.replace.choose}
       </Button>
-      <Button variant="quiet" className="self-start" disabled={working} onClick={onPair}>
+      <Button variant="quiet" className="self-start text-left" disabled={working} onClick={onPair}>
         {m.replace.pairChoose}
       </Button>
-      <Button variant="quiet" className="self-start" disabled={working} onClick={onErase}>
+      <Button variant="quiet" className="self-start text-left" disabled={working} onClick={onErase}>
         {m.erase.choose}
       </Button>
     </Card>

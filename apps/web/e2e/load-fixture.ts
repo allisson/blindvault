@@ -4,6 +4,8 @@
 // opens the vault in a browser. The same vault as a `.bvault` file feeds the Gate C manual run
 // (D202): `large-backup.spec.ts`.
 
+import { type Page } from '@playwright/test';
+
 import {
   type KdfParams,
   type KdfPort,
@@ -215,4 +217,60 @@ export async function unlockInMemory(fixture: Fixture, password: string): Promis
   const elapsed = performance.now() - start;
   session.lock();
   return Math.round(elapsed);
+}
+
+/** Writes `fixture` into this origin's IndexedDB as the app's schema holds it. */
+export async function install(page: Page, fixture: Fixture) {
+  await page.evaluate(
+    async ({ name, localConfig }) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(name, 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('records');
+          request.result.createObjectStore('localConfig');
+        };
+        request.onsuccess = () => {
+          resolve(request.result);
+        };
+        request.onerror = () => {
+          reject(new Error('open failed'));
+        };
+      });
+      const tx = db.transaction('localConfig', 'readwrite');
+      tx.objectStore('localConfig').put(
+        Uint8Array.from(atob(localConfig), (c) => c.charCodeAt(0)),
+        'localConfig',
+      );
+      await new Promise((resolve) => (tx.oncomplete = resolve));
+      db.close();
+    },
+    { name: fixture.name, localConfig: Buffer.from(fixture.localConfig).toString('base64') },
+  );
+  const CHUNK = 2000;
+  for (let i = 0; i < fixture.records.length; i += CHUNK) {
+    const chunk = fixture.records.slice(i, i + CHUNK).map((r) => ({
+      t: r.recordType,
+      id: Buffer.from(r.recordId).toString('base64'),
+      e: Buffer.from(r.envelope).toString('base64'),
+    }));
+    await page.evaluate(
+      async ({ name, chunk }) => {
+        const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open(name);
+          request.onsuccess = () => {
+            resolve(request.result);
+          };
+          request.onerror = () => {
+            reject(new Error('open failed'));
+          };
+        });
+        const tx = db.transaction('records', 'readwrite');
+        for (const r of chunk) tx.objectStore('records').put(bytes(r.e), [r.t, bytes(r.id)]);
+        await new Promise((resolve) => (tx.oncomplete = resolve));
+        db.close();
+      },
+      { name: fixture.name, chunk },
+    );
+  }
 }

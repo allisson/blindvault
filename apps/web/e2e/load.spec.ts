@@ -3,7 +3,7 @@ import { type Page, expect, test } from '@playwright/test';
 import { MEMLIMIT } from '@blindvault/crypto';
 import { HISTORY_LIMIT } from '@blindvault/vault';
 
-import { type Fixture, buildVault, unlockInMemory } from './load-fixture';
+import { type Fixture, buildVault, install, unlockInMemory } from './load-fixture';
 
 // The load test of architecture.md ("Load at unlock"): opt-in, since building and writing 42,000
 // records takes minutes. Run it with `BV_LOAD_TEST=1 pnpm exec playwright test e2e/load.spec.ts`.
@@ -26,62 +26,6 @@ test.beforeAll(async () => {
   // The same unlock in Node, records in memory: decryption and parsing without IndexedDB.
   console.log(`[load] node, in memory: ${String(await unlockInMemory(loaded, PASSWORD))} ms`);
 });
-
-/** Writes `fixture` into this origin's IndexedDB as the app's schema holds it. */
-async function install(page: Page, fixture: Fixture) {
-  await page.evaluate(
-    async ({ name, localConfig }) => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(name, 1);
-        request.onupgradeneeded = () => {
-          request.result.createObjectStore('records');
-          request.result.createObjectStore('localConfig');
-        };
-        request.onsuccess = () => {
-          resolve(request.result);
-        };
-        request.onerror = () => {
-          reject(new Error('open failed'));
-        };
-      });
-      const tx = db.transaction('localConfig', 'readwrite');
-      tx.objectStore('localConfig').put(
-        Uint8Array.from(atob(localConfig), (c) => c.charCodeAt(0)),
-        'localConfig',
-      );
-      await new Promise((resolve) => (tx.oncomplete = resolve));
-      db.close();
-    },
-    { name: fixture.name, localConfig: Buffer.from(fixture.localConfig).toString('base64') },
-  );
-  const CHUNK = 2000;
-  for (let i = 0; i < fixture.records.length; i += CHUNK) {
-    const chunk = fixture.records.slice(i, i + CHUNK).map((r) => ({
-      t: r.recordType,
-      id: Buffer.from(r.recordId).toString('base64'),
-      e: Buffer.from(r.envelope).toString('base64'),
-    }));
-    await page.evaluate(
-      async ({ name, chunk }) => {
-        const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-        const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open(name);
-          request.onsuccess = () => {
-            resolve(request.result);
-          };
-          request.onerror = () => {
-            reject(new Error('open failed'));
-          };
-        });
-        const tx = db.transaction('records', 'readwrite');
-        for (const r of chunk) tx.objectStore('records').put(bytes(r.e), [r.t, bytes(r.id)]);
-        await new Promise((resolve) => (tx.oncomplete = resolve));
-        db.close();
-      },
-      { name: fixture.name, chunk },
-    );
-  }
-}
 
 /** Milliseconds from the Unlock click to the unlocked vault. */
 async function timedUnlock(page: Page): Promise<number> {
