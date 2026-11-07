@@ -3,7 +3,7 @@ import { useId, useState } from 'react';
 import { clipboard } from '../app/clipboard';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
-import { Button, INPUT } from './components';
+import { Button, CopyCheck, INPUT, useCheck } from './components';
 
 // Secrets are masked by default in every layout; revealing takes an explicit action, and the
 // mask never shows the value's length (overview §13.1, §13.2).
@@ -25,11 +25,13 @@ function Toggle({ shown, onToggle }: { readonly shown: boolean; readonly onToggl
 export function useCopy(clearSeconds: number | undefined) {
   const m = useMessages();
   const [state, setState] = useState<'copied' | 'failed'>();
+  const [checked, check] = useCheck();
   const copy = (text: string) => {
     if (clearSeconds === undefined) return;
     clipboard.copy(text, clearSeconds).then(
       () => {
         setState('copied');
+        check();
       },
       () => {
         setState('failed');
@@ -44,21 +46,24 @@ export function useCopy(clearSeconds: number | undefined) {
           : m.items.copyFailed}
       </p>
     ) : null;
-  return { copy, status };
+  return { copy, status, checked };
 }
 
-/** `label` shown; the field's `name` completes the accessible name. */
+/** `label` shown; the field's `name` completes the accessible name. `checked` shows the check. */
 export function CopyButton({
   label,
   name,
+  checked,
   onCopy,
 }: {
   readonly label: string;
   readonly name: string;
+  readonly checked: boolean;
   readonly onCopy: () => void;
 }) {
   return (
     <Button variant="quiet" aria-label={`${label}: ${name}`} onClick={onCopy}>
+      <CopyCheck shown={checked} />
       {label}
     </Button>
   );
@@ -76,7 +81,7 @@ export function SecretView({
 }) {
   const m = useMessages();
   const [shown, setShown] = useState(false);
-  const { copy, status } = useCopy(clearSeconds);
+  const { copy, status, checked } = useCopy(clearSeconds);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
@@ -96,6 +101,7 @@ export function SecretView({
           <CopyButton
             label={m.items.copy}
             name={label}
+            checked={checked}
             onCopy={() => {
               copy(value);
             }}

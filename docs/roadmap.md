@@ -396,9 +396,10 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Own components replacing the template's (buttons, fields, dialogs, lists, banners, notices), each with its hover, focus, disabled, error and loading states (D233)
 - [x] Flow review: onboarding (create, restore, join), item creation and editing, pairing, re-admission and sync; fewer steps only where no security decision is lost, every warning still explicit (section 13.5) (D234)
 - [x] Copy review against `GLOSSARY.md`, in every supported language (D235)
-- [ ] Microinteractions: loading states, transitions and copy feedback, in CSS, none under `prefers-reduced-motion`
+- [x] Microinteractions: loading states, transitions and copy feedback, in CSS, none under `prefers-reduced-motion` (D236)
 - [ ] Accessibility to WCAG 2.2 AA: contrast, visible focus, labels, screen reader and keyboard on every layout
 - [ ] Automated accessibility checks with `@axe-core/playwright` on every screen, justified in `docs/architecture.md`
+- [ ] Audit of every screen in a real browser (the T3 Code browser preview), at the three layout widths and in both themes: each finding recorded and fixed, or recorded with its reason to stay
 
 ### UX Gate
 

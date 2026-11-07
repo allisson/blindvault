@@ -48,6 +48,26 @@
 
   /* Two elevations: flat (none) and raised, a light shadow in the light theme, a 1 px edge in the dark. */
   --shadow-raised: 0 1px 3px 0 var(--bv-shadow), 0 0 0 1px var(--bv-edge);
+
+  /*
+   * Motion (D231): opacity and transform only, ease-out, 200 ms for an entrance and 150 ms for
+   * feedback, no exit. Used only behind `motion-safe:` (a unit test refuses any other use).
+   */
+  --animate-enter: bv-enter 200ms ease-out;
+  --animate-pop: bv-pop 150ms ease-out;
+
+  @keyframes bv-enter {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem) scale(0.98);
+    }
+  }
+  @keyframes bv-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+  }
 }
 
 /* Neutrals, statuses and the default accent (blue), light. */
