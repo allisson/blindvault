@@ -86,7 +86,7 @@ const en = {
     takeOverNote: 'This locks the vault in the other window.',
     updateRequired:
       'This vault was written by a newer version of BlindVault. Update the app to open it.',
-    corrupt: 'The local configuration of this vault cannot be read.',
+    corrupt: 'The Local Config of this vault cannot be read.',
     unsupported: 'This browser lacks IndexedDB or Web Locks, which BlindVault needs.',
     chooseIntro:
       'BlindVault has no account and no server: your vault lives only on your devices and in your backups.',
@@ -104,17 +104,17 @@ const en = {
     continueTab: 'Continue in this tab',
   },
   pairing: {
-    title: 'Pair a new device',
+    title: 'Pair a device',
     intro:
-      'The new device gets this whole vault. On it, open BlindVault and choose “Pair with an existing device”.',
-    start: 'Pair a new device…',
-    auth: 'Pairing hands this vault’s Master Key to the new device for good: enter the local password again.',
+      'The other device gets this whole vault. On it, open BlindVault and choose “Pair with an existing device”.',
+    start: 'Pair a device…',
+    auth: 'Pairing hands this vault’s Master Key to the other device for good: enter the local password again.',
     password: 'Local password',
     begin: 'Start pairing',
     passkey: 'Use the passkey',
-    wrong: 'That password does not open this vault.',
+    wrong: 'That password does not unlock this vault.',
     passkeyCancelled: 'The passkey prompt was closed. Nothing was started.',
-    passkeyFailed: 'The passkey did not open this vault. Use the password.',
+    passkeyFailed: 'The passkey did not unlock this vault. Use the password.',
     unavailable: 'This browser cannot pair: it offers no WebRTC.',
     readOnly:
       'The device clock went back, so the vault is read-only: pairing comes back once writing does.',
@@ -126,7 +126,7 @@ const en = {
       'Both devices must then be on the same network. Otherwise a STUN server ({hosts}) sees this device’s public address.',
     preparing: 'Preparing the connection…',
     offerIntro:
-      'Scan this code with the new device in its pairing screen, or copy the text to it. Then scan or paste its answer below.',
+      'Scan this code with the other device in its pairing screen, or copy the text to it. Then scan or paste its answer below.',
     offerLabel: 'This device’s pairing text',
     qrLabel: 'This device’s code, for the other device to scan',
     copy: 'Copy',
@@ -144,7 +144,7 @@ const en = {
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the pairing ends.',
     leavingImmediate:
       'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock below.',
-    answerPaste: 'The new device’s answer',
+    answerPaste: 'The other device’s answer',
     connect: 'Connect',
     connecting: 'Connecting…',
     sasTitle: 'Compare the numbers',
@@ -164,7 +164,7 @@ const en = {
     pasteWrongSession:
       'This answer belongs to another pairing: paste the answer to the text above.',
     pasteOutdated:
-      'The new device runs a BlindVault that cannot hold this vault: update the app there, then pair again.',
+      'The other device runs a BlindVault that cannot hold this vault: update the app there, then pair again.',
     pastePeerHoldsVault:
       'That device already holds a vault: to re-admit it, cancel here and choose “Re-admit with another device of this vault…” on both devices.',
     pastePeerNoVault:
@@ -180,9 +180,9 @@ const en = {
         'The device holding the vault was retired, so no device can join through it: pair with another device of the vault.',
       differentVaults: 'The two devices hold different vaults.',
       unsupportedFormat:
-        'The vault holds records this BlindVault cannot read: update the app on the new device, then pair again.',
+        'The vault holds records this BlindVault cannot read: update the app on the other device, then pair again.',
       verificationFailed:
-        'A record failed verification, so the pairing stopped and the new device kept nothing.',
+        'A record failed verification, so the pairing stopped and the other device kept nothing.',
       version: 'The devices run versions of BlindVault that cannot pair: update both.',
       protocolError: 'The other device sent something unexpected, so the pairing stopped.',
       closed: 'The connection closed, so the pairing stopped.',
@@ -214,7 +214,7 @@ const en = {
   join: {
     title: 'Pair with an existing device',
     intro:
-      'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a new device”.',
+      'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a device”.',
     submit: 'Start pairing',
     scanIntro: 'Scan the code the other device shows, or paste its pairing text here.',
     offerPaste: 'The other device’s pairing text',
@@ -245,7 +245,7 @@ const en = {
     offerPaste: 'The other device’s re-admission text',
     answerIntro:
       'Show this code to the other device, which scans it below its own, or copy this answer back to it.',
-    merging: 'Merging the two devices…',
+    merging: 'Merging the records of the two devices…',
     done: 'Re-admitted with {name}: both devices know each other and hold the same records.',
     notCommitted:
       'This device merged, but the other may not have finished: check it there. Re-admitting again is safe.',
@@ -259,7 +259,7 @@ const en = {
       'unsupported-format': 'from a newer version of BlindVault: update this device',
     },
     pastePeerNoVault:
-      'This text comes from a device with no vault: pair it instead, with “Pair a new device…”.',
+      'This text comes from a device with no vault: pair it instead, with “Pair a device…”.',
     failed: {
       cancelled: 'The re-admission was cancelled on this device.',
       cancelledRemote: 'The re-admission was cancelled on the other device.',
@@ -287,7 +287,7 @@ const en = {
     title: 'Sync with {name}',
     notifyTitle: 'Tell {name} it is retired',
     notifyHow:
-      'On {name}, open Settings → Devices and choose “Sync” next to this device. This device sends {name} only its retired record, and the sync ends: {name} then shows that it was retired and stops syncing.',
+      'On {name}, open Settings → Devices and choose “Sync” next to this device. This device sends {name} only its Device record, marked retired, and the sync ends: {name} then shows that it was retired and stops syncing.',
     how: 'On {name}, open Settings → Devices and choose “Sync” next to this device too. One device shows its code first; the other scans or pastes it.',
     first: 'Show this device’s code first',
     read: 'Read the code of {name}',
@@ -370,9 +370,9 @@ const en = {
     passkeyAction: 'Set up a passkey',
     checkPhrase:
       'This vault was restored with an export password: check that your Recovery Phrase still opens it.',
-    checkPhraseAction: 'Check the Recovery Phrase',
+    checkPhraseAction: 'Check Recovery Phrase',
     readmitAction: 'See the devices',
-    pair: 'Pair another device, so the vault has a second copy that stays in sync.',
+    pair: 'Pair another device, so the vault has a second copy you can sync with.',
     pairAction: 'Pair a device',
     backup:
       'Make a backup and keep it off this device: with the Recovery Phrase, it brings the vault back if this device is lost.',
@@ -459,7 +459,7 @@ const en = {
     choose: 'Erase this vault from this device…',
     title: 'Erase this vault from this device',
     intro:
-      'Removes the vault and its local settings from this device only. Other devices and backups keep their copy.',
+      'Removes the vault and its Local Config from this device only. Other devices and backups keep their copy.',
     warning:
       'Changes that exist only on this device are lost. Make a backup first, if you can still unlock the vault.',
     onlyDevice: 'This is the only device holding the vault: without a backup, it is lost for good.',
@@ -516,7 +516,7 @@ const en = {
   create: {
     title: 'Create a vault',
     intro:
-      'BlindVault has no server: nobody can reset your vault for you. Your data stays on your devices.',
+      'BlindVault has no server: nobody can reset your local password or recover your vault for you. Your data stays on your devices.',
     password: 'Local password',
     confirm: 'Repeat the password',
     submit: 'Create vault',
@@ -574,7 +574,7 @@ const en = {
     clockFar:
       'Changes made while the clock was wrong exist only on this device, since your other devices rejected them, and stay readable so you can copy them by hand. To write before then, re-found the vault.',
     clockPairAgain:
-      'Or pair this device again from another one: lock, then choose “Replace by pairing with another device…”.',
+      'Or replace this device’s vault by pairing with another device: lock, then choose “Replace by pairing with another device…”.',
     reminderNever:
       'No backup has been made on this device: make one, so you can restore the vault if you lose this device.',
     reminderStale:
@@ -603,7 +603,7 @@ const en = {
     discardWarning: 'The changes made to this item are not saved and will be lost.',
     edit: 'Edit',
     moveToTrash: 'Move to trash',
-    restore: 'Restore',
+    restore: 'Restore from the trash',
     show: 'Show',
     hide: 'Hide',
     open: 'Open',
@@ -612,13 +612,13 @@ const en = {
       'This item was saved by a newer version of BlindVault. Update the app to edit or duplicate it.',
     readOnlyClock:
       "This item is dated ahead of this device's clock. It can be changed once the clock reaches that date.",
-    inTrash: 'In the trash. It can only be restored; it is deleted for good on {date}.',
+    inTrash: 'In the trash. It can only be restored from the trash; it is purged on {date}.',
     multiLine: 'Show the value to enter several lines.',
     checksum: 'The checksum of this seed phrase does not match. Check the words.',
     duplicate: 'Duplicate',
     copySuffix: ' (copy)',
     copyTitleTooLong:
-      "The copy's title would be longer than 512 characters. Shorten the title first.",
+      "The duplicate's title would be longer than 512 characters. Shorten the title first.",
     history: 'History',
     historyTitle: 'History of {title}',
     historyNote:
@@ -656,8 +656,9 @@ const en = {
     folder: 'Folder',
     empty: 'This folder is empty.',
     trashNote: 'Moving a folder to the trash also moves its subfolders and their items.',
-    restoreNote: 'Restoring a folder brings back what was trashed with it.',
-    blocked: 'Nothing was changed: these records are read-only.',
+    restoreNote: 'Restoring a folder from the trash brings back what was trashed with it.',
+    restoreNamed: 'Restore {name} from the trash',
+    blocked: 'Nothing was changed: these items or folders are read-only.',
     'newer-content': 'saved by a newer version of BlindVault',
     'future-clock': "dated ahead of this device's clock",
     nameRequired: 'Enter a folder name.',
@@ -783,7 +784,7 @@ const en = {
     regenPasskey: 'Regenerate with the passkey instead',
     regenWrong: 'Wrong password. The Recovery Phrase did not change.',
     regenPasskeyCancelled: 'The passkey prompt was closed. The Recovery Phrase did not change.',
-    regenPasskeyFailed: 'The passkey did not open the vault. Use the password.',
+    regenPasskeyFailed: 'The passkey did not unlock the vault. Use the password.',
     regenDone: 'The Recovery Phrase was regenerated: {id}, created on {date}.',
     regenOtherDevices:
       'The new phrase is not on your other devices yet: they receive it when they sync with this one, and until then their backups open only with the previous phrase.',
@@ -851,7 +852,7 @@ const en = {
     backupCorrupt:
       'A record failed verification, so no backup was made: {type} {id}. Nothing on this device was changed.',
     backupPasskeyCancelled: 'The passkey prompt was closed. No backup was made.',
-    backupPasskeyRejected: 'This passkey does not open this vault. Use the password.',
+    backupPasskeyRejected: 'This passkey does not unlock this vault. Use the password.',
     backupPasskeyNoVerification:
       'The authenticator did not verify you with a PIN, fingerprint or face. Use the password.',
     backupPasskeyUnavailable:
@@ -882,7 +883,7 @@ const en = {
     devicesRetired: '{name} is retired.',
     devicesRetiredList: 'Retired devices',
     devicesRetiredNotify:
-      'A retired device learns it is retired only when told: sync with it from here, and it receives only its retired record.',
+      'A retired device learns it is retired only when told: sync with it from here, and it receives only its Device record, marked retired.',
     devicesNotify: 'Tell {name}',
     devicesRename: 'Rename',
     devicesName: 'Device name',
@@ -909,7 +910,7 @@ const en = {
       'If someone else may hold the Master Key (an exposed Recovery Phrase or export password, a retirement you did not make, a device you did not pair), re-found the vault: what this device holds moves to a new vault under entirely new keys.',
     start: 'Re-found the vault…',
     warnSync:
-      'Sync this device first with every other device still in your hands: changes that are not on this device are lost. Afterwards, pair each other device again with the new vault, and destroy the backups of the old vault: they still open it with the old Recovery Phrase.',
+      'Sync this device first with every other device still in your hands: changes that are not on this device are lost. Afterwards, replace each other device’s vault by pairing it with this one, and destroy the backups of the old vault: they still open it with the old Recovery Phrase.',
     warnRetired:
       'This device was retired, so it cannot sync first: changes that exist only on other devices are lost. If a device that was not retired is still in your hands, re-found there instead.',
     warnTrash:
@@ -930,7 +931,7 @@ const en = {
     authPasskey: 'Use the passkey',
     wrong: 'Wrong password.',
     passkeyCancelled: 'The passkey prompt was closed.',
-    passkeyFailed: 'The passkey did not open the vault. Use the password.',
+    passkeyFailed: 'The passkey did not unlock the vault. Use the password.',
     phraseTitle: 'The Recovery Phrase of the new vault',
     passwordIntro: 'Choose the local password of the new vault on this device.',
     password: 'New local password',
@@ -939,7 +940,7 @@ const en = {
     working: 'Re-founding the vault…',
     busy: 'BlindVault is busy in another window. Try again once it is done.',
     cancel: 'Cancel',
-    done: 'The vault was re-founded. Make a backup of the new vault now, pair your other devices with it again, and destroy the backups of the old vault. A passkey can be set up again in Settings.',
+    done: 'The vault was re-founded. Make a backup of the new vault now, replace your other devices’ vault by pairing them with this one, and destroy the backups of the old vault. A passkey can be set up again in Settings.',
   },
   templates: {
     login: 'Login',
@@ -1046,11 +1047,11 @@ const ptBR: Messages = {
     syncNever: 'Este dispositivo ainda não sincronizou com outro dispositivo.',
     ask: 'Pedir ao navegador para manter o armazenamento',
     refused:
-      'O navegador não aceitou manter o armazenamento. Os navegadores decidem isso por regras próprias, como uma app instalada ou um site usado com frequência.',
+      'O navegador não aceitou manter o armazenamento. Os navegadores decidem isso por regras próprias, como um app instalado ou um site usado com frequência.',
     safariTab:
-      'O Safari pode apagar este cofre depois de sete dias de uso do Safari sem abrir o BlindVault. Instale a app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e passe o cofre para ela: instalar não leva este cofre junto, então pareie a app instalada com esta aba ou restaure um backup nela.',
+      'O Safari pode apagar este cofre depois de sete dias de uso do Safari sem abrir o BlindVault. Instale o app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e passe o cofre para ele: instalar não leva este cofre junto, então pareie o app instalado com esta aba ou restaure um backup nele.',
     safariTabNoVault:
-      'O Safari pode apagar o que você criar nesta aba depois de sete dias de uso do Safari sem abrir o BlindVault. Instale a app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e comece por lá: a app instalada não compartilha o armazenamento desta aba.',
+      'O Safari pode apagar o que você criar nesta aba depois de sete dias de uso do Safari sem abrir o BlindVault. Instale o app (Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac) e comece por lá: o app instalado não compartilha o armazenamento desta aba.',
     notKeptOnly:
       'O navegador pode apagar o armazenamento deste cofre, e este é o único dispositivo do cofre: se isso acontecer, só um backup e a Frase de Recuperação trazem o cofre de volta. Faça um backup e pareie outro dispositivo.',
     nearlyFull:
@@ -1071,7 +1072,7 @@ const ptBR: Messages = {
     takeOverNote: 'Isso bloqueia o cofre na outra janela.',
     updateRequired:
       'Este cofre foi gravado por uma versão mais nova do BlindVault. Atualize o app para abri-lo.',
-    corrupt: 'A configuração local deste cofre não pode ser lida.',
+    corrupt: 'A Configuração Local deste cofre não pode ser lida.',
     unsupported: 'Este navegador não tem IndexedDB ou Web Locks, de que o BlindVault precisa.',
     chooseIntro:
       'O BlindVault não tem conta nem servidor: seu cofre existe só nos seus dispositivos e nos seus backups.',
@@ -1083,23 +1084,23 @@ const ptBR: Messages = {
     restore: 'Restaurar de um backup',
     installTitle: 'Instale o BlindVault primeiro',
     installWhy:
-      'No Safari, a app instalada não compartilha o armazenamento desta aba: um cofre criado aqui fica nesta aba, e o Safari pode apagá-lo depois de sete dias de uso do Safari sem abrir o BlindVault.',
+      'No Safari, o app instalado não compartilha o armazenamento desta aba: um cofre criado aqui fica nesta aba, e o Safari pode apagá-lo depois de sete dias de uso do Safari sem abrir o BlindVault.',
     installHow:
       'Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac. Depois abra o BlindVault por lá.',
     continueTab: 'Continuar nesta aba',
   },
   pairing: {
-    title: 'Parear um dispositivo novo',
+    title: 'Parear um dispositivo',
     intro:
-      'O dispositivo novo recebe este cofre inteiro. Nele, abra o BlindVault e escolha “Parear com um dispositivo existente”.',
-    start: 'Parear um dispositivo novo…',
-    auth: 'Parear entrega a Chave Mestra deste cofre ao dispositivo novo para sempre: digite a senha local de novo.',
+      'O outro dispositivo recebe este cofre inteiro. Nele, abra o BlindVault e escolha “Parear com um dispositivo existente”.',
+    start: 'Parear um dispositivo…',
+    auth: 'Parear entrega a Chave Mestra deste cofre ao outro dispositivo para sempre: digite a senha local de novo.',
     password: 'Senha local',
     begin: 'Começar o pareamento',
     passkey: 'Usar a passkey',
-    wrong: 'Essa senha não abre este cofre.',
+    wrong: 'Essa senha não desbloqueia este cofre.',
     passkeyCancelled: 'O pedido de passkey foi fechado. Nada foi iniciado.',
-    passkeyFailed: 'A passkey não abriu este cofre. Use a senha.',
+    passkeyFailed: 'A passkey não desbloqueou este cofre. Use a senha.',
     unavailable: 'Este navegador não consegue parear: ele não oferece WebRTC.',
     readOnly:
       'O relógio do dispositivo voltou, então o cofre está somente leitura: o pareamento volta quando a escrita voltar.',
@@ -1111,7 +1112,7 @@ const ptBR: Messages = {
       'Os dois dispositivos precisam então estar na mesma rede. Sem isso, um servidor STUN ({hosts}) vê o endereço público deste dispositivo.',
     preparing: 'Preparando a conexão…',
     offerIntro:
-      'Escaneie este código com o dispositivo novo, na tela de pareamento dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
+      'Escaneie este código com o outro dispositivo, na tela de pareamento dele, ou copie o texto para ele. Depois escaneie ou cole a resposta dele abaixo.',
     offerLabel: 'Texto de pareamento deste dispositivo',
     qrLabel: 'Código deste dispositivo, para o outro dispositivo escanear',
     copy: 'Copiar',
@@ -1129,7 +1130,7 @@ const ptBR: Messages = {
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, o pareamento termina.',
     leavingImmediate:
       'Este cofre bloqueia assim que o BlindVault fica oculto, o que termina o pareamento: copie e cole sem sair do app, ou mude o bloqueio do app oculto abaixo.',
-    answerPaste: 'Resposta do dispositivo novo',
+    answerPaste: 'Resposta do outro dispositivo',
     connect: 'Conectar',
     connecting: 'Conectando…',
     sasTitle: 'Compare os números',
@@ -1148,7 +1149,7 @@ const ptBR: Messages = {
     pasteVersion: 'Este texto vem de outra versão do BlindVault: atualize os dois dispositivos.',
     pasteWrongSession: 'Esta resposta é de outro pareamento: cole a resposta ao texto acima.',
     pasteOutdated:
-      'O dispositivo novo roda um BlindVault que não comporta este cofre: atualize o app nele e pareie de novo.',
+      'O outro dispositivo roda um BlindVault que não comporta este cofre: atualize o app nele e pareie de novo.',
     pastePeerHoldsVault:
       'Esse dispositivo já tem um cofre: para readmiti-lo, cancele aqui e escolha “Readmitir com outro dispositivo deste cofre…” nos dois dispositivos.',
     pastePeerNoVault:
@@ -1165,9 +1166,9 @@ const ptBR: Messages = {
         'O dispositivo que tem o cofre foi aposentado, então nenhum dispositivo pode entrar por ele: pareie com outro dispositivo do cofre.',
       differentVaults: 'Os dois dispositivos têm cofres diferentes.',
       unsupportedFormat:
-        'O cofre tem registros que este BlindVault não consegue ler: atualize o app no dispositivo novo e pareie de novo.',
+        'O cofre tem registros que este BlindVault não consegue ler: atualize o app no outro dispositivo e pareie de novo.',
       verificationFailed:
-        'Um registro falhou na verificação, então o pareamento parou e o dispositivo novo não guardou nada.',
+        'Um registro falhou na verificação, então o pareamento parou e o outro dispositivo não guardou nada.',
       version: 'Os dispositivos rodam versões do BlindVault que não pareiam: atualize os dois.',
       protocolError: 'O outro dispositivo enviou algo inesperado, então o pareamento parou.',
       closed: 'A conexão fechou, então o pareamento parou.',
@@ -1200,7 +1201,7 @@ const ptBR: Messages = {
   join: {
     title: 'Parear com um dispositivo existente',
     intro:
-      'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo novo”.',
+      'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo”.',
     submit: 'Começar o pareamento',
     scanIntro:
       'Escaneie o código que o outro dispositivo mostra, ou cole aqui o texto de pareamento dele.',
@@ -1234,7 +1235,7 @@ const ptBR: Messages = {
     offerPaste: 'Texto de readmissão do outro dispositivo',
     answerIntro:
       'Mostre este código ao outro dispositivo, que o escaneia abaixo do dele, ou copie esta resposta de volta para ele.',
-    merging: 'Mesclando os dois dispositivos…',
+    merging: 'Mesclando os registros dos dois dispositivos…',
     done: 'Readmitido com {name}: os dois dispositivos se conhecem e têm os mesmos registros.',
     notCommitted:
       'Este dispositivo mesclou, mas o outro pode não ter terminado: confira nele. Readmitir de novo é seguro.',
@@ -1243,12 +1244,12 @@ const ptBR: Messages = {
     rejectedNoKey: 'um registro que não decodifica',
     rejectedReasons: {
       'verification-failed': 'não verifica',
-      'future-clock': 'datado à frente do relógio deste dispositivo',
+      'future-clock': 'com data à frente do relógio deste dispositivo',
       'immutable-record': 'uma cópia alterada de um registro que nunca muda',
       'unsupported-format': 'de uma versão mais nova do BlindVault: atualize este dispositivo',
     },
     pastePeerNoVault:
-      'Este texto vem de um dispositivo sem cofre: pareie-o em vez disso, com “Parear um dispositivo novo…”.',
+      'Este texto vem de um dispositivo sem cofre: pareie-o em vez disso, com “Parear um dispositivo…”.',
     failed: {
       cancelled: 'A readmissão foi cancelada neste dispositivo.',
       cancelledRemote: 'A readmissão foi cancelada no outro dispositivo.',
@@ -1266,7 +1267,7 @@ const ptBR: Messages = {
       unsupportedFormatRemote:
         'Este dispositivo tem registros que o BlindVault do outro dispositivo não consegue ler: atualize o app nele e readmita de novo.',
       verificationFailed:
-        'Um registro guardado falhou na verificação, então a readmissão parou antes da mescla.',
+        'Um registro guardado falhou na verificação, então a readmissão parou antes da mesclagem.',
       version: 'Os dispositivos rodam versões do BlindVault que não readmitem: atualize os dois.',
       protocolError: 'O outro dispositivo enviou algo inesperado, então a readmissão parou.',
       closed: 'A conexão fechou, então a readmissão parou.',
@@ -1277,7 +1278,7 @@ const ptBR: Messages = {
     title: 'Sincronizar com {name}',
     notifyTitle: 'Avisar {name} que foi aposentado',
     notifyHow:
-      'Em {name}, abra Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Este dispositivo envia a {name} só o registro aposentado dele, e a sincronização termina: {name} então mostra que foi aposentado e para de sincronizar.',
+      'Em {name}, abra Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Este dispositivo envia a {name} só o Registro de dispositivo dele, marcado como aposentado, e a sincronização termina: {name} então mostra que foi aposentado e para de sincronizar.',
     how: 'Em {name}, abra também Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Um dispositivo mostra o código dele primeiro; o outro o escaneia ou cola.',
     first: 'Mostrar primeiro o código deste dispositivo',
     read: 'Ler o código de {name}',
@@ -1285,7 +1286,7 @@ const ptBR: Messages = {
     unavailable: 'Este navegador não consegue sincronizar: ele não oferece WebRTC.',
     refused: {
       unregistered:
-        'Este dispositivo ainda não tem o próprio registro de dispositivo: readmita-o antes com outro dispositivo deste cofre.',
+        'Este dispositivo ainda não tem o próprio Registro de dispositivo: readmita-o antes com outro dispositivo deste cofre.',
       retired:
         'Este dispositivo foi aposentado: ele não pode sincronizar. Substitua-o por pareamento.',
       'unknown-peer':
@@ -1361,10 +1362,10 @@ const ptBR: Messages = {
     passkey: 'Desbloqueie com uma passkey em vez de digitar a senha local.',
     passkeyAction: 'Configurar uma passkey',
     checkPhrase:
-      'Este cofre foi restaurado com uma senha de exportação: verifique se sua Frase de Recuperação ainda o abre.',
-    checkPhraseAction: 'Verificar a Frase de Recuperação',
+      'Este cofre foi restaurado com uma senha de exportação: confira se a sua Frase de Recuperação ainda o abre.',
+    checkPhraseAction: 'Conferir a Frase de Recuperação',
     readmitAction: 'Ver os dispositivos',
-    pair: 'Pareie outro dispositivo, para que o cofre tenha uma segunda cópia que fica sincronizada.',
+    pair: 'Pareie outro dispositivo, para que o cofre tenha uma segunda cópia com a qual você possa sincronizar.',
     pairAction: 'Parear um dispositivo',
     backup:
       'Faça um backup e guarde-o fora deste dispositivo: com a Frase de Recuperação, ele traz o cofre de volta se este dispositivo for perdido.',
@@ -1420,7 +1421,7 @@ const ptBR: Messages = {
     title: 'Redefinir a senha local',
     intro:
       'A sua Frase de Recuperação define uma nova senha local neste dispositivo, mantendo tudo o que o cofre guarda aqui.',
-    hint: 'Use a frase que este dispositivo conhece: se ela foi gerada de novo em outro dispositivo e este não sincronizou desde então, é a antiga.',
+    hint: 'Use a frase que este dispositivo conhece: se ela foi regenerada em outro dispositivo e este não sincronizou desde então, é a antiga.',
     next: 'Avançar',
     passwordIntro: 'Agora escolha a nova senha local deste dispositivo.',
     submit: 'Redefinir a senha',
@@ -1435,13 +1436,13 @@ const ptBR: Messages = {
     choose: 'Substituir por um backup…',
     title: 'Substituir este cofre por um backup',
     warning:
-      'O cofre deste dispositivo é apagado e substituído pelo backup, seja ele deste cofre ou de outro. As mudanças que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
+      'O cofre deste dispositivo é apagado e substituído pelo backup, seja ele deste cofre ou de outro. As alterações que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
     retire:
-      'Depois, aposente o registro de dispositivo deste dispositivo a partir de outro dispositivo do cofre substituído: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
+      'Depois, aposente o Registro de dispositivo deste dispositivo a partir de outro dispositivo do cofre substituído: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
     pairChoose: 'Substituir por pareamento com outro dispositivo…',
     pairTitle: 'Substituir este cofre por pareamento',
     pairWarning:
-      'O cofre deste dispositivo é apagado e substituído pelo cofre do dispositivo com que você parear, seja ele este cofre ou outro. As mudanças que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
+      'O cofre deste dispositivo é apagado e substituído pelo cofre do dispositivo com que você parear, seja ele este cofre ou outro. As alterações que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
     understand: 'Entendo que o cofre deste dispositivo será substituído',
     submit: 'Substituir',
     replacing: 'Substituindo o cofre…',
@@ -1452,15 +1453,15 @@ const ptBR: Messages = {
     choose: 'Apagar este cofre deste dispositivo…',
     title: 'Apagar este cofre deste dispositivo',
     intro:
-      'Remove o cofre e as configurações locais dele só deste dispositivo. Os outros dispositivos e os backups mantêm a cópia deles.',
+      'Remove o cofre e a Configuração Local dele só deste dispositivo. Os outros dispositivos e os backups mantêm a cópia deles.',
     warning:
-      'As mudanças que só existem neste dispositivo se perdem. Faça um backup antes, se você ainda consegue desbloquear o cofre.',
+      'As alterações que só existem neste dispositivo se perdem. Faça um backup antes, se você ainda consegue desbloquear o cofre.',
     onlyDevice: 'Este é o único dispositivo com o cofre: sem um backup, ele se perde de vez.',
     named:
-      'Depois, aposente o registro de dispositivo deste dispositivo, "{name}", a partir de outro dispositivo: até lá, eles continuam a oferecê-lo para sincronizar.',
+      'Depois, aposente o Registro de dispositivo deste dispositivo, "{name}", a partir de outro dispositivo: até lá, eles continuam a oferecê-lo para sincronizar.',
     locked:
-      'Depois, aposente o registro de dispositivo deste dispositivo a partir de outro dispositivo: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
-    unregistered: 'Este dispositivo não tem registro de dispositivo a aposentar.',
+      'Depois, aposente o Registro de dispositivo deste dispositivo a partir de outro dispositivo: até lá, eles continuam a oferecê-lo para sincronizar. O nome dele não pode ser mostrado com o cofre bloqueado.',
+    unregistered: 'Este dispositivo não tem Registro de dispositivo a aposentar.',
     understand: 'Entendo que o cofre deste dispositivo será apagado',
     submit: 'Apagar',
     cancel: 'Cancelar',
@@ -1486,16 +1487,16 @@ const ptBR: Messages = {
     masterKey:
       'Este backup tem o ID deste cofre, mas outra Chave Mestra. Ele não pode ser mesclado.',
     corruptRecord:
-      'Este backup contém um registro que não é verificado: {type} {id}. Ele não pode ser mesclado.',
+      'Este backup contém um registro que não verifica: {type} {id}. Ele não pode ser mesclado.',
     immutable:
       'Este backup contém uma cópia alterada de um registro que nunca muda: {type} {id}. Ele não pode ser mesclado: só alguém com a Chave Mestra, ou um defeito, cria uma assim.',
     futureClock:
       'Este backup contém registros com data à frente do relógio deste dispositivo. Ele pode ser mesclado a partir de {date}.',
     locked: 'A mesclagem parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
     phraseChanged:
-      'A Frase de Recuperação foi gerada de novo em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Verificar a Frase de Recuperação, abaixo.',
+      'A Frase de Recuperação foi regenerada em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Conferir a Frase de Recuperação, abaixo.',
     phraseSuperseded:
-      'A Frase de Recuperação que você anotou para este dispositivo, {id}, criada em {date}, foi substituída por uma gerada de novo em outro dispositivo. Os backups feitos com ela só abrem com ela, então guarde-a até ter um novo backup. Os novos backups só abrem com a frase nova.',
+      'A Frase de Recuperação que você anotou para este dispositivo, {id}, criada em {date}, foi substituída por uma regenerada em outro dispositivo. Os backups feitos com ela só abrem com ela, então guarde-a até ter um novo backup. Os novos backups só abrem com a frase nova.',
     backupNow: 'Fazer um backup agora',
     newDevices:
       'Dispositivos que este dispositivo nunca tinha visto: {names}. Um dispositivo que você não pareou significa que alguém com a Chave Mestra o adicionou.',
@@ -1510,13 +1511,13 @@ const ptBR: Messages = {
   create: {
     title: 'Criar um cofre',
     intro:
-      'O BlindVault não tem servidor: ninguém pode redefinir o seu cofre. Seus dados ficam nos seus dispositivos.',
+      'O BlindVault não tem servidor: ninguém pode redefinir a sua senha local ou recuperar o seu cofre por você. Seus dados ficam nos seus dispositivos.',
     password: 'Senha local',
     confirm: 'Repita a senha',
     submit: 'Criar cofre',
     working: 'Criando o cofre…',
     mismatch: 'As senhas não coincidem.',
-    weak: 'Esta senha é fácil de adivinhar. Use uma frase-senha mais longa.',
+    weak: 'Esta senha é fácil demais de adivinhar. Use uma frase-senha mais longa.',
     strong: 'Forte o bastante.',
     browserSave:
       'Não deixe o navegador salvar esta senha: dependendo do navegador, uma cópia dos dados dele poderia bastar para abrir o cofre.',
@@ -1567,7 +1568,7 @@ const ptBR: Messages = {
     clockFar:
       'As alterações feitas com o relógio errado existem só neste dispositivo, porque os seus outros dispositivos as rejeitaram, e continuam legíveis para você copiá-las à mão. Para escrever antes disso, refunde o cofre.',
     clockPairAgain:
-      'Ou pareie este dispositivo de novo a partir de outro: bloqueie e escolha “Substituir por pareamento com outro dispositivo…”.',
+      'Ou substitua o cofre deste dispositivo por pareamento com outro dispositivo: bloqueie e escolha “Substituir por pareamento com outro dispositivo…”.',
     reminderNever:
       'Nenhum backup foi feito neste dispositivo: faça um, para poder restaurar o cofre se perder este dispositivo.',
     reminderStale:
@@ -1596,7 +1597,7 @@ const ptBR: Messages = {
     discardWarning: 'As alterações feitas neste item não foram salvas e serão perdidas.',
     edit: 'Editar',
     moveToTrash: 'Mover para a lixeira',
-    restore: 'Restaurar',
+    restore: 'Restaurar da lixeira',
     show: 'Mostrar',
     hide: 'Ocultar',
     open: 'Abrir',
@@ -1605,16 +1606,16 @@ const ptBR: Messages = {
       'Este item foi salvo por uma versão mais nova do BlindVault. Atualize o app para editá-lo ou duplicá-lo.',
     readOnlyClock:
       'Este item tem data à frente do relógio deste dispositivo. Ele pode ser alterado quando o relógio chegar a essa data.',
-    inTrash: 'Na lixeira. Ele só pode ser restaurado; será apagado de vez em {date}.',
+    inTrash: 'Na lixeira. Ele só pode ser restaurado da lixeira; será removido de vez em {date}.',
     multiLine: 'Mostre o valor para digitar várias linhas.',
     checksum: 'O checksum desta frase-semente não confere. Confira as palavras.',
     duplicate: 'Duplicar',
     copySuffix: ' (cópia)',
-    copyTitleTooLong: 'O título da cópia passaria de 512 caracteres. Encurte o título antes.',
+    copyTitleTooLong: 'O título da duplicata passaria de 512 caracteres. Encurte o título antes.',
     history: 'Histórico',
     historyTitle: 'Histórico de {title}',
     historyNote:
-      'Valores antigos ficam neste histórico, em todos os dispositivos e nos backups seguintes, em até 20 versões. Para removê-los, duplique o item e mova o original para a lixeira: o histórico dele é apagado quando ele é apagado de vez da lixeira.',
+      'Valores antigos ficam neste histórico, em todos os dispositivos e nos backups seguintes, em até 20 versões. Para removê-los, duplique o item e mova o original para a lixeira: o histórico dele é apagado quando ele é removido de vez da lixeira.',
     noHistory: 'Nenhuma versão anterior.',
     backToItem: 'Voltar ao item',
     restoreVersion: 'Restaurar esta versão',
@@ -1648,8 +1649,9 @@ const ptBR: Messages = {
     folder: 'Pasta',
     empty: 'Esta pasta está vazia.',
     trashNote: 'Mover uma pasta para a lixeira também move suas subpastas e os itens delas.',
-    restoreNote: 'Restaurar uma pasta traz de volta o que foi para a lixeira com ela.',
-    blocked: 'Nada foi alterado: estes registros estão somente leitura.',
+    restoreNote: 'Restaurar uma pasta da lixeira traz de volta o que foi para a lixeira com ela.',
+    restoreNamed: 'Restaurar {name} da lixeira',
+    blocked: 'Nada foi alterado: estes itens ou pastas estão somente leitura.',
     'newer-content': 'salvo por uma versão mais nova do BlindVault',
     'future-clock': 'com data à frente do relógio deste dispositivo',
     nameRequired: 'Digite um nome para a pasta.',
@@ -1756,48 +1758,48 @@ const ptBR: Messages = {
     recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
     recoveryNoBackup:
       'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Backup, acima.',
-    regenTitle: 'Gerar uma nova Frase de Recuperação',
+    regenTitle: 'Regenerar a Frase de Recuperação',
     regenIntro:
-      'Se você perdeu a Frase de Recuperação, gere uma nova com o cofre desbloqueado: a nova frase substitui a atual, e nada no cofre muda.',
+      'Se você perdeu a Frase de Recuperação, regenere-a com o cofre desbloqueado: uma frase nova substitui a atual, e nada no cofre muda.',
     regenExposed:
-      'Gerar uma nova frase não adianta se outra pessoa viu ou copiou a atual: ela continua abrindo todos os backups feitos com ela e o Envelope de Recuperação de qualquer dispositivo que ainda não sincronizou, e assim entrega a Chave Mestra. Uma frase exposta exige refundar o cofre.',
+      'Regenerar não adianta se outra pessoa viu ou copiou a atual: ela continua abrindo todos os backups feitos com ela e o Envelope de Recuperação de qualquer dispositivo que ainda não sincronizou, e assim entrega a Chave Mestra. Uma frase exposta exige refundar o cofre.',
     regenBackups:
       'Os backups feitos até agora só abrem com a frase atual. Os seus outros dispositivos continuam com ela, e continuam fazendo backups para ela, até sincronizarem com este.',
-    regenStart: 'Gerar uma nova Frase de Recuperação…',
+    regenStart: 'Regenerar a Frase de Recuperação…',
     regenContinue: 'Mostrar a nova frase',
     regenCancel: 'Cancelar',
     regenPhraseTitle: 'Sua nova Frase de Recuperação',
     regenAuthIntro:
-      'A nova frase recupera a Chave Mestra, então gerar uma nova pede a sua senha local de novo.',
+      'A nova frase recupera a Chave Mestra, então regenerar pede a sua senha local de novo.',
     regenAuth: 'Senha local',
-    regenSubmit: 'Gerar a nova frase',
-    regenWorking: 'Gerando a nova frase…',
-    regenPasskey: 'Gerar com a passkey',
+    regenSubmit: 'Regenerar',
+    regenWorking: 'Regenerando…',
+    regenPasskey: 'Regenerar com a passkey',
     regenWrong: 'Senha incorreta. A Frase de Recuperação não mudou.',
     regenPasskeyCancelled: 'O pedido de passkey foi fechado. A Frase de Recuperação não mudou.',
-    regenPasskeyFailed: 'A passkey não abriu o cofre. Use a senha.',
-    regenDone: 'A nova Frase de Recuperação foi gerada: {id}, criada em {date}.',
+    regenPasskeyFailed: 'A passkey não desbloqueou o cofre. Use a senha.',
+    regenDone: 'A Frase de Recuperação foi regenerada: {id}, criada em {date}.',
     regenOtherDevices:
       'A nova frase ainda não está nos seus outros dispositivos: eles a recebem quando sincronizarem com este, e até lá os backups deles só abrem com a frase anterior.',
     regenOldBackups:
       'Os backups feitos antes de agora só abrem com a frase anterior. Faça um novo backup agora.',
     regenBackupNow: 'Fazer um backup agora',
     regenNewer:
-      'O Envelope de Recuperação foi gravado por uma versão mais nova do BlindVault. Atualize o app para gerar uma nova Frase de Recuperação.',
+      'O Envelope de Recuperação foi gravado por uma versão mais nova do BlindVault. Atualize o app para regenerar a Frase de Recuperação.',
     regenFutureClock:
-      'O Envelope de Recuperação tem data à frente do relógio deste dispositivo. Uma nova Frase de Recuperação pode ser gerada a partir de {date}.',
+      'O Envelope de Recuperação tem data à frente do relógio deste dispositivo. A Frase de Recuperação pode ser regenerada a partir de {date}.',
     regenReadOnly:
-      'O relógio deste dispositivo voltou, então o cofre está somente leitura. Uma nova Frase de Recuperação pode ser gerada a partir de {date}.',
+      'O relógio deste dispositivo voltou, então o cofre está somente leitura. A Frase de Recuperação pode ser regenerada a partir de {date}.',
     recoveryIntro:
       'Digite as 24 palavras que você anotou para confirmar que elas abrem este cofre e os backups dele. Nada do que você digita é guardado.',
     recoveryInput: 'Suas 24 palavras',
-    recoveryCheck: 'Verificar a Frase de Recuperação',
+    recoveryCheck: 'Conferir a Frase de Recuperação',
     recoveryOpens: 'Esta frase abre este cofre e os backups dele.',
     recoveryWrong: 'Esta não é a Frase de Recuperação atual deste cofre.',
     recoveryPublicKey:
-      'Esta frase abre o cofre, mas os backups não abrem com ela. Gere uma nova Frase de Recuperação e depois faça um novo backup.',
+      'Esta frase abre o cofre, mas os backups não abrem com ela. Regenere a Frase de Recuperação e depois faça um novo backup.',
     recoveryMasterKey:
-      'Esta frase abre um Envelope de Recuperação que não recupera este cofre, então os backups não podem ser restaurados com ela. Gere uma nova Frase de Recuperação e depois faça um novo backup.',
+      'Esta frase abre um Envelope de Recuperação que não recupera este cofre, então os backups não podem ser restaurados com ela. Regenere a Frase de Recuperação e depois faça um novo backup.',
     recoveryWordCount: 'Uma Frase de Recuperação tem 24 palavras.',
     recoveryUnknownWord: 'A palavra {n} não é uma palavra de Frase de Recuperação.',
     recoveryChecksum:
@@ -1805,7 +1807,7 @@ const ptBR: Messages = {
     recoveryNone:
       'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, e ele não pode ser recuperado. Crie um novo cofre para ter uma.',
     recoveryCorrupt:
-      'O Envelope de Recuperação neste dispositivo está danificado, então a Frase de Recuperação não pode ser verificada. Gere uma nova Frase de Recuperação para substituí-lo.',
+      'O Envelope de Recuperação neste dispositivo está danificado, então a Frase de Recuperação não pode ser verificada. Regenere a Frase de Recuperação para substituí-lo.',
     backup: 'Backup',
     backupIntro:
       'Um backup é um arquivo criptografado com uma cópia completa deste cofre. A sua Frase de Recuperação sempre o abre. Guarde cópias fora deste dispositivo, para poder restaurar se perdê-lo.',
@@ -1843,7 +1845,7 @@ const ptBR: Messages = {
     backupCorrupt:
       'Um registro falhou na verificação, então nenhum backup foi feito: {type} {id}. Nada foi alterado neste dispositivo.',
     backupPasskeyCancelled: 'O pedido de passkey foi fechado. Nenhum backup foi feito.',
-    backupPasskeyRejected: 'Esta passkey não abre este cofre. Use a senha.',
+    backupPasskeyRejected: 'Esta passkey não desbloqueia este cofre. Use a senha.',
     backupPasskeyNoVerification:
       'O autenticador não verificou você com PIN, digital ou rosto. Use a senha.',
     backupPasskeyUnavailable:
@@ -1874,7 +1876,7 @@ const ptBR: Messages = {
     devicesRetired: '{name} foi aposentado.',
     devicesRetiredList: 'Dispositivos aposentados',
     devicesRetiredNotify:
-      'Um dispositivo aposentado só fica sabendo quando é avisado: sincronize com ele daqui, e ele recebe só o registro aposentado dele.',
+      'Um dispositivo aposentado só fica sabendo quando é avisado: sincronize com ele daqui, e ele recebe só o Registro de dispositivo dele, marcado como aposentado.',
     devicesNotify: 'Avisar {name}',
     devicesRename: 'Renomear',
     devicesName: 'Nome do dispositivo',
@@ -1883,14 +1885,14 @@ const ptBR: Messages = {
     devicesNameTooLong: 'O nome passa de 64 caracteres.',
     devicesNameSingleLine: 'O nome aceita uma única linha.',
     devicesRenameBlocked:
-      'Este dispositivo ainda não pode renomeá-lo: o relógio dele está atrás da última mudança desse nome. Tente mais tarde.',
+      'Este dispositivo ainda não pode renomeá-lo: o relógio dele está atrás da última alteração desse nome. Tente mais tarde.',
     devicesRenameRefused: 'Esse dispositivo não está mais neste cofre.',
     devicesRefused:
       'Esse dispositivo não pode ser aposentado: é este dispositivo, ou já está aposentado.',
     recordTypes: {
       item: 'Item',
       folder: 'Pasta',
-      itemVersion: 'Versão do item',
+      itemVersion: 'Versão do Item',
       vaultKey: 'Chave do Cofre',
       recoveryEnvelope: 'Envelope de Recuperação',
       device: 'Registro de dispositivo',
@@ -1902,7 +1904,7 @@ const ptBR: Messages = {
       'Se outra pessoa pode ter a Chave Mestra (uma Frase de Recuperação ou senha de exportação exposta, uma aposentadoria que você não fez, um dispositivo que você não pareou), refunde o cofre: o que este dispositivo tem passa para um cofre novo, com chaves totalmente novas.',
     start: 'Refundar o cofre…',
     warnSync:
-      'Antes, sincronize este dispositivo com todos os outros que ainda estão com você: as alterações que não estão neste dispositivo se perdem. Depois, pareie de novo cada um dos outros dispositivos com o cofre novo e destrua os backups do cofre antigo: eles ainda o abrem com a Frase de Recuperação antiga.',
+      'Antes, sincronize este dispositivo com todos os outros que ainda estão com você: as alterações que não estão neste dispositivo se perdem. Depois, substitua o cofre de cada um dos outros dispositivos por pareamento com este e destrua os backups do cofre antigo: eles ainda o abrem com a Frase de Recuperação antiga.',
     warnRetired:
       'Este dispositivo foi aposentado, então não pode sincronizar antes: as alterações que só existem em outros dispositivos se perdem. Se um dispositivo não aposentado ainda está com você, refunde por ele.',
     warnTrash:
@@ -1923,7 +1925,7 @@ const ptBR: Messages = {
     authPasskey: 'Usar a passkey',
     wrong: 'Senha incorreta.',
     passkeyCancelled: 'O pedido de passkey foi fechado.',
-    passkeyFailed: 'A passkey não abriu o cofre. Use a senha.',
+    passkeyFailed: 'A passkey não desbloqueou o cofre. Use a senha.',
     phraseTitle: 'A Frase de Recuperação do cofre novo',
     passwordIntro: 'Escolha a senha local do cofre novo neste dispositivo.',
     password: 'Nova senha local',
@@ -1932,7 +1934,7 @@ const ptBR: Messages = {
     working: 'Refundando o cofre…',
     busy: 'O BlindVault está ocupado em outra janela. Tente de novo quando ela terminar.',
     cancel: 'Cancelar',
-    done: 'O cofre foi refundado. Faça agora um backup do cofre novo, pareie de novo os outros dispositivos com ele e destrua os backups do cofre antigo. Uma passkey pode ser configurada de novo em Configurações.',
+    done: 'O cofre foi refundado. Faça agora um backup do cofre novo, substitua por pareamento com este o cofre dos outros dispositivos e destrua os backups do cofre antigo. Uma passkey pode ser configurada de novo em Configurações.',
   },
   templates: {
     login: 'Login',

@@ -103,7 +103,7 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Trash').click();
     await expect(page.getByText('Folder: Clients')).toBeVisible();
     await expect(button(page, 'Contract')).toBeVisible();
-    await button(page, 'Restore Clients').click();
+    await button(page, 'Restore Clients from the trash').click();
     await expect(page.getByText('The trash is empty.')).toBeVisible();
     await folders(page, layout);
     await button(page, 'Clients').click();

@@ -2,18 +2,23 @@
 
 A local-first, end-to-end encrypted personal vault that lives only on the user's devices and in encrypted backup files.
 
+UI copy in pt-BR uses the `_pt-BR_` form of each term. An entry without one has no UI presence.
+
 ## Vault contents
 
 **Vault**:
 The body of encrypted items, folders and history, replicated across the devices and backups of the people who can open it; either a personal vault or a shared vault.
+_pt-BR_: cofre
 _Avoid_: account, database, wallet
 
 **Vault root**:
 The top level of the vault, where an item or folder with no parent folder lives.
+_pt-BR_: raiz do cofre
 _Avoid_: home, top folder, unfiled
 
 **Item**:
 One stored entry in the vault, made of typed fields.
+_pt-BR_: item
 _Avoid_: entry, secret, record (in UI copy)
 
 **Item cap**:
@@ -22,10 +27,12 @@ _Avoid_: item size limit, max item size
 
 **Field**:
 One typed value inside an item, such as a URL, a secret or a TOTP.
+_pt-BR_: campo
 _Avoid_: attribute, property
 
 **Field type**:
 The kind of value a field holds, from a closed list such as text, secret, URL, date, TOTP or seed phrase; it sets how the value is checked, shown and masked.
+_pt-BR_: tipo de campo
 _Avoid_: field kind, data type
 
 **Field role**:
@@ -34,14 +41,17 @@ _Avoid_: field key, field kind, template field
 
 **Seed phrase**:
 A cryptocurrency wallet's BIP39 phrase stored as a field of an item; unrelated to the Recovery Phrase.
+_pt-BR_: frase-semente
 _Avoid_: seed, BIP39 seed, wallet seed
 
 **TOTP secret**:
 The shared secret of a TOTP field, from which its one-time codes are computed.
+_pt-BR_: segredo TOTP
 _Avoid_: seed, TOTP seed, TOTP key
 
 **Template**:
 A field layout an item is created from, such as Login or Card.
+_pt-BR_: modelo
 _Avoid_: type, category, item type
 
 **Factory template**:
@@ -50,26 +60,32 @@ _Avoid_: built-in type, default template, preset
 
 **Folder**:
 A named, nestable container in the vault that holds items and other folders; each item lives in exactly one folder or at the vault root.
+_pt-BR_: pasta
 _Avoid_: collection, directory, group
 
 **Tag**:
 A flat label that classifies items across folders.
+_pt-BR_: tag
 _Avoid_: label, category
 
 **Read-only record**:
 A record the app shows but will not change, because its HLC is beyond the future-clock bound or, for an item, an Item Version or the Recovery Envelope, because it holds content from a newer app version.
+_pt-BR_: somente leitura
 _Avoid_: read-only item (for other records), locked item, frozen item
 
 **Read-only vault**:
 A vault that refuses every write on one device, except retirement and the automatic purge, while the greatest HLC that device has issued or accepted is beyond the future-clock bound of its clock.
+_pt-BR_: cofre somente leitura
 _Avoid_: frozen vault, locked vault
 
 **Item Version**:
 An encrypted past snapshot of an item, kept in its history.
+_pt-BR_: Versão do Item
 _Avoid_: revision, history entry
 
 **Trash**:
 The state of a tombstoned item or folder whose content has not yet been purged and can still be restored from the trash.
+_pt-BR_: lixeira
 _Avoid_: recycle bin, deleted items
 
 **Trash operation**:
@@ -82,24 +98,29 @@ _Avoid_: deletion marker, delete flag
 
 **Purge**:
 The automatic removal of a trashed record's content and history, leaving only its tombstone.
+_pt-BR_: remover de vez (removido de vez)
 _Avoid_: hard delete, empty trash
 
 **Restore from the trash**:
 Bringing a trashed item or folder back before its purge.
+_pt-BR_: restaurar da lixeira
 _Avoid_: undelete, recover, restore (unqualified)
 
 **Restore a version**:
 Making an Item Version's content an item's current state again, as a new edit.
+_pt-BR_: restaurar a versão
 _Avoid_: revert, roll back, restore (unqualified)
 
 **Duplicate**:
 Making a new item with another item's current content, its own identity and no history.
+_pt-BR_: duplicar; duplicata (the new item)
 _Avoid_: clone, copy (within one vault)
 
 ## Records
 
 **Record**:
 One encrypted, synchronized unit of vault data, such as an item, a folder, an Item Version or a Device record.
+_pt-BR_: registro
 _Avoid_: row, document, object
 
 **Record header**:
@@ -122,10 +143,12 @@ _Avoid_: item key, data key, per-item key
 
 **Master Key**:
 The root secret of the vault, identical on every device that holds the vault.
+_pt-BR_: Chave Mestra
 _Avoid_: root key, vault password
 
 **Vault Key**:
 The key of one key epoch that protects every record key.
+_pt-BR_: Chave do Cofre
 _Avoid_: data key, encryption key
 
 **Key epoch**:
@@ -134,6 +157,7 @@ _Avoid_: key version, key generation
 
 **Local password**:
 The per-device password that unlocks the vault on that device only.
+_pt-BR_: senha local
 _Avoid_: master password, vault password
 
 **Device KEK**:
@@ -142,6 +166,7 @@ _Avoid_: password key, local key
 
 **Local Config**:
 The per-device settings and key-wrapping material that are never synchronized.
+_pt-BR_: Configuração Local
 _Avoid_: local settings, device state, profile
 
 **PRF KEK**:
@@ -150,6 +175,7 @@ _Avoid_: biometric-derived wrapping key, biometric wrapping material
 
 **Recovery Phrase**:
 The 24-word phrase that represents the vault's recovery secret.
+_pt-BR_: Frase de Recuperação
 _Avoid_: seed, Bitcoin seed
 
 **Recovery KEK**:
@@ -158,46 +184,56 @@ _Avoid_: phrase key, seed key
 
 **Recovery Envelope**:
 The record that holds the vault's Master Key protected by the Recovery Phrase, together with what any unlocked device needs to make backups that phrase can open; shared by every device and every backup.
+_pt-BR_: Envelope de Recuperação
 _Avoid_: recovery wrapping, recovery mechanism
 
 **Check Recovery Phrase**:
 Confirming, on an unlocked device, that a typed Recovery Phrase opens the current Recovery Envelope and the backups made for it.
+_pt-BR_: Conferir a Frase de Recuperação
 _Avoid_: verify phrase, test phrase
 
 **Regeneration**:
 Replacing the Recovery Phrase and the Recovery Envelope with new ones without changing the Master Key; the response to a lost phrase, not an exposed one.
+_pt-BR_: regenerar (a Frase de Recuperação)
 _Avoid_: reset phrase, rotate phrase, new phrase
 
 **Re-founding**:
 Replacing every key of the vault, and the vault's identity, while keeping its current items and folders; the response to a compromised Master Key.
+_pt-BR_: refundar (o cofre)
 _Avoid_: rekey, Master Key rotation, new vault + import
 
 ## Locking
 
 **Unlock**:
 Opening the vault on one device with the local password, a WebAuthn credential or the Recovery Phrase, so its keys are held in memory.
+_pt-BR_: desbloquear
 _Avoid_: log in, sign in, open (as the security action)
 
 **Lock**:
 Closing the vault on one device: its keys and decrypted content leave memory and every operation in progress is cancelled.
+_pt-BR_: bloquear
 _Avoid_: log out, sign out, close
 
 **Auto-lock**:
 The lock that happens after a set time without user activity.
+_pt-BR_: bloquear após inatividade
 _Avoid_: timeout, session expiry
 
 **Hidden-app lock**:
 The lock that happens after the app has been out of view for a set time, independently of auto-lock.
+_pt-BR_: bloqueio do app oculto
 _Avoid_: background lock, blur lock
 
 ## Backup
 
 **Backup**:
 An encrypted `.bvault` file holding a full copy of the vault.
+_pt-BR_: backup
 _Avoid_: export (for the file), archive, snapshot
 
 **Export**:
 Making a backup on a device; the backup is the file, export is the action.
+_pt-BR_: exportar; exportação
 _Avoid_: save, download, dump
 
 **Keyslot**:
@@ -206,10 +242,12 @@ _Avoid_: key slot, unlock method
 
 **Export password**:
 An optional password that opens one specific backup.
+_pt-BR_: senha de exportação
 _Avoid_: backup password, file password
 
 **Restore**:
 Bringing a backup's records onto a device, as either a fresh restore or a backup merge; the only meaning of "restore" without a qualifier.
+_pt-BR_: restaurar; restauração
 _Avoid_: import, recover (as the action)
 
 **Fresh restore**:
@@ -218,6 +256,7 @@ _Avoid_: restore as a new vault, new vault from backup
 
 **Backup merge**:
 Restoring a backup into the vault a device already holds, merging its records by the same rules as sync.
+_pt-BR_: mesclar um backup; mesclagem
 _Avoid_: merge restore, import
 
 **Import**:
@@ -232,6 +271,7 @@ _Avoid_: instance (for the copy), app, client
 
 **Device**:
 One installation as one vault sees it, with its own device identity for that vault; a Safari tab and the installed app on the same phone are two devices.
+_pt-BR_: dispositivo
 _Avoid_: phone, computer (as an identity), browser
 
 **Device identity**:
@@ -240,6 +280,7 @@ _Avoid_: device key, device certificate, static key (in UI copy)
 
 **Device record**:
 The record that registers one device's identity and display name in the vault.
+_pt-BR_: Registro de dispositivo
 _Avoid_: device entry, device profile
 
 **Vault creator**:
@@ -248,14 +289,17 @@ _Avoid_: owner device, primary device, master device
 
 **Registered device**:
 A device whose identity is recorded in a Device record of the vault.
+_pt-BR_: dispositivo registrado
 _Avoid_: paired device, trusted device, enrolled device
 
 **Unregistered device**:
 A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync with the vault's existing devices only after re-admission.
+_pt-BR_: dispositivo não registrado
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
 **App window**:
 One running tab or window of BlindVault on an installation; only one at a time opens the vault.
+_pt-BR_: janela
 _Avoid_: instance, tab (as the general term)
 
 **Installation guard**:
@@ -264,10 +308,12 @@ _Avoid_: installation lock, global lock
 
 **Erase**:
 Removing the vault and the Local Config from one device, leaving it with no vault.
+_pt-BR_: apagar
 _Avoid_: wipe, reset, factory reset
 
 **Retired device**:
 A device whose Device record has been permanently marked retired from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
+_pt-BR_: dispositivo aposentado (aposentar)
 _Avoid_: revoked device, removed device, deleted device
 
 **Admission**:
@@ -276,38 +322,47 @@ _Avoid_: pairing (as the umbrella term), enrollment
 
 **Pairing**:
 The admission flow in which a device holding the vault gives its Master Key to a device with no vault, or one whose vault the pairing replaces, and registers that device's identity.
+_pt-BR_: pareamento (parear)
 _Avoid_: enrollment, linking
 
 **Joining device**:
 The device with no vault, or one whose vault the pairing replaces, that receives the vault in pairing; the other side is the device holding the vault.
+_pt-BR_: o outro dispositivo (in UI copy)
 _Avoid_: new device (as a role), guest, B (in UI copy)
 
 **Replace by pairing**:
 Pairing a device that already holds a vault, so the vault it receives replaces the one it held, whether the same vault or another.
+_pt-BR_: substituir por pareamento
 _Avoid_: re-pair, overwrite
 
 **Re-admission**:
 The admission flow between two devices that already hold the same vault, in which the identity either side lacks is registered after both prove they hold the same Master Key, so no Master Key is transferred.
+_pt-BR_: readmissão (readmitir)
 _Avoid_: re-pairing, rejoin
 
 **SAS**:
 The short code shown on both screens that the user compares to confirm an admission.
+_pt-BR_: os números
 _Avoid_: verification code, PIN, pairing code
 
 **Pairing payload**:
 The connection data one device shows (by QR or copy/paste) so another can start pairing with it.
+_pt-BR_: texto de pareamento
 _Avoid_: pairing invitation, pairing response, pairing QR
 
 **Reconnection payload**:
 The connection data two registered devices exchange to start a sync session.
+_pt-BR_: texto de sincronização
 _Avoid_: sync QR, sync invitation
 
 **Sync session**:
 One authenticated connection over which two devices holding the same vault exchange records, live until either side closes it or locks the vault.
+_pt-BR_: sincronização
 _Avoid_: live session, connection
 
 **LAN-only mode**:
 A network setting where devices sync only on the same local network, without contacting any STUN server.
+_pt-BR_: somente na mesma rede
 _Avoid_: local-network-only mode, offline mode
 
 ## Vaults and Members

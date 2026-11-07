@@ -83,7 +83,7 @@ for (const [layout, width] of WIDTHS) {
     // An item in the trash allows only restore (D143).
     await expect(page.getByText(/It can only be restored/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.getByRole('button', { name: 'Restore from the trash', exact: true }).click();
     await expect(page.getByText('The trash is empty.')).toBeVisible();
 
     await showList(page, layout, 'All items');

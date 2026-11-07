@@ -55,7 +55,7 @@ async function paired(browser: Browser) {
   const b = await device(browser);
   await createVault(a, PASSWORD_A);
   await button(a, 'Settings').click();
-  await button(a, 'Pair a new device…').click();
+  await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
@@ -358,7 +358,7 @@ test('an edit older than a trash never brings the item back: in the trash on bot
     await button(page, 'Trash').click();
     await button(page, 'ACME').click();
     // An item in the trash offers only restore (D143): restored, its history shows A's edit.
-    await button(page, 'Restore').click();
+    await button(page, 'Restore from the trash').click();
     await expect(page.getByText('The trash is empty.')).toBeVisible();
     await button(page, 'All items').click();
     await button(page, 'ACME').click();
@@ -391,11 +391,11 @@ test('an item trashed on A is in the trash of both with the same purge date, off
     await expect(page.getByText('No items yet.')).toBeVisible();
     await button(page, 'Trash').click();
     await button(page, 'ACME').click();
-    const notice = page.getByText(/It can only be restored; it is deleted for good on /);
+    const notice = page.getByText(/It can only be restored from the trash; it is purged on /);
     await expect(notice).toBeVisible();
     dates.push((await notice.textContent()) ?? '');
     // Purge is automatic only: nothing deletes it by hand (D94).
-    await expect(button(page, 'Restore')).toBeVisible();
+    await expect(button(page, 'Restore from the trash')).toBeVisible();
     await expect(page.getByRole('button', { name: /delete|purge|empty/i })).toHaveCount(0);
   }
   expect(dates[1]).toBe(dates[0]);

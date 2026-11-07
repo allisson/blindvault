@@ -11,7 +11,7 @@ import {
 import { hex } from '../app/ids';
 import { type ListScreen, type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
-import { type Messages } from '../i18n/messages';
+import { type Messages, format } from '../i18n/messages';
 import { Button, Field, INPUT, Notice, ROW } from './components';
 
 function recordName(session: VaultSession, r: BlockedRecord, m: Messages): string {
@@ -374,7 +374,7 @@ export function TrashedFolder({
           <Button
             variant="quiet"
             title={m.folders.restoreNote}
-            aria-label={`${m.items.restore} ${name}`}
+            aria-label={format(m.folders.restoreNamed, { name })}
             onClick={() => {
               setFailure(undefined);
               session.restoreFolder(id).then(onChange, (err: unknown) => {
