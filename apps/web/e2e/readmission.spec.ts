@@ -79,10 +79,11 @@ async function toSas(a: Page, b: Page): Promise<void> {
   });
 }
 
-test('re-admits a restored device: both know each other and hold every item (§9, D22, D207)', async ({
-  browser,
-}) => {
-  const logged: string[] = [];
+/**
+ * A holds a vault with an item and exports it; B restores that backup, so it is unregistered, and
+ * adds an item of its own.
+ */
+async function restored(browser: Browser, logged: string[]) {
   const a = await device(browser, logged);
   const words = await createVault(a, PASSWORD_A);
   await addItem(a, 'Harbor Bank');
@@ -112,6 +113,14 @@ test('re-admits a restored device: both know each other and hold every item (§9
   await openVault(b);
   await addItem(b, 'Copper Mail');
 
+  return { a, b, words };
+}
+
+test('re-admits a restored device: both know each other and hold every item (§9, D22, D207)', async ({
+  browser,
+}) => {
+  const logged: string[] = [];
+  const { a, b, words } = await restored(browser, logged);
   await toSas(a, b);
   await button(a, 'Yes, the same').click();
   await button(b, 'Yes, the same').click();
@@ -157,4 +166,25 @@ test('two devices of different vaults: both say so, and nothing is written (D50,
     await expect(failed).toContainText('Replace by pairing with another device…');
     await expect(page.getByTestId('device')).toHaveCount(1);
   }
+});
+
+test('numbers said to differ stop the re-admission on both, and nothing is merged (§9, D234, CRYPTO-INV-011)', async ({
+  browser,
+}) => {
+  const logged: string[] = [];
+  const { a, b } = await restored(browser, logged);
+  await toSas(a, b);
+  await button(b, 'No, it differs').click();
+  for (const page of [a, b]) {
+    const failed = page.getByTestId('pairing-failed');
+    await expect(failed).toHaveAttribute('data-reason', 'sas-mismatch', { timeout: 30_000 });
+    await expect(failed).toContainText('The numbers differ, so the re-admission stopped');
+    await expect(failed).toContainText('carry them some other way');
+  }
+
+  // Neither knows the other, and neither holds the other's item.
+  await expect(a.getByTestId('device')).toHaveCount(1);
+  await expect(b.getByTestId('devices-readmit')).toBeVisible();
+  await button(a, 'Back').click();
+  await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });
