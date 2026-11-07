@@ -8,6 +8,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   useSyncExternalStore,
 } from 'react';
 
@@ -36,6 +37,10 @@ const LOOK = {
   danger: 'bg-danger text-danger-ink enabled:hover:bg-danger-hover',
 } as const;
 
+// A press scales the button down for 150 ms, only for users who have not asked for reduced motion.
+const PRESS =
+  'motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:enabled:active:scale-[0.97]';
+
 /**
  * A button (D233). `busy` disables it and shows a spinner beside its label; under reduced motion the
  * spinner is hidden and the label, which names the work in progress, stays.
@@ -54,7 +59,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`${TARGET} rounded-control px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${LOOK[variant]} ${className}`}
+      className={`${TARGET} rounded-control px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${PRESS} ${LOOK[variant]} ${className}`}
       disabled={disabled === true || busy}
       aria-busy={busy || undefined}
       {...props}
@@ -70,6 +75,38 @@ export function Spinner() {
   return (
     <Icon name="loader-circle" className="me-1.5 motion-safe:animate-spin motion-reduce:hidden" />
   );
+}
+
+/** How long a copy shows its check (D231). */
+export const CHECK_MS = 1500;
+
+/** A check shown for `CHECK_MS` after each `show()`; a new `show()` restarts it. */
+export function useCheck(): readonly [boolean, () => void] {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (shown === 0) return;
+    const timer = setTimeout(() => {
+      setShown(0);
+    }, CHECK_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [shown]);
+  return [
+    shown !== 0,
+    () => {
+      setShown((n) => n + 1);
+    },
+  ];
+}
+
+/** The check beside a copy button's label: decorative, the copy's status note says what happened. */
+export function CopyCheck({ shown }: { readonly shown: boolean }) {
+  return shown ? (
+    <span data-testid="copy-check">
+      <Icon name="check" className="me-1.5 text-success motion-safe:animate-pop" />
+    </span>
+  ) : null;
 }
 
 /**
@@ -106,7 +143,7 @@ export function ConfirmDialog({
     <dialog
       ref={ref}
       aria-label={confirm}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card bg-raised p-6 text-fg shadow-raised backdrop:bg-scrim"
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card bg-raised p-6 text-fg shadow-raised backdrop:bg-scrim motion-safe:animate-enter"
       onCancel={(e) => {
         // Escape: the caller unmounts the dialog, unless the work already started.
         e.preventDefault();

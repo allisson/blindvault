@@ -23,7 +23,7 @@ import {
 } from '../app/stun-settings';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, Field, Notice, TARGET, TextArea } from './components';
+import { Button, CopyCheck, Field, Notice, TARGET, TextArea, useCheck } from './components';
 import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { QrCode, QrScanner } from './Qr';
@@ -319,6 +319,7 @@ export function PayloadText({
 }) {
   const m = useMessages();
   const [copied, setCopied] = useState(false);
+  const [checked, check] = useCheck();
   return (
     <div className="flex flex-col gap-2">
       <QrCode text={text} label={m.pairing.qrLabel} />
@@ -331,6 +332,7 @@ export function PayloadText({
           void navigator.clipboard.writeText(text).then(
             () => {
               setCopied(true);
+              check();
             },
             () => {
               setCopied(false);
@@ -338,6 +340,7 @@ export function PayloadText({
           );
         }}
       >
+        <CopyCheck shown={checked} />
         {copied ? m.pairing.copied : m.pairing.copy}
       </Button>
       <p className="text-sm text-muted">{channel ?? m.pairing.channel}</p>

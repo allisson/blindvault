@@ -150,3 +150,27 @@ describe('components name no palette color (D231)', () => {
     expect(found).toEqual([]);
   });
 });
+
+describe('motion runs only for users who have not asked for reduced motion (D231)', () => {
+  // A class that animates or transitions, with its variants: each must start with `motion-safe:`.
+  const MOTION =
+    /[\w:[\]-]*(?<![\w-])(?:animate|transition|duration|ease|delay|scale|translate|rotate)-[\w.[\]-]+|[\w:-]*(?<![\w-])transition(?![\w-])/g;
+
+  const sources = import.meta.glob<string>('../**/*.tsx', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  });
+
+  it('declares every animation and transition behind motion-safe', () => {
+    const found = Object.entries(sources).flatMap(([file, text]) =>
+      text
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('//') && !line.trim().startsWith('*'))
+        .flatMap((line) => [...line.matchAll(MOTION)].map(([token]) => token))
+        .filter((token) => !token.startsWith('motion-safe:'))
+        .map((token) => `${file}: ${token}`),
+    );
+    expect(found).toEqual([]);
+  });
+});

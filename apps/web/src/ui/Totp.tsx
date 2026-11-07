@@ -27,7 +27,7 @@ export function TotpView({
   const m = useMessages();
   const [now, setNow] = useState(() => Date.now());
   const [code, setCode] = useState<{ readonly step: number; readonly code: string }>();
-  const { copy, status } = useCopy(clearSeconds);
+  const { copy, status, checked } = useCopy(clearSeconds);
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
@@ -78,6 +78,7 @@ export function TotpView({
           <CopyButton
             label={m.items.copyCode}
             name={name}
+            checked={checked}
             onCopy={() => {
               copy(current);
             }}

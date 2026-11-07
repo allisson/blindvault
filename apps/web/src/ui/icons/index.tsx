@@ -5,6 +5,7 @@
 import type { ReactNode } from 'react';
 
 const PATHS = {
+  check: <path d="M20 6 9 17l-5-5" />,
   'loader-circle': <path d="M21 12a9 9 0 1 1-6.219-8.56" />,
   lock: (
     <>
