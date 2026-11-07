@@ -826,6 +826,7 @@ dependency may run install scripts (`onlyBuiltDependencies: []`).
 | `@types/node` 26 | root, `apps/web` | Types for config files and tests running in Node. Matches the pinned Node major. |
 | `vitest`, `@vitest/coverage-v8` | each package, `tests`, `apps/web` (`vitest` only) | Unit tests (stack) and the 95% coverage gate on `packages/*`. |
 | `@playwright/test` | `apps/web` | End-to-end tests on Chromium, Firefox and WebKit (stack). |
+| `@axe-core/playwright` 4.14.0 | `apps/web` | Runs axe-core, Deque's rule engine for WCAG, inside Playwright pages: `e2e/axe.spec.ts` checks every screen against WCAG 2.2 A and AA in both themes and at the three layout widths (D238). Writing those rules by hand would mean reimplementing contrast, name and ARIA computations axe already tests across browsers. Brings `axe-core` 4.14.0 (MPL-2.0); its only peer is `playwright-core`, already here. No install scripts. Test only, never bundled. Phase 7. |
 | `vite`, `@vitejs/plugin-react` | `apps/web` | Build and dev server (stack). |
 | `tailwindcss`, `@tailwindcss/vite` | `apps/web` | Styling (stack). |
 | `@types/react`, `@types/react-dom` | `apps/web` | Types for React. |

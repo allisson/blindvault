@@ -398,7 +398,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Copy review against `GLOSSARY.md`, in every supported language (D235)
 - [x] Microinteractions: loading states, transitions and copy feedback, in CSS, none under `prefers-reduced-motion` (D236)
 - [x] Accessibility to WCAG 2.2 AA: contrast, visible focus, labels, screen reader and keyboard on every layout (D237)
-- [ ] Automated accessibility checks with `@axe-core/playwright` on every screen, justified in `docs/architecture.md`
+- [x] Automated accessibility checks with `@axe-core/playwright` on every screen, justified in `docs/architecture.md` (D238)
 - [ ] Audit of every screen in a real browser (the T3 Code browser preview), at the three layout widths and in both themes: each finding recorded and fixed, or recorded with its reason to stay
 
 ### UX Gate
