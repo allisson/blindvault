@@ -65,7 +65,7 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
   const a = await device(browser);
   await createVault(a, PASSWORD_A);
   await button(a, 'Settings').click();
-  await button(a, 'Pair a new device…').click();
+  await button(a, 'Pair a device…').click();
   const hint = a.getByTestId('same-network-hint');
   await expect(hint).toContainText('(stun.l.google.com, stun.cloudflare.com)');
   await a.getByTestId('stun-open').click();
@@ -139,7 +139,7 @@ test('an unreadable stored list: the same network only, locked on, and the pairi
 
   await createVault(a, PASSWORD_A);
   await button(a, 'Settings').click();
-  await button(a, 'Pair a new device…').click();
+  await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();

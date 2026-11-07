@@ -49,7 +49,7 @@ async function invite(a: Page): Promise<string> {
   await expect(a.getByRole('heading', { name: TITLE })).toBeVisible();
 
   await button(a, 'Settings').click();
-  await button(a, 'Pair a new device…').click();
+  await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();

@@ -183,7 +183,7 @@ test('restores a backup by its export password, then recommends Check Recovery P
     /Make a backup/,
   ]);
   // Its action opens Settings with the cursor in the check; back returns to "Vault ready".
-  await button(page, 'Check the Recovery Phrase').click();
+  await button(page, 'Check Recovery Phrase').click();
   await expect(page.getByTestId('check-phrase')).toBeFocused();
   await button(page, 'Back').click();
   await expect(ready).toBeVisible();

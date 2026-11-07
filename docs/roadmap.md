@@ -395,7 +395,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Design tokens in Tailwind (color, type, spacing, radius, elevation), light and dark themes; the theme preference stays in `localStorage` (D232)
 - [x] Own components replacing the template's (buttons, fields, dialogs, lists, banners, notices), each with its hover, focus, disabled, error and loading states (D233)
 - [x] Flow review: onboarding (create, restore, join), item creation and editing, pairing, re-admission and sync; fewer steps only where no security decision is lost, every warning still explicit (section 13.5) (D234)
-- [ ] Copy review against `GLOSSARY.md`, in every supported language
+- [x] Copy review against `GLOSSARY.md`, in every supported language (D235)
 - [ ] Microinteractions: loading states, transitions and copy feedback, in CSS, none under `prefers-reduced-motion`
 - [ ] Accessibility to WCAG 2.2 AA: contrast, visible focus, labels, screen reader and keyboard on every layout
 - [ ] Automated accessibility checks with `@axe-core/playwright` on every screen, justified in `docs/architecture.md`

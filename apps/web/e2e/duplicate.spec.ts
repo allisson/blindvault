@@ -78,7 +78,7 @@ for (const [layout, width] of WIDTHS) {
     }
     await button(page, 'Trash').click();
     await button(page, 'Harbor').click();
-    await expect(button(page, 'Restore')).toBeVisible();
+    await expect(button(page, 'Restore from the trash')).toBeVisible();
     await expect(button(page, 'Duplicate')).toHaveCount(0);
     await expect(button(page, 'History')).toHaveCount(0);
   });
