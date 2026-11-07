@@ -193,7 +193,7 @@ export function MergeNotices({
   );
 }
 
-function mergeError(
+export function mergeError(
   m: Messages,
   outcome: Exclude<MergeOutcome, { readonly kind: 'ok' }>,
   date: (at: number) => string,

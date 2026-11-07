@@ -1,5 +1,7 @@
+import { RecordType } from '@blindvault/crypto';
 import { type Page, expect, test } from '@playwright/test';
 
+import { deleteRecords } from './corrupt';
 import { createVault } from './create';
 
 // Creation, the reset and each unlock derive Argon2id at about 1 s (D9).
@@ -62,4 +64,25 @@ test('resets a forgotten local password with the Recovery Phrase, keeping the va
   const secrets = [PASSWORD, NEW_PASSWORD, SECRET, words.join(' ')];
   expect(logged.filter((line) => secrets.some((s) => line.includes(s)))).toEqual([]);
   expect(logged).toEqual([]);
+});
+
+test('a vault with no Recovery Envelope says so at the reset, and stays locked (D184)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const words = await createVault(page, PASSWORD);
+  await button(page, 'Lock').click();
+  await expect(page.getByTestId('lock-state')).toHaveText('Locked');
+  expect(await deleteRecords(page, RecordType.recoveryEnvelope)).toBe(1);
+
+  await button(page, 'Forgot the password?').click();
+  await page.getByTestId('reset-phrase').fill(words.join(' '));
+  await button(page, 'Next').click();
+  await page.getByTestId('new-password').fill(NEW_PASSWORD);
+  await page.getByTestId('confirm-password').fill(NEW_PASSWORD);
+  await button(page, 'Reset the password').click();
+  await expect(
+    page.getByText('This vault has no Recovery Envelope to open. Replace it with a backup.'),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('lock-state')).toHaveText('Locked');
 });
