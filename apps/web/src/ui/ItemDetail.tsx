@@ -57,7 +57,7 @@ export function FieldValue({
         <div className="flex flex-col gap-1">
           <SecretView value={value} label={name} clearSeconds={clearSeconds} />
           {seedPhraseChecksumValid(value) ? null : (
-            <p className="text-sm text-amber-800 dark:text-amber-200">{m.items.checksum}</p>
+            <p className="text-sm text-warning">{m.items.checksum}</p>
           )}
         </div>
       );
@@ -146,7 +146,7 @@ export function ItemDetail({
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold break-words">{item?.title ?? m.items.newerTitle}</h1>
         {item ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             {m.templates[item.templateId as keyof Messages['templates']]}
           </p>
         ) : null}
@@ -167,7 +167,7 @@ export function ItemDetail({
             return (
               // Fields have no ID; their order is fixed while the item is shown.
               <div key={i} className="flex flex-col gap-0.5">
-                <dt className="text-xs font-medium text-zinc-500">{name}</dt>
+                <dt className="text-xs font-medium text-muted">{name}</dt>
                 <dd>
                   <FieldValue
                     field={field}
@@ -180,19 +180,16 @@ export function ItemDetail({
           })}
           {item.folderId && session.folder(item.folderId)?.inTrash === false ? (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium text-zinc-500">{m.folders.folder}</dt>
+              <dt className="text-xs font-medium text-muted">{m.folders.folder}</dt>
               <dd>{session.folder(item.folderId)?.name}</dd>
             </div>
           ) : null}
           {item.tags.length > 0 ? (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium text-zinc-500">{m.items.tags}</dt>
+              <dt className="text-xs font-medium text-muted">{m.items.tags}</dt>
               <dd className="flex flex-wrap gap-1">
                 {item.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-zinc-100 px-2 py-0.5 text-sm dark:bg-zinc-800"
-                  >
+                  <span key={tag} className="rounded-full bg-subtle px-2 py-0.5 text-sm">
                     {tag}
                   </span>
                 ))}
@@ -201,7 +198,7 @@ export function ItemDetail({
           ) : null}
           {item.notes !== undefined ? (
             <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium text-zinc-500">{m.items.notes}</dt>
+              <dt className="text-xs font-medium text-muted">{m.items.notes}</dt>
               <dd className="break-words whitespace-pre-wrap">{item.notes}</dd>
             </div>
           ) : null}
@@ -258,7 +255,7 @@ export function ItemDetail({
         </div>
       ) : null}
       {error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}

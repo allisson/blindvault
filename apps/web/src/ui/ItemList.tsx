@@ -18,7 +18,7 @@ function flatten(node: FolderTree): TreeItem[] {
   return [...node.items, ...node.folders.flatMap(flatten)];
 }
 
-const ROW = `${TARGET} w-full truncate rounded-md px-2 text-left text-sm hover:bg-zinc-100 aria-[current]:bg-zinc-200 dark:hover:bg-zinc-800 dark:aria-[current]:bg-zinc-800`;
+const ROW = `${TARGET} w-full truncate rounded-control px-2 text-left text-sm hover:bg-subtle aria-[current]:bg-accent-soft`;
 
 /** The list shown: every item not in the trash, one folder's contents, or the trash. */
 export function ItemList({
@@ -141,7 +141,7 @@ export function ItemList({
           onChange={onChange}
         />
       ) : null}
-      {nothing ? <p className="text-sm text-zinc-500">{empty}</p> : null}
+      {nothing ? <p className="text-sm text-muted">{empty}</p> : null}
       {subfolders.length > 0 ? (
         <ul className="flex flex-col" aria-label={m.vault.folders}>
           {subfolders.map((row) => (

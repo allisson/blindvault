@@ -45,7 +45,7 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
   };
   const bits = entropy(settings);
   return (
-    <fieldset className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+    <fieldset className="flex flex-col gap-3 rounded-control border border-line p-3">
       <div className="flex gap-4 text-sm" role="radiogroup">
         {(['characters', 'words'] as const).map((mode) => (
           <label key={mode} className={`${TARGET} flex items-center gap-2`}>
@@ -101,7 +101,7 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
           }}
         />
       )}
-      <p className="text-sm text-zinc-500" data-testid="generator-entropy">
+      <p className="text-sm text-muted" data-testid="generator-entropy">
         {bits === null
           ? m.generator.unavailable
           : format(m.generator.entropy, { bits: String(Math.floor(bits)) })}

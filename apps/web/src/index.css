@@ -1,1 +1,230 @@
 @import 'tailwindcss';
+
+/*
+ * Visual foundation (overview §13.7, D231). Components use only the semantic tokens below: the
+ * default palette is removed, so a palette class generates nothing (and a unit test refuses one).
+ * `data-theme` (light or dark, the system theme resolved) and `data-accent` are set on <html> by
+ * app/appearance.ts before the first render. Every value is a 6-digit hex: the contrast test
+ * (ui/contrast.test.ts) reads this file and checks every accent in both themes.
+ */
+
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-surface: var(--bv-surface);
+  --color-raised: var(--bv-raised);
+  --color-subtle: var(--bv-subtle);
+  --color-fg: var(--bv-fg);
+  --color-muted: var(--bv-muted);
+  --color-line: var(--bv-line);
+  --color-control: var(--bv-control);
+  --color-scrim: var(--bv-scrim);
+
+  --color-accent: var(--bv-accent);
+  --color-accent-hover: var(--bv-accent-hover);
+  --color-accent-ink: var(--bv-accent-ink);
+  --color-accent-soft: var(--bv-accent-soft);
+  --color-accent-text: var(--bv-accent-text);
+  --color-focus: var(--bv-accent);
+
+  --color-danger: var(--bv-danger);
+  --color-danger-hover: var(--bv-danger-hover);
+  --color-danger-ink: var(--bv-danger-ink);
+  --color-danger-soft: var(--bv-danger-soft);
+  --color-danger-text: var(--bv-danger-text);
+  --color-warning: var(--bv-warning);
+  --color-warning-soft: var(--bv-warning-soft);
+  --color-warning-text: var(--bv-warning-text);
+  --color-info: var(--bv-info);
+  --color-info-soft: var(--bv-info-soft);
+  --color-info-text: var(--bv-info-text);
+  --color-success: var(--bv-success);
+
+  /* Two radii: controls and cards. */
+  --radius-control: 0.375rem;
+  --radius-card: 0.75rem;
+
+  /* Two elevations: flat (none) and raised, a light shadow in the light theme, a 1 px edge in the dark. */
+  --shadow-raised: 0 1px 3px 0 var(--bv-shadow), 0 0 0 1px var(--bv-edge);
+}
+
+/* Neutrals, statuses and the default accent (blue), light. */
+:root {
+  color-scheme: light;
+  --bv-surface: #fafafa;
+  --bv-raised: #ffffff;
+  --bv-subtle: #f4f4f5;
+  --bv-fg: #18181b;
+  --bv-muted: #52525b;
+  --bv-line: #e4e4e7;
+  --bv-control: #71717a;
+  --bv-scrim: #09090b4d;
+  --bv-shadow: #0000001a;
+  --bv-edge: #00000000;
+
+  --bv-danger: #b91c1c;
+  --bv-danger-hover: #991b1b;
+  --bv-danger-ink: #ffffff;
+  --bv-danger-soft: #fef2f2;
+  --bv-danger-text: #7f1d1d;
+  --bv-warning: #b45309;
+  --bv-warning-soft: #fef3c7;
+  --bv-warning-text: #78350f;
+  --bv-info: #0369a1;
+  --bv-info-soft: #f0f9ff;
+  --bv-info-text: #082f49;
+  --bv-success: #047857;
+
+  --bv-accent: #2563eb;
+  --bv-accent-hover: #1d4ed8;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #eff6ff;
+  --bv-accent-text: #1d4ed8;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bv-surface: #09090b;
+  --bv-raised: #18181b;
+  --bv-subtle: #27272a;
+  --bv-fg: #f4f4f5;
+  --bv-muted: #a1a1aa;
+  --bv-line: #27272a;
+  --bv-control: #71717a;
+  --bv-scrim: #0000008c;
+  --bv-shadow: #00000000;
+  --bv-edge: #27272aff;
+
+  --bv-danger: #f87171;
+  --bv-danger-hover: #fca5a5;
+  --bv-danger-ink: #09090b;
+  --bv-danger-soft: #450a0a;
+  --bv-danger-text: #fee2e2;
+  --bv-warning: #fbbf24;
+  --bv-warning-soft: #451a03;
+  --bv-warning-text: #fef3c7;
+  --bv-info: #38bdf8;
+  --bv-info-soft: #082f49;
+  --bv-info-text: #f0f9ff;
+  --bv-success: #34d399;
+}
+
+/*
+ * The six accents (D231). Each sets the same five tokens, light then dark; `[data-accent]` also
+ * scopes a swatch to its own accent in Settings › Appearance.
+ */
+[data-accent='blue'] {
+  --bv-accent: #2563eb;
+  --bv-accent-hover: #1d4ed8;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #eff6ff;
+  --bv-accent-text: #1d4ed8;
+}
+[data-theme='dark'][data-accent='blue'],
+[data-theme='dark'] [data-accent='blue'] {
+  --bv-accent: #60a5fa;
+  --bv-accent-hover: #93c5fd;
+  --bv-accent-ink: #09090b;
+  --bv-accent-soft: #172554;
+  --bv-accent-text: #93c5fd;
+}
+
+[data-accent='indigo'] {
+  --bv-accent: #4f46e5;
+  --bv-accent-hover: #4338ca;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #eef2ff;
+  --bv-accent-text: #4338ca;
+}
+[data-theme='dark'][data-accent='indigo'],
+[data-theme='dark'] [data-accent='indigo'] {
+  --bv-accent: #818cf8;
+  --bv-accent-hover: #a5b4fc;
+  --bv-accent-ink: #09090b;
+  --bv-accent-soft: #1e1b4b;
+  --bv-accent-text: #a5b4fc;
+}
+
+[data-accent='violet'] {
+  --bv-accent: #7c3aed;
+  --bv-accent-hover: #6d28d9;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #f5f3ff;
+  --bv-accent-text: #6d28d9;
+}
+[data-theme='dark'][data-accent='violet'],
+[data-theme='dark'] [data-accent='violet'] {
+  --bv-accent: #a78bfa;
+  --bv-accent-hover: #c4b5fd;
+  --bv-accent-ink: #09090b;
+  --bv-accent-soft: #2e1065;
+  --bv-accent-text: #c4b5fd;
+}
+
+[data-accent='teal'] {
+  --bv-accent: #0f766e;
+  --bv-accent-hover: #115e59;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #f0fdfa;
+  --bv-accent-text: #0f766e;
+}
+[data-theme='dark'][data-accent='teal'],
+[data-theme='dark'] [data-accent='teal'] {
+  --bv-accent: #2dd4bf;
+  --bv-accent-hover: #5eead4;
+  --bv-accent-ink: #09090b;
+  --bv-accent-soft: #042f2e;
+  --bv-accent-text: #5eead4;
+}
+
+[data-accent='green'] {
+  --bv-accent: #15803d;
+  --bv-accent-hover: #166534;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #f0fdf4;
+  --bv-accent-text: #15803d;
+}
+[data-theme='dark'][data-accent='green'],
+[data-theme='dark'] [data-accent='green'] {
+  --bv-accent: #4ade80;
+  --bv-accent-hover: #86efac;
+  --bv-accent-ink: #09090b;
+  --bv-accent-soft: #052e16;
+  --bv-accent-text: #86efac;
+}
+
+[data-accent='rose'] {
+  --bv-accent: #e11d48;
+  --bv-accent-hover: #be123c;
+  --bv-accent-ink: #ffffff;
+  --bv-accent-soft: #fff1f2;
+  --bv-accent-text: #be123c;
+}
+[data-theme='dark'][data-accent='rose'],
+[data-theme='dark'] [data-accent='rose'] {
+  --bv-accent: #fb7185;
+  --bv-accent-hover: #fda4af;
+  --bv-accent-ink: #09090b;
+  --bv-accent-soft: #4c0519;
+  --bv-accent-text: #fda4af;
+}
+
+/* Before app/appearance.ts runs, a dark system theme gets a dark page, not a white flash. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    background-color: #09090b;
+  }
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-fg);
+  accent-color: var(--color-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

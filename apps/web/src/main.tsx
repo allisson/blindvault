@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { answerLink, offerLink, startInitiator, startResponder } from '@blindvault/sync';
 import { App, supported } from './App';
+import { startAppearance } from './app/appearance';
 import { manifestHash } from './app/build-info';
 import { VaultController } from './app/controller';
 import { framed } from './app/frame';
@@ -19,6 +20,9 @@ const root = document.getElementById('root');
 if (!root) {
   throw new Error('Missing #root element');
 }
+
+// Theme and accent apply before the first render, in a frame too (D231).
+startAppearance();
 
 // Inside a frame the app opens nothing: no vault database, no Web Lock, no worker, no manifest and no
 // service worker, since `frame-ancestors` cannot be set by <meta> (D83, D193).

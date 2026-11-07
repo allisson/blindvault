@@ -60,9 +60,9 @@ export function NewPassword({
             className={`h-1.5 flex-1 rounded-full ${
               (strength?.score ?? 0) >= level
                 ? acceptable
-                  ? 'bg-emerald-600'
-                  : 'bg-amber-500'
-                : 'bg-zinc-200 dark:bg-zinc-700'
+                  ? 'bg-success'
+                  : 'bg-warning'
+                : 'bg-subtle'
             }`}
           />
         ))}
@@ -79,7 +79,7 @@ export function NewPassword({
         data-testid="confirm-password"
       />
       {/* A browser can keep the password next to the locked storage (D175). */}
-      <p className="text-sm text-zinc-500">{m.create.browserSave}</p>
+      <p className="text-sm text-muted">{m.create.browserSave}</p>
     </>
   );
 }

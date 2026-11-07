@@ -279,7 +279,7 @@ export function RefoundVault({
             {working ? r.working : r.submit}
           </Button>
           {error ? (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           ) : null}

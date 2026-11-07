@@ -38,7 +38,7 @@ export function useCopy(clearSeconds: number | undefined) {
   };
   const status =
     state && clearSeconds !== undefined ? (
-      <p role="status" className="text-xs text-zinc-500">
+      <p role="status" className="text-xs text-muted">
         {state === 'copied'
           ? format(m.items.copied, { seconds: String(clearSeconds) })
           : m.items.copyFailed}
@@ -178,11 +178,11 @@ export function SecretInput({
         />
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : hint || (multiLine && !shown) ? (
-        <p className="text-sm text-zinc-500">{hint ?? m.items.multiLine}</p>
+        <p className="text-sm text-muted">{hint ?? m.items.multiLine}</p>
       ) : null}
     </div>
   );

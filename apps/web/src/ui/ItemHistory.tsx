@@ -24,7 +24,7 @@ function VersionFields({
         return (
           // Fields have no ID; a version never changes.
           <div key={i} className="flex flex-col gap-0.5">
-            <dt className="text-xs font-medium text-zinc-500">{name}</dt>
+            <dt className="text-xs font-medium text-muted">{name}</dt>
             <dd>
               <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
             </dd>
@@ -33,7 +33,7 @@ function VersionFields({
       })}
       {item.notes !== undefined ? (
         <div className="flex flex-col gap-0.5">
-          <dt className="text-xs font-medium text-zinc-500">{m.items.notes}</dt>
+          <dt className="text-xs font-medium text-muted">{m.items.notes}</dt>
           <dd className="break-words whitespace-pre-wrap">{item.notes}</dd>
         </div>
       ) : null}
@@ -71,16 +71,16 @@ export function ItemHistory({
         {format(m.items.historyTitle, { title: view.item?.title ?? m.items.newerTitle })}
       </h1>
       <Notice>{m.items.historyNote}</Notice>
-      {versions.length === 0 ? <p className="text-sm text-zinc-500">{m.items.noHistory}</p> : null}
+      {versions.length === 0 ? <p className="text-sm text-muted">{m.items.noHistory}</p> : null}
       <ol className="flex flex-col gap-4">
         {versions.map((v) => (
           <li
             key={hex(v.versionId)}
-            className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+            className="flex flex-col gap-3 rounded-control border border-line p-3"
           >
             <header className="flex flex-col gap-0.5">
               <h2 className="font-semibold break-words">{v.item?.title ?? m.items.newerTitle}</h2>
-              <p className="text-sm text-zinc-500">{when.format(v.hlc.physicalMs)}</p>
+              <p className="text-sm text-muted">{when.format(v.hlc.physicalMs)}</p>
             </header>
             {v.readOnly === 'newer-content' ? <Notice>{m.items.versionNewer}</Notice> : null}
             {v.readOnly === 'future-clock' ? <Notice>{m.items.versionClock}</Notice> : null}
@@ -129,7 +129,7 @@ export function ItemHistory({
         {m.items.backToItem}
       </Button>
       {error ? (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}
