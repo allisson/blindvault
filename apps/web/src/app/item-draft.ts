@@ -98,6 +98,36 @@ export function newDraft(t: Template): Draft {
   };
 }
 
+function sameBytes(a: Uint8Array | undefined, b: Uint8Array | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * Whether the user changed `draft` since `initial`, so leaving the editor asks first (D234). A
+ * field's stored TOTP value is compared by identity: the editor never rewrites it.
+ */
+export function draftChanged(initial: Draft, draft: Draft): boolean {
+  return (
+    initial.templateId !== draft.templateId ||
+    initial.title !== draft.title ||
+    initial.tags !== draft.tags ||
+    initial.notes !== draft.notes ||
+    !sameBytes(initial.folderId, draft.folderId) ||
+    initial.fields.length !== draft.fields.length ||
+    initial.fields.some((f, i) => {
+      const g = draft.fields[i];
+      return (
+        g?.key !== f.key ||
+        f.type !== g.type ||
+        f.label !== g.label ||
+        f.value !== g.value ||
+        f.totp !== g.totp
+      );
+    })
+  );
+}
+
 /** `item` as a draft; the template roles it does not hold follow its own fields, empty. */
 export function draftOf(item: Item): Draft {
   const fields: DraftField[] = item.fields.map((f) => ({

@@ -127,4 +127,15 @@ describe('system back (D167, D197)', () => {
     history.pop();
     expect(nav.current()).toEqual({ name: 'item', id: ID });
   });
+
+  it('pushes its entry again when an editor holds the system back (D234)', () => {
+    const { nav, history } = setup();
+    nav.select({ name: 'new' });
+    nav.guard(() => true);
+    expect(history.pushed).toHaveLength(1);
+    history.pop();
+    expect(nav.current().name).toBe('new');
+    // The next system back is held again instead of leaving the app.
+    expect(history.pushed).toHaveLength(2);
+  });
 });

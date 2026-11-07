@@ -9,10 +9,13 @@ export function NewPassword({
   label,
   confirmLabel,
   onChange,
+  autoFocus = false,
 }: {
   readonly label: string;
   readonly confirmLabel: string;
   readonly onChange: (password: string | null) => void;
+  /** The first field of its screen: onboarding and the restore (D234), not Settings. */
+  readonly autoFocus?: boolean;
 }) {
   const { language, messages: m } = useLanguage();
   const [password, setPassword] = useState('');
@@ -45,6 +48,7 @@ export function NewPassword({
         label={label}
         type="password"
         autoComplete="new-password"
+        autoFocus={autoFocus}
         value={password}
         onChange={(e) => {
           setPassword(e.target.value);

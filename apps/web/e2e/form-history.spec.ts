@@ -113,6 +113,8 @@ test('keeps vault content out of the form history and the spellchecker (D174, D1
     await button(page, 'Generate').first().click();
     await expectNoneKept(page);
     await button(page, 'Cancel').click();
+    // The added fields are a change: leaving asks first (D234).
+    await button(page, 'Discard the changes').click();
   }
 
   // Search, then Settings: only the password fields name their purpose.

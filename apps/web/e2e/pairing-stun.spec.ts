@@ -155,9 +155,9 @@ test('an unreadable stored list: the same network only, locked on, and the pairi
   await expect(b.getByTestId('stun-list')).toHaveCount(0);
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
-  await button(b, 'Continue').click();
+  await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(offer, { timeout: 30_000 });
-  await button(b, 'Continue').click();
+  await button(b, 'Show my answer').click();
   const answerText = b.getByTestId('pairing-text');
   await expect(answerText).not.toHaveValue('', { timeout: 30_000 });
   expect(await iceServersSeen(b)).toEqual([[]]);

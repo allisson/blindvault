@@ -65,9 +65,9 @@ async function join(b: Page, offer: string): Promise<string> {
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
   await b.getByTestId('pairing-same-network').check();
-  await button(b, 'Continue').click();
+  await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(offer, { timeout: 30_000 });
-  await button(b, 'Continue').click();
+  await button(b, 'Show my answer').click();
   const text = b.getByTestId('pairing-text');
   await expect(text).not.toHaveValue('', { timeout: 30_000 });
   return text.inputValue();
@@ -108,7 +108,7 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
 
   // A: the paired device's name, then both devices, each synced with the other (D34).
   await expect(a.getByTestId('pairing-done')).toContainText('is paired', { timeout: 60_000 });
-  await button(a, 'Done').click();
+  await button(a, 'Close').click();
   const devicesA = a.getByTestId('device');
   await expect(devicesA).toHaveCount(2);
   await expect(a.getByTestId('device-last-sync')).toContainText('Last synced with this device: ');
@@ -189,13 +189,13 @@ async function replacing(browser: Browser) {
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_NEW);
   await b.getByTestId('pairing-same-network').check();
   // Nothing starts before the user confirms the replacement (D183, D204).
-  await expect(button(b, 'Continue')).toBeDisabled();
+  await expect(button(b, 'Start pairing')).toBeDisabled();
   await b.getByTestId('replace-understood').check();
 
   const offer = await invite(a);
-  await button(b, 'Continue').click();
+  await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(offer, { timeout: 30_000 });
-  await button(b, 'Continue').click();
+  await button(b, 'Show my answer').click();
   const text = b.getByTestId('pairing-text');
   await expect(text).not.toHaveValue('', { timeout: 30_000 });
   await a.getByTestId('pairing-paste').fill(await text.inputValue());

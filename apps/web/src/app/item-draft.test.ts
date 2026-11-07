@@ -2,7 +2,15 @@ import { initCrypto } from '@blindvault/crypto';
 import { type Item, TITLE_MAX, itemToCbor, readItem, template } from '@blindvault/vault';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { type Draft, type DraftField, addField, draftOf, inputOf, newDraft } from './item-draft';
+import {
+  type Draft,
+  type DraftField,
+  addField,
+  draftChanged,
+  draftOf,
+  inputOf,
+  newDraft,
+} from './item-draft';
 
 beforeAll(async () => {
   await initCrypto();
@@ -304,6 +312,28 @@ describe('item drafts (record-content.md §3, §4)', () => {
       };
       expect(inputOf(bad).ok).toBe(false);
     });
+  });
+
+  it('tells a changed draft from the one opened (D234)', () => {
+    const draft = login();
+    expect(draftChanged(draft, draft)).toBe(false);
+    expect(draftChanged(draft, { ...draft, fields: [...draft.fields] })).toBe(false);
+    expect(draftChanged(draft, { ...draft, title: 'x' })).toBe(true);
+    expect(draftChanged(draft, { ...draft, notes: 'x' })).toBe(true);
+    expect(draftChanged(draft, { ...draft, tags: 'x' })).toBe(true);
+    expect(draftChanged(draft, { ...draft, folderId: new Uint8Array(16) })).toBe(true);
+    expect(
+      draftChanged(
+        { ...draft, folderId: new Uint8Array(16) },
+        { ...draft, folderId: new Uint8Array(16) },
+      ),
+    ).toBe(false);
+    expect(draftChanged(draft, addField(draft, 'text'))).toBe(true);
+    const typed = draft.fields.map((f, i) => (i === 0 ? { ...f, value: 'me' } : f));
+    expect(draftChanged(draft, { ...draft, fields: typed })).toBe(true);
+    const relabeled = draft.fields.map((f, i) => (i === 0 ? { ...f, label: 'Login' } : f));
+    expect(draftChanged(draft, { ...draft, fields: relabeled })).toBe(true);
+    expect(draftChanged(draft, { ...draft, fields: draft.fields.slice(1) })).toBe(true);
   });
 
   it('gives every field its own key', () => {

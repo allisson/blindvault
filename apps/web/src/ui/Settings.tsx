@@ -60,6 +60,8 @@ export function Settings({
     // The passkey section shows once support is known: it focuses itself.
     else if (focus === 'recovery' || focus === 'devices' || focus === 'refound')
       focusSection(focus);
+    else if (focus === 'pair') focusField('invite-password');
+    else if (focus === 'readmit') focusField('readmission-first');
   }, [focus]);
   return (
     <div className="flex max-w-md flex-col gap-8 p-4">
@@ -68,7 +70,11 @@ export function Settings({
       <BackupSettings controller={controller} session={session} />
       <MergeBackup controller={controller} session={session} />
       <RecoveryPhraseSettings controller={controller} session={session} />
-      <DeviceSettings controller={controller} session={session} />
+      <DeviceSettings
+        controller={controller}
+        session={session}
+        open={focus === 'pair' || focus === 'readmit' ? focus : undefined}
+      />
       <ChangePassword controller={controller} />
       <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
       <LockSettings controller={controller} preferences={session.preferences} />
@@ -332,6 +338,17 @@ function focusSection(name: SettingsFocus): void {
     section?.querySelector<HTMLElement>('input, textarea') ?? section?.querySelector('h2');
   target?.scrollIntoView({ block: 'center' });
   target?.focus();
+}
+
+/** The pairing or re-admission "Vault ready" opened: its first control, or Devices if blocked. */
+function focusField(testId: string): void {
+  const target = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  if (!target) {
+    focusSection('devices');
+    return;
+  }
+  target.scrollIntoView({ block: 'center' });
+  target.focus();
 }
 
 function PasskeySettings({
@@ -637,9 +654,12 @@ type RetireState =
 function DeviceSettings({
   controller,
   session,
+  open,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
+  /** Opened from "Vault ready": the pairing or the re-admission starts open (D234). */
+  readonly open?: 'pair' | 'readmit' | undefined;
 }) {
   const { messages: m, language } = useLanguage();
   const [retire, setRetire] = useState<RetireState>({ kind: 'idle' });
@@ -846,8 +866,8 @@ function DeviceSettings({
           }}
         />
       ) : null}
-      <ReadmitDevice controller={controller} session={session} />
-      <InviteDevice controller={controller} session={session} />
+      <ReadmitDevice controller={controller} session={session} open={open === 'readmit'} />
+      <InviteDevice controller={controller} session={session} open={open === 'pair'} />
     </section>
   );
 }

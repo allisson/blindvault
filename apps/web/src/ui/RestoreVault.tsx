@@ -271,7 +271,13 @@ function RestorePassword({
         {format(m.restore.opened, { date })}
       </p>
       <p className="text-sm">{m.restore.passwordIntro}</p>
-      <NewPassword label={m.restore.local} confirmLabel={m.restore.confirm} onChange={onChange} />
+      {/* A replacement's warning comes first, so the cursor does not skip it (D183, D234). */}
+      <NewPassword
+        label={m.restore.local}
+        confirmLabel={m.restore.confirm}
+        onChange={onChange}
+        autoFocus={!replace}
+      />
       {replace ? (
         <label className={`${TARGET} flex items-center gap-2 text-sm`}>
           <input

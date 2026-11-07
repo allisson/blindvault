@@ -115,3 +115,64 @@ describe('navigation after a write (D210)', () => {
     expect(nav.opening(nav.current())).not.toBe(first);
   });
 });
+
+describe('leaving an editor with unsaved changes (D234)', () => {
+  function guarded() {
+    const nav = new Navigation();
+    nav.select({ name: 'new' });
+    const editor = nav.current();
+    let pending: (() => void) | undefined;
+    let hold = true;
+    const release = nav.guard((proceed) => {
+      if (!hold) return false;
+      pending = proceed;
+      return true;
+    });
+    return {
+      nav,
+      editor,
+      release,
+      proceed: () => pending?.(),
+      allow: () => {
+        hold = false;
+      },
+    };
+  }
+
+  it('holds every navigation that leaves the editor until the user agrees', () => {
+    const { nav, editor, proceed } = guarded();
+    nav.back();
+    expect(nav.current()).toBe(editor);
+    nav.open({ name: 'settings' });
+    expect(nav.current()).toBe(editor);
+    proceed();
+    expect(nav.current().name).toBe('settings');
+    // Agreed once: the guard is gone, and Back from Settings is the editor again.
+    nav.back();
+    expect(nav.current()).toBe(editor);
+  });
+
+  it('lets an unchanged draft go, and never holds a lock or a trashed item', () => {
+    const a = guarded();
+    a.allow();
+    a.nav.back();
+    expect(a.nav.current().name).toBe('vault');
+
+    const b = guarded();
+    b.nav.reset();
+    expect(b.nav.current().name).toBe('vault');
+
+    const c = new Navigation();
+    c.select({ name: 'edit', id: ID });
+    c.guard(() => true);
+    c.close(ID);
+    expect(c.current().name).toBe('vault');
+  });
+
+  it('asks nothing once the editor removed its guard', () => {
+    const { nav, release } = guarded();
+    release();
+    nav.back();
+    expect(nav.current().name).toBe('vault');
+  });
+});

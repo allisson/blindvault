@@ -208,6 +208,49 @@ test("goes one screen back on the browser's back, through one entry that carries
   expect(new URL(page.url()).search + new URL(page.url()).hash).toBe('');
 });
 
+test('asks before leaving an editor with changes, by Cancel, Back or the browser’s back (D234)', async ({
+  page,
+}) => {
+  await create(page, 390);
+  await page.getByRole('button', { name: 'New item', exact: true }).click();
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  const title = page.getByTestId('item-title');
+  // The cursor starts in the title.
+  await expect(title).toBeFocused();
+  // Nothing typed: Cancel leaves at once.
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(title).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'New item', exact: true }).click();
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await title.fill('Unsaved');
+  const confirm = page.getByTestId('discard-confirm');
+  for (const leave of [
+    () => page.getByRole('button', { name: 'Cancel', exact: true }).click(),
+    () => page.getByRole('button', { name: 'Back', exact: true }).click(),
+    () => page.goBack(),
+  ]) {
+    await leave();
+    await expect(confirm).toContainText('not saved and will be lost');
+    await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(title).toHaveValue('Unsaved');
+  }
+  // Held by the browser's back, the entry is pushed again: the next back asks again.
+  await page.goBack();
+  await page.getByRole('button', { name: 'Discard the changes', exact: true }).click();
+  await expect(title).toHaveCount(0);
+  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
+
+  // A refused save puts the cursor in the field it marks.
+  await page.getByRole('button', { name: 'New item', exact: true }).click();
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await page.getByTestId('input-Password').fill(SECRET);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(title).toBeFocused();
+  await expect(title).toHaveAttribute('aria-invalid', 'true');
+});
+
 test('starts a new item with N, never from a text field, the editor or the trash (D197)', async ({
   page,
 }) => {
@@ -236,6 +279,7 @@ test('starts a new item with N, never from a text field, the editor or the trash
   await page.keyboard.press('n');
   await expect(page.getByTestId('item-title')).toHaveValue('Draft title');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard the changes', exact: true }).click();
 
   await folders(page).getByRole('button', { name: 'Trash', exact: true }).click();
   await blur();

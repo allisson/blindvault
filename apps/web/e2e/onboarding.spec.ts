@@ -98,6 +98,12 @@ for (const width of [390, 1280] as const) {
     await button(page, 'Back').click();
     await expect(ready).toBeVisible();
 
+    // Pairing opens with its password step already shown, the cursor in it (D234).
+    await button(page, 'Pair a device').click();
+    await expect(page.getByTestId('invite-password')).toBeFocused();
+    await button(page, 'Back').click();
+    await expect(ready).toBeVisible();
+
     // Closed: the vault, with the backup reminder, and never again after an unlock.
     await openVault(page);
     await expect(page.getByTestId('panes')).toBeVisible();
@@ -113,6 +119,25 @@ for (const width of [390, 1280] as const) {
     await expect(ready).toHaveCount(0);
   });
 }
+
+test('"Vault ready" marks the backup done once made, and still offers it (D234)', async ({
+  page,
+}) => {
+  await create(page);
+  const ready = page.getByTestId('ready');
+  const backup = ready.getByTestId('ready-backup');
+  await expect(backup).not.toHaveAttribute('data-done');
+  await button(page, 'Make a backup').click();
+  await page.getByTestId('backup-password').fill(PASSWORD);
+  await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    button(page, 'Export').click(),
+  ]);
+  await button(page, 'Back').click();
+  await expect(backup).toHaveAttribute('data-done', 'true');
+  await expect(backup).toContainText('Done');
+  await expect(backup.getByRole('button')).toHaveText('Make a backup');
+});
 
 test('a lock on "Vault ready" clears it (D198)', async ({ page }) => {
   await create(page);

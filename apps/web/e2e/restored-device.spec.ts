@@ -89,6 +89,8 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(page.getByTestId('ready-pair')).toHaveCount(0);
   await button(page, 'See the devices').click();
   await expect(page.getByTestId('ready')).toHaveCount(0);
+  // The re-admission opens at the choice of who shows first (D234).
+  await expect(page.getByTestId('readmission-first')).toBeFocused();
 
   // Settings keeps it while unregistered: the old device is listed, this one is not.
   await expect(devices.getByTestId('devices-readmit')).toBeVisible();
@@ -102,7 +104,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(confirm).toContainText('cannot be undone');
   await expect(confirm).toContainText('not revocation');
   await expect(confirm).toContainText('re-found the vault');
-  await button(page, 'Cancel').click();
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(confirm).toHaveCount(0);
   await expect(devices.getByTestId('device')).toHaveCount(1);
 

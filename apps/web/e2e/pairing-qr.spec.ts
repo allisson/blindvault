@@ -74,7 +74,7 @@ async function join(b: Page): Promise<void> {
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
   await b.getByTestId('pairing-same-network').check();
-  await button(b, 'Continue').click();
+  await button(b, 'Start pairing').click();
   await expect(b.getByTestId('pairing-paste')).toBeVisible({ timeout: 30_000 });
 }
 
@@ -165,7 +165,7 @@ test('a denied camera says so, and pasting still works (D208)', async ({
     'The camera was denied: allow it in the browser settings, or paste the text.',
   );
   await b.getByTestId('pairing-paste').fill(await a.getByTestId('pairing-text').inputValue());
-  await button(b, 'Continue').click();
+  await button(b, 'Show my answer').click();
   await expect(b.getByTestId('pairing-qr')).toBeVisible({ timeout: 30_000 });
 });
 

@@ -104,6 +104,7 @@ function SetPassword({
           label={m.create.password}
           confirmLabel={m.create.confirm}
           onChange={onChange}
+          autoFocus
         />
         <Button type="submit" disabled={!password || working}>
           {working ? m.create.working : m.create.submit}
