@@ -2,35 +2,15 @@
 // reaches, in both themes, at the three layout widths. The screens a second device opens (the
 // SAS comparison, a live sync) are left to the pairing and sync specs and the manual UX Gate run.
 
-import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect, test } from '@playwright/test';
 
+import { THEMES, WIDTHS, audit } from './axe';
 import { answerConfirmation, openVault, readPhrase, startScreen } from './create';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9); each test also runs axe on every screen.
 test.setTimeout(240_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
-const WIDTHS = [
-  ['mobile', 375],
-  ['tablet', 800],
-  ['desktop', 1280],
-] as const;
-const THEMES = ['light', 'dark'] as const;
-
-/** WCAG 2.2 A and AA, the target of §13.7 (D231). */
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-
-async function audit(page: Page, screen: string): Promise<void> {
-  const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  const found = violations.flatMap((v) =>
-    v.nodes.map(
-      (n) => `${v.id} (${v.impact ?? 'n/a'}): ${n.target.join(' ')}: ${n.failureSummary ?? ''}`,
-    ),
-  );
-  expect(found, `axe on ${screen}`).toEqual([]);
-}
-
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
 for (const [layout, width] of WIDTHS) {

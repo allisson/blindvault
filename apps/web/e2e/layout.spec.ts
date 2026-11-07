@@ -294,7 +294,8 @@ test.describe('on a coarse pointer', () => {
     ({ browserName }) => browserName !== 'chromium',
     'Only Chromium emulates a touch screen with a coarse pointer (isMobile)',
   );
-  test.use({ hasTouch: true, isMobile: true });
+  // Reduced motion measures each control at rest, not while a pressed button scales back (D236).
+  test.use({ hasTouch: true, isMobile: true, reducedMotion: 'reduce' });
 
   /** Every visible control under 44 px tall; a checkbox or radio button counts by its label. */
   function smallTargets(page: Page): Promise<string[]> {
