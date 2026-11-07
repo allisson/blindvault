@@ -1,5 +1,5 @@
 import { type SyncPurpose, type VaultSession } from '@blindvault/vault';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { type SyncPeer, type SyncStart, type VaultController } from '../app/controller';
 import { recordIdPrefix } from '../app/backup-file';
@@ -153,9 +153,21 @@ function Stage({
             date={(at) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(at)}
           />
           <Rejected rejected={stage.result.rejected} testId="sync-rejected" />
-          <Button className="self-start" onClick={close} data-testid="sync-close">
-            {s.close}
-          </Button>
+          {stage.live ? (
+            // Closing the panel keeps a live session open; ending it is its own action (D225, D234).
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={onClose} data-testid="sync-close">
+                {s.keepLive}
+              </Button>
+              <Button variant="quiet" onClick={close} data-testid="sync-end">
+                {s.endLive}
+              </Button>
+            </div>
+          ) : (
+            <Button className="self-start" onClick={close} data-testid="sync-close">
+              {s.close}
+            </Button>
+          )}
         </>
       );
     case 'failed':
@@ -230,9 +242,15 @@ export function SyncDevice({
     setOutcome(controller.startSync(peer.deviceId, role, { sameNetwork }, purpose));
   };
   const error = startError(m, outcome, name);
+  // The panel opens below the device list: bring it into view where the user clicked (D234).
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.scrollIntoView({ block: 'nearest' });
+    heading.current?.focus();
+  }, []);
   return (
     <div className="flex flex-col gap-3" data-testid="sync">
-      <h3 className="font-semibold">
+      <h3 ref={heading} tabIndex={-1} className="font-semibold">
         {format(purpose === 'retirement' ? s.notifyTitle : s.title, { name })}
       </h3>
       {mine ? (

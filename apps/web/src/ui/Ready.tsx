@@ -6,11 +6,12 @@ import { devicesOf } from '../app/devices';
 import { type Navigation, type SettingsFocus } from '../app/nav';
 import { type Ready as ReadyState, type ReadyAdvice, readyAdvice } from '../app/ready';
 import { useMessages } from '../i18n/context';
-import { Button } from './components';
+import { Badge, Button } from './components';
 
 // "Vault ready" after a creation, a restore or a pairing (overview §13.3, D198, D203): the
-// recommendations in order, each opening Settings at its section. Back from Settings returns here;
-// "Open the vault" closes it.
+// recommendations in order, each opening Settings at its section, the pairing and the re-admission
+// already open. Back from Settings returns here, with the passkey and the backup marked once done
+// (D234); "Open the vault" closes it.
 
 export function Ready({
   controller,
@@ -50,9 +51,13 @@ export function Ready({
   const action: Record<ReadyAdvice, { label: string; focus: SettingsFocus } | undefined> = {
     passkey: { label: m.ready.passkeyAction, focus: 'passkey' },
     'check-phrase': { label: m.ready.checkPhraseAction, focus: 'recovery' },
-    readmit: { label: m.ready.readmitAction, focus: 'devices' },
-    pair: { label: m.ready.pairAction, focus: 'devices' },
+    readmit: { label: m.ready.readmitAction, focus: 'readmit' },
+    pair: { label: m.ready.pairAction, focus: 'pair' },
     backup: { label: m.ready.backupAction, focus: 'backup' },
+  };
+  const done: Partial<Record<ReadyAdvice, boolean>> = {
+    passkey: session.passkeyCredentialId !== undefined,
+    backup: session.lastBackupAt !== undefined,
   };
   return (
     <section
@@ -68,8 +73,16 @@ export function Ready({
         {advice.map((a) => {
           const act = action[a];
           return (
-            <li key={a} className="flex flex-col items-start gap-2" data-testid={`ready-${a}`}>
-              <p className="text-sm">{text[a]}</p>
+            <li
+              key={a}
+              className="flex flex-col items-start gap-2"
+              data-testid={`ready-${a}`}
+              data-done={done[a] === true ? 'true' : undefined}
+            >
+              <p className="text-sm">
+                {text[a]}
+                {done[a] === true ? <Badge className="ms-2">{m.ready.done}</Badge> : null}
+              </p>
               {act ? (
                 <Button
                   variant="quiet"

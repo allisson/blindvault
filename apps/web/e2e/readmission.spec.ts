@@ -67,7 +67,7 @@ async function toSas(a: Page, b: Page): Promise<void> {
   await expect(offer).not.toHaveValue('', { timeout: 30_000 });
   await startReadmission(b, false);
   await b.getByTestId('pairing-paste').fill(await offer.inputValue());
-  await button(b, 'Continue').click();
+  await button(b, 'Show my answer').click();
   const answer = b.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await a.getByTestId('pairing-paste').fill(await answer.inputValue());

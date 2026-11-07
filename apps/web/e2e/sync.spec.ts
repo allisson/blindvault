@@ -67,9 +67,9 @@ async function paired(browser: Browser) {
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
   await b.getByTestId('pairing-same-network').check();
-  await button(b, 'Continue').click();
+  await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(await offer.inputValue(), { timeout: 30_000 });
-  await button(b, 'Continue').click();
+  await button(b, 'Show my answer').click();
   const answer = b.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await a.getByTestId('pairing-paste').fill(await answer.inputValue());
@@ -79,7 +79,7 @@ async function paired(browser: Browser) {
   await button(b, 'Yes, the same').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
   await expect(a.getByTestId('pairing-done')).toBeVisible({ timeout: 60_000 });
-  await button(a, 'Done').click();
+  await button(a, 'Close').click();
   await button(b, 'Settings').click();
   return { a, b };
 }
@@ -105,7 +105,7 @@ test('two paired devices connect from their sync codes, each with the other pick
   await syncB.getByTestId('pairing-same-network').check();
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(offerText);
-  await button(b, 'Next').click();
+  await button(b, 'Show my answer').click();
   const answer = syncB.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
 
@@ -120,8 +120,8 @@ test('two paired devices connect from their sync codes, each with the other pick
   await expect(b.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
   await expect(a.getByTestId('merge-result')).toContainText('Merged: 0 added, 0 replaced.');
 
-  // Closing on A ends B's sync with A's abort, inside the Noise channel (§11.2, D218).
-  await a.getByTestId('sync-close').click();
+  // Ending on A ends B's sync with A's abort, inside the Noise channel (§11.2, D218).
+  await a.getByTestId('sync-end').click();
   await expect(a.getByTestId('sync')).toHaveCount(0);
   await expect(b.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'ended', {
     timeout: 30_000,
@@ -153,7 +153,7 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   await syncB.getByTestId('pairing-same-network').check();
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
-  await button(b, 'Next').click();
+  await button(b, 'Show my answer').click();
   const answer = syncB.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
@@ -187,7 +187,7 @@ test('A retires B during an open sync: B merges its retired record and shows the
   await syncB.getByTestId('pairing-same-network').check();
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
-  await button(b, 'Next').click();
+  await button(b, 'Show my answer').click();
   const answer = syncB.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
@@ -220,7 +220,7 @@ async function synced(a: Page, b: Page) {
   await syncB.getByTestId('pairing-same-network').check();
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
-  await button(b, 'Next').click();
+  await button(b, 'Show my answer').click();
   const answer = syncB.getByTestId('pairing-text');
   await expect(answer).not.toHaveValue('', { timeout: 30_000 });
   await syncA.getByTestId('pairing-paste').fill(await answer.inputValue());
@@ -229,9 +229,9 @@ async function synced(a: Page, b: Page) {
   await expect(a.getByTestId('sync-done')).toBeVisible({ timeout: 30_000 });
 }
 
-/** B closes the sync, which ends A's with `ended` (D218); both go back to the vault. */
+/** B ends the sync, which ends A's with `ended` (D218); both go back to the vault. */
 async function closed(a: Page, b: Page) {
-  await b.getByTestId('sync-close').click();
+  await b.getByTestId('sync-end').click();
   await expect(a.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'ended');
   await a.getByTestId('sync-again').click();
   for (const page of [a, b]) await button(page, 'Back').click();
@@ -261,7 +261,7 @@ test('an item created on A reaches B through a sync, and B shows the merge (D222
 
   await synced(a, b);
   await expect(b.getByTestId('merge-result')).toContainText('Merged: 1 added, 0 replaced.');
-  await b.getByTestId('sync-close').click();
+  await b.getByTestId('sync-end').click();
   await button(b, 'Back').click();
   // B still shows "Vault ready" from its pairing (D198).
   await button(b, 'Open the vault').click();
@@ -473,7 +473,10 @@ test('a live sync outlives Settings: an item made in the vault reaches the peer 
       timeout: 30_000,
     });
   }
-  // Leaving Settings keeps it open.
+  // Closing its panel keeps it open, as leaving Settings does (D234).
+  await a.getByTestId('sync-close').click();
+  await expect(a.getByTestId('sync')).toHaveCount(0);
+  await expect(a.getByTestId('live-sync')).toBeVisible();
   await button(a, 'Back').click();
   await button(b, 'Back').click();
   await button(b, 'Open the vault').click();
@@ -527,7 +530,7 @@ test('Settings shows the sync on the row of its peer while it runs, and the last
     );
   }
   expect(before).toMatch(/\d{1,2}:\d{2}/);
-  await a.getByTestId('sync-close').click();
+  await a.getByTestId('sync-end').click();
   for (const page of [a, b]) {
     await expect(page.getByTestId('device-sync-state')).toHaveCount(0, { timeout: 30_000 });
   }

@@ -668,14 +668,17 @@ function blocked(m: Messages, session: VaultSession): string | undefined {
 export function InviteDevice({
   controller,
   session,
+  open: startOpen = false,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
+  /** From "Vault ready": the password step is shown at once (D234). */
+  readonly open?: boolean;
 }) {
   const m = useMessages();
   const p = m.pairing;
   const stage = usePairing(controller, 'invite');
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [password, setPassword] = useState('');
   const [sameNetwork, setSameNetwork] = useState(false);
   const [working, setWorking] = useState(false);
@@ -775,6 +778,7 @@ export function InviteDevice({
                 setOutcome(undefined);
               }}
               error={startError(m, outcome)}
+              autoFocus
               data-testid="invite-password"
             />
             <div className="flex flex-wrap gap-2">
@@ -865,6 +869,7 @@ export function JoinVault({
           label={m.create.password}
           confirmLabel={m.create.confirm}
           onChange={onChange}
+          autoFocus={!replace}
         />
         <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
         {replace ? (
@@ -929,14 +934,17 @@ function readmissionBlocked(m: Messages, session: VaultSession): string | undefi
 export function ReadmitDevice({
   controller,
   session,
+  open: startOpen = false,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
+  /** From "Vault ready": the choice of who shows first is shown at once (D234). */
+  readonly open?: boolean;
 }) {
   const m = useMessages();
   const r = m.readmission;
   const stage = usePairing(controller, 'readmit');
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [sameNetwork, setSameNetwork] = useState(false);
   const [working, setWorking] = useState(false);
   const [outcome, setOutcome] = useState<ReadmissionStart>();

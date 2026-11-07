@@ -156,7 +156,7 @@ const en = {
     done: '{name} is paired: it holds this vault now.',
     readmit:
       'The other devices of this vault do not know this device or {name} yet: re-admit this device with one of them, so they can sync with both.',
-    close: 'Done',
+    close: 'Close',
     again: 'Start again',
     cancel: 'Cancel',
     pasteInvalid: 'This is not a BlindVault pairing text. Copy it again, whole.',
@@ -215,10 +215,10 @@ const en = {
     title: 'Pair with an existing device',
     intro:
       'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a new device”.',
-    submit: 'Continue',
+    submit: 'Start pairing',
     scanIntro: 'Scan the code the other device shows, or paste its pairing text here.',
     offerPaste: 'The other device’s pairing text',
-    next: 'Continue',
+    next: 'Show my answer',
     answerIntro:
       'Show this code to the other device, which scans it below its own, or copy this answer back to it.',
     answerLabel: 'This device’s answer',
@@ -309,7 +309,7 @@ const en = {
     connect: 'Connect',
     scanIntro: 'Scan the code {name} shows, or paste its sync text here.',
     offerPaste: 'The sync text of {name}',
-    next: 'Next',
+    next: 'Show my answer',
     answerIntro:
       'Show this code to {name}, which scans it below its own, or copy this answer back to it.',
     answerLabel: 'This device’s answer',
@@ -326,6 +326,8 @@ const en = {
     liveShow: 'Show',
     liveEnd: 'End',
     close: 'Close',
+    keepLive: 'Close, keep it open',
+    endLive: 'End the sync',
     again: 'Start again',
     leaving:
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the sync ends.',
@@ -375,6 +377,7 @@ const en = {
     backup:
       'Make a backup and keep it off this device: with the Recovery Phrase, it brings the vault back if this device is lost.',
     backupAction: 'Make a backup',
+    done: 'Done',
     open: 'Open the vault',
   },
   restore: {
@@ -595,6 +598,9 @@ const en = {
     save: 'Save',
     saving: 'Saving…',
     cancel: 'Cancel',
+    discard: 'Discard the changes',
+    keepEditing: 'Keep editing',
+    discardWarning: 'The changes made to this item are not saved and will be lost.',
     edit: 'Edit',
     moveToTrash: 'Move to trash',
     restore: 'Restore',
@@ -1135,7 +1141,7 @@ const ptBR: Messages = {
     done: '{name} está pareado: ele tem este cofre agora.',
     readmit:
       'Os outros dispositivos deste cofre ainda não conhecem este dispositivo nem {name}: readmita este dispositivo com um deles, para que possam sincronizar com os dois.',
-    close: 'Concluir',
+    close: 'Fechar',
     again: 'Começar de novo',
     cancel: 'Cancelar',
     pasteInvalid: 'Isto não é um texto de pareamento do BlindVault. Copie-o de novo, inteiro.',
@@ -1195,11 +1201,11 @@ const ptBR: Messages = {
     title: 'Parear com um dispositivo existente',
     intro:
       'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo novo”.',
-    submit: 'Continuar',
+    submit: 'Começar o pareamento',
     scanIntro:
       'Escaneie o código que o outro dispositivo mostra, ou cole aqui o texto de pareamento dele.',
     offerPaste: 'Texto de pareamento do outro dispositivo',
-    next: 'Continuar',
+    next: 'Mostrar minha resposta',
     answerIntro:
       'Mostre este código ao outro dispositivo, que o escaneia abaixo do dele, ou copie esta resposta de volta para ele.',
     answerLabel: 'Resposta deste dispositivo',
@@ -1294,7 +1300,7 @@ const ptBR: Messages = {
     connect: 'Conectar',
     scanIntro: 'Escaneie o código que {name} mostra, ou cole aqui o texto de sincronização dele.',
     offerPaste: 'Texto de sincronização de {name}',
-    next: 'Avançar',
+    next: 'Mostrar minha resposta',
     answerIntro:
       'Mostre este código a {name}, que o escaneia abaixo do dele, ou copie esta resposta de volta para ele.',
     answerLabel: 'Resposta deste dispositivo',
@@ -1311,6 +1317,8 @@ const ptBR: Messages = {
     liveShow: 'Mostrar',
     liveEnd: 'Encerrar',
     close: 'Fechar',
+    keepLive: 'Fechar, manter aberta',
+    endLive: 'Encerrar a sincronização',
     again: 'Começar de novo',
     leaving:
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, a sincronização termina.',
@@ -1361,6 +1369,7 @@ const ptBR: Messages = {
     backup:
       'Faça um backup e guarde-o fora deste dispositivo: com a Frase de Recuperação, ele traz o cofre de volta se este dispositivo for perdido.',
     backupAction: 'Fazer um backup',
+    done: 'Feito',
     open: 'Abrir o cofre',
   },
   restore: {
@@ -1582,6 +1591,9 @@ const ptBR: Messages = {
     save: 'Salvar',
     saving: 'Salvando…',
     cancel: 'Cancelar',
+    discard: 'Descartar as alterações',
+    keepEditing: 'Continuar editando',
+    discardWarning: 'As alterações feitas neste item não foram salvas e serão perdidas.',
     edit: 'Editar',
     moveToTrash: 'Mover para a lixeira',
     restore: 'Restaurar',

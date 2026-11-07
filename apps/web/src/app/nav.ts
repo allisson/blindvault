@@ -8,10 +8,12 @@ export type ListScreen =
   | { readonly name: 'folder'; readonly id: Uint8Array };
 
 /**
- * Where Settings puts the cursor: `backup` in the export's password field (D185, D188), the others
- * at their section, from "Vault ready" (D198).
+ * Where Settings puts the cursor: `backup` in the export's password field (D185, D188), `pair` and
+ * `readmit` in the pairing and the re-admission, already open (D234), the others at their section,
+ * from "Vault ready" (D198).
  */
-export type SettingsFocus = 'backup' | 'passkey' | 'recovery' | 'devices' | 'refound';
+export type SettingsFocus =
+  'backup' | 'passkey' | 'recovery' | 'devices' | 'pair' | 'readmit' | 'refound';
 
 export type Screen =
   | ListScreen
@@ -44,11 +46,18 @@ const ROOT_LIST: ListScreen = { name: 'vault' };
 const ROOT_SCREEN: Screen = ROOT_LIST;
 const ROOT: readonly Screen[] = [ROOT_SCREEN];
 
+/**
+ * Asked before a navigation leaves the current screen: returns true to hold it, and then calls
+ * `proceed` once the user agrees to leave.
+ */
+export type LeaveGuard = (proceed: () => void) => boolean;
+
 export class Navigation {
   #stack: readonly Screen[] = ROOT;
   readonly #listeners = new Set<() => void>();
   readonly #openings = new WeakMap<Screen, number>();
   #opened = 0;
+  #guard: LeaveGuard | undefined;
 
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
@@ -73,6 +82,17 @@ export class Navigation {
    */
   follow(from: Screen, step: () => void): void {
     if (this.current() === from) step();
+  }
+
+  /**
+   * An editor with unsaved changes asks before any navigation leaves it (D234). A lock never asks:
+   * `reset` and the closing of a trashed item go through. Returns the removal.
+   */
+  guard(guard: LeaveGuard): () => void {
+    this.#guard = guard;
+    return () => {
+      if (this.#guard === guard) this.#guard = undefined;
+    };
   }
 
   /** A number per opening of a screen, so each New item is a fresh editor (D210). */
@@ -108,12 +128,12 @@ export class Navigation {
     const open = this.#stack.some(
       (s) => (s.name === 'item' || s.name === 'edit' || s.name === 'history') && same(s.id, id),
     );
-    if (open) this.#set(this.#listStack());
+    if (open) this.#set(this.#listStack(), true);
   }
 
   /** Leaves folder `id`'s list, after it was trashed: back to all items. */
   closeFolder(id: Uint8Array): void {
-    if (this.#stack.some((s) => s.name === 'folder' && same(s.id, id))) this.#set(ROOT);
+    if (this.#stack.some((s) => s.name === 'folder' && same(s.id, id))) this.#set(ROOT, true);
   }
 
   back(): void {
@@ -123,7 +143,7 @@ export class Navigation {
 
   /** Back to the vault root: on lock, nothing of the previous navigation is kept. */
   reset(): void {
-    this.#set(ROOT);
+    this.#set(ROOT, true);
   }
 
   /** The stack up to its last list screen; the root is always one. */
@@ -133,7 +153,19 @@ export class Navigation {
     return this.#stack.slice(0, end);
   }
 
-  #set(stack: readonly Screen[]): void {
+  #set(stack: readonly Screen[], force = false): void {
+    const guard = this.#guard;
+    if (!force && guard && stack.at(-1) !== this.current()) {
+      const held = guard(() => {
+        if (this.#guard === guard) this.#guard = undefined;
+        this.#set(stack, true);
+      });
+      if (held) {
+        // Still on the same screen: listeners resync, so the system's back pushes its entry again.
+        for (const l of this.#listeners) l();
+        return;
+      }
+    }
     this.#stack = stack;
     for (const l of this.#listeners) l();
   }

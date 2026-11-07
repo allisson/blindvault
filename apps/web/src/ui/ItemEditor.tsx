@@ -6,7 +6,7 @@ import {
   roleOf,
   template,
 } from '@blindvault/vault';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { folderRows } from '../app/folders';
 import { hex } from '../app/ids';
@@ -16,6 +16,7 @@ import {
   type DraftErrors,
   type DraftField,
   addField,
+  draftChanged,
   draftOf,
   inputOf,
   newDraft,
@@ -23,7 +24,7 @@ import {
 import { type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, roleName } from '../i18n/messages';
-import { Button, Field, INPUT, TextArea } from './components';
+import { Button, ConfirmDialog, Field, INPUT, Notice, TextArea } from './components';
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { SecretInput } from './Secret';
@@ -210,10 +211,31 @@ export function ItemEditor({
     const item = id ? session.item(id)?.item : undefined;
     return item ? draftOf(item) : undefined;
   });
+  // The draft as opened, or as the template made it: leaving with anything else asks first (D234).
+  const [initial, setInitial] = useState(draft);
   const [errors, setErrors] = useState<DraftErrors>();
   const [failure, setFailure] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState<FieldType>('text');
+  const [leaving, setLeaving] = useState<() => void>();
+  const form = useRef<HTMLFormElement>(null);
+  const changed = useRef(false);
+  changed.current = draft !== undefined && initial !== undefined && draftChanged(initial, draft);
+  // Set in the submit itself: a navigation in the same moment as Save is not held (D210).
+  const submitted = useRef(false);
+  useEffect(
+    () =>
+      nav.guard((proceed) => {
+        if (submitted.current || !changed.current) return false;
+        setLeaving(() => proceed);
+        return true;
+      }),
+    [nav],
+  );
+  // A refused save puts the cursor in the first field it marks (D234).
+  useEffect(() => {
+    if (errors) form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [errors]);
 
   if (!draft) {
     if (id) return null;
@@ -222,7 +244,9 @@ export function ItemEditor({
     return (
       <TemplatePicker
         onPick={(picked) => {
-          setDraft(list.name === 'folder' ? { ...picked, folderId: list.id } : picked);
+          const next = list.name === 'folder' ? { ...picked, folderId: list.id } : picked;
+          setDraft(next);
+          setInitial(next);
         }}
       />
     );
@@ -236,6 +260,7 @@ export function ItemEditor({
 
   return (
     <form
+      ref={form}
       noValidate
       className="flex w-full max-w-2xl flex-col gap-4 p-4"
       onSubmit={(e) => {
@@ -248,6 +273,7 @@ export function ItemEditor({
         }
         setErrors(undefined);
         setSaving(true);
+        submitted.current = true;
         const from = nav.current();
         const write = id
           ? session.updateItem(id, result.input).then(() => id)
@@ -263,6 +289,7 @@ export function ItemEditor({
             });
           },
           (error: unknown) => {
+            submitted.current = false;
             setSaving(false);
             setFailure(writeError(error, m));
           },
@@ -285,6 +312,7 @@ export function ItemEditor({
         onChange={(e) => {
           update({ ...draft, title: e.target.value });
         }}
+        autoFocus
         data-testid="item-title"
       />
       {draft.fields.map((field) => (
@@ -394,6 +422,22 @@ export function ItemEditor({
           {m.items.cancel}
         </Button>
       </div>
+      {leaving ? (
+        <ConfirmDialog
+          data-testid="discard-confirm"
+          confirm={m.items.discard}
+          cancel={m.items.keepEditing}
+          onConfirm={() => {
+            setLeaving(undefined);
+            leaving();
+          }}
+          onCancel={() => {
+            setLeaving(undefined);
+          }}
+        >
+          <Notice>{m.items.discardWarning}</Notice>
+        </ConfirmDialog>
+      ) : null}
     </form>
   );
 }
