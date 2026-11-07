@@ -67,7 +67,9 @@ export function EraseVault({
       </label>
       <div className="flex flex-wrap gap-2">
         <Button
-          disabled={!understood || working}
+          variant="danger"
+          disabled={!understood}
+          busy={working}
           onClick={() => {
             setWorking(true);
             void controller.erase();
