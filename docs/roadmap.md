@@ -403,7 +403,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### UX Gate
 
-- [ ] axe reports no violation on any screen, in both themes, at the three layout widths
+- [x] axe reports no violation on any screen, in both themes, at the three layout widths (D238, D240)
 - [ ] Every flow completes with the keyboard alone, and with a screen reader on one browser per platform (manual run, recorded)
 - [ ] Every security warning and confirmation is still shown and still asserted by the tests
 - [ ] Under `prefers-reduced-motion`, no animation runs
