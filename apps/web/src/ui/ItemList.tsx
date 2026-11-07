@@ -6,7 +6,8 @@ import { hex } from '../app/ids';
 import { type Navigation } from '../app/nav';
 import { type SearchIndex } from '../app/search';
 import { useLanguage } from '../i18n/context';
-import { Button, INPUT, TARGET } from './components';
+import { Button, INPUT, ROW } from './components';
+import { Icon } from './icons';
 import { FolderActions, TrashedFolder } from './Folders';
 
 interface Row {
@@ -17,8 +18,6 @@ interface Row {
 function flatten(node: FolderTree): TreeItem[] {
   return [...node.items, ...node.folders.flatMap(flatten)];
 }
-
-const ROW = `${TARGET} w-full truncate rounded-control px-2 text-left text-sm hover:bg-subtle aria-[current]:bg-accent-soft`;
 
 /** The list shown: every item not in the trash, one folder's contents, or the trash. */
 export function ItemList({
@@ -109,6 +108,7 @@ export function ItemList({
               nav.select({ name: 'new' });
             }}
           >
+            <Icon name="plus" className="me-1.5" />
             {m.items.new}
           </Button>
         ) : null}

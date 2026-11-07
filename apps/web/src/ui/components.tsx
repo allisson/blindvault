@@ -5,7 +5,9 @@ import {
   type TextareaHTMLAttributes,
   createContext,
   useContext,
+  useEffect,
   useId,
+  useRef,
   useSyncExternalStore,
 } from 'react';
 
@@ -15,25 +17,143 @@ import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { AboutBuild } from './About';
 import { useAbout } from './about-context';
+import { Icon } from './icons';
 import { useUpdates } from './update-context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
 export const TARGET = 'min-h-10 pointer-coarse:min-h-11';
-export const INPUT = `${TARGET} rounded-control border border-control bg-raised px-3 text-base`;
+// Text field, text area and select (D233): the border darkens on hover, turns danger when invalid;
+// the focus ring is global (index.css).
+export const INPUT = `${TARGET} rounded-control border border-control bg-raised px-3 text-base text-fg enabled:hover:border-fg aria-[invalid=true]:border-danger disabled:cursor-not-allowed disabled:opacity-60`;
 
+/** A row of the folder tree or the item list: the current one takes the accent's soft fill. */
+export const ROW = `${TARGET} w-full truncate rounded-control px-2 text-left text-sm hover:bg-subtle aria-[current]:bg-accent-soft aria-[current]:font-medium`;
+
+const LOOK = {
+  primary: 'bg-accent text-accent-ink enabled:hover:bg-accent-hover',
+  secondary: 'border border-control bg-raised text-fg enabled:hover:bg-subtle',
+  quiet: 'text-fg enabled:hover:bg-subtle',
+  danger: 'bg-danger text-danger-ink enabled:hover:bg-danger-hover',
+} as const;
+
+/**
+ * A button (D233). `busy` disables it and shows a spinner beside its label; under reduced motion the
+ * spinner is hidden and the label, which names the work in progress, stays.
+ */
 export function Button({
   variant = 'primary',
+  busy = false,
   className = '',
+  disabled,
+  children,
   ...props
-}: ComponentProps<'button'> & { readonly variant?: 'primary' | 'quiet' }) {
-  const look =
-    variant === 'primary'
-      ? 'bg-accent text-accent-ink hover:bg-accent-hover'
-      : 'text-fg hover:bg-subtle';
+}: ComponentProps<'button'> & {
+  readonly variant?: keyof typeof LOOK;
+  readonly busy?: boolean;
+}) {
   return (
     <button
       type="button"
-      className={`${TARGET} rounded-control px-4 text-sm font-medium disabled:opacity-50 ${look} ${className}`}
+      className={`${TARGET} rounded-control px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${LOOK[variant]} ${className}`}
+      disabled={disabled === true || busy}
+      aria-busy={busy || undefined}
+      {...props}
+    >
+      {busy ? <Spinner /> : null}
+      {children}
+    </button>
+  );
+}
+
+/** Work in progress, beside the text that names it. Nothing turns under reduced motion. */
+export function Spinner() {
+  return (
+    <Icon name="loader-circle" className="me-1.5 motion-safe:animate-spin motion-reduce:hidden" />
+  );
+}
+
+/**
+ * A destructive or security confirmation in the native modal dialog (D231, D233): the focus stays
+ * inside, Escape cancels and the rest of the page is inert. Shown while mounted; its text is the
+ * caller's, unchanged from the inline confirmation it replaces.
+ */
+export function ConfirmDialog({
+  confirm,
+  cancel,
+  onConfirm,
+  onCancel,
+  busy = false,
+  tone = 'danger',
+  children,
+  ...props
+}: Omit<ComponentProps<'dialog'>, 'onCancel'> & {
+  readonly confirm: string;
+  readonly cancel: string;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+  readonly busy?: boolean;
+  readonly tone?: 'danger' | 'primary';
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => {
+      dialog?.close();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      aria-label={confirm}
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card bg-raised p-6 text-fg shadow-raised backdrop:bg-scrim"
+      onCancel={(e) => {
+        // Escape: the caller unmounts the dialog, unless the work already started.
+        e.preventDefault();
+        if (!busy) onCancel();
+      }}
+      {...props}
+    >
+      <div className="flex flex-col gap-4">
+        {children}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" disabled={busy} onClick={onCancel}>
+            {cancel}
+          </Button>
+          <Button variant={tone} busy={busy} onClick={onConfirm}>
+            {confirm}
+          </Button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+const TONES = {
+  danger: 'bg-danger-soft text-danger-text',
+  warning: 'bg-warning-soft text-warning-text',
+  info: 'bg-info-soft text-info-text',
+} as const;
+
+/** A full-width banner above the screen; the caller sets its role: alert, status or note (D233). */
+export function Banner({
+  tone,
+  className = '',
+  ...props
+}: ComponentProps<'div'> & { readonly tone: keyof typeof TONES }) {
+  return <div className={`px-4 py-2 text-sm ${TONES[tone]} ${className}`} {...props} />;
+}
+
+/** A short label: the lock state, a tag. */
+export function Badge({
+  tone = 'neutral',
+  className = '',
+  ...props
+}: ComponentProps<'span'> & { readonly tone?: 'neutral' | 'warning' }) {
+  const look = tone === 'warning' ? 'bg-warning-soft text-warning-text' : 'bg-subtle text-fg';
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium ${look} ${className}`}
       {...props}
     />
   );
@@ -130,14 +250,9 @@ export function Notice({ children }: { readonly children: ReactNode }) {
 export function LockState({ unlocked }: { readonly unlocked: boolean }) {
   const m = useMessages();
   return (
-    <span
-      data-testid="lock-state"
-      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-        unlocked ? 'bg-warning-soft text-warning-text' : 'bg-subtle text-fg'
-      }`}
-    >
+    <Badge data-testid="lock-state" tone={unlocked ? 'warning' : 'neutral'}>
       {unlocked ? m.app.unlocked : m.app.locked}
-    </span>
+    </Badge>
   );
 }
 
@@ -145,13 +260,9 @@ export function LockState({ unlocked }: { readonly unlocked: boolean }) {
 export function PreviewBanner() {
   const m = useMessages();
   return (
-    <p
-      role="note"
-      data-testid="preview-banner"
-      className="bg-warning-soft px-4 py-2 text-sm text-warning-text"
-    >
+    <Banner tone="warning" role="note" data-testid="preview-banner">
       {m.preview.banner}
-    </p>
+    </Banner>
   );
 }
 
@@ -174,10 +285,11 @@ export function UpdateBanner() {
   const offer = state?.offer;
   if (!updates || !offer || state.changedWorker || !allowed) return null;
   return (
-    <section
+    <Banner
+      tone="info"
       role="status"
       data-testid="update-banner"
-      className="flex flex-col gap-2 bg-info-soft px-4 py-3 text-sm text-info-text"
+      className="flex flex-col gap-2 py-3"
     >
       <p>{format(m.update.available, { current: __APP_VERSION__, next: offer.version })}</p>
       <p>
@@ -196,7 +308,7 @@ export function UpdateBanner() {
       >
         {m.update.apply}
       </Button>
-    </section>
+    </Banner>
   );
 }
 
@@ -205,13 +317,9 @@ export function SharedOriginWarning() {
   const m = useMessages();
   if (!sharedOrigin(location)) return null;
   return (
-    <p
-      role="alert"
-      data-testid="shared-origin"
-      className="bg-danger-soft px-4 py-2 text-sm text-danger-text"
-    >
+    <Banner tone="danger" role="alert" data-testid="shared-origin">
       {m.origin.shared}
-    </p>
+    </Banner>
   );
 }
 
@@ -224,14 +332,9 @@ export function StorageAlert({
   readonly text: string;
 }) {
   return (
-    <p
-      role="alert"
-      data-testid="storage-warning"
-      data-warning={warning}
-      className="bg-danger-soft px-4 py-2 text-sm text-danger-text"
-    >
+    <Banner tone="danger" role="alert" data-testid="storage-warning" data-warning={warning}>
       {text}
-    </p>
+    </Banner>
   );
 }
 

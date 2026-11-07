@@ -393,7 +393,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 - [x] Record the UX decisions in the overview: design tokens, component set, motion rules (D231, section 13.7)
 - [x] Design tokens in Tailwind (color, type, spacing, radius, elevation), light and dark themes; the theme preference stays in `localStorage` (D232)
-- [ ] Own components replacing the template's (buttons, fields, dialogs, lists, banners, notices), each with its hover, focus, disabled, error and loading states
+- [x] Own components replacing the template's (buttons, fields, dialogs, lists, banners, notices), each with its hover, focus, disabled, error and loading states (D233)
 - [ ] Flow review: onboarding (create, restore, join), item creation and editing, pairing, re-admission and sync; fewer steps only where no security decision is lost, every warning still explicit (section 13.5)
 - [ ] Copy review against `GLOSSARY.md`, in every supported language
 - [ ] Microinteractions: loading states, transitions and copy feedback, in CSS, none under `prefers-reduced-motion`

@@ -28,7 +28,7 @@ import {
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Messages, format } from '../i18n/messages';
 import { AboutBuild } from './About';
-import { Button, Field, INPUT, Notice, TARGET, TextArea } from './components';
+import { Button, ConfirmDialog, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { EraseVault } from './EraseVault';
 import { ExportPassword } from './ExportPassword';
 import { MergeBackup } from './MergeBackup';
@@ -799,39 +799,31 @@ function DeviceSettings({
         </details>
       ) : null}
       {retire.kind === 'confirm' || retire.kind === 'working' ? (
-        <div className="flex flex-col gap-2" data-testid="retire-confirm">
+        <ConfirmDialog
+          data-testid="retire-confirm"
+          confirm={format(m.settings.devicesRetireConfirm, { name: retire.name })}
+          cancel={m.settings.devicesRetireCancel}
+          busy={retire.kind === 'working'}
+          onConfirm={() => {
+            const target = devices.listed.find((d) => hex(d.deviceId) === retire.id);
+            if (!target) return;
+            setRetire({ ...retire, kind: 'working' });
+            void controller.retireDevice(target.deviceId).then((outcome) => {
+              if (outcome === 'ok') setRetire({ ...retire, kind: 'done' });
+              else if (outcome === 'refused') setRetire({ kind: 'refused' });
+              // Locked meanwhile: this screen is gone, and nothing changed.
+              else setRetire({ kind: 'idle' });
+            });
+          }}
+          onCancel={() => {
+            setRetire({ kind: 'idle' });
+          }}
+        >
           {devices.listed.some((d) => d.pending && hex(d.deviceId) === retire.id) ? (
             <Notice>{format(m.settings.devicesPendingRetire, { name: retire.name })}</Notice>
           ) : null}
           <Notice>{format(m.settings.devicesRetireWarning, { name: retire.name })}</Notice>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={retire.kind === 'working'}
-              onClick={() => {
-                const target = devices.listed.find((d) => hex(d.deviceId) === retire.id);
-                if (!target) return;
-                setRetire({ ...retire, kind: 'working' });
-                void controller.retireDevice(target.deviceId).then((outcome) => {
-                  if (outcome === 'ok') setRetire({ ...retire, kind: 'done' });
-                  else if (outcome === 'refused') setRetire({ kind: 'refused' });
-                  // Locked meanwhile: this screen is gone, and nothing changed.
-                  else setRetire({ kind: 'idle' });
-                });
-              }}
-            >
-              {format(m.settings.devicesRetireConfirm, { name: retire.name })}
-            </Button>
-            <Button
-              variant="quiet"
-              disabled={retire.kind === 'working'}
-              onClick={() => {
-                setRetire({ kind: 'idle' });
-              }}
-            >
-              {m.settings.devicesRetireCancel}
-            </Button>
-          </div>
-        </div>
+        </ConfirmDialog>
       ) : null}
       {retire.kind === 'done' ? (
         <p role="status">{format(m.settings.devicesRetired, { name: retire.name })}</p>
@@ -925,33 +917,26 @@ function IncompleteBackup({
         {format(m.settings.backupIncomplete, { names: peers.map((p) => p.label).join(', ') })}
       </Notice>
       {asked ? (
-        <div className="flex flex-col gap-2" data-testid="backup-incomplete-confirm">
+        <ConfirmDialog
+          data-testid="backup-incomplete-confirm"
+          confirm={format(m.settings.backupIncompleteConfirm, { name: asked.label })}
+          cancel={m.settings.backupIncompleteCancel}
+          busy={working}
+          onConfirm={() => {
+            setWorking(true);
+            void controller.dismissRejectedPeer(asked.deviceId).then(() => {
+              setWorking(false);
+              setConfirm(undefined);
+            });
+          }}
+          onCancel={() => {
+            setConfirm(undefined);
+          }}
+        >
           <Notice>{format(m.settings.backupIncompleteWarning, { name: asked.label })}</Notice>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={working}
-              onClick={() => {
-                setWorking(true);
-                void controller.dismissRejectedPeer(asked.deviceId).then(() => {
-                  setWorking(false);
-                  setConfirm(undefined);
-                });
-              }}
-            >
-              {format(m.settings.backupIncompleteConfirm, { name: asked.label })}
-            </Button>
-            <Button
-              variant="quiet"
-              disabled={working}
-              onClick={() => {
-                setConfirm(undefined);
-              }}
-            >
-              {m.settings.backupIncompleteCancel}
-            </Button>
-          </div>
-        </div>
-      ) : (
+        </ConfirmDialog>
+      ) : null}
+      {asked ? null : (
         <div className="flex flex-wrap gap-2">
           {peers.map((p) => (
             <Button

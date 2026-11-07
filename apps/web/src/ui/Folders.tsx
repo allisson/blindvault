@@ -12,7 +12,7 @@ import { hex } from '../app/ids';
 import { type ListScreen, type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages } from '../i18n/messages';
-import { Button, Field, INPUT, Notice } from './components';
+import { Button, Field, INPUT, Notice, ROW } from './components';
 
 function recordName(session: VaultSession, r: BlockedRecord, m: Messages): string {
   const folder = session.folder(r.recordId);
@@ -128,9 +128,9 @@ function ListEntry({
     current.name === list.name &&
     (current.name !== 'folder' || list.name !== 'folder' || hex(current.id) === hex(list.id));
   return (
-    <Button
-      variant="quiet"
-      className="justify-start truncate text-left aria-[current]:bg-accent-soft"
+    <button
+      type="button"
+      className={ROW}
       style={{ paddingLeft: `${String(1 + depth)}rem` }}
       aria-current={selected ? 'true' : undefined}
       onClick={() => {
@@ -138,7 +138,7 @@ function ListEntry({
       }}
     >
       {children}
-    </Button>
+    </button>
   );
 }
 

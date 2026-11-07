@@ -853,7 +853,9 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 | `@zxcvbn-ts/core` 3.0.4, `@zxcvbn-ts/language-common` 3.0.4, `-language-en` 3.0.2, `-language-pt-br` 3.0.2 | `apps/web` | Local password strength at score 4 (D71) and the export password guess estimate (D134). Phase 1. |
 | `qrcode-generator` 2.0.4 | `apps/web` | Draws the pairing and re-admission QR codes (D208): MIT, no dependencies, gives the module matrix, so React draws the SVG without injected markup. Chosen in the Phase 0 spike. Phase 4. |
 | `zxing-wasm` 3.1.4 | `apps/web` | Reads the other device's QR code from the camera (D208): MIT, ZXing-C++ in WASM, the reader alone (953,527 bytes of WASM, 416 kB gzipped in the build, loaded only when a scan starts, from the app's origin). Read every code in the Phase 0 spike on Safari, which has no `BarcodeDetector`. Its dependencies are types only (`@types/emscripten`, `type-fest`). 3.1.5 was under 14 days old. Phase 4. |
-| `@base-ui/react` 1.x | `apps/web` | Headless, accessible dialog, menu and popover primitives, already used by BlindPass; no styling of its own, so Tailwind stays the only styling layer. Phase 1. |
+
+Copied, not depended on: the icons in `apps/web/src/ui/icons/`, from `lucide-static` 1.61.0
+(ISC; `lock` and `plus` derive from Feather, MIT), both notices in `icons/LICENSE` (D233).
 
 Each is pinned to an exact version at least 14 days old when its phase adds it. Runtime
 cryptographic, serialization and protocol dependencies of later phases are added with their phase.

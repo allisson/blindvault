@@ -93,7 +93,7 @@ export function MergeBackup({
             {format(m.merge.confirm, { date: date(step.exportedAt, true) })}
           </p>
           <Button
-            disabled={merging}
+            busy={merging}
             onClick={() => {
               setMerging(true);
               void controller.mergeBackup().then((outcome) => {

@@ -27,6 +27,7 @@ import { Ready } from './Ready';
 import { focusBackup } from './RegeneratePhrase';
 import { Settings } from './Settings';
 import { StorageWarningBanner } from './StorageState';
+import { Icon } from './icons';
 
 // One set of panes, three shells (overview §13.1, D15): the shells place the panes and hold no
 // vault or security logic.
@@ -109,6 +110,7 @@ function Header({
             nav.open({ name: 'settings' });
           }}
         >
+          <Icon name="settings" className="me-1.5" />
           {m.app.settings}
         </Button>
       ) : null}
@@ -119,6 +121,7 @@ function Header({
         title="Ctrl/⌘ + Shift + L"
         aria-keyshortcuts="Control+Shift+L Meta+Shift+L"
       >
+        <Icon name="lock" className="me-1.5" />
         {m.app.lock}
       </Button>
     </header>
@@ -486,6 +489,7 @@ export function VaultShell({
               nav.open({ name: 'settings' });
             }}
           >
+            <Icon name="settings" className="me-1.5" />
             {m.app.settings}
           </Button>
         </footer>
