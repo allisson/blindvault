@@ -36,9 +36,11 @@ function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
 }
 
-async function device(browser: Browser): Promise<Page> {
+async function device(browser: Browser, clock = false): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
+  // The app reads the clock it found at load: a fake one goes in before (it runs at real speed).
+  if (clock) await page.clock.install();
   await page.goto('/');
   return page;
 }
@@ -81,8 +83,8 @@ async function join(b: Page, offer: string): Promise<string> {
 }
 
 /** Both devices reach the SAS; returns it, as shown on A. */
-async function toSas(browser: Browser) {
-  const a = await device(browser);
+async function toSas(browser: Browser, clockA = false) {
+  const a = await device(browser, clockA);
   const b = await device(browser);
   const offer = await invite(a);
   expect(offer).toMatch(/^[0-9A-Z $%*+\-./:]+$/);
@@ -130,6 +132,34 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
   await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
   await button(b, 'Unlock').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+});
+
+test('a clock gone back far on a paired device offers replacing its vault by pairing again (D149, D153)', async ({
+  browser,
+}) => {
+  const { a, b } = await toSas(browser, true);
+  await button(a, 'Yes, the same').click();
+  await button(b, 'Yes, the same').click();
+  await expect(a.getByTestId('pairing-done')).toContainText('is paired', { timeout: 60_000 });
+  await button(a, 'Close').click();
+
+  // A writes 400 days ahead, then its clock goes back: B is another device to pair again from.
+  const now = await a.evaluate(() => Date.now());
+  await a.clock.setSystemTime(now + 400 * 24 * 60 * 60 * 1000);
+  await button(a, 'Back').click();
+  await button(a, 'New item').click();
+  await button(a, 'Login').click();
+  await a.getByTestId('item-title').fill('Ahead');
+  await button(a, 'Save').click();
+  await expect(a.getByRole('heading', { name: 'Ahead' })).toBeVisible();
+  await a.clock.setSystemTime(now);
+  await button(a, 'Lock').click();
+  await fillPassword(a.getByTestId('unlock-password'), PASSWORD_A);
+  await button(a, 'Unlock').click();
+  await expect(a.getByTestId('clock-behind')).toContainText(
+    'Or replace this device’s vault by pairing with another device: lock, then choose “Replace by pairing with another device…”.',
+    { timeout: 30_000 },
+  );
 });
 
 test('numbers said to differ stop the pairing on both, and B keeps nothing (§6.4, CRYPTO-INV-011)', async ({
