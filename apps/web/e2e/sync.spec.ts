@@ -138,14 +138,28 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
 }) => {
   const { a, b } = await paired(browser);
 
+  // Retiring asks first, saying it cannot be undone and is not revocation (D41, D45).
   await a.getByTestId('device-retire').click();
-  await a.getByRole('button', { name: /^Retire / }).click();
+  const confirm = a.getByRole('button', { name: /^Retire / });
+  const nameB = ((await confirm.textContent()) ?? '').replace(/^Retire /, '');
+  await expect(
+    a.getByText(
+      `Retire ${nameB}? Retirement cannot be undone. It is not revocation: whatever that device already holds stays readable to whoever has it. If it may be in someone else’s hands, re-found the vault.`,
+    ),
+  ).toBeVisible();
+  await confirm.click();
   await expect(a.getByTestId('device')).toHaveCount(1);
   const retired = a.getByTestId('retired-devices');
   await retired.locator('summary').click();
+  await expect(retired).toContainText(
+    'A retired device learns it is retired only when told: sync with it from here, and it receives only its Device record, marked retired.',
+  );
   await retired.getByTestId('device-notify').click();
   const syncA = a.getByTestId('sync');
-  await expect(syncA).toContainText('it is retired');
+  await expect(syncA).toContainText(`Tell ${nameB} it is retired`);
+  await expect(syncA).toContainText(
+    `On ${nameB}, open Settings → Devices and choose “Sync” next to this device. This device sends ${nameB} only its Device record, marked retired, and the sync ends: ${nameB} then shows that it was retired and stops syncing.`,
+  );
   await syncA.getByTestId('pairing-same-network').check();
   await syncA.getByTestId('sync-first').click();
   const offer = syncA.getByTestId('pairing-text');
@@ -166,13 +180,26 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   await expect(a.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'retired-peer', {
     timeout: 30_000,
   });
+  await expect(a.getByTestId('sync-failed')).toHaveText(
+    `${nameB} is retired: this device told it so and sent it nothing else, and the sync ended.`,
+  );
   await expect(b.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'retired', {
     timeout: 30_000,
   });
+  await expect(b.getByTestId('sync-failed')).toHaveText(
+    /^This device was retired on another device, and .+ passed that on, so the sync ended\. This device can no longer sync\.$/,
+  );
   await expect(b.getByTestId('own-retired')).toBeVisible();
-  // B, now retired, offers no sync (D41, D45).
+  // B, now retired, offers no sync, no pairing and no re-admission, and says why (D41, D45).
   await button(b, 'Start again').click();
   await expect(b.getByTestId('device-sync')).toHaveCount(0);
+  await expect(b.getByTestId('invite')).toContainText(
+    'This device was retired: it cannot pair another device.',
+  );
+  await expect(button(b, 'Pair a device…')).toHaveCount(0);
+  await expect(b.getByTestId('readmit-device')).toContainText(
+    'This device was retired: it cannot be re-admitted. Replace it by pairing to sync.',
+  );
 });
 
 test('A retires B during an open sync: B merges its retired record and shows the D41 notice (D69, D220)', async ({
