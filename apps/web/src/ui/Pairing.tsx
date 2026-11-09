@@ -411,8 +411,17 @@ export function Rejected({
   readonly testId?: string;
 }) {
   const m = useMessages();
-  const r = m.readmission;
   if (rejected.length === 0) return null;
+  return (
+    <Notice>
+      <span data-testid={testId}>{rejectedText(m, rejected)}</span>
+    </Notice>
+  );
+}
+
+/** Each rejected record by its type and ID prefix, or as one that does not decode, with why. */
+export function rejectedText(m: Messages, rejected: readonly RejectedRecord[]): string {
+  const r = m.readmission;
   const records = rejected
     .map(({ reason, record }) =>
       record
@@ -420,13 +429,7 @@ export function Rejected({
         : `${r.rejectedNoKey} (${r.rejectedReasons[reason]})`,
     )
     .join(', ');
-  return (
-    <Notice>
-      <span data-testid={testId}>
-        {format(r.rejected, { n: String(rejected.length), records })}
-      </span>
-    </Notice>
-  );
+  return format(r.rejected, { n: String(rejected.length), records });
 }
 
 /** Every stage after the start, on either device. */
