@@ -200,6 +200,13 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   await expect(b.getByTestId('readmit-device')).toContainText(
     'This device was retired: it cannot be re-admitted. Replace it by pairing to sync.',
   );
+  // Re-founding on B says it cannot sync first, in place of the advice to sync (D47).
+  await b.getByTestId('refound-start').click();
+  const warnings = b.getByTestId('refound-warnings');
+  await expect(warnings).toContainText(
+    'This device was retired, so it cannot sync first: changes that exist only on other devices are lost. If a device that was not retired is still in your hands, re-found there instead.',
+  );
+  await expect(warnings).not.toContainText('Sync this device first');
 });
 
 test('A retires B during an open sync: B merges its retired record and shows the D41 notice (D69, D220)', async ({

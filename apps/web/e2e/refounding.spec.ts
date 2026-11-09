@@ -41,11 +41,22 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   const refound = page.getByTestId('refound');
   await refound.getByTestId('refound-start').click();
   const warnings = refound.getByTestId('refound-warnings');
-  await expect(warnings).toContainText('changes that are not on this device are lost');
-  await expect(warnings).toContainText('The trash and the history of every item are emptied');
-  await expect(warnings).toContainText('whoever already copied the old vault keeps it');
+  await expect(warnings).toContainText(
+    'Sync this device first with every other device still in your hands: changes that are not on this device are lost. Afterwards, replace each other device’s vault by pairing it with this one, and destroy the backups of the old vault: they still open it with the old Recovery Phrase.',
+  );
+  await expect(warnings).toContainText(
+    'The trash and the history of every item are emptied. Restore from the trash anything you still need first.',
+  );
+  await expect(warnings).toContainText(
+    'Re-founding protects only what happens afterwards: whoever already copied the old vault keeps it.',
+  );
+  await expect(warnings).not.toContainText('This device was retired');
+  await expect(refound.getByTestId('refound-understand').locator('..')).toHaveText(
+    'I understand that changes not on this device, the trash and the history are lost, and that the other devices and the old backups stay with the old vault.',
+  );
   await expect(refound.getByTestId('refound-corrupt')).toHaveCount(0);
   await expect(refound.getByTestId('refound-rejected')).toHaveCount(0);
+  await expect(refound.getByTestId('refound-understand-rejected')).toHaveCount(0);
   await expect(button(page, 'Continue')).toBeDisabled();
   await refound.getByTestId('refound-understand').check();
   await button(page, 'Continue').click();

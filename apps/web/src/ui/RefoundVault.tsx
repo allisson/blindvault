@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { recordIdPrefix } from '../app/backup-file';
 import { type ExportAuth, type RefoundingStart, type VaultController } from '../app/controller';
 import { deviceName } from '../app/device-name';
+import { rejectedPeersOf } from '../app/devices';
 import { type Navigation } from '../app/nav';
 import { drawPositions } from '../app/phrase-check';
 import { useLanguage } from '../i18n/context';
@@ -46,13 +47,9 @@ function authError(m: Messages, outcome: RefoundingStart): string | undefined {
 }
 
 /** The names of the peers whose records were rejected (D116): their device names, or IDs. */
-function rejectedNames(session: VaultSession): string {
-  const devices = session.devices();
-  return session.rejectedPeers
-    .map((id) => {
-      const held = devices.find((d) => d.deviceId.every((b, i) => b === id[i]));
-      return held?.device.displayName ?? recordIdPrefix(id);
-    })
+export function rejectedNames(session: Parameters<typeof rejectedPeersOf>[0]): string {
+  return rejectedPeersOf(session)
+    .map((p) => p.name ?? recordIdPrefix(p.deviceId))
     .join(', ');
 }
 
