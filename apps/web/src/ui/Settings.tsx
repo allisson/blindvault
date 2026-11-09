@@ -911,6 +911,15 @@ function exportError(m: Messages, outcome: BackupExport): string | undefined {
  * password is optional, with the warning that it yields the Master Key. The local password, or the
  * passkey, is asked for again. Shows the last backup made on this device (§13.4).
  */
+/** The peers of the incomplete-backup warning, each labelled by its device name, or its ID (D115). */
+export function incompleteBackupPeers(session: Parameters<typeof rejectedPeersOf>[0]) {
+  return rejectedPeersOf(session).map((p) => ({
+    ...p,
+    id: hex(p.deviceId),
+    label: p.name ?? recordIdPrefix(p.deviceId),
+  }));
+}
+
 /**
  * The export warning while peers' records were rejected for their format or type, naming the peers,
  * each dismissable after a confirmation, for a device lost or retired (D68, D115, D227).
@@ -925,11 +934,7 @@ function IncompleteBackup({
   const { messages: m } = useLanguage();
   const [confirm, setConfirm] = useState<string>();
   const [working, setWorking] = useState(false);
-  const peers = rejectedPeersOf(session).map((p) => ({
-    ...p,
-    id: hex(p.deviceId),
-    label: p.name ?? recordIdPrefix(p.deviceId),
-  }));
+  const peers = incompleteBackupPeers(session);
   const asked = peers.find((p) => p.id === confirm);
   return (
     <div className="flex flex-col gap-2" data-testid="backup-incomplete">
