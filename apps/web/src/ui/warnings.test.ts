@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MESSAGES, format } from '../i18n/messages';
 import { mergeError } from './MergeBackup';
+import { rejectedText } from './Pairing';
 import { rejectedNames } from './RefoundVault';
 import { resetError } from './ResetPassword';
 import { openingError, restoreError } from './RestoreVault';
@@ -97,6 +98,27 @@ describe('records a peer on a newer app version sent, rejected here (D116)', () 
     );
     expect(format(m.settings.backupIncompleteConfirm, { name: 'abababab' })).toBe(
       'Dismiss the warning for abababab',
+    );
+  });
+});
+
+describe('a re-admission or a sync with a peer that sends what this device rejects (D206, D222)', () => {
+  it('names each rejected record by its type and ID, or as one that does not decode, with why', () => {
+    const key = { recordType: RecordType.item, recordId: new Uint8Array(16).fill(0xcd) };
+    const text = rejectedText(m, [
+      { reason: 'verification-failed', record: key },
+      { reason: 'future-clock', record: key },
+      { reason: 'immutable-record', record: { ...key, recordType: RecordType.vaultKey } },
+      { reason: 'unsupported-format' },
+    ]);
+    expect(text).toBe(
+      '4 records from the other device were rejected and not merged: Item cdcdcdcd (does not verify), Item cdcdcdcd (dated ahead of this device’s clock), Vault Key cdcdcdcd (a changed copy of a record that never changes), a record that does not decode (from a newer version of BlindVault: update this device). The rest merged.',
+    );
+  });
+
+  it('a merge whose peer never confirmed its own says to check it there (D207)', () => {
+    expect(m.readmission.notCommitted).toBe(
+      'This device merged, but the other may not have finished: check it there. Re-admitting again is safe.',
     );
   });
 });
