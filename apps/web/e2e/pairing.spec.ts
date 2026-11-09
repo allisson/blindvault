@@ -132,6 +132,21 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
   await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
   await button(b, 'Unlock').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+
+  // Erasing B names its Device record, to retire from A, before and after (D205).
+  await button(b, 'Settings').click();
+  const own = b.getByTestId('device').filter({ hasText: '(this device)' });
+  const nameB = ((await own.locator('span.font-medium').textContent()) ?? '')
+    .replace(' (this device)', '')
+    .trim();
+  expect(nameB).not.toBe('');
+  const named = `Afterwards, retire this device's Device record, "${nameB}", from another device: until then they keep offering it as a sync peer.`;
+  await button(b, 'Erase this vault from this device…').click();
+  await expect(b.getByTestId('erase-warning').getByText(named, { exact: true })).toBeVisible();
+  await b.getByTestId('erase-understood').check();
+  await button(b, 'Erase').click();
+  await startScreen(b);
+  await expect(b.getByTestId('erased').getByText(named, { exact: true })).toBeVisible();
 });
 
 test('a clock gone back far on a paired device offers replacing its vault by pairing again (D149, D153)', async ({

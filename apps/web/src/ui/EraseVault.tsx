@@ -24,6 +24,11 @@ export function eraseAdviceText(m: Messages, advice: EraseAdvice): string | unde
   }
 }
 
+/** Why an erase left the vault on this device, shown on the unlock screen (D154, D205). */
+export function eraseFailureText(m: Messages, failure: 'busy' | 'failed'): string {
+  return failure === 'busy' ? m.erase.busy : m.erase.failed;
+}
+
 export function EraseVault({
   controller,
   advice,

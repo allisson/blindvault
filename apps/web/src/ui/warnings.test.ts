@@ -6,6 +6,7 @@ import { RecordType } from '@blindvault/crypto';
 import { describe, expect, it } from 'vitest';
 
 import { MESSAGES, format } from '../i18n/messages';
+import { eraseFailureText } from './EraseVault';
 import { mergeError } from './MergeBackup';
 import { rejectedText } from './Pairing';
 import { rejectedNames } from './RefoundVault';
@@ -127,6 +128,17 @@ describe('a vault changed with the Master Key', () => {
   it('a reset refuses a Recovery Envelope that opens but not this vault (D184)', () => {
     expect(resetError(m, { kind: 'master-key-mismatch' })).toBe(
       'This phrase opens the Recovery Envelope held here, but not this vault: the storage is damaged, or someone holding the Master Key changed it. Replace the vault with a backup.',
+    );
+  });
+});
+
+describe('an erase the browser does not carry out (D154, D205)', () => {
+  it('says the vault is still here, whether another window held it or the deletion failed', () => {
+    expect(eraseFailureText(m, 'busy')).toBe(
+      'BlindVault is busy in another window. Nothing was erased.',
+    );
+    expect(eraseFailureText(m, 'failed')).toBe(
+      'The vault could not be erased. It is still on this device, locked.',
     );
   });
 });

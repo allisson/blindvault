@@ -7,6 +7,8 @@ import { createVault, startScreen } from './create';
 test.setTimeout(120_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
+const INTRO =
+  'Removes the vault and its Local Config from this device only. Other devices and backups keep their copy.';
 
 function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
@@ -44,6 +46,7 @@ test('erases the unlocked vault from Settings, saying it is the only device (D11
   expect(await databases(page)).toHaveLength(1);
 
   await page.getByRole('button', { name: 'Settings' }).first().click();
+  await expect(page.getByText(INTRO)).toBeVisible();
   await button(page, 'Erase this vault from this device…').click();
   const warning = page.getByTestId('erase-warning');
   await expect(warning).toContainText('Changes that exist only on this device are lost.');
@@ -78,6 +81,7 @@ test('erases a locked vault without its password, from the unlock screen (D183, 
   await button(page, 'Lock').click();
 
   await button(page, 'Erase this vault from this device…').click();
+  await expect(page.getByText(INTRO)).toBeVisible();
   await expect(page.getByTestId('erase-warning')).toContainText(
     'Its name cannot be shown while the vault is locked.',
   );

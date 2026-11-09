@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { type CDPSession, type Page, expect, test } from '@playwright/test';
 
 import { createVault } from './create';
@@ -79,7 +81,11 @@ test('sets up a device-bound passkey and unlocks with it (§5.5, D75)', async ({
   // Removed: no longer offered.
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('button', { name: 'Remove passkey', exact: true }).click();
-  await expect(page.getByText(/^Passkey removed\./)).toBeVisible();
+  await expect(
+    page.getByText('Passkey removed. Your passkey manager was asked to delete it.', {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect.poll(() => credentials(cdp, authenticatorId)).toHaveLength(0);
   await lock(page);
   await expect(page.getByRole('button', { name: 'Unlock with passkey', exact: true })).toHaveCount(
@@ -157,4 +163,83 @@ test('rejects an assertion without user verification (D75, CRYPTO-INV-021)', asy
   await page.reload();
   await page.getByRole('button', { name: 'Unlock with passkey', exact: true }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+});
+
+/** A browser without `signalUnknownCredential`: BlindVault cannot ask the manager to delete a passkey. */
+async function noSignal(page: Page) {
+  await page.addInitScript(() => {
+    delete (PublicKeyCredential as { signalUnknownCredential?: unknown }).signalUnknownCredential;
+  });
+}
+
+async function setUpAgain(page: Page) {
+  await page.getByTestId('passkey-password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Set up passkey', exact: true }).click();
+  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+}
+
+test('with no way to ask the manager, removing, replacing or erasing says to delete the passkey by hand (D75, D153, D205)', async ({
+  page,
+}) => {
+  await noSignal(page);
+  await authenticator(page, false);
+  await page.goto('/');
+  const words = await createVault(page, PASSWORD);
+  await setUp(page);
+  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Remove passkey', exact: true }).click();
+  await expect(
+    page.getByText(
+      'Passkey removed. It no longer unlocks anything: delete the "BlindVault" passkey in your passkey manager.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+
+  // Replaced with its own backup while a passkey is set up.
+  await setUpAgain(page);
+  await page.getByTestId('backup-password').fill(PASSWORD);
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    page.getByRole('button', { name: 'Export', exact: true }).click(),
+  ]);
+  const backup = await readFile(await download.path());
+  await lock(page);
+  await page.getByRole('button', { name: 'Replace with a backup…', exact: true }).click();
+  await page.getByTestId('restore-file').setInputFiles({
+    name: 'blindvault-backup.bvault',
+    mimeType: 'application/octet-stream',
+    buffer: backup,
+  });
+  await page.getByTestId('restore-phrase').fill(words.join(' '));
+  await page.getByRole('button', { name: 'Open the backup', exact: true }).click();
+  await page.getByTestId('new-password').fill(PASSWORD, { timeout: 30_000 });
+  await page.getByTestId('confirm-password').fill(PASSWORD);
+  await page.getByTestId('replace-understood').check();
+  await page.getByRole('button', { name: 'Replace', exact: true }).click();
+  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
+  await expect(
+    page
+      .getByTestId('leftover-passkey')
+      .getByText(
+        'The passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+        { exact: true },
+      ),
+  ).toBeVisible();
+
+  // Erased while a passkey is set up.
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await setUpAgain(page);
+  await page
+    .getByRole('button', { name: 'Erase this vault from this device…', exact: true })
+    .click();
+  await page.getByTestId('erase-understood').check();
+  await page.getByRole('button', { name: 'Erase', exact: true }).click();
+  await expect(
+    page
+      .getByTestId('leftover-passkey')
+      .getByText(
+        'The passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+        { exact: true },
+      ),
+  ).toBeVisible({ timeout: 30_000 });
 });

@@ -5,7 +5,7 @@ import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
 import { Button, Card, Field, Notice, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
-import { EraseVault, eraseAdviceText } from './EraseVault';
+import { EraseVault, eraseAdviceText, eraseFailureText } from './EraseVault';
 import { JoinVault } from './Pairing';
 import { ResetPassword } from './ResetPassword';
 import { RestoreVault } from './RestoreVault';
@@ -202,7 +202,7 @@ function Unlock({
       {eraseFailure ? (
         <div className="flex flex-wrap items-center gap-2" data-testid="erase-failure">
           <p role="alert" className="text-sm text-danger">
-            {eraseFailure === 'busy' ? m.erase.busy : m.erase.failed}
+            {eraseFailureText(m, eraseFailure)}
           </p>
           <Button
             variant="quiet"
