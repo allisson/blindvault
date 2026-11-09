@@ -193,7 +193,21 @@ test('a record of A that fails verification stops the pairing on both, and B kee
   }
   // A admitted B before the transfer, so it lists B as a pairing not completed (D34).
   await expect(a.getByTestId('device')).toHaveCount(2);
-  await expect(a.getByTestId('device-pending')).toBeVisible();
+  await expect(a.getByTestId('device-pending')).toHaveText(
+    'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
+  );
+  // Retiring it first advises looking at it: only the confirmation may have been lost (D34).
+  await a.getByTestId('device-retire').click();
+  const confirm = a.getByRole('button', { name: /^Retire / });
+  const nameB = ((await confirm.textContent()) ?? '').replace(/^Retire /, '');
+  await expect(
+    a.getByText(
+      `Before retiring ${nameB}, look at it: if it shows the vault, the pairing succeeded, and only its confirmation was lost.`,
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await button(a, 'Cancel').click();
+  await expect(a.getByTestId('device')).toHaveCount(2);
   expect(await b.evaluate(async () => (await indexedDB.databases()).length)).toBe(0);
 });
 

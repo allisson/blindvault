@@ -211,7 +211,9 @@ test('a stored record of A that fails verification stops the re-admission on bot
 
   // A admitted B before the transfer, so it lists B as not completed, and holds nothing of B.
   await expect(a.getByTestId('device')).toHaveCount(2);
-  await expect(a.getByTestId('device-pending')).toBeVisible();
+  await expect(a.getByTestId('device-pending')).toHaveText(
+    'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
+  );
   await button(a, 'Back').click();
   await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });

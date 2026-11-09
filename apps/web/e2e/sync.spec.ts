@@ -147,6 +147,8 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
       `Retire ${nameB}? Retirement cannot be undone. It is not revocation: whatever that device already holds stays readable to whoever has it. If it may be in someone else’s hands, re-found the vault.`,
     ),
   ).toBeVisible();
+  // B completed its pairing: no advice to look at it first (D34).
+  await expect(a.getByText(/^Before retiring /)).toHaveCount(0);
   await confirm.click();
   await expect(a.getByTestId('device')).toHaveCount(1);
   const retired = a.getByTestId('retired-devices');
