@@ -97,6 +97,14 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(devices.getByTestId('device')).toHaveCount(1);
   await expect(devices.getByTestId('device')).toContainText(name);
   await expect(devices.getByTestId('device')).not.toContainText('(this device)');
+  // Erasing it now leaves no Device record of its own to retire (D205).
+  await button(page, 'Erase this vault from this device…').click();
+  const erase = page.getByTestId('erase-warning');
+  await expect(
+    erase.getByText('This device has no Device record left to retire.', { exact: true }),
+  ).toBeVisible();
+  await erase.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(erase).toHaveCount(0);
 
   // Retiring asks for a confirmation that says what it is not; cancel writes nothing.
   await devices.getByTestId('device-retire').click();
