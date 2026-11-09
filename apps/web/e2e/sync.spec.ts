@@ -90,6 +90,10 @@ test('two paired devices connect from their sync codes, each with the other pick
   browser,
 }) => {
   const { a, b } = await paired(browser);
+  // B locks at once when hidden; A keeps the default delay (D93, D105).
+  await b.getByTestId('hiddenLockSeconds').fill('0');
+  await button(b, 'Save').click();
+  await expect(b.getByText('Saved.')).toBeVisible();
 
   // Each picks the other device; A shows its code first, B reads it.
   await a.getByTestId('device-sync').click();
@@ -101,11 +105,21 @@ test('two paired devices connect from their sync codes, each with the other pick
   const offerText = await offer.inputValue();
   expect(offerText).toMatch(/^[0-9A-Z $%*+\-./:]+$/);
   await expect(syncA).toContainText('encrypted for');
+  await expect(
+    syncA.getByText(
+      'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for 60 seconds, the sync ends.',
+    ),
+  ).toBeVisible();
 
   await b.getByTestId('device-sync').click();
   const syncB = b.getByTestId('sync');
   await syncB.getByTestId('pairing-same-network').check();
   await syncB.getByTestId('sync-read').click();
+  await expect(
+    syncB.getByText(
+      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock below.',
+    ),
+  ).toBeVisible();
   await syncB.getByTestId('pairing-paste').fill(offerText);
   await button(b, 'Show my answer').click();
   const answer = syncB.getByTestId('pairing-text');
