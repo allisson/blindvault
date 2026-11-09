@@ -44,7 +44,10 @@ async function relock(page: Page) {
 test('a clock gone back makes the vault read-only, each screen says why, and writing resumes once the clock gets there (§9.2, D73, D149)', async ({
   page,
 }) => {
+  // Fixed until the item is saved, so the vault is written at AHEAD exactly however long creation
+  // takes; setSystemTime lets the clock run again.
   await page.clock.install({ time: AHEAD });
+  await page.clock.setFixedTime(AHEAD);
   await page.goto('/');
   await createVault(page, PASSWORD);
   await button(page, 'New item').click();
