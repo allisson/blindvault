@@ -1,11 +1,13 @@
-// The warnings of states only someone holding the Master Key makes (a forged backup or vault): each
-// condition, tested where it is detected, reaches its user as its own text (UX Gate).
+// The warnings of states only someone holding the Master Key (a forged backup or vault) or a newer
+// app version makes: each condition, tested where it is detected, reaches its user as its own text
+// (UX Gate).
 
 import { RecordType } from '@blindvault/crypto';
 import { describe, expect, it } from 'vitest';
 
-import { MESSAGES } from '../i18n/messages';
+import { MESSAGES, format } from '../i18n/messages';
 import { mergeError } from './MergeBackup';
+import { rejectedNames } from './RefoundVault';
 import { resetError } from './ResetPassword';
 import { openingError, restoreError } from './RestoreVault';
 
@@ -48,6 +50,30 @@ describe('a backup forged with the Master Key', () => {
     expect(restoreError(m, { kind: 'corrupt-record', ...named })).toBe(text);
     expect(openingError(m, { kind: 'corrupt-record' }, 'phrase')).toBe(
       'This backup holds a record that cannot be read. It cannot be restored.',
+    );
+  });
+});
+
+describe('records a peer on a newer app version sent, rejected here (D116)', () => {
+  it('re-founding names each peer by its device name, or its ID, in the warning and its confirmation', () => {
+    const id = (n: number) => new Uint8Array(16).fill(n);
+    const phone = {
+      deviceId: id(2),
+      hlc: { physicalMs: 0, counter: 0, deviceId: id(1) },
+      device: {
+        publicKey: new Uint8Array(32),
+        displayName: 'Phone',
+        retired: false,
+        registeredAt: 0,
+      },
+      unknownKeys: [],
+    };
+    const names = rejectedNames({ devices: () => [phone], rejectedPeers: [id(2), id(0xab)] });
+    expect(format(m.refound.warnRejected, { names })).toBe(
+      'This device rejected records from Phone, abababab, made by a newer app version. They are not on this device and will be lost: update the app and sync with those devices first.',
+    );
+    expect(format(m.refound.understandRejected, { names })).toBe(
+      'I understand that the records from Phone, abababab are lost.',
     );
   });
 });
