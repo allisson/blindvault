@@ -240,6 +240,53 @@ test('B hidden for 60 seconds while joining stops the pairing, as a lock would (
   expect(await b.evaluate(async () => (await indexedDB.databases()).length)).toBe(0);
 });
 
+test('a hidden-app lock at 0 says it locks at once, in Settings, the export and the pairing, and another says its delay (D93, D105)', async ({
+  browser,
+}) => {
+  const a = await device(browser);
+  await createVault(a, PASSWORD_A);
+  await button(a, 'Settings').click();
+  const immediate =
+    'At 0 the vault locks as soon as the app is hidden, including during a file picker or passkey prompt on some systems.';
+  const exportHidden =
+    'The vault locks as soon as the app is hidden: if the browser hides it while it saves the file, the vault locks, and the export must be repeated.';
+  await expect(a.getByText(immediate)).toHaveCount(0);
+  await expect(a.getByText(exportHidden)).toHaveCount(0);
+  await a.getByTestId('hiddenLockSeconds').fill('0');
+  await expect(a.getByText(immediate)).toBeVisible();
+  await button(a, 'Save').click();
+  await expect(a.getByText('Saved.')).toBeVisible();
+  await expect(a.getByText(exportHidden)).toBeVisible();
+
+  await button(a, 'Pair a device…').click();
+  await a.getByTestId('pairing-same-network').check();
+  await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
+  await button(a, 'Start pairing').click();
+  await expect(a.getByTestId('pairing-text')).not.toHaveValue('', { timeout: 30_000 });
+  await expect(
+    a.getByText(
+      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock below.',
+    ),
+  ).toBeVisible();
+  await a.getByTestId('pairing-cancel').click();
+
+  await a.getByTestId('hiddenLockSeconds').fill('30');
+  await expect(a.getByText(immediate)).toHaveCount(0);
+  await button(a, 'Save').click();
+  await expect(a.getByText('Saved.')).toBeVisible();
+  await expect(a.getByText(exportHidden)).toHaveCount(0);
+  // Cancel left the password step open.
+  await a.getByTestId('pairing-same-network').check();
+  await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
+  await button(a, 'Start pairing').click();
+  await expect(a.getByTestId('pairing-text')).not.toHaveValue('', { timeout: 30_000 });
+  await expect(
+    a.getByText(
+      'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for 30 seconds, the pairing ends.',
+    ),
+  ).toBeVisible();
+});
+
 const PASSWORD_NEW = 'harbor-violet-ember-sextant-5820';
 
 /** B holds a vault of its own with one item, locked, and starts replacing it by pairing (D204). */
