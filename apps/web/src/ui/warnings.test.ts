@@ -10,6 +10,7 @@ import { mergeError } from './MergeBackup';
 import { rejectedNames } from './RefoundVault';
 import { resetError } from './ResetPassword';
 import { openingError, restoreError } from './RestoreVault';
+import { incompleteBackupPeers } from './Settings';
 
 const m = MESSAGES.en;
 const date = () => 'never';
@@ -55,25 +56,47 @@ describe('a backup forged with the Master Key', () => {
 });
 
 describe('records a peer on a newer app version sent, rejected here (D116)', () => {
+  const id = (n: number) => new Uint8Array(16).fill(n);
+  const phone = {
+    deviceId: id(2),
+    hlc: { physicalMs: 0, counter: 0, deviceId: id(1) },
+    device: {
+      publicKey: new Uint8Array(32),
+      displayName: 'Phone',
+      retired: false,
+      registeredAt: 0,
+    },
+    unknownKeys: [],
+  };
+
   it('re-founding names each peer by its device name, or its ID, in the warning and its confirmation', () => {
-    const id = (n: number) => new Uint8Array(16).fill(n);
-    const phone = {
-      deviceId: id(2),
-      hlc: { physicalMs: 0, counter: 0, deviceId: id(1) },
-      device: {
-        publicKey: new Uint8Array(32),
-        displayName: 'Phone',
-        retired: false,
-        registeredAt: 0,
-      },
-      unknownKeys: [],
-    };
     const names = rejectedNames({ devices: () => [phone], rejectedPeers: [id(2), id(0xab)] });
     expect(format(m.refound.warnRejected, { names })).toBe(
       'This device rejected records from Phone, abababab, made by a newer app version. They are not on this device and will be lost: update the app and sync with those devices first.',
     );
     expect(format(m.refound.understandRejected, { names })).toBe(
       'I understand that the records from Phone, abababab are lost.',
+    );
+  });
+
+  it('the export warns the backup may be incomplete, and each dismissal names its peer and asks first (D227)', () => {
+    const peers = incompleteBackupPeers({
+      devices: () => [phone],
+      rejectedPeers: [id(2), id(0xab)],
+    });
+    const labels = peers.map((p) => p.label);
+    expect(format(m.settings.backupIncomplete, { names: labels.join(', ') })).toBe(
+      'Records from Phone, abababab were rejected because they need a newer app version, so this backup may be incomplete. Update the app and sync with them first.',
+    );
+    expect(labels.map((name) => format(m.settings.backupIncompleteDismiss, { name }))).toEqual([
+      'Dismiss for Phone…',
+      'Dismiss for abababab…',
+    ]);
+    expect(format(m.settings.backupIncompleteWarning, { name: 'abababab' })).toBe(
+      'The records of abababab that this app rejected are not on this device, and every backup made here will still lack them. Dismiss only for a device that is lost or retired.',
+    );
+    expect(format(m.settings.backupIncompleteConfirm, { name: 'abababab' })).toBe(
+      'Dismiss the warning for abababab',
     );
   });
 });

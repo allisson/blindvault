@@ -45,6 +45,8 @@ test('exports a backup, asking for the local password again, then one under a ge
   await expect(page.getByTestId('last-backup')).toHaveText(
     'No backup has been made on this device yet.',
   );
+  // No peer's records were rejected: no incomplete-backup warning (D115).
+  await expect(page.getByTestId('backup-incomplete')).toHaveCount(0);
 
   // Another local password makes no file.
   await page.getByTestId('backup-password').fill(WRONG);
