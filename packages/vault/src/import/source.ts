@@ -63,6 +63,11 @@ export function isObject(value: unknown): value is Json {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The value when it is an object, else an empty one. */
+export function object(value: unknown): Json {
+  return isObject(value) ? value : {};
+}
+
 /** The value when it is a string, else ''. */
 export function text(value: unknown): string {
   return typeof value === 'string' ? value : '';

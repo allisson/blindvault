@@ -246,15 +246,17 @@ export class JoinRejectedError extends VaultError {
 /**
  * Why an import file is refused as a whole before anything is written (overview §15): a CSV
  * without the columns its format needs, a file that is not the format's JSON, an unsupported
- * BlindPass `version`, a BlindPass item that does not match its type (`item` is its index), or an
- * encrypted Bitwarden or Proton Pass export, which the UI asks to export again unencrypted (D146).
+ * BlindPass `version`, a BlindPass item that does not match its type (`item` is its index), an
+ * encrypted Bitwarden or Proton Pass export, which the UI asks to export again unencrypted (D146),
+ * or a zip archive beyond 100 MB of uncompressed size or 10,000 entries (D130).
  */
 export type ImportRejection =
   | 'missing-columns'
   | 'not-this-format'
   | 'unsupported-version'
   | 'invalid-item'
-  | 'encrypted-export';
+  | 'encrypted-export'
+  | 'too-large';
 
 export class ImportRejectedError extends VaultError {
   override name = 'ImportRejectedError';

@@ -11,6 +11,7 @@ import {
   expiry,
   field,
   isObject,
+  object,
   optional,
   readJson,
   rest,
@@ -24,10 +25,6 @@ const TEMPLATES = new Map([
   [4, 'identity'],
   [5, 'developer-credential'],
 ]);
-
-function object(value: unknown): Json {
-  return isObject(value) ? value : {};
-}
 
 /** Text (0), hidden (1) and boolean (2) fields; a linked field (3) points at another, no value. */
 function custom(list: unknown): SourceField[] {

@@ -1,7 +1,8 @@
+import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import { ImportRejectedError } from '../errors';
-import { parseProtonPassJson } from './protonpass';
+import { parseProtonPassJson, parseProtonPassZip } from './protonpass';
 
 // Adapted from BlindPass (`apps/web/src/lib/import/__tests__/protonpass.test.ts`).
 
@@ -248,5 +249,38 @@ describe('Proton Pass JSON export', () => {
     refused('null', 'not-this-format');
     refused('{}', 'not-this-format');
     refused('{"vaults":[]}', 'not-this-format');
+  });
+});
+
+describe('Proton Pass zip export', () => {
+  const zipRefused = (bytes: Uint8Array, reason: string) => {
+    expect(() => parseProtonPassZip(bytes)).toThrow(ImportRejectedError);
+    try {
+      parseProtonPassZip(bytes);
+    } catch (e) {
+      expect((e as ImportRejectedError).reason).toBe(reason);
+    }
+  };
+
+  it('reads its data.json', () => {
+    const bytes = zipSync({
+      'Proton Pass/data.json': strToU8(file([{ data: { type: 'note', metadata: { name: 'n' } } }])),
+    });
+    expect(parseProtonPassZip(bytes)).toEqual({
+      items: [{ title: 'n', template: 'secure-note', fields: [], folder: ['Personal'] }],
+      skipped: 0,
+    });
+  });
+
+  it('refuses the encrypted export, its data.pgp (D146)', () => {
+    zipRefused(
+      zipSync({ 'Proton Pass/data.pgp': strToU8('-----BEGIN PGP MESSAGE-----') }),
+      'encrypted-export',
+    );
+  });
+
+  it('refuses a zip with no data.json, and a file that is not a zip', () => {
+    zipRefused(zipSync({ 'Proton Pass/other.json': strToU8('{}') }), 'not-this-format');
+    zipRefused(strToU8(file([])), 'not-this-format');
   });
 });
