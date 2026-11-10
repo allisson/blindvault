@@ -34,6 +34,12 @@ async function exportBackup(page: Page): Promise<Buffer> {
 async function newPhrase(page: Page): Promise<string[]> {
   await page.getByTestId('regenerate-start').click();
   await expect(page.getByTestId('regenerate-exposed')).toContainText('re-founded');
+  await expect(
+    page.getByText(
+      'Backups made until now open only with the current phrase. Your other devices keep it, and keep making backups for it, until they sync with this one.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await button(page, 'Show the new phrase').click();
   await expect(page.getByTestId('recovery-phrase')).toBeVisible();
   const words: string[] = [];
@@ -65,12 +71,24 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   expect(oldId).toMatch(/^[0-9a-f]{8}$/);
   await exportBackup(page);
   await expect(page.getByTestId('recovery-no-backup')).toHaveCount(0);
+  await expect(
+    page.getByText(
+      'If you lost the Recovery Phrase, regenerate it while the vault is unlocked: a new phrase replaces it, and nothing in the vault changes.',
+      { exact: true },
+    ),
+  ).toBeVisible();
 
   const words = await newPhrase(page);
   expect(words).not.toEqual(old);
   await button(page, 'I wrote them down').click();
   await answerConfirmation(page, words);
   await expect(page.getByTestId('recovery-phrase')).toHaveCount(0);
+  await expect(
+    page.getByText(
+      'The new phrase recovers the Master Key, so regenerating asks for your local password again.',
+      { exact: true },
+    ),
+  ).toBeVisible();
 
   // Another local password changes nothing; the phrase stays for another try.
   await page.getByTestId('regenerate-password').fill(WRONG);
@@ -86,9 +104,22 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   expect(newId).toMatch(/^[0-9a-f]{8}$/);
   expect(newId).not.toBe(oldId);
   await expect(done).toContainText(`The Recovery Phrase was regenerated: ${newId}`);
-  await expect(done).toContainText('not on your other devices yet');
+  await expect(
+    done.getByText(
+      'The new phrase is not on your other devices yet: they receive it when they sync with this one, and until then their backups open only with the previous phrase.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    done.getByText(
+      'Backups made before now open only with the previous phrase. Make a new backup now.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   // The backup made before opens only with the previous phrase.
-  await expect(page.getByTestId('recovery-no-backup')).toBeVisible();
+  await expect(page.getByTestId('recovery-no-backup')).toHaveText(
+    'No backup made on this device opens with the current Recovery Phrase yet: make one in Backup, above.',
+  );
 
   await check(page, words);
   await expect(page.getByText('This phrase opens this vault and its backups.')).toBeVisible();

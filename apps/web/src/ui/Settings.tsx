@@ -461,7 +461,7 @@ function PasskeySettings({
 }
 
 /** What a check result says, and whether it is good news (§5.4, D24, D179, D180). */
-function phraseResult(
+export function phraseResult(
   m: Messages,
   check: PhraseCheck,
 ): { readonly ok: boolean; readonly text: string } {
@@ -880,7 +880,7 @@ export function recordTypeName(m: Messages, recordType: number): string {
 }
 
 /** What an export that made no file says (backup-format.md §8, D64, D179, D181). */
-function exportError(m: Messages, outcome: BackupExport): string | undefined {
+export function exportError(m: Messages, outcome: BackupExport): string | undefined {
   const s = m.settings;
   switch (outcome.kind) {
     case 'ok':

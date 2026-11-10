@@ -58,7 +58,24 @@ test('shows the phrase once, asks for three of its words, and shows it again on 
   const words = await readPhrase(page);
   expect(words).toHaveLength(24);
   expect(words.every((w) => /^[a-z]+$/.test(w))).toBe(true);
-  await expect(page.getByText(/Do not take a screenshot or a photo/)).toBeVisible();
+  await expect(
+    page.getByText(
+      'These 24 words, with a backup, recover the vault if you forget the local password or lose this device. BlindVault has no server, so nobody else can recover it for you. Write them on paper, in order, and keep them somewhere safe.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'They are shown only now: BlindVault does not keep them and cannot show them again.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Do not take a screenshot or a photo: it lands in the gallery and in its cloud backup.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   // No copy or download control on the phrase screen.
   await expect(page.getByRole('button')).toHaveText(['I wrote them down']);
   await expect(page.getByRole('link')).toHaveCount(0);

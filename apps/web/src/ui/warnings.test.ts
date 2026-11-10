@@ -12,7 +12,7 @@ import { rejectedText } from './Pairing';
 import { rejectedNames } from './RefoundVault';
 import { resetError } from './ResetPassword';
 import { openingError, restoreError } from './RestoreVault';
-import { incompleteBackupPeers } from './Settings';
+import { exportError, incompleteBackupPeers, phraseResult } from './Settings';
 
 const m = MESSAGES.en;
 const date = () => 'never';
@@ -128,6 +128,29 @@ describe('a vault changed with the Master Key', () => {
   it('a reset refuses a Recovery Envelope that opens but not this vault (D184)', () => {
     expect(resetError(m, { kind: 'master-key-mismatch' })).toBe(
       'This phrase opens the Recovery Envelope held here, but not this vault: the storage is damaged, or someone holding the Master Key changed it. Replace the vault with a backup.',
+    );
+  });
+
+  it('Check Recovery Phrase says a phrase that opens the vault but not its backups (D24, D180)', () => {
+    expect(phraseResult(m, { kind: 'public-key-mismatch' })).toEqual({
+      ok: false,
+      text: 'This phrase opens the vault, but backups cannot be opened with it. Regenerate the Recovery Phrase, then make a new backup.',
+    });
+    expect(phraseResult(m, { kind: 'master-key-mismatch' })).toEqual({
+      ok: false,
+      text: 'This phrase opens a Recovery Envelope that does not recover this vault, so backups cannot be restored with it. Regenerate the Recovery Phrase, then make a new backup.',
+    });
+  });
+});
+
+describe('a vault an earlier preview build made without a Recovery Phrase (D179)', () => {
+  it('the phrase check and the export say it cannot be recovered or backed up', () => {
+    expect(phraseResult(m, { kind: 'no-envelope' })).toEqual({
+      ok: false,
+      text: 'This vault has no Recovery Phrase: the preview build created it, and it cannot be recovered. Create a new vault to get one.',
+    });
+    expect(exportError(m, { kind: 'no-envelope' })).toBe(
+      'This vault has no Recovery Phrase: the preview build created it, so no backup of it could be opened. Create a new vault to get one.',
     );
   });
 });
