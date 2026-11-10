@@ -103,8 +103,14 @@ jobs:
         run: BLINDVAULT_URL=$(e2e/self-hosting/serve.sh caddy) pnpm test:self-hosting
 
   e2e:
-    name: Playwright (Chromium, Firefox, WebKit)
+    # Four shards of the web suite, each on its own runner: one runner gives Playwright 2 workers,
+    # and the suite took 38 minutes there. packages/sync runs on the first shard only.
+    name: Playwright (Chromium, Firefox, WebKit), shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,11 +122,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @blindvault/web exec playwright install --with-deps chromium firefox webkit
-      - run: pnpm test:e2e
+      - if: matrix.shard == 1
+        run: pnpm --filter @blindvault/sync test:e2e
+      - run: pnpm --filter @blindvault/web test:e2e --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             apps/web/playwright-report/
             packages/sync/playwright-report/
