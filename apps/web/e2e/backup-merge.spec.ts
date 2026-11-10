@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 
 import { type Browser, type BrowserContext, type Page, expect, test } from '@playwright/test';
 
+import { FUTURE_CLOCK_BOUND_MS } from '@blindvault/vault';
+
 import { createVault, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
@@ -114,6 +116,12 @@ test('merges a backup made on another installation, keeping the losing edit in h
   const fromB = await exportBackup(b, B_PASSWORD);
 
   await openForMerge(a, fromB, words);
+  await expect(
+    a.getByText(
+      'Brings the records of a backup of this vault into it, as a sync would: the newer copy of each record wins, and the older version of an item goes to its history. A merge cannot be undone.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await expect(a.getByTestId('merge-confirm')).toContainText('verified.', { timeout: 30_000 });
   await button(a, 'Merge').click();
   await expect(a.getByTestId('merge-result')).toContainText('Merged: 0 added, 1 replaced.');
@@ -149,6 +157,60 @@ test('refuses to merge a backup of another vault, before asking to confirm (D13)
     a.getByText('This backup is of another vault. It cannot be merged into this one.'),
   ).toBeVisible({ timeout: 30_000 });
   await expect(a.getByTestId('merge-confirm')).toHaveCount(0);
+  expect(logged).toEqual([]);
+});
+
+test("refuses to merge a backup holding records dated ahead of this device's clock, saying from when it can (D74, D182)", async ({
+  browser,
+}) => {
+  const logged: string[] = [];
+  const a = await installation(browser, logged);
+  const words = await createVault(a, PASSWORD);
+  const first = await exportBackup(a, PASSWORD);
+
+  // B: a restore of A's backup on a device whose clock is a week ahead, fixed so its item is
+  // dated exactly then.
+  const ahead = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const context = await browser.newContext();
+  contexts.push(context);
+  const b = await context.newPage();
+  watchLogs(b, logged);
+  await b.clock.install({ time: ahead });
+  await b.clock.setFixedTime(ahead);
+  await b.goto('/');
+  await startScreen(b);
+  await button(b, 'Restore from a backup').click();
+  await b.getByTestId('restore-file').setInputFiles({
+    name: 'blindvault-backup.bvault',
+    mimeType: 'application/octet-stream',
+    buffer: first,
+  });
+  await b.getByTestId('restore-phrase').fill(words.join(' '));
+  await button(b, 'Open the backup').click();
+  await b.getByTestId('new-password').fill(B_PASSWORD);
+  await b.getByTestId('confirm-password').fill(B_PASSWORD);
+  await button(b, 'Restore').click();
+  await openVault(b);
+  await button(b, 'New item').click();
+  await button(b, 'Login').click();
+  await b.getByTestId('item-title').fill('ACME');
+  await button(b, 'Save').click();
+  await expect(b.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
+  const fromB = await exportBackup(b, B_PASSWORD);
+
+  await openForMerge(a, fromB, words);
+  await expect(a.getByTestId('merge-confirm')).toContainText('verified.', { timeout: 30_000 });
+  await button(a, 'Merge').click();
+  const date = new Intl.DateTimeFormat('en', { dateStyle: 'long', timeStyle: 'short' }).format(
+    ahead - FUTURE_CLOCK_BOUND_MS,
+  );
+  await expect(
+    a.getByText(
+      `This backup holds records dated ahead of this device's clock. It can be merged from ${date}.`,
+      { exact: true },
+    ),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(a.getByTestId('merge-result')).toHaveCount(0);
   expect(logged).toEqual([]);
 });
 
@@ -268,10 +330,11 @@ test.describe('devices a merge brings', () => {
     await openForMerge(c, paired, words);
     await button(c, 'Merge').click();
     const result = c.getByTestId('merge-result');
-    await expect(result).toContainText('Devices this device had never seen: ', { timeout: 30_000 });
-    await expect(result).toContainText(
-      'A device you did not pair means someone holding the Master Key added it.',
-    );
+    await expect(
+      result.getByText(
+        /^Devices this device had never seen: [^,]+\. A device you did not pair means someone holding the Master Key added it\.$/,
+      ),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(result).not.toContainText('Devices now retired');
 
     // A retires the paired device; its next backup tells C.
@@ -284,10 +347,11 @@ test.describe('devices a merge brings', () => {
 
     await openForMerge(c, retired, words);
     await button(c, 'Merge').click();
-    await expect(result).toContainText('Devices now retired: ', { timeout: 30_000 });
-    await expect(result).toContainText(
-      'If you did not retire them, someone holding the Master Key did.',
-    );
+    await expect(
+      result.getByText(
+        /^Devices now retired: [^,]+\. If you did not retire them, someone holding the Master Key did\.$/,
+      ),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(result).not.toContainText('had never seen');
     expect(logged).toEqual([]);
   });
