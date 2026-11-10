@@ -242,3 +242,21 @@ export class JoinRejectedError extends VaultError {
     super(`pairing rejected: ${reason}`);
   }
 }
+
+/**
+ * Why an import file is refused as a whole before anything is written (overview §15): a CSV
+ * without the columns its format needs, a BlindPass export of another `type`, an unsupported
+ * `version`, or an item that does not match its type. `item` is the index of that item.
+ */
+export type ImportRejection =
+  'missing-columns' | 'not-this-format' | 'unsupported-version' | 'invalid-item';
+
+export class ImportRejectedError extends VaultError {
+  override name = 'ImportRejectedError';
+  constructor(
+    readonly reason: ImportRejection,
+    readonly item?: number,
+  ) {
+    super(`import refused: ${reason}`);
+  }
+}
