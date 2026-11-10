@@ -5,10 +5,12 @@
 import { KdfWorkerError } from './errors';
 import { KEY_LENGTH, type Keyring, type SymmetricKey } from './keys';
 import {
+  BLINDPASS_KDF_PARAMS,
   type KdfParams,
   MEMLIMIT,
   SALT_LENGTH,
   argon2id,
+  blindPassArgon2id,
   calibrate,
   checkKdfParams,
   kdfParamsAccepted,
@@ -22,7 +24,8 @@ export type KdfRequest =
       readonly salt: Uint8Array;
       readonly params: KdfParams;
     }
-  | { readonly op: 'calibrate'; readonly password: Uint8Array; readonly salt: Uint8Array };
+  | { readonly op: 'calibrate'; readonly password: Uint8Array; readonly salt: Uint8Array }
+  | { readonly op: 'blindpass'; readonly password: Uint8Array; readonly salt: Uint8Array };
 
 export type KdfResponse =
   | { readonly ok: true; readonly key: Uint8Array; readonly params: KdfParams }
@@ -68,6 +71,9 @@ export function handleKdfRequest(request: unknown, now: () => number): KdfRespon
         now,
       );
       return { ok: true, key, params: { opslimit, memlimit: MEMLIMIT } };
+    }
+    if (request.op === 'blindpass') {
+      return { ok: true, key: blindPassArgon2id(password, salt), params: BLINDPASS_KDF_PARAMS };
     }
     return { ok: false };
   } catch {
@@ -147,6 +153,26 @@ export async function deriveDeviceKek(
  * backup at the export parameters (backup-format.md §3, §4), which share the accepted range.
  */
 export const derivePasswordKek = deriveDeviceKek;
+
+/**
+ * @internal The key of a `.blindpass` export, at BlindPass's fixed parameters (D126): the raw 32
+ * bytes, for the caller to wipe. `password` is wiped.
+ */
+export async function deriveBlindPassKey(
+  port: KdfPort,
+  password: Uint8Array,
+  salt: Uint8Array,
+): Promise<Uint8Array> {
+  const result = await run(port, { op: 'blindpass', password: transferable(password), salt });
+  if (
+    result.params.opslimit !== BLINDPASS_KDF_PARAMS.opslimit ||
+    result.params.memlimit !== BLINDPASS_KDF_PARAMS.memlimit
+  ) {
+    lib().memzero(result.key);
+    throw new KdfWorkerError();
+  }
+  return result.key;
+}
 
 /**
  * Calibrates and derives the Device KEK of a new local password (D166). Returns the parameters to

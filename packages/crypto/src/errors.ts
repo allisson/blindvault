@@ -88,6 +88,17 @@ export class TotpRejectedError extends CryptoError {
   }
 }
 
+/**
+ * A file that is not a `.blindpass` export (`blindpass-format.md` §2), or of a version other than 1,
+ * refused before deriving. A wrong passphrase is a `DecryptionError`.
+ */
+export class BlindPassRejectedError extends CryptoError {
+  override name = 'BlindPassRejectedError';
+  constructor(readonly reason: 'not-this-format' | 'unsupported-version') {
+    super(`.blindpass export rejected: ${reason}`);
+  }
+}
+
 /** Generator settings below the minimums or outside the limits (D128). */
 export class GeneratorRejectedError extends CryptoError {
   override name = 'GeneratorRejectedError';

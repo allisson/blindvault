@@ -2,48 +2,16 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { open, seal } from './aead';
 import { DecryptionError, KdfParamsRejectedError, KdfWorkerError } from './errors';
-import {
-  type KdfPort,
-  type KdfRequest,
-  calibrateDeviceKek,
-  deriveDeviceKek,
-  handleKdfRequest,
-} from './kdf-worker';
+import { calibrateDeviceKek, deriveDeviceKek, handleKdfRequest } from './kdf-worker';
 import { Keyring, generateKey, keyBytes } from './keys';
 import { MEMLIMIT, normalizePassword } from './password';
 import { initCrypto } from './sodium';
-import { fromHex, toHex, vectors } from './test-helpers';
+import { fromHex, inProcessPort, slowClock, toHex, vectors } from './test-helpers';
 
 beforeAll(initCrypto);
 
 const a2 = vectors.argon2id;
 const PARAMS = { opslimit: a2.opslimit, memlimit: a2.memlimit };
-
-/** A clock that advances 2 s per reading: every timed derivation looks slow, so calibration stops at 2. */
-function slowClock(): () => number {
-  let t = 0;
-  return () => (t += 2000);
-}
-
-/** Runs the worker handler in-process, answering asynchronously like a real worker. */
-function inProcessPort(answer?: (request: KdfRequest) => unknown) {
-  const state = { posted: 0, terminated: 0, transferred: [] as ArrayBuffer[] };
-  const port: KdfPort & { state: typeof state } = {
-    state,
-    onmessage: null,
-    onerror: null,
-    postMessage(message, transfer) {
-      state.posted += 1;
-      state.transferred.push(...transfer);
-      const data = answer ? answer(message) : handleKdfRequest(message, slowClock());
-      queueMicrotask(() => port.onmessage?.({ data }));
-    },
-    terminate() {
-      state.terminated += 1;
-    },
-  };
-  return port;
-}
 
 describe('Argon2id worker handler', () => {
   it('derives the vector Device KEK and wipes the password', () => {
@@ -73,6 +41,10 @@ describe('Argon2id worker handler', () => {
     ],
     ['no params', { op: 'derive', password: new Uint8Array(1), salt: new Uint8Array(16) }],
     ['an unknown op', { op: 'hash', password: new Uint8Array(1), salt: new Uint8Array(16) }],
+    [
+      'a .blindpass key with a short salt',
+      { op: 'blindpass', password: new Uint8Array(1), salt: new Uint8Array(15) },
+    ],
     [
       'params outside the range',
       {

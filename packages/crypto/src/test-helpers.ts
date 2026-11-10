@@ -2,6 +2,8 @@
 
 import vectors from '../test-vectors/crypto-v1.json' with { type: 'json' };
 
+import { type KdfPort, type KdfRequest, handleKdfRequest } from './kdf-worker';
+
 export { vectors };
 
 export function fromHex(hex: string): Uint8Array {
@@ -32,4 +34,30 @@ export function hlcFromHex(hlc: HexHlc): {
   deviceId: Uint8Array;
 } {
   return { physicalMs: hlc.physicalMs, counter: hlc.counter, deviceId: fromHex(hlc.deviceId) };
+}
+
+/** A clock that advances 2 s per reading: every timed derivation looks slow, so calibration stops at 2. */
+export function slowClock(): () => number {
+  let t = 0;
+  return () => (t += 2000);
+}
+
+/** Runs the worker handler in-process, answering asynchronously like a real worker. */
+export function inProcessPort(answer?: (request: KdfRequest) => unknown) {
+  const state = { posted: 0, terminated: 0, transferred: [] as ArrayBuffer[] };
+  const port: KdfPort & { state: typeof state } = {
+    state,
+    onmessage: null,
+    onerror: null,
+    postMessage(message, transfer) {
+      state.posted += 1;
+      state.transferred.push(...transfer);
+      const data = answer ? answer(message) : handleKdfRequest(message, slowClock());
+      queueMicrotask(() => port.onmessage?.({ data }));
+    },
+    terminate() {
+      state.terminated += 1;
+    },
+  };
+  return port;
 }
