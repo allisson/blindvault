@@ -101,6 +101,12 @@ for (const width of [390, 1280] as const) {
     // Pairing opens with its password step already shown, the cursor in it (D234).
     await button(page, 'Pair a device').click();
     await expect(page.getByTestId('invite-password')).toBeFocused();
+    await expect(
+      page.getByText(
+        'Pairing hands this vault’s Master Key to the other device for good: enter the local password again.',
+        { exact: true },
+      ),
+    ).toBeVisible();
     await button(page, 'Back').click();
     await expect(ready).toBeVisible();
 
