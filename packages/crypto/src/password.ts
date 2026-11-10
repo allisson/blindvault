@@ -56,9 +56,24 @@ export function checkKdfParams(params: KdfParams): void {
   if (!kdfParamsAccepted(params)) throw new KdfParamsRejectedError();
 }
 
+/**
+ * BlindPass's Argon2id parameters, libsodium's `SENSITIVE` limits (D126). BlindPass fixes them in
+ * code and a `.blindpass` file does not store them, so they are never read from the file.
+ */
+export const BLINDPASS_KDF_PARAMS: KdfParams = { opslimit: 4, memlimit: 1024 * MIB };
+
 /** @internal One Argon2id derivation, for the worker. Returns the raw 32 bytes. */
 export function argon2id(password: Uint8Array, salt: Uint8Array, params: KdfParams): Uint8Array {
   checkKdfParams(params);
+  return pwhash(password, salt, params);
+}
+
+/** @internal The key of a `.blindpass` export, at BlindPass's fixed parameters (D126). */
+export function blindPassArgon2id(password: Uint8Array, salt: Uint8Array): Uint8Array {
+  return pwhash(password, salt, BLINDPASS_KDF_PARAMS);
+}
+
+function pwhash(password: Uint8Array, salt: Uint8Array, params: KdfParams): Uint8Array {
   if (salt.length !== SALT_LENGTH) throw new KdfParamsRejectedError();
   return lib().crypto_pwhash(
     KEY_LENGTH,

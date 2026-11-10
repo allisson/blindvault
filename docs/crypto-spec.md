@@ -163,7 +163,9 @@ authenticator data does not have the UV flag set is rejected before any derivati
   the stored parameters MUST be within `memlimit` ∈ [64 MiB, 256 MiB] and `opslimit` ∈ [2, 64];
   anything else is rejected without running Argon2id.
 - Export password parameters and their accepted range are in `backup-format.md` (D78).
-- `.blindpass` import uses libsodium's `SENSITIVE` limits as BlindPass constants (D126).
+- `.blindpass` import uses libsodium's `SENSITIVE` limits as BlindPass constants (D126), never read
+  from the file, in the same worker. The passphrase is used as its UTF-8 bytes without the
+  normalization above, as BlindPass uses it (`blindpass-format.md` §2).
 
 ## 7. AEAD
 

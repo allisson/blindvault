@@ -2,6 +2,7 @@
 // Only this file is the package's API: functions marked @internal stay inside the package.
 
 export {
+  BlindPassRejectedError,
   CryptoError,
   CryptoNotReadyError,
   DecryptionError,
@@ -27,8 +28,10 @@ export {
   sameKey,
 } from './keys';
 export { type MasterSubkeys, deriveMasterSubkeys, isMasterKeyOf } from './kdf';
+export { openBlindPassExport } from './blindpass';
 export {
   ACCEPTED_KDF_RANGE,
+  BLINDPASS_KDF_PARAMS,
   type KdfParams,
   MEMLIMIT,
   SALT_LENGTH,
