@@ -418,7 +418,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Tasks
 
 - [x] `docs/blindpass-format.md`: BlindPass export format (plaintext `.json`, encrypted `.blindpass`) (D123)
-- [ ] Justify `fflate` in `docs/architecture.md` (D125)
+- [x] Justify `fflate` in `docs/architecture.md` (D125)
 - [ ] Copy and adapt the BlindPass parsers into `packages/vault`: BlindPass, Chrome, LastPass, Apple Passwords, KeePassXC, Bitwarden, Proton Pass, 1Password, Dashlane (D123)
 - [ ] `.blindpass` export decryption in `packages/crypto` with BlindPass's fixed Argon2id parameters and `crypto_secretbox` (D125, D126)
 - [ ] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); `otpauth://` URIs as `totp` fields whatever their key, bare base32 values only under TOTP-looking keys (D131, D133)
