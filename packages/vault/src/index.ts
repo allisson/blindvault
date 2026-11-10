@@ -143,5 +143,7 @@ export {
   parseKeePassXcCsv,
   parseLastPassCsv,
 } from './import/csv-formats';
-export { parseProtonPassJson } from './import/protonpass';
+export { parseDashlaneExport } from './import/dashlane';
+export { parseOnePasswordExport } from './import/onepassword';
+export { parseProtonPassJson, parseProtonPassZip } from './import/protonpass';
 export { type SourceField, type SourceItem, type SourceParse } from './import/source';

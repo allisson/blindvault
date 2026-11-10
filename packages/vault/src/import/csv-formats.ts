@@ -20,7 +20,7 @@ function table(raw: string, required: readonly string[]): Row[] {
 }
 
 /** The source title, else the URL's host, else the URL. */
-function title(name: string, url: string): string {
+export function loginTitle(name: string, url: string): string {
   if (name || !url) return name;
   try {
     return new URL(url).hostname || url;
@@ -40,7 +40,7 @@ function login(
   if (!row('password')) return undefined;
   const url = row('url');
   return {
-    title: title(name, url),
+    title: loginTitle(name, url),
     template: 'login',
     fields: [
       ...field('Username', row('username'), 'username'),

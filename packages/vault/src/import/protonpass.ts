@@ -1,8 +1,7 @@
 // Proton Pass's unencrypted JSON export, the `Proton Pass/data.json` of its zip (overview §15,
 // D123). Copied from BlindPass's parser and adapted to `SourceItem` (architecture.md, BlindPass
 // inventory): each vault is a folder, and content keys no reader takes are kept as fields. A
-// PGP-encrypted export is refused (D146): here as an armored message, and as the zip's `data.pgp`
-// by the zip reader.
+// PGP-encrypted export is refused (D146): as an armored message, and as the zip's `data.pgp`.
 
 import { ImportRejectedError } from '../errors';
 import {
@@ -12,12 +11,14 @@ import {
   type SourceParse,
   field,
   isObject,
+  object,
   optional,
   readJson,
   rest,
   text,
   expiry,
 } from './source';
+import { baseName, readText, readZip } from './zip';
 
 const TEMPLATES = new Map([
   ['login', 'login'],
@@ -26,10 +27,6 @@ const TEMPLATES = new Map([
   ['identity', 'identity'],
   ['sshKey', 'developer-credential'],
 ]);
-
-function object(value: unknown): Json {
-  return isObject(value) ? value : {};
-}
 
 /** Extra fields, and the fields of the sections that hold them. */
 function extras(list: unknown[]): SourceField[] {
@@ -134,4 +131,14 @@ export function parseProtonPassJson(json: string): SourceParse {
     }
   }
   return { items, skipped: entries - items.length };
+}
+
+/** Proton Pass's zip export: its `data.json`, or a refusal for the encrypted `data.pgp` (D146). */
+export function parseProtonPassZip(bytes: Uint8Array): SourceParse {
+  const files = [...readZip(bytes)];
+  const named = (name: string) => files.find(([n]) => baseName(n) === name)?.[1];
+  if (named('data.pgp')) throw new ImportRejectedError('encrypted-export');
+  const data = named('data.json');
+  if (data === undefined) throw new ImportRejectedError('not-this-format');
+  return parseProtonPassJson(readText(data));
 }
