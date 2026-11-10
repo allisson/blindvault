@@ -98,6 +98,10 @@ for (const [layout, width] of WIDTHS) {
     await folders(page, layout);
     await button(page, 'Clients').click();
     await expect(list.getByRole('button', { name: 'Contract', exact: true })).toBeVisible();
+    await expect(button(page, 'Move to trash')).toHaveAttribute(
+      'title',
+      'Moving a folder to the trash also moves its subfolders and their items.',
+    );
     await button(page, 'Move to trash').click();
     await expect(page.getByRole('heading', { name: 'Clients', level: 2 })).toHaveCount(0);
     await folders(page, layout);
@@ -108,6 +112,10 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Trash').click();
     await expect(page.getByText('Folder: Clients')).toBeVisible();
     await expect(button(page, 'Contract')).toBeVisible();
+    await expect(button(page, 'Restore Clients from the trash')).toHaveAttribute(
+      'title',
+      'Restoring a folder from the trash brings back what was trashed with it.',
+    );
     await button(page, 'Restore Clients from the trash').click();
     await expect(page.getByText('The trash is empty.')).toBeVisible();
     await folders(page, layout);

@@ -39,6 +39,12 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
 
   // The warnings, and the confirmation they need (D46, D72).
   const refound = page.getByTestId('refound');
+  await expect(
+    refound.getByText(
+      'If someone else may hold the Master Key (an exposed Recovery Phrase or export password, a retirement you did not make, a device you did not pair), re-found the vault: what this device holds moves to a new vault under entirely new keys.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await refound.getByTestId('refound-start').click();
   const warnings = refound.getByTestId('refound-warnings');
   await expect(warnings).toContainText(

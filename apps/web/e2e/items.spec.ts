@@ -130,6 +130,24 @@ test('refuses an invalid item with a message per field (record-content.md §3, �
   await expect(page.getByText('Branch')).toBeVisible();
 });
 
+test('a seed phrase of BIP39 words whose checksum does not match is saved, and says so (record-content.md §4)', async ({
+  page,
+}) => {
+  await create(page);
+  await page.getByRole('button', { name: 'New item', exact: true }).click();
+  await page.getByRole('button', { name: 'Crypto wallet', exact: true }).click();
+  await page.getByTestId('item-title').fill('Cold wallet');
+  // Twelve words of the list, but the last one is not the checksum of the others.
+  await page.getByTestId('input-Seed phrase').fill(Array(12).fill('abandon').join(' '));
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cold wallet' })).toBeVisible();
+  await expect(
+    page.getByText('The checksum of this seed phrase does not match. Check the words.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
 test('fills a secret from the password generator (D128)', async ({ page }) => {
   await create(page);
   await page.getByRole('button', { name: 'New item', exact: true }).click();
