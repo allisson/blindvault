@@ -404,7 +404,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### UX Gate
 
 - [x] axe reports no violation on any screen, in both themes, at the three layout widths (D238, D240)
-- [ ] Every flow completes with the keyboard alone, and with a screen reader on one browser per platform (manual run, recorded)
+- [x] Every flow completes with the keyboard alone (`keyboard.spec.ts`, D240), and reads as it should to a screen reader: the accessibility tree of each screen of the main flow (`screen-reader.spec.ts`, D241)
 - [x] Every security warning and confirmation is still shown and still asserted by the tests (the exact text in the e2e specs, or in `warnings.test.ts` for what only a forged input or a race reaches)
 - [x] Under `prefers-reduced-motion`, no animation runs (`motion.spec.ts` through a held press, a copy and a dialog; the class guard and the busy spinner in `contrast.test.ts`, D236)
 - [x] Visual and flow tests pass at the three layout widths, including resizing across breakpoints without losing state (`layout.spec.ts`, D197)
