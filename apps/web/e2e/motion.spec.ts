@@ -51,9 +51,13 @@ test('nothing animates under prefers-reduced-motion, and the check still shows (
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await newLogin(page);
 
-  // A press, the copy check.
+  // A press held down, then the copy check. The press is counted while held: a click lets its
+  // 150 ms transition end before anything can count it.
   const copy = page.getByRole('button', { name: 'Copy: Password', exact: true });
-  await copy.click();
+  await copy.hover();
+  await page.mouse.down();
+  expect(await animations(page)).toBe(0);
+  await page.mouse.up();
   await expect(copy.getByTestId('copy-check')).toBeVisible();
   expect(await animations(page)).toBe(0);
 
