@@ -135,6 +135,7 @@ export {
   isWithin,
 } from './tree';
 export { codePointLength } from './text';
+export { parseBitwardenJson } from './import/bitwarden';
 export { parseBlindPassExport } from './import/blindpass';
 export {
   parseApplePasswordsCsv,
@@ -142,4 +143,5 @@ export {
   parseKeePassXcCsv,
   parseLastPassCsv,
 } from './import/csv-formats';
+export { parseProtonPassJson } from './import/protonpass';
 export { type SourceField, type SourceItem, type SourceParse } from './import/source';
