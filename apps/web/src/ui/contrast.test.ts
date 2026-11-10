@@ -1,7 +1,10 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { ACCENTS, THEME_COLORS } from '../app/appearance';
 import source from '../index.css?raw';
+import { Spinner } from './components';
 
 // WCAG 2.2 AA for every accent in both themes (overview §13.7, D231): 4.5:1 for text, 3:1 for
 // controls and the focus ring. The values are read from index.css itself.
@@ -172,5 +175,10 @@ describe('motion runs only for users who have not asked for reduced motion (D231
         .map((token) => `${file}: ${token}`),
     );
     expect(found).toEqual([]);
+  });
+
+  // No e2e holds a button busy long enough to look at it, so its spinner is checked here (D236).
+  it('hides the busy spinner under reduced motion, leaving the label that names the work', () => {
+    expect(renderToStaticMarkup(createElement(Spinner))).toContain('motion-reduce:hidden');
   });
 });
