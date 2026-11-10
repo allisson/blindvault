@@ -26,6 +26,12 @@ test('refuses a weak or mismatched password before creating (D71)', async ({ pag
   await page.getByTestId('new-password').fill('password123');
   await page.getByTestId('confirm-password').fill('password123');
   await expect(submit).toBeDisabled();
+  // Random but short: no pattern for zxcvbn to name, so the app's own warning.
+  await page.getByTestId('new-password').fill('Xq7#vL2p');
+  await expect(
+    page.getByText('This password is too easy to guess. Use a longer passphrase.', { exact: true }),
+  ).toBeVisible();
+  await expect(submit).toBeDisabled();
   await page.getByTestId('new-password').fill(PASSWORD);
   await page.getByTestId('confirm-password').fill(`${PASSWORD}x`);
   await expect(page.getByText('The passwords do not match.')).toBeVisible();

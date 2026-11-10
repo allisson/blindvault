@@ -62,6 +62,12 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await button(page, 'Continue').click();
 
   // The proof of the user: a wrong password goes no further (D187).
+  await expect(
+    refound.getByText(
+      'Confirm it is you with the local password of this vault, or with its passkey.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await refound.getByTestId('refound-password').fill(WRONG);
   await button(page, 'Confirm').click();
   await expect(refound.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });

@@ -151,6 +151,14 @@ test('offers a new deploy without switching to it, and switches only once confir
     timeout: 30_000,
   });
   await expect(page.getByTestId('update-hash')).toHaveText(next.hash);
+  await expect(
+    banner.getByText('Compare this hash with the one published in the release before you update.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    banner.getByText('Updating locks the vault and reloads the app.', { exact: true }),
+  ).toBeVisible();
   // Being offered locks nothing.
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
 
