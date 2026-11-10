@@ -152,6 +152,51 @@ test('refuses to merge a backup of another vault, before asking to confirm (D13)
   expect(logged).toEqual([]);
 });
 
+test('a merge of a backup opened by its export password recommends Check Recovery Phrase (D43)', async ({
+  browser,
+}) => {
+  const logged: string[] = [];
+  const a = await installation(browser, logged);
+  await createVault(a, PASSWORD);
+  await openSettings(a);
+  await a.getByTestId('backup-protect').check();
+  await button(a, 'Generate a passphrase').click();
+  const passphrase = await a.getByTestId('export-password').inputValue();
+  await a.getByTestId('export-confirm').fill(passphrase);
+  await a.getByTestId('backup-password').fill(PASSWORD);
+  const [download] = await Promise.all([
+    a.waitForEvent('download', { timeout: 60_000 }),
+    button(a, 'Export').click(),
+  ]);
+  const file = await readFile(await download.path());
+  await expect(a.getByTestId('after-restore')).toHaveCount(0);
+
+  // Its own backup merges with nothing to change; the export password opened it.
+  await a.getByTestId('merge-start').click();
+  await a.getByTestId('restore-file').setInputFiles({
+    name: 'blindvault-backup.bvault',
+    mimeType: 'application/octet-stream',
+    buffer: file,
+  });
+  await a.getByRole('radio', { name: 'Export password' }).check();
+  await a.getByTestId('restore-export-password').fill(passphrase);
+  await button(a, 'Open the backup').click();
+  await expect(a.getByTestId('merge-confirm')).toContainText('verified.', { timeout: 30_000 });
+  await button(a, 'Merge').click();
+  await expect(a.getByTestId('merge-result')).toBeVisible();
+  await expect(
+    a
+      .getByTestId('after-restore')
+      .getByText(
+        'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
+        { exact: true },
+      ),
+  ).toBeVisible();
+
+  expect(logged.filter((line) => [PASSWORD, passphrase].some((s) => line.includes(s)))).toEqual([]);
+  expect(logged).toEqual([]);
+});
+
 test.describe('devices a merge brings', () => {
   // Pairing copies and pastes with no camera: WebKit on Linux does not connect (D203), and Firefox
   // gathers no ICE candidate on `localhost` (playwright.config.ts).
