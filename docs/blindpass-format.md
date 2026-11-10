@@ -112,4 +112,9 @@ login it belongs to; BlindVault imports it as a `totp` field under D124.
 
 **Validation.** BlindPass rejects the whole file when the JSON does not parse, `type` or `version`
 does not match, `items` is not an array or any item does not match its type. BlindVault rejects
-such a file the same way, with a message the user can read (overview §15).
+such a file the same way, with a message the user can read (overview §15). It checks each item's
+shape: `type`, `credentialMode` and `walletMode`, required keys present as strings, optional keys
+strings when present (`null` reads as absent), and the TOTP `algorithm`, `digits` and `period`. The
+value rules (non-empty strings, mnemonic word count, derivation path, URL, `addressHint` length,
+SSH algorithm or fingerprint) are left to the import mapping, which checks every value against
+BlindVault's own field types (D124). Unknown keys are ignored, as BlindPass ignores them.
