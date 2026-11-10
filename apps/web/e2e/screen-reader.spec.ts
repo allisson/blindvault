@@ -79,12 +79,12 @@ for (const [layout, width] of WIDTHS) {
     await page.getByTestId('confirm-password').fill(PASSWORD);
     await button(page, 'Create vault').click();
     await expect(page.getByTestId('ready')).toBeVisible({ timeout: 60_000 });
+    // The passkey step is left out: it shows only where the browser supports passkeys, and
+    // WebKit on Linux does not.
     await expect(main).toMatchAriaSnapshot(`
       - region "Vault ready":
         - heading "Vault ready" [level=1]
         - list:
-          - listitem:
-            - button "Set up a passkey"
           - listitem:
             - button "Make a backup"
           - listitem:
