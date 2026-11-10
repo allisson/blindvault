@@ -151,6 +151,66 @@ test('re-admits a restored device: both know each other and hold every item (§9
   expect(logged.filter((line) => secrets.some((s) => line.includes(s)))).toEqual([]);
 });
 
+test('a pairing answered by a device of the vault is refused, and a restored device that pairs a new one is told to re-admit (D207)', async ({
+  browser,
+}) => {
+  const logged: string[] = [];
+  const { a, b } = await restored(browser, logged);
+
+  // A invites; B answers from its re-admission, as a device that already holds the vault.
+  await a.getByRole('button', { name: 'Settings' }).first().click();
+  await button(a, 'Pair a device…').click();
+  await a.getByTestId('pairing-same-network').check();
+  await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
+  await button(a, 'Start pairing').click();
+  const offer = a.getByTestId('pairing-text');
+  await expect(offer).not.toHaveValue('', { timeout: 30_000 });
+  await startReadmission(b, false);
+  await b.getByTestId('pairing-paste').fill(await offer.inputValue());
+  await button(b, 'Show my answer').click();
+  const answer = b.getByTestId('pairing-text');
+  await expect(answer).not.toHaveValue('', { timeout: 30_000 });
+  await a.getByTestId('pairing-paste').fill(await answer.inputValue());
+  await button(a, 'Connect').click();
+  await expect(
+    a.getByText(
+      'That device already holds a vault: to re-admit it, cancel here and choose “Re-admit with another device of this vault…” on both devices.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await button(b, 'Cancel').click();
+
+  // B, restored and unregistered, pairs a new device C: the others know neither yet.
+  await button(b, 'Pair a device…').click();
+  await b.getByTestId('invite').getByTestId('pairing-same-network').check();
+  await fillPassword(b.getByTestId('invite-password'), PASSWORD_B);
+  await button(b, 'Start pairing').click();
+  const invite = b.getByTestId('pairing-text');
+  await expect(invite).not.toHaveValue('', { timeout: 30_000 });
+  const c = await device(browser, logged);
+  await startScreen(c);
+  await button(c, 'Pair with an existing device').click();
+  await fillPassword(c.getByTestId('new-password'), PASSWORD_A);
+  await fillPassword(c.getByTestId('confirm-password'), PASSWORD_A);
+  await c.getByTestId('pairing-same-network').check();
+  await button(c, 'Start pairing').click();
+  await c.getByTestId('pairing-paste').fill(await invite.inputValue(), { timeout: 30_000 });
+  await button(c, 'Show my answer').click();
+  const reply = c.getByTestId('pairing-text');
+  await expect(reply).not.toHaveValue('', { timeout: 30_000 });
+  await b.getByTestId('pairing-paste').fill(await reply.inputValue());
+  await button(b, 'Connect').click();
+  await expect(b.getByTestId('pairing-sas')).toHaveText(/^\d{3} \d{3}$/, { timeout: 30_000 });
+  await button(b, 'Yes, the same').click();
+  await button(c, 'Yes, the same').click();
+  await expect(b.getByTestId('pairing-done')).toBeVisible({ timeout: 60_000 });
+  await expect(
+    b.getByText(
+      /^The other devices of this vault do not know this device or .+ yet: re-admit this device with one of them, so they can sync with both\.$/,
+    ),
+  ).toBeVisible();
+});
+
 test('two devices of different vaults: both say so, and nothing is written (D50, CRYPTO-INV-014)', async ({
   browser,
 }) => {

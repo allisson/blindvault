@@ -69,6 +69,12 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
   const hint = a.getByTestId('same-network-hint');
   await expect(hint).toContainText('(stun.l.google.com, stun.cloudflare.com)');
   await a.getByTestId('stun-open').click();
+  await expect(
+    a.getByText(
+      'Unless the same network only is chosen, this device asks these STUN servers for its public address. Each one sees that address, and nothing of the vault.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   const list = a.getByTestId('stun-list').getByRole('listitem');
   await expect(list).toHaveText(['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478']);
   await expect(a.getByTestId('stun-reset')).toHaveCount(0);

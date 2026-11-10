@@ -21,6 +21,12 @@ async function expectAbout(page: Page, hash: string): Promise<void> {
   const about = page.getByTestId('about');
   await expect(about.getByTestId('about-version')).toHaveText(VERSION);
   await expect(about.getByTestId('about-hash')).toHaveText(hash);
+  await expect(
+    about.getByText(
+      'The app shows these values about itself, and a modified app can show any value. They do not prove which code runs.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await expect(about).toContainText('shasum -a 256 -c asset-manifest.txt');
   const releases = about.getByRole('link', { name: 'Releases on GitHub' });
   await expect(releases).toHaveAttribute('href', 'https://github.com/allisson/blindvault/releases');

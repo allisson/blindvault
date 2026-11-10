@@ -220,6 +220,12 @@ test('locks an unlocked vault and warns when the host serves a changed sw.js (D6
   await expect(warning).toContainText('The host served a changed service worker', {
     timeout: 30_000,
   });
+  await expect(
+    warning.getByText(
+      'A release that changes the service worker must say so and why in its release notes. Do not unlock the vault until you have verified the release outside the app: compare the served files with its published asset manifest, or rebuild it from source.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'I verified, continue', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Unlock the vault' })).toBeVisible();
   // The new bundle came with the changed worker: no asset update is offered next to it.

@@ -173,6 +173,9 @@ test('a second app window does not open the vault, and takes it over (D51)', asy
   const second = await context.newPage();
   await second.goto('/');
   await expect(second.getByText('BlindVault is open in another window.')).toBeVisible();
+  await expect(
+    second.getByText('This locks the vault in the other window.', { exact: true }),
+  ).toBeVisible();
   await second.getByRole('button', { name: 'Use here' }).click();
   await expect(second.getByRole('heading', { name: 'Unlock the vault' })).toBeVisible();
   await expect(page.getByText('BlindVault is open in another window.')).toBeVisible();
