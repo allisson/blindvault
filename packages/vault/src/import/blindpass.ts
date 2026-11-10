@@ -3,15 +3,19 @@
 // becomes the shape checks below, and each item becomes a `SourceItem`.
 
 import { ImportRejectedError } from '../errors';
-import { type SourceField, type SourceItem, type SourceParse, field, optional } from './source';
-
-type Json = Record<string, unknown>;
+import {
+  type Json,
+  type SourceField,
+  type SourceItem,
+  type SourceParse,
+  expiry,
+  field,
+  isObject,
+  optional,
+  readJson,
+} from './source';
 
 class Invalid extends Error {}
-
-function isObject(value: unknown): value is Json {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** A required string. */
 function req(o: Json, key: string): string {
@@ -44,12 +48,6 @@ function custom(o: Json): SourceField[] {
     if (!isObject(entry)) throw new Invalid();
     return field(req(entry, 'label'), req(entry, 'value'));
   });
-}
-
-/** `YYYY-MM` from BlindPass's month and year strings, when both are numbers. */
-function expiry(month: string, year: string): string {
-  if (!/^\d{1,2}$/.test(month) || !/^(\d{2}|\d{4})$/.test(year)) return '';
-  return `${year.length === 2 ? `20${year}` : year}-${month.padStart(2, '0')}`;
 }
 
 /** An `otpauth://` URI carrying a BlindPass TOTP item's parameters, so D133 reads it as TOTP. */
@@ -125,18 +123,13 @@ function item(o: Json): SourceItem {
       ]);
     case 'secure_note':
       return make({ template: 'secure-note' }, [], req(o, 'content'));
-    case 'payment_card': {
-      const [month, year] = [req(o, 'expMonth'), req(o, 'expYear')];
-      const date = expiry(month, year);
+    case 'payment_card':
       return make({ template: 'card' }, [
         ...field('Cardholder', req(o, 'cardholderName'), 'cardholder'),
         ...field('Number', req(o, 'number'), 'number'),
-        ...(date
-          ? field('Expiry', date, 'expiry')
-          : [...field('Expiry month', month), ...field('Expiry year', year)]),
+        ...expiry(req(o, 'expMonth'), req(o, 'expYear')),
         ...field('CVV', opt(o, 'cvv'), 'cvv'),
       ]);
-    }
     case 'identity':
       return make({ template: 'identity' }, [
         ...field('First name', req(o, 'firstName'), 'firstName'),
@@ -169,12 +162,7 @@ function item(o: Json): SourceItem {
 
 /** Parses a BlindPass plaintext export; refuses the whole file on any mismatch, as BlindPass does. */
 export function parseBlindPassExport(json: string): SourceParse {
-  let data: unknown;
-  try {
-    data = JSON.parse(json);
-  } catch {
-    throw new ImportRejectedError('not-this-format');
-  }
+  const data = readJson(json);
   if (!isObject(data) || data.type !== 'blindpass-export') {
     throw new ImportRejectedError('not-this-format');
   }
