@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { createVault } from './create';
+import { lock } from './lock';
 import { storedPlaintext } from './stored';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
@@ -91,7 +92,7 @@ for (const [layout, width] of WIDTHS) {
     await page.getByRole('button', { name: TITLE, exact: true }).click();
     await expect(page.getByText('ana.lima.0042')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Lock', exact: true }).click();
+    await lock(page);
     await page.getByTestId('unlock-password').fill(PASSWORD);
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

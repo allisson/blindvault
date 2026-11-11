@@ -1,6 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { confirmPhrase, openVault, startScreen } from './create';
+import { lock } from './lock';
 
 // The first screen, the three starts and "Vault ready" (overview §13.3, D198).
 
@@ -117,7 +118,7 @@ for (const width of [390, 1280] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       width,
     );
-    await button(page, 'Lock').click();
+    await lock(page);
     await page.getByTestId('unlock-password').fill(PASSWORD);
     await button(page, 'Unlock').click();
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

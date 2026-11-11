@@ -857,7 +857,7 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 | `fflate` 0.8.3 | `packages/vault` | Reads the zip imports, 1Password `.1pux` and Dashlane `.zip` (D123, D125): MIT, no dependencies, no install scripts, pure JavaScript with no WASM; the import uses only its unzip code. The browser has no zip reader (`DecompressionStream` inflates a stream, not an archive), and writing one means parsing a central directory from an untrusted file by hand. Same library as BlindPass (`^0.8.2`); 0.8.3 (2026-05-16) fixes a buffer over-read in Zip64 extra fields. **Use `unzipSync` only.** It inflates each entry into a buffer of the size its header declares, so the output can never exceed that size: checked on 2026-11-10 with a 50 MB entry declared as 10 bytes, which came out as 10 bytes. The 100 MB and 10,000-entry caps (D130) are therefore enforced in its `filter` on `originalSize` and the entry count, before anything is inflated. The async `unzip` treats large entries' size as a hint and can grow past it, and BlindPass's `filter` sums `size`, the compressed size: neither is copied. Phase 8. |
 
 Copied, not depended on: the icons in `apps/web/src/ui/icons/`, from `lucide-static` 1.61.0
-(ISC; `lock` and `plus` derive from Feather, MIT), both notices in `icons/LICENSE` (D233).
+(ISC; some, as `lock` and `plus`, derive from Feather, MIT), both notices in `icons/LICENSE` (D233).
 
 ### Review before v1.0 (Phase 8, 2026-11-11)
 

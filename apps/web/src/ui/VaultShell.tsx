@@ -3,7 +3,7 @@ import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore 
 
 import { type BackupReminder } from '../app/backup-reminder';
 import { type VaultController } from '../app/controller';
-import { type Navigation, isDetail } from '../app/nav';
+import { type Navigation, isDetail, isList } from '../app/nav';
 import { SearchIndex } from '../app/search';
 import { newItemShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
@@ -12,6 +12,7 @@ import {
   Button,
   LockState,
   Notice,
+  Overflow,
   PreviewBanner,
   SharedOriginWarning,
   UpdateBanner,
@@ -77,26 +78,48 @@ function DetailPane({
 
 function Header({
   controller,
+  session,
   nav,
   mobile,
 }: {
   readonly controller: VaultController;
+  readonly session: VaultSession;
   readonly nav: Navigation;
-  /** Mobile drills down and has Settings in its bottom navigation instead. */
+  /**
+   * Mobile drills down, has Settings in its bottom navigation instead, New item as the header's
+   * action and Lock in the "…" menu (D245).
+   */
   readonly mobile: boolean;
 }) {
   const m = useMessages();
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const back = mobile ? screen.name !== 'vault' : screen.name === 'settings';
+  const lock = {
+    onClick: () => {
+      controller.lock();
+    },
+    title: 'Ctrl/⌘ + Shift + L',
+    'aria-keyshortcuts': 'Control+Shift+L Meta+Shift+L',
+    children: (
+      <>
+        <Icon name="lock" className="me-1.5" />
+        {m.app.lock}
+      </>
+    ),
+  };
+  // Under "Vault ready" a new item would open unseen (D198).
+  const adds = isList(screen) && screen.name !== 'trash' && session.writable && !controller.ready;
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
       {back ? (
         <Button
           variant="quiet"
+          className="ps-2"
           onClick={() => {
             nav.back();
           }}
         >
+          <Icon name="chevron-left" className="me-1" />
           {m.app.back}
         </Button>
       ) : null}
@@ -114,16 +137,27 @@ function Header({
           {m.app.settings}
         </Button>
       ) : null}
-      <Button
-        onClick={() => {
-          controller.lock();
-        }}
-        title="Ctrl/⌘ + Shift + L"
-        aria-keyshortcuts="Control+Shift+L Meta+Shift+L"
-      >
-        <Icon name="lock" className="me-1.5" />
-        {m.app.lock}
-      </Button>
+      {mobile ? (
+        <>
+          {adds ? (
+            <Button
+              aria-label={m.items.new}
+              title={`${m.items.new} (N)`}
+              aria-keyshortcuts="N"
+              onClick={() => {
+                nav.select({ name: 'new' });
+              }}
+            >
+              <Icon name="plus" />
+            </Button>
+          ) : null}
+          <Overflow label={m.app.more}>
+            <Button variant="quiet" className="text-left" {...lock} />
+          </Overflow>
+        </>
+      ) : (
+        <Button {...lock} />
+      )}
     </header>
   );
 }
@@ -370,7 +404,7 @@ export function VaultShell({
 
   return (
     <div data-layout={layout} className="flex h-dvh flex-col overflow-hidden bg-surface text-fg">
-      <Header controller={controller} nav={nav} mobile={layout === 'mobile'} />
+      <Header controller={controller} session={session} nav={nav} mobile={layout === 'mobile'} />
       <LiveSync controller={controller} nav={nav} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
         <SharedOriginWarning />
@@ -488,25 +522,46 @@ export function VaultShell({
         <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>{body}</main>
       </div>
       {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
-        <footer className="flex justify-around border-t border-line p-2">
-          <Button
-            variant="quiet"
-            aria-current={screen.name === 'vault' ? 'page' : undefined}
-            onClick={() => {
-              nav.showList({ name: 'vault' });
-            }}
-          >
-            {m.vault.items}
-          </Button>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              nav.open({ name: 'settings' });
-            }}
-          >
-            <Icon name="settings" className="me-1.5" />
-            {m.app.settings}
-          </Button>
+        <footer className="grid grid-cols-3 gap-1 border-t border-line p-1">
+          {(
+            [
+              [
+                'list',
+                m.vault.items,
+                screen.name === 'vault' || screen.name === 'folder',
+                () => {
+                  nav.showList({ name: 'vault' });
+                },
+              ],
+              [
+                'trash-2',
+                m.vault.trash,
+                screen.name === 'trash',
+                () => {
+                  nav.showList({ name: 'trash' });
+                },
+              ],
+              [
+                'settings',
+                m.app.settings,
+                false,
+                () => {
+                  nav.open({ name: 'settings' });
+                },
+              ],
+            ] as const
+          ).map(([icon, label, current, go]) => (
+            <Button
+              key={icon}
+              variant="quiet"
+              className="flex flex-col items-center justify-center gap-0.5 px-1 text-xs aria-[current]:text-accent-text"
+              aria-current={current ? 'page' : undefined}
+              onClick={go}
+            >
+              <Icon name={icon} />
+              {label}
+            </Button>
+          ))}
         </footer>
       ) : null}
     </div>

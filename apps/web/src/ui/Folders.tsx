@@ -7,12 +7,15 @@ import {
   folderNameOf,
   folderRows,
   moveTargets,
+  treeItems,
 } from '../app/folders';
 import { hex } from '../app/ids';
 import { type ListScreen, type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Field, INPUT, Notice, ROW } from './components';
+import { useLayout } from './hooks';
+import { Icon, type IconName } from './icons';
 
 function recordName(session: VaultSession, r: BlockedRecord, m: Messages): string {
   const folder = session.folder(r.recordId);
@@ -115,11 +118,16 @@ function NameForm({
 function ListEntry({
   nav,
   list,
+  icon,
+  count,
   depth = 0,
   children,
 }: {
   readonly nav: Navigation;
   readonly list: ListScreen;
+  readonly icon: IconName;
+  /** Seen only: the list it opens announces its length (D245). */
+  readonly count: number;
   readonly depth?: number;
   readonly children: ReactNode;
 }) {
@@ -130,14 +138,18 @@ function ListEntry({
   return (
     <button
       type="button"
-      className={ROW}
-      style={{ paddingLeft: `${String(1 + depth)}rem` }}
+      className={`${ROW} flex items-center gap-2`}
+      style={{ paddingLeft: `${String(0.5 + depth)}rem` }}
       aria-current={selected ? 'true' : undefined}
       onClick={() => {
         nav.showList(list);
       }}
     >
-      {children}
+      <Icon name={icon} className="text-muted" />
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <span aria-hidden="true" className="text-xs text-muted">
+        {count}
+      </span>
     </button>
   );
 }
@@ -154,26 +166,38 @@ export function FolderPane({
 }) {
   const { messages: m, language } = useLanguage();
   const [creating, setCreating] = useState(false);
-  const rows = folderRows(session.tree(new Intl.Collator(language).compare));
+  const layout = useLayout();
+  const tree = session.tree(new Intl.Collator(language).compare);
+  const rows = folderRows(tree);
   return (
     <nav aria-label={m.vault.folders} className="flex flex-col gap-1 p-3">
       <h2 className="px-2 text-xs font-semibold uppercase text-muted">{m.vault.folders}</h2>
-      <ListEntry nav={nav} list={{ name: 'vault' }}>
+      <ListEntry nav={nav} list={{ name: 'vault' }} icon="list" count={treeItems(tree).length}>
         {m.vault.allItems}
       </ListEntry>
-      {rows.map(({ folder, depth }) => (
+      {rows.map(({ folder, depth, items }) => (
         <ListEntry
           key={hex(folder.id)}
           nav={nav}
           list={{ name: 'folder', id: folder.id }}
+          icon="folder"
+          count={items}
           depth={depth + 1}
         >
           {folder.name}
         </ListEntry>
       ))}
-      <ListEntry nav={nav} list={{ name: 'trash' }}>
-        {m.vault.trash}
-      </ListEntry>
+      {/* On mobile, the Trash is in the bottom navigation (D245). */}
+      {layout === 'mobile' ? null : (
+        <ListEntry
+          nav={nav}
+          list={{ name: 'trash' }}
+          icon="trash-2"
+          count={session.items().filter((v) => v.inTrash).length}
+        >
+          {m.vault.trash}
+        </ListEntry>
+      )}
       {session.writable ? (
         creating ? (
           <NameForm

@@ -9,6 +9,7 @@ const en = {
     locked: 'Locked',
     unlocked: 'Unlocked',
     lock: 'Lock',
+    more: 'More',
     settings: 'Settings',
     back: 'Back',
     retry: 'Try again',
@@ -607,6 +608,8 @@ const en = {
     searchHint: 'Searches titles, tags, folders, notes and fields that are not secret.',
     results: 'Results',
     noResults: 'No items match.',
+    filterType: 'Filter by type',
+    allTypes: 'All',
     clockBehind:
       "This device's clock went back, so the vault is read-only until {date}. Sync still receives records.",
     clockFar:
@@ -1033,6 +1036,7 @@ const ptBR: Messages = {
     locked: 'Bloqueado',
     unlocked: 'Desbloqueado',
     lock: 'Bloquear',
+    more: 'Mais',
     settings: 'Configurações',
     back: 'Voltar',
     retry: 'Tentar de novo',
@@ -1641,6 +1645,8 @@ const ptBR: Messages = {
     searchHint: 'Busca em títulos, tags, pastas, notas e campos que não são secretos.',
     results: 'Resultados',
     noResults: 'Nenhum item corresponde.',
+    filterType: 'Filtrar por tipo',
+    allTypes: 'Todos',
     clockBehind:
       'O relógio deste dispositivo voltou, então o cofre está somente leitura até {date}. A sincronização continua recebendo registros.',
     clockFar:

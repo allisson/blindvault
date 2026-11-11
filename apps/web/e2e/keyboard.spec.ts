@@ -116,6 +116,8 @@ for (const [layout, width] of WIDTHS) {
     while (!(await settings.isVisible())) await press(page, button(page, 'Back'));
     await press(page, settings);
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+    // On a phone, Lock is in the "…" menu (D245).
+    if (await button(page, 'More').isVisible()) await press(page, button(page, 'More'));
     await press(page, button(page, 'Lock'));
     await type(page, page.getByTestId('unlock-password'), PASSWORD);
     await page.keyboard.press('Enter');

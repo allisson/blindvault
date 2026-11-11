@@ -8,6 +8,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { WIDTHS } from './axe';
 import { answerConfirmation, openVault, readPhrase, startScreen } from './create';
+import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9), and the unlock runs it again.
 test.setTimeout(180_000);
@@ -92,12 +93,12 @@ for (const [layout, width] of WIDTHS) {
         - button "Open the vault"
     `);
 
-    // The folder tree is left out: on a tablet it waits in its drawer, out of the tree (D197).
+    // The folder tree is left out: on a tablet it waits in its drawer, out of the tree (D197). So is
+    // New item, which a phone has in its header (D245).
     await openVault(page);
     await expect(main).toMatchAriaSnapshot(`
       - region "Items":
         - heading "Items" [level=2]
-        - button "New item"
         - searchbox "Search"
         - paragraph: No items yet.
     `);
@@ -156,7 +157,7 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Discard the changes').click();
 
     // A wrong password is an alert beside the invalid field.
-    await button(page, 'Lock').click();
+    await lock(page);
     await page.getByTestId('unlock-password').fill('wrong-password-0000');
     await page.keyboard.press('Enter');
     await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });

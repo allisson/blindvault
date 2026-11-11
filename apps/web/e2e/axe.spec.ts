@@ -6,6 +6,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { THEMES, WIDTHS, audit } from './axe';
 import { answerConfirmation, openVault, readPhrase, startScreen } from './create';
+import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9); each test also runs axe on every screen.
 test.setTimeout(240_000);
@@ -90,7 +91,7 @@ for (const [layout, width] of WIDTHS) {
       await audit(page, 'Settings');
 
       // Locked: unlock, and the forgotten password.
-      await button(page, 'Lock').click();
+      await lock(page);
       await expect(page.getByTestId('unlock-password')).toBeVisible();
       await audit(page, 'the unlock');
       await page.getByTestId('unlock-password').fill('wrong-password-1234');
