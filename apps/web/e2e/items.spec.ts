@@ -73,7 +73,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByTestId('input-Password')).toHaveAttribute('type', 'password');
     await page.getByTestId('input-Username').fill('ana.lima.0042');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByText('ana.lima.0042')).toBeVisible();
+    await expect(page.getByRole('article').getByText('ana.lima.0042')).toBeVisible();
     await expect(page.getByTestId('secret-Password')).toHaveText('••••••••Hidden');
 
     await page.getByRole('button', { name: 'Move to trash', exact: true }).click();
@@ -90,7 +90,7 @@ for (const [layout, width] of WIDTHS) {
 
     await showList(page, layout, 'All items');
     await page.getByRole('button', { name: TITLE, exact: true }).click();
-    await expect(page.getByText('ana.lima.0042')).toBeVisible();
+    await expect(page.getByRole('article').getByText('ana.lima.0042')).toBeVisible();
 
     await lock(page);
     await page.getByTestId('unlock-password').fill(PASSWORD);
@@ -128,7 +128,7 @@ test('refuses an invalid item with a message per field (record-content.md §3, �
   await page.getByTestId('custom-label').fill('Branch');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Visa' })).toBeVisible();
-  await expect(page.getByText('2027-05')).toBeVisible();
+  await expect(page.getByRole('article').getByText('2027-05')).toBeVisible();
   await expect(page.getByText('Branch')).toBeVisible();
 });
 

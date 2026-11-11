@@ -610,6 +610,7 @@ const en = {
     noResults: 'No items match.',
     filterType: 'Filter by type',
     allTypes: 'All',
+    copyPassword: 'Copy password',
     clockBehind:
       "This device's clock went back, so the vault is read-only until {date}. Sync still receives records.",
     clockFar:
@@ -1647,6 +1648,7 @@ const ptBR: Messages = {
     noResults: 'Nenhum item corresponde.',
     filterType: 'Filtrar por tipo',
     allTypes: 'Todos',
+    copyPassword: 'Copiar a senha',
     clockBehind:
       'O relógio deste dispositivo voltou, então o cofre está somente leitura até {date}. A sincronização continua recebendo registros.',
     clockFar:

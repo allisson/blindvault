@@ -44,12 +44,12 @@ test('searches in memory, never over secrets, and forgets the query on lock (D13
   await page.keyboard.press('ControlOrMeta+k');
   await expect(search).toBeFocused();
   await search.fill('ANA.LIMA');
-  await expect(results.getByRole('listitem')).toHaveText(['Harbor Credit Union']);
+  await expect(results.getByTestId('row-title')).toHaveText(['Harbor Credit Union']);
   await search.fill('finance');
-  await expect(results.getByRole('listitem')).toHaveText(['Harbor Credit Union']);
+  await expect(results.getByTestId('row-title')).toHaveText(['Harbor Credit Union']);
   await search.fill('tulip');
   // Notes match; the password holding the same word does not.
-  await expect(results.getByRole('listitem')).toHaveText(['Garden plan']);
+  await expect(results.getByTestId('row-title')).toHaveText(['Garden plan']);
   await search.fill('5528');
   await expect(page.getByText('No items match.')).toBeVisible();
   await search.fill('Orbit-5528');
