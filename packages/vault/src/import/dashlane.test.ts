@@ -2,6 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import { ImportRejectedError } from '../errors';
+import { MAX_ZIP_ENTRIES } from './zip';
 import { parseDashlaneExport } from './dashlane';
 
 // Adapted from BlindPass (`apps/web/src/lib/import/__tests__/dashlane.test.ts`).
@@ -198,6 +199,13 @@ describe('Dashlane .zip export', () => {
     );
     expect(result.items.map((i) => i.title)).toEqual(['X', 'N']);
     expect(result.skipped).toBe(0);
+  });
+
+  it('refuses an archive beyond the entry cap (D130)', () => {
+    const files = Object.fromEntries(
+      Array.from({ length: MAX_ZIP_ENTRIES + 1 }, (_, i) => [`f${String(i)}`, new Uint8Array()]),
+    );
+    refused(zipSync(files), 'too-large');
   });
 
   it('refuses a zip with none of its CSVs, and a file that is not a zip', () => {

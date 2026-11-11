@@ -423,7 +423,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `.blindpass` export decryption in `packages/crypto` with BlindPass's fixed Argon2id parameters and `crypto_secretbox` (D125, D126)
 - [x] Mapping: TOTP as a field, unknown categories as Secure Notes, secret-looking keys as `secret` fields, dropped attachments named in notes (D124); `otpauth://` URIs as `totp` fields whatever their key, bare base32 values only under TOTP-looking keys (D131, D133)
 - [x] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the item cap (D129, D139), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125); encrypted Bitwarden and Proton Pass exports rejected with a message to export unencrypted (D146)
-- [ ] Import tests per format with valid, malformed and oversized input (section 18)
+- [x] Import tests per format with valid, malformed and oversized input (section 18)
 - [ ] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
 - [ ] Dependency review
 - [ ] Threat-model review against what was implemented

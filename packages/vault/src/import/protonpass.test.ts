@@ -2,6 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import { ImportRejectedError } from '../errors';
+import { MAX_ZIP_ENTRIES } from './zip';
 import { parseProtonPassJson, parseProtonPassZip } from './protonpass';
 
 // Adapted from BlindPass (`apps/web/src/lib/import/__tests__/protonpass.test.ts`).
@@ -277,6 +278,13 @@ describe('Proton Pass zip export', () => {
       zipSync({ 'Proton Pass/data.pgp': strToU8('-----BEGIN PGP MESSAGE-----') }),
       'encrypted-export',
     );
+  });
+
+  it('refuses an archive beyond the entry cap (D130)', () => {
+    const files = Object.fromEntries(
+      Array.from({ length: MAX_ZIP_ENTRIES + 1 }, (_, i) => [`f${String(i)}`, new Uint8Array()]),
+    );
+    zipRefused(zipSync(files), 'too-large');
   });
 
   it('refuses a zip with no data.json, and a file that is not a zip', () => {
