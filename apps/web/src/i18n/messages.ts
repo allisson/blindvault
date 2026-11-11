@@ -513,6 +513,44 @@ const en = {
     ownRetired:
       'This device was retired from the vault. To sync again, replace it by pairing with another device. If you did not retire it, someone holding the Master Key did: re-found the vault.',
   },
+  import: {
+    title: 'Import',
+    intro:
+      'Brings the items of another password manager’s export into a new folder of this vault, with no history. Nothing is merged into your folders, and importing the same file again makes a second folder.',
+    choose: 'Import from a file…',
+    source: 'Exported from',
+    plaintext:
+      'An export file other than an encrypted .blindpass holds every secret in plaintext: anyone who reads it reads them all. Delete it once the import is done.',
+    file: 'Export file',
+    passphrase: 'Passphrase of the .blindpass export',
+    passphraseHint: 'The one you set in BlindPass when you exported.',
+    open: 'Open',
+    opening: 'Opening… this takes a few seconds',
+    wrongPassphrase: 'Wrong passphrase, or the file is damaged.',
+    folder: 'Imported from {source} {date}',
+    found: '{count} items to import into a new folder, {folder}.',
+    skipped: '{count} entries skipped: unreadable, or above the size limit of an item.',
+    attachments: '{count} attachments dropped: each item names its own in its notes.',
+    notes: '{count} items of a category with no template, imported as Secure notes.',
+    nothing: 'This file holds no item to import.',
+    submit: 'Import',
+    importing: 'Importing…',
+    done: 'Imported {count} items into {folder}.',
+    deleteFile:
+      'Delete {file} now, and empty the trash it goes to: an export holds every secret in plaintext.',
+    cancel: 'Cancel',
+    readOnly: 'Import is not available while the vault is read-only.',
+    tooLarge:
+      'This file is above 100 MB, or its archive unpacks beyond 100 MB or 10,000 files. It cannot be imported.',
+    encrypted:
+      'This {source} export is encrypted. Export it again unencrypted, import it, then delete that file.',
+    missingColumns: 'This file lacks the columns of a {source} export.',
+    unsupportedVersion: 'This {source} export is of a version BlindVault does not read.',
+    invalidItem: 'Item {number} of this file is malformed. Nothing was imported.',
+    notThisFormat: 'This is not a {source} export.',
+    kdfFailed:
+      'This device could not open the .blindpass export: its key needs 1 GiB of memory. Import it on another device of this vault, then sync.',
+  },
   create: {
     title: 'Create a vault',
     intro:
@@ -1509,6 +1547,44 @@ const ptBR: Messages = {
       'Uma edição mais antiga feita neste dispositivo não cabe mais no histórico de: {titles}. Ela foi descartada.',
     ownRetired:
       'Este dispositivo foi aposentado do cofre. Para sincronizar de novo, substitua-o pareando com outro dispositivo. Se não foi você quem o aposentou, foi alguém com a Chave Mestra: refunde o cofre.',
+  },
+  import: {
+    title: 'Importar',
+    intro:
+      'Traz os itens da exportação de outro gerenciador de senhas para uma pasta nova deste cofre, sem histórico. Nada se mistura às suas pastas, e importar o mesmo arquivo de novo cria uma segunda pasta.',
+    choose: 'Importar de um arquivo…',
+    source: 'Exportado de',
+    plaintext:
+      'Um arquivo de exportação que não seja um .blindpass criptografado guarda todos os segredos em texto puro: quem o lê, lê todos. Apague-o assim que a importação terminar.',
+    file: 'Arquivo de exportação',
+    passphrase: 'Senha da exportação .blindpass',
+    passphraseHint: 'A que você definiu no BlindPass ao exportar.',
+    open: 'Abrir',
+    opening: 'Abrindo… isso leva alguns segundos',
+    wrongPassphrase: 'Senha errada, ou o arquivo está danificado.',
+    folder: 'Importado de {source} {date}',
+    found: '{count} itens a importar para uma pasta nova, {folder}.',
+    skipped: '{count} entradas ignoradas: ilegíveis, ou acima do limite de tamanho de um item.',
+    attachments: '{count} anexos descartados: cada item cita os seus nas notas.',
+    notes: '{count} itens de uma categoria sem modelo, importados como Notas seguras.',
+    nothing: 'Este arquivo não tem nenhum item a importar.',
+    submit: 'Importar',
+    importing: 'Importando…',
+    done: '{count} itens importados para {folder}.',
+    deleteFile:
+      'Apague {file} agora, e esvazie a lixeira para onde ele for: uma exportação guarda todos os segredos em texto puro.',
+    cancel: 'Cancelar',
+    readOnly: 'A importação não está disponível enquanto o cofre é somente leitura.',
+    tooLarge:
+      'Este arquivo passa de 100 MB, ou o arquivo compactado se expande além de 100 MB ou 10.000 arquivos. Ele não pode ser importado.',
+    encrypted:
+      'Esta exportação do {source} é criptografada. Exporte de novo sem criptografia, importe e depois apague esse arquivo.',
+    missingColumns: 'Este arquivo não tem as colunas de uma exportação do {source}.',
+    unsupportedVersion: 'Esta exportação do {source} é de uma versão que o BlindVault não lê.',
+    invalidItem: 'O item {number} deste arquivo está malformado. Nada foi importado.',
+    notThisFormat: 'Este arquivo não é uma exportação do {source}.',
+    kdfFailed:
+      'Este dispositivo não conseguiu abrir a exportação .blindpass: a chave dela precisa de 1 GiB de memória. Importe em outro dispositivo deste cofre e sincronize.',
   },
   create: {
     title: 'Criar um cofre',

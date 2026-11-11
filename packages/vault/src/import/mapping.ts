@@ -22,6 +22,7 @@ import {
   normalizeSeedPhrase,
   normalizeTags,
 } from '../item';
+import { FOLDER_NAME_MAX } from '../folder';
 import { type FieldType, type RoleDefinition, type Template, roleOf, template } from '../templates';
 import { codePointLength } from '../text';
 import type { SourceField, SourceItem, SourceParse } from './source';
@@ -29,7 +30,7 @@ import type { SourceField, SourceItem, SourceParse } from './source';
 export interface MappedItem {
   /** With no `folderId`: the import places it under its landing folder (D125). */
   readonly item: Item;
-  /** The source folder path, outermost first; empty for the landing folder itself. */
+  /** The source folder path, outermost first, blank names left out; empty for the landing folder. */
   readonly folder: readonly string[];
 }
 
@@ -174,7 +175,8 @@ export function mapImport(parse: SourceParse): MappedImport {
       skipped++;
       continue;
     }
-    items.push({ item, folder: source.folder ?? [] });
+    const folder = (source.folder ?? []).map((name) => bounded(name, FOLDER_NAME_MAX));
+    items.push({ item, folder: folder.filter((name) => name !== '') });
     attachments += source.attachments?.length ?? 0;
     if (note) notes++;
   }

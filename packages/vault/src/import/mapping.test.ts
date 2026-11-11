@@ -175,7 +175,7 @@ describe('import mapping (D124, D131, D133, D242)', () => {
         },
         { title: ' ', category: 'Wifi', fields: [] },
         { title: 'Odd', template: 'unknown', fields: [] },
-        { title: 'Login', template: 'login', fields: [] },
+        { title: 'Login', template: 'login', fields: [], folder: [' ', `${'f'.repeat(300)}\nx`] },
       ],
       skipped: 2,
     });
@@ -193,7 +193,7 @@ describe('import mapping (D124, D131, D133, D242)', () => {
       ['secure-note', '[Bank Account] Chase', ['Bank']],
       ['secure-note', '[Wifi] Untitled', []],
       ['secure-note', 'Odd', []],
-      ['login', 'Login', []],
+      ['login', 'Login', ['f'.repeat(256)]],
     ]);
     expect(mapped).toMatchObject({ skipped: 2, attachments: 0, notes: 3 });
   });

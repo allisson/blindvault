@@ -31,6 +31,7 @@ import { AboutBuild } from './About';
 import { Button, ConfirmDialog, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { EraseVault } from './EraseVault';
 import { ExportPassword } from './ExportPassword';
+import { ImportItems } from './ImportItems';
 import { MergeBackup } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { InviteDevice, ReadmitDevice } from './Pairing';
@@ -69,6 +70,7 @@ export function Settings({
       <DeviceStorage controller={controller} session={session} />
       <BackupSettings controller={controller} session={session} />
       <MergeBackup controller={controller} session={session} />
+      <ImportItems controller={controller} session={session} />
       <RecoveryPhraseSettings controller={controller} session={session} />
       <DeviceSettings
         controller={controller}

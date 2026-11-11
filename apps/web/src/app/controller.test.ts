@@ -2185,3 +2185,23 @@ describe('device clock gone back (§9.2, D73, D149, D221)', () => {
     });
   });
 });
+
+describe('import (overview §15, D125)', () => {
+  const FILE = new TextEncoder().encode('name,url,username,password\nACME,,alice,p');
+
+  it('reads an import file only while unlocked, and drops it on a lock before it ends (§7)', async () => {
+    const c = controller();
+    await c.start();
+    expect(await c.readImport('chrome', FILE)).toEqual({ kind: 'locked' });
+    must(c.newRecoveryPhrase());
+    await c.create(PASSWORD, 'Device');
+    expect(await c.readImport('chrome', FILE)).toMatchObject({
+      kind: 'ok',
+      mapped: { items: [{ item: { title: 'ACME' } }] },
+    });
+    const reading = c.readImport('chrome', FILE);
+    c.lock();
+    expect(await reading).toEqual({ kind: 'locked' });
+    expect(await c.readImport('chrome', FILE)).toEqual({ kind: 'locked' });
+  });
+});

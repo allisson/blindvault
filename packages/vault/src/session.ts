@@ -97,6 +97,7 @@ import {
 } from './folder';
 import { FUTURE_CLOCK_BOUND_MS, HlcClock, compareHlc } from './hlc';
 import { idKey, sameBytes } from './ids';
+import { type MappedItem } from './import/mapping';
 import {
   type Item,
   type ItemReading,
@@ -2901,6 +2902,43 @@ export class VaultSession {
         .filter((h) => h !== write.header)
         .map((h) => ({ recordType: RecordType.itemVersion, recordId: h.recordId })),
     };
+  }
+
+  // --- import ----------------------------------------------------------------------------------
+
+  /**
+   * An import (overview §15, D125): a new folder `name` at the vault root, each source folder path
+   * as its subfolders, and every item, in one commit with new IDs, new HLCs and no history. Returns
+   * the landing folder's ID.
+   */
+  importItems(name: string, items: readonly MappedItem[]): Promise<Uint8Array> {
+    return this.#run(() => {
+      const writes: Write[] = [];
+      const folder = (folderName: string, parentId?: Uint8Array): Uint8Array => {
+        const content = folderToCbor(
+          { name: folderName, ...(parentId ? { parentId } : {}) },
+          false,
+        );
+        const id = randomId();
+        writes.push(this.#seal(RecordType.folder, id, this.#clock.issue(), false, content));
+        return id;
+      };
+      const landing = folder(name);
+      const paths = new Map<string, Uint8Array>();
+      for (const { item, folder: path } of items) {
+        let parentId = landing;
+        for (let depth = 1; depth <= path.length; depth++) {
+          const key = JSON.stringify(path.slice(0, depth));
+          const known = paths.get(key) ?? folder(path[depth - 1] ?? '', parentId);
+          paths.set(key, known);
+          parentId = known;
+        }
+        const content = itemToCbor(liveItem(item, parentId), false);
+        checkCap(content);
+        writes.push(this.#seal(RecordType.item, randomId(), this.#clock.issue(), false, content));
+      }
+      return { writes, deletes: [], result: landing.slice() };
+    });
   }
 
   // --- folder operations -----------------------------------------------------------------------
