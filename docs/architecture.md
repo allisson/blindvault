@@ -859,6 +859,33 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 Copied, not depended on: the icons in `apps/web/src/ui/icons/`, from `lucide-static` 1.61.0
 (ISC; `lock` and `plus` derive from Feather, MIT), both notices in `icons/LICENSE` (D233).
 
+### Review before v1.0 (Phase 8, 2026-11-11)
+
+Every dependency of every workspace package was checked against the tables above, with
+`pnpm audit`, `pnpm outdated -r`, `pnpm licenses list --prod` and the registry's publish dates.
+
+- **Runtime tree.** 20 packages reach the app: the 12 direct runtime dependencies above (the four
+  `@zxcvbn-ts` packages count as four) and 8 of theirs, `libsodium-sumo`, `@noble/hashes`,
+  `@cto.af/wtf8`, `scheduler`, `fastest-levenshtein` (of `@zxcvbn-ts/core`), and
+  `@types/emscripten`, `type-fest` and `tagged-tag` (types of `zxing-wasm`, nothing bundled). Licenses:
+  17 MIT, 2 ISC, 1 MIT or CC0-1.0. `pnpm audit --prod` reports no known vulnerability. Nothing runs
+  install scripts.
+- **Tooling advisories, fixed.** `vite` 8.3.1 (GHSA-587h-7wmj-h5pm, high, and five more of the dev
+  server and `launch-editor`), `vitest` 5.0.2 through `@vitest/mocker` (GHSA-qxg6-89mg-rqv8,
+  GHSA-xp26-3454-mjgp) and `source-map-js` 1.2.1 through `@tailwindcss/vite`
+  (GHSA-68fv-2mgg-jv7q, high) are updated to `vite` 8.3.5, `vitest` and `@vitest/coverage-v8`
+  5.0.5 and `source-map-js` 1.2.2, each over 14 days old. They concern the dev server, the test
+  runner and source maps at build time; none of them ships in the app.
+- **Tooling advisory, accepted.** `minimatch` 10.2.6 through `eslint` (GHSA-g3hv-75wg-m249,
+  moderate): a denial of service from crafted glob patterns. ESLint only matches the repository's
+  own patterns, and the fix is `minimatch` 11, outside the range `eslint` 10.13.0 declares. It goes
+  when `eslint` takes it.
+- **Runtime updates, not taken.** `react` and `react-dom` 19.3.1, `zxing-wasm` 3.1.6 and `cbor2`
+  2.4.1 fix no advisory; `cbor2` is the record serializer, so a change to it needs its own review
+  against D10 and the CBOR vectors. `@zxcvbn-ts` 4 changes the strength estimate that D71 and D134
+  set thresholds on. `typescript` stays on 6.0, as above. Each is a change of its own, with the
+  tests of what it touches.
+
 Each is pinned to an exact version at least 14 days old when its phase adds it. Runtime
 cryptographic, serialization and protocol dependencies of later phases are added with their phase.
 The ones already chosen are below.

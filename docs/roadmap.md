@@ -425,7 +425,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Import flow: plaintext-export warning, 100 MB file cap (D130), preview counting items above the item cap (D129, D139), landing folder, one-transaction commit, lock abort, delete-the-file reminder (D123, D125); encrypted Bitwarden and Proton Pass exports rejected with a message to export unencrypted (D146)
 - [x] Import tests per format with valid, malformed and oversized input (section 18)
 - [x] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
-- [ ] Dependency review
+- [x] Dependency review
 - [ ] Threat-model review against what was implemented
 - [ ] User documentation: limitations (memory zeroization, revocation, TOFU, old backups and old phrase, permanent loss)
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212, then from Phase 5)
