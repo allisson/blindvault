@@ -1,7 +1,7 @@
 # blindvault
 
 A local-first, end-to-end encrypted personal vault that runs in the browser. Official build: https://blindvault.allisson.dev. To serve it yourself, see [docs/self-hosting.md](docs/self-hosting.md).
-BlindVault is not yet at v1.0 and has had no independent security review.
+BlindVault is not yet at v1.0 and has had no independent security review. Before you use it, read [docs/limitations.md](docs/limitations.md): what it cannot protect, and when a vault is lost for good.
 
 ## Design and review
 
