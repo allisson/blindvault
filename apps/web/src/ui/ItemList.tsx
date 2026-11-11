@@ -1,9 +1,10 @@
-import { type TreeItem, type VaultSession } from '@blindvault/vault';
+import { type Item, type TreeItem, type VaultSession } from '@blindvault/vault';
 import { type RefObject, useState, useSyncExternalStore } from 'react';
 
 import { findNode, treeItems } from '../app/folders';
 import { hex } from '../app/ids';
 import { type Navigation } from '../app/nav';
+import { letter } from '../app/row';
 import { type SearchIndex } from '../app/search';
 import { useLanguage } from '../i18n/context';
 import { type Messages } from '../i18n/messages';
@@ -11,12 +12,16 @@ import { Button, INPUT, ROW, TARGET } from './components';
 import { useLayout } from './hooks';
 import { Icon } from './icons';
 import { FolderActions, TrashedFolder } from './Folders';
+import { ItemRow } from './ItemRow';
+import { useCopy } from './Secret';
 
 interface Row {
   readonly id: Uint8Array;
   readonly name: string;
   /** Its template, unless the item is from a newer app version. */
   readonly type?: string | undefined;
+  /** Its content, unless the item is from a newer app version. */
+  readonly item?: Item | undefined;
 }
 
 type Template = keyof Messages['templates'];
@@ -46,6 +51,7 @@ export function ItemList({
   const layout = useLayout();
   // In memory, kept across lists; a type the list shown lacks falls back to all (D245).
   const [type, setType] = useState<Template>();
+  const { copy, status } = useCopy(session.preferences.clipboardClearSeconds);
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const list = useSyncExternalStore(nav.subscribe, nav.list);
   const collator = new Intl.Collator(language);
@@ -54,6 +60,7 @@ export function ItemList({
     id: t.id,
     name: t.name === '' ? m.items.newerTitle : t.name,
     type: t.item?.templateId,
+    item: t.item,
   });
 
   let heading = m.vault.items;
@@ -84,6 +91,7 @@ export function ItemList({
         id: v.id,
         name: v.item?.title ?? m.items.newerTitle,
         type: v.item?.templateId,
+        item: v.item,
       }));
     trashedFolders = session
       .folders()
@@ -180,6 +188,7 @@ export function ItemList({
             ))}
           </div>
         ) : null}
+        {status}
       </div>
       {list.name === 'folder' && !searching ? (
         <FolderActions
@@ -221,20 +230,36 @@ export function ItemList({
       ) : null}
       {items.length > 0 ? (
         <ul className="flex flex-col">
-          {items.map((row) => (
-            <li key={hex(row.id)}>
-              <button
-                type="button"
-                aria-current={selected === hex(row.id) ? 'true' : undefined}
-                className={ROW}
-                onClick={() => {
-                  nav.select({ name: 'item', id: row.id });
-                }}
-              >
-                {row.name}
-              </button>
-            </li>
-          ))}
+          {items.flatMap((row, i) => {
+            const id = hex(row.id);
+            const group = letter(row.name);
+            const entry = (
+              <li key={id}>
+                <ItemRow
+                  name={row.name}
+                  item={row.item}
+                  selected={selected === id}
+                  onSelect={() => {
+                    nav.select({ name: 'item', id: row.id });
+                  }}
+                  onCopy={copy}
+                />
+              </li>
+            );
+            // On a phone, items fall under their first letter; seen only, as the list is read.
+            return layout === 'mobile' && (i === 0 || letter(items[i - 1]?.name ?? '') !== group)
+              ? [
+                  <li
+                    key={`letter-${id}`}
+                    aria-hidden="true"
+                    className="px-2 pt-3 pb-1 text-xs font-semibold text-muted"
+                  >
+                    {group}
+                  </li>,
+                  entry,
+                ]
+              : [entry];
+          })}
         </ul>
       ) : null}
     </section>

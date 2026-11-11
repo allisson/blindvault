@@ -62,7 +62,7 @@ test('filters the list by type, with counts beside the types and the folder pane
   await page.goto('/');
   await createVault(page, PASSWORD);
   const pane = page.getByRole('navigation', { name: 'Folders' });
-  const list = page.getByRole('region', { name: 'Items' }).getByRole('listitem');
+  const list = page.getByRole('region', { name: 'Items' }).getByTestId('row-title');
   const filter = page.getByRole('group', { name: 'Filter by type' });
 
   await newNote(page, 'Garden plan');
@@ -96,7 +96,7 @@ test('filters the list by type, with counts beside the types and the folder pane
   await expect(pane.getByRole('button', { name: 'Trash', exact: true })).toContainText('1');
   await pane.getByRole('button', { name: 'Trash', exact: true }).click();
   await expect(filter).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Trash' }).getByRole('listitem')).toHaveText([
+  await expect(page.getByRole('region', { name: 'Trash' }).getByTestId('row-title')).toHaveText([
     'Harbor Credit Union',
   ]);
   // Kept across lists: back in All items with two types, the notes alone show again.

@@ -42,6 +42,18 @@
   --color-info-soft: var(--bv-info-soft);
   --color-info-text: var(--bv-info-text);
   --color-success: var(--bv-success);
+  --color-avatar-1: var(--bv-avatar-1);
+  --color-avatar-1-ink: var(--bv-avatar-1-ink);
+  --color-avatar-2: var(--bv-avatar-2);
+  --color-avatar-2-ink: var(--bv-avatar-2-ink);
+  --color-avatar-3: var(--bv-avatar-3);
+  --color-avatar-3-ink: var(--bv-avatar-3-ink);
+  --color-avatar-4: var(--bv-avatar-4);
+  --color-avatar-4-ink: var(--bv-avatar-4-ink);
+  --color-avatar-5: var(--bv-avatar-5);
+  --color-avatar-5-ink: var(--bv-avatar-5-ink);
+  --color-avatar-6: var(--bv-avatar-6);
+  --color-avatar-6-ink: var(--bv-avatar-6-ink);
 
   /* Two radii: controls and cards. */
   --radius-control: 0.375rem;
@@ -98,6 +110,20 @@
   --bv-info-text: #082f49;
   --bv-success: #047857;
 
+  /* The six avatar pairs of the list row and the item header (D246). */
+  --bv-avatar-1: #dbeafe;
+  --bv-avatar-1-ink: #1e3a8a;
+  --bv-avatar-2: #dcfce7;
+  --bv-avatar-2-ink: #14532d;
+  --bv-avatar-3: #fef3c7;
+  --bv-avatar-3-ink: #78350f;
+  --bv-avatar-4: #fce7f3;
+  --bv-avatar-4-ink: #831843;
+  --bv-avatar-5: #ede9fe;
+  --bv-avatar-5-ink: #4c1d95;
+  --bv-avatar-6: #ccfbf1;
+  --bv-avatar-6-ink: #134e4a;
+
   --bv-accent: #2563eb;
   --bv-accent-hover: #1d4ed8;
   --bv-accent-ink: #ffffff;
@@ -130,6 +156,20 @@
   --bv-info-soft: #082f49;
   --bv-info-text: #f0f9ff;
   --bv-success: #34d399;
+
+  /* The six avatar pairs of the list row and the item header (D246). */
+  --bv-avatar-1: #1e3a8a;
+  --bv-avatar-1-ink: #dbeafe;
+  --bv-avatar-2: #14532d;
+  --bv-avatar-2-ink: #dcfce7;
+  --bv-avatar-3: #78350f;
+  --bv-avatar-3-ink: #fef3c7;
+  --bv-avatar-4: #831843;
+  --bv-avatar-4-ink: #fce7f3;
+  --bv-avatar-5: #4c1d95;
+  --bv-avatar-5-ink: #ede9fe;
+  --bv-avatar-6: #134e4a;
+  --bv-avatar-6-ink: #ccfbf1;
 }
 
 /*

@@ -5,7 +5,8 @@
 
 import { type FieldType, type FolderTree } from '@blindvault/vault';
 
-const NEVER_READ: ReadonlySet<FieldType> = new Set(['secret', 'totp', 'seed-phrase']);
+/** The field types whose values search and the list row never read (D132, CRYPTO-INV-024). */
+export const NEVER_READ: ReadonlySet<FieldType> = new Set(['secret', 'totp', 'seed-phrase']);
 
 /** Compatibility decomposition, marks dropped, lowercase without a locale. */
 export function normalizeForSearch(text: string): string {

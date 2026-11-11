@@ -18,7 +18,7 @@ const rules = new Map<string, Vars>();
 for (const [, selectors = '', body = ''] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
   const key = selectors.split(',')[0]?.replace(/\s+/g, ' ').trim() ?? '';
   const vars: Vars = {};
-  for (const [, name = '', value = ''] of body.matchAll(/--bv-([a-z-]+):\s*([^;]+);/g)) {
+  for (const [, name = '', value = ''] of body.matchAll(/--bv-([a-z0-9-]+):\s*([^;]+);/g)) {
     vars[name] = value.trim();
   }
   rules.set(key, vars);
@@ -75,6 +75,12 @@ const NEUTRAL: [string, string, number][] = [
   ['info-text', 'info-soft', TEXT],
   ['warning', 'subtle', CONTROL],
   ['success', 'subtle', CONTROL],
+  // The list row's avatar (D246).
+  ...[1, 2, 3, 4, 5, 6].map((n): [string, string, number] => [
+    `avatar-${String(n)}-ink`,
+    `avatar-${String(n)}`,
+    TEXT,
+  ]),
 ];
 
 const ACCENT: [string, string, number][] = [
