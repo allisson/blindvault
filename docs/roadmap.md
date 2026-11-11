@@ -427,7 +427,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Publish the spec and protocol docs and request community review (ideally starting in Phase 4)
 - [x] Dependency review
 - [x] Threat-model review against what was implemented (D243)
-- [ ] User documentation: limitations (memory zeroization, revocation, TOFU, old backups and old phrase, permanent loss)
+- [x] User documentation: limitations (memory zeroization, revocation, TOFU, old backups and old phrase, permanent loss), in `docs/limitations.md`
 - [ ] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212, then from Phase 5)
 
 ### Security Gate → v1.0
