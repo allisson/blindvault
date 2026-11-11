@@ -3779,6 +3779,77 @@ function compareBytesOfNames(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+describe('import (§15, D125)', () => {
+  const at = (title: string, folder: string[] = []) => ({ item: login(title), folder });
+
+  it('writes the landing folder, the source folders under it and every item in one commit', async () => {
+    const { session, store } = await create();
+    await session.createItem(login('Mine'));
+    const commits = store.commits.length;
+    const landing = await session.importItems('Imported from Bitwarden', [
+      at('Root'),
+      at('A', ['Work', 'Dev']),
+      at('B', ['Work']),
+      at('C', ['Work', 'Dev']),
+      at('D', ['Dev']),
+    ]);
+
+    expect(store.commits).toHaveLength(commits + 1);
+    const { folder, item } = RecordType;
+    expect(store.commits.at(-1)?.put.map((r) => r.recordType)).toEqual([
+      ...[folder, item, folder, folder, item, item, item, folder, item],
+    ]);
+    const s = await unlock(store);
+    const folders = new Map(s.folders().map((f) => [idKey(f.id), f]));
+    const path = (id: Uint8Array | undefined): string[] => {
+      const f = id ? folders.get(idKey(id)) : undefined;
+      return f ? [...path(f.parentId), f.name] : [];
+    };
+    expect(s.folders()).toHaveLength(4);
+    expect(must(s.folder(landing))).toMatchObject({
+      name: 'Imported from Bitwarden',
+      inTrash: false,
+    });
+    expect(s.folder(landing)?.parentId).toBeUndefined();
+    const placed = s
+      .items()
+      .map((v) => [v.item?.title, path(v.item?.folderId)])
+      .sort();
+    expect(placed).toEqual([
+      ['A', ['Imported from Bitwarden', 'Work', 'Dev']],
+      ['B', ['Imported from Bitwarden', 'Work']],
+      ['C', ['Imported from Bitwarden', 'Work', 'Dev']],
+      ['D', ['Imported from Bitwarden', 'Dev']],
+      ['Mine', []],
+      ['Root', ['Imported from Bitwarden']],
+    ]);
+    expect(s.items().every((v) => s.versions(v.id).length === 0)).toBe(true);
+    // The same file again: a second folder, nothing merged (D125).
+    const again = await s.importItems('Imported from Bitwarden', [at('Root')]);
+    expect(again).not.toEqual(landing);
+    expect(s.items()).toHaveLength(7);
+  });
+
+  it('writes nothing when an item is refused, the vault is read-only or locked', async () => {
+    const clock = new Clock(T0 + 2 * DAY);
+    const { session, store } = await create(clock);
+    const commits = store.commits.length;
+    const big = { item: { ...login('Big'), notes: 'x'.repeat(ITEM_CAP) }, folder: ['F'] };
+    await expect(session.importItems('I', [at('A'), big])).rejects.toThrow(
+      new ContentInvalidError('item cap'),
+    );
+    await expect(session.importItems('', [at('A')])).rejects.toThrow(ContentInvalidError);
+    expect(store.commits).toHaveLength(commits);
+    clock.t = T0;
+    const behind = await unlock(store, clock);
+    await expect(behind.importItems('I', [at('A')])).rejects.toThrow(HlcReadOnlyError);
+    behind.lock();
+    await expect(behind.importItems('I', [at('A')])).rejects.toThrow(VaultLockedError);
+    expect(store.commits).toHaveLength(commits);
+    expect(session.items()).toEqual([]);
+  });
+});
+
 describe('automatic purge (D7, D27, D94)', () => {
   it('purges a tombstone 30 days after its HLC, at unlock, keeping its header', async () => {
     const { session, store, clock } = await create();
@@ -4006,6 +4077,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       restoreItem: () => session.restoreItem(itemId),
       restoreVersion: () => session.restoreVersion(itemId, versionId),
       createFolder: () => session.createFolder('Home'),
+      importItems: () => session.importItems('Imported', [{ item: login(), folder: [] }]),
       renameFolder: () => session.renameFolder(folderId, 'Home'),
       moveFolder: () => session.moveFolder(folderId),
       trashFolder: () => session.trashFolder(folderId),

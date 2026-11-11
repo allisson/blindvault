@@ -78,6 +78,7 @@ import { backupFileName, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { type ClockNotice, WritableTimer, clockNoticeOf } from './clock';
 import { type EraseAdvice, devicesOf, eraseAdvice } from './devices';
+import { type ImportRead, type ImportSource, readImport } from './import';
 import {
   Inviting,
   Joining,
@@ -987,6 +988,21 @@ export class VaultController {
     } finally {
       keyring.wipeAll();
     }
+  }
+
+  /**
+   * Reads an import file while unlocked (overview §15): parsed and mapped, never stored. A lock
+   * before it ends drops what it read (§7).
+   */
+  async readImport(
+    source: ImportSource,
+    bytes: Uint8Array,
+    passphrase?: string,
+  ): Promise<ImportRead | { readonly kind: 'locked' }> {
+    if (this.#status.kind !== 'unlocked') return { kind: 'locked' };
+    const epoch = this.#epoch;
+    const read = await readImport(source, bytes, passphrase, () => this.#deps.kdf());
+    return epoch === this.#epoch ? read : { kind: 'locked' };
   }
 
   /** Drops the backup being restored, wiping its Master Key. */
