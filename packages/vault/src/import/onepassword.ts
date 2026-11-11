@@ -25,6 +25,9 @@ const TEMPLATES = new Map([
   ['003', 'secure-note'],
   ['004', 'identity'],
   ['005', 'login'],
+  ['103', 'document'],
+  ['106', 'document'],
+  ['108', 'document'],
   ['112', 'developer-credential'],
   ['114', 'developer-credential'],
 ]);
@@ -74,6 +77,17 @@ const ROLES = new Map([
       ['email', 'email'],
       ['defphone', 'phone'],
       ['address', 'address'],
+    ]),
+  ],
+  [
+    'document',
+    new Map([
+      ['number', 'number'],
+      ['fullname', 'fullName'],
+      ['name', 'fullName'],
+      ['issuing_authority', 'issuer'],
+      ['issue_date', 'issueDate'],
+      ['expiry_date', 'expiryDate'],
     ]),
   ],
   [
@@ -150,7 +164,11 @@ function item(o: Json, folder: string[]): SourceItem {
   return {
     title: text(overview.title),
     ...(template ? { template } : { category }),
-    fields: fields(details, overview, template),
+    fields: [
+      // A passport, driver's license or SSN is a Document of that kind (D242).
+      ...(template === 'document' ? field('Document type', category, 'documentType') : []),
+      ...fields(details, overview, template),
+    ],
     ...optional(text(details.notesPlain), folder),
     ...(tags.length > 0 ? { tags } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),

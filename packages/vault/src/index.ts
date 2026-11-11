@@ -144,6 +144,7 @@ export {
   parseLastPassCsv,
 } from './import/csv-formats';
 export { parseDashlaneExport } from './import/dashlane';
+export { type MappedImport, type MappedItem, mapImport } from './import/mapping';
 export { parseOnePasswordExport } from './import/onepassword';
 export { parseProtonPassJson, parseProtonPassZip } from './import/protonpass';
 export { type SourceField, type SourceItem, type SourceParse } from './import/source';

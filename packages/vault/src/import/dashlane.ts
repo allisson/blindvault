@@ -77,11 +77,45 @@ function payment(r: Json): SourceItem {
   };
 }
 
+/** The Dashlane ID types that are a Document of that kind (D242); a tax number is not. */
+const DOCUMENTS = new Map([
+  ['card', 'ID card'],
+  ['passport', 'Passport'],
+  ['license', "Driver's License"],
+  ['social_security', 'Social Security Number'],
+]);
+
 function id(r: Json): SourceItem {
+  const kind = DOCUMENTS.get(text(r.type));
+  const title = text(r.name) || text(r.number);
+  if (kind === undefined) {
+    return {
+      title,
+      category: `Dashlane ${text(r.type) || 'ID'}`,
+      fields: rest(r, ['type', 'name', 'note']),
+      ...optional(text(r.note)),
+    };
+  }
   return {
-    title: text(r.name) || text(r.number),
-    category: `Dashlane ${text(r.type) || 'ID'}`,
-    fields: rest(r, ['type', 'name', 'note']),
+    title,
+    template: 'document',
+    fields: [
+      ...field('Document type', kind, 'documentType'),
+      ...field('Number', text(r.number), 'number'),
+      ...field('Name', text(r.name), 'fullName'),
+      ...field('Place of issue', text(r.place_of_issue), 'issuer'),
+      ...field('Issue date', text(r.issue_date), 'issueDate'),
+      ...field('Expiration date', text(r.expiration_date), 'expiryDate'),
+      ...rest(r, [
+        'type',
+        'name',
+        'note',
+        'number',
+        'place_of_issue',
+        'issue_date',
+        'expiration_date',
+      ]),
+    ],
     ...optional(text(r.note)),
   };
 }
