@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light" data-accent="blue">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BlindVault 7b — protótipo</title>
+    <style>
+      /* Tokens copiados de apps/web/src/index.css (D231, D232). */
+      :root {
+        color-scheme: light;
+        --surface: #fafafa;
+        --raised: #fff;
+        --subtle: #f4f4f5;
+        --fg: #18181b;
+        --muted: #52525b;
+        --line: #e4e4e7;
+        --control: #71717a;
+        --scrim: #09090b4d;
+        --shadow: #0000001a;
+        --edge: #0000;
+        --danger: #b91c1c;
+        --danger-ink: #fff;
+        --danger-soft: #fef2f2;
+        --danger-text: #7f1d1d;
+        --warning: #b45309;
+        --warning-soft: #fef3c7;
+        --warning-text: #78350f;
+        --success: #047857;
+        --info-soft: #f0f9ff;
+        --info-text: #082f49;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --accent-ink: #fff;
+        --accent-soft: #eff6ff;
+        --accent-text: #1d4ed8;
+        --av1: #dbeafe;
+        --av1t: #1e3a8a;
+        --av2: #dcfce7;
+        --av2t: #14532d;
+        --av3: #fef3c7;
+        --av3t: #78350f;
+        --av4: #fce7f3;
+        --av4t: #831843;
+        --av5: #ede9fe;
+        --av5t: #4c1d95;
+        --av6: #ccfbf1;
+        --av6t: #134e4a;
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --surface: #09090b;
+        --raised: #18181b;
+        --subtle: #27272a;
+        --fg: #f4f4f5;
+        --muted: #a1a1aa;
+        --line: #27272a;
+        --scrim: #0000008c;
+        --shadow: #0000;
+        --edge: #27272a;
+        --danger: #f87171;
+        --danger-ink: #09090b;
+        --danger-soft: #450a0a;
+        --danger-text: #fee2e2;
+        --warning: #fbbf24;
+        --warning-soft: #451a03;
+        --warning-text: #fef3c7;
+        --success: #34d399;
+        --info-soft: #082f49;
+        --info-text: #f0f9ff;
+        --accent: #60a5fa;
+        --accent-hover: #93c5fd;
+        --accent-ink: #09090b;
+        --accent-soft: #172554;
+        --accent-text: #93c5fd;
+        --av1: #1e3a8a;
+        --av1t: #dbeafe;
+        --av2: #14532d;
+        --av2t: #dcfce7;
+        --av3: #78350f;
+        --av3t: #fef3c7;
+        --av4: #831843;
+        --av4t: #fce7f3;
+        --av5: #4c1d95;
+        --av5t: #ede9fe;
+        --av6: #134e4a;
+        --av6t: #ccfbf1;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.45 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      #app {
+        background: var(--surface);
+        color: var(--fg);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .fit {
+        transform-origin: 0 0;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .ico {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vertical-align: -0.15em;
+      }
+      /* Página do protótipo */
+      .top {
+        z-index: 50;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        align-items: center;
+        padding: 10px 16px;
+        background: var(--raised);
+        border-bottom: 1px solid var(--line);
+      }
+      .top h1 {
+        font-size: 15px;
+        margin: 0 8px 0 0;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        background: none;
+        padding: 6px 10px;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      .page {
+        padding: 16px 12px 24px;
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .note {
+        max-width: 820px;
+        color: var(--muted);
+        margin: 0 0 16px;
+      }
+      .note b {
+        color: var(--fg);
+      }
+      .frames {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .frame > span {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .dev {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow:
+          0 1px 3px var(--shadow),
+          0 0 0 1px var(--edge);
+        position: relative;
+      }
+      .phone {
+        width: 334px;
+        height: 740px;
+        display: flex;
+        flex-direction: column;
+      }
+      .desk {
+        width: 1080px;
+        height: 640px;
+        display: flex;
+        flex-direction: column;
+      }
+      /* App */
+      .hdr {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--raised);
+        min-height: 52px;
+      }
+      .hdr .t {
+        font-weight: 600;
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .hdr .brand {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-weight: 700;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--subtle);
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .badge.weak {
+        background: var(--warning-soft);
+        color: var(--warning-text);
+      }
+      .badge.ok {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--raised);
+        cursor: pointer;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        background: var(--subtle);
+      }
+      .btn.p {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-ink);
+      }
+      .btn.p:hover {
+        background: var(--accent-hover);
+      }
+      .btn.q {
+        border-color: transparent;
+        background: none;
+      }
+      .btn.q:hover {
+        background: var(--subtle);
+      }
+      .btn.d {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: var(--danger-ink);
+      }
+      .btn.sm {
+        min-height: 32px;
+        padding: 0 10px;
+        font-size: 13px;
+      }
+      .btn.icon {
+        width: 40px;
+        padding: 0;
+      }
+      .input {
+        width: 100%;
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--raised);
+        padding: 0 10px;
+        color: var(--fg);
+        font: inherit;
+      }
+      .search {
+        position: relative;
+      }
+      .search .ico {
+        position: absolute;
+        left: 10px;
+        top: 11px;
+        color: var(--muted);
+      }
+      .search .input {
+        padding-left: 32px;
+      }
+      .search kbd {
+        position: absolute;
+        right: 8px;
+        top: 9px;
+      }
+      kbd {
+        font:
+          11px ui-monospace,
+          monospace;
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: var(--muted);
+        background: var(--raised);
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--line);
+        background: var(--raised);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 13px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .chip[aria-pressed='true'] {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      .chip .n {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip[aria-pressed='true'] .n {
+        color: var(--accent-text);
+      }
+      /* Linha rica */
+      .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        min-height: 56px;
+      }
+      .row:hover {
+        background: var(--subtle);
+      }
+      .row[aria-current='true'] {
+        background: var(--accent-soft);
+      }
+      .row .txt {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .ti {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .row .su {
+        font-size: 13px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .row.kb {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+      .av {
+        position: relative;
+        flex-shrink: 0;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .av .ty {
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        background: var(--raised);
+        box-shadow: 0 0 0 1px var(--line);
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+      }
+      .av .ty .ico {
+        width: 11px;
+        height: 11px;
+      }
+      .av.big {
+        width: 56px;
+        height: 56px;
+        font-size: 24px;
+        border-radius: 14px;
+      }
+      .av.big .ty {
+        width: 22px;
+        height: 22px;
+      }
+      .av.big .ty .ico {
+        width: 13px;
+        height: 13px;
+      }
+      .group {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 12px 8px 4px;
+      }
+      /* Rodapé celular */
+      .tabs {
+        display: flex;
+        border-top: 1px solid var(--line);
+        background: var(--raised);
+      }
+      .tabs button {
+        flex: 1;
+        border: 0;
+        background: none;
+        padding: 8px 0 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .tabs button .ico {
+        width: 20px;
+        height: 20px;
+      }
+      .tabs button[aria-current='true'] {
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      .scroll {
+        flex: 1;
+        overflow: auto;
+        min-height: 0;
+      }
+      /* Desktop */
+      .cols {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      .side {
+        width: 210px;
+        border-right: 1px solid var(--line);
+        padding: 12px 8px;
+        overflow: auto;
+        background: var(--surface);
+      }
+      .side .it {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--fg);
+      }
+      .side .it:hover {
+        background: var(--subtle);
+      }
+      .side .it[aria-current='true'] {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      .side .it .n {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .side .it .ico {
+        color: var(--muted);
+      }
+      .side .it[aria-current='true'] .ico {
+        color: var(--accent-text);
+      }
+      .listp {
+        width: 340px;
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .listp .head {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .detp {
+        flex: 1;
+        overflow: auto;
+        min-width: 0;
+      }
+      /* Detalhe */
+      .det {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        max-width: 640px;
+      }
+      .hero {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .hero h2 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.25;
+      }
+      .hero .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .chip.link {
+        color: var(--accent-text);
+        text-decoration: none;
+      }
+      .card {
+        background: var(--raised);
+        border-radius: 12px;
+        box-shadow:
+          0 1px 3px 0 var(--shadow),
+          0 0 0 1px var(--edge);
+        border: 1px solid var(--line);
+      }
+      .card h3 {
+        margin: 0;
+        padding: 10px 14px 0;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .fld {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--line);
+      }
+      .card h3 + .fld {
+        border-top: 0;
+      }
+      .fld .lv {
+        flex: 1;
+        min-width: 0;
+      }
+      .fld .l {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .fld .v {
+        word-break: break-word;
+      }
+      .fld .v.mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.02em;
+      }
+      .fld .v.mask {
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .fld .acts {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .totp {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .totp .code {
+        white-space: nowrap;
+        font:
+          600 22px ui-monospace,
+          monospace;
+        letter-spacing: 0.12em;
+      }
+      .ring {
+        width: 34px;
+        height: 34px;
+        position: relative;
+      }
+      .ring svg {
+        width: 34px;
+        height: 34px;
+        transform: rotate(-90deg);
+      }
+      .ring span {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .seed {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .seed div {
+        background: var(--subtle);
+        border-radius: 6px;
+        padding: 4px 6px;
+        font:
+          13px ui-monospace,
+          monospace;
+      }
+      .seed div i {
+        color: var(--muted);
+        font-style: normal;
+        font-size: 11px;
+        margin-right: 4px;
+      }
+      .menu {
+        position: absolute;
+        right: 12px;
+        top: 52px;
+        z-index: 5;
+        min-width: 200px;
+        background: var(--raised);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: 0 8px 24px var(--shadow);
+        padding: 4px;
+      }
+      .menu button {
+        display: flex;
+        width: 100%;
+        gap: 10px;
+        align-items: center;
+        border: 0;
+        background: none;
+        padding: 9px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        text-align: left;
+      }
+      .menu button:hover {
+        background: var(--subtle);
+      }
+      .menu .dz {
+        color: var(--danger);
+      }
+      .menu hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 4px 0;
+      }
+      /* Toast */
+      .toast {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 76px;
+        z-index: 20;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        background: var(--fg);
+        color: var(--surface);
+        padding: 10px 14px;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px var(--shadow);
+        font-size: 13px;
+        width: max-content;
+        max-width: calc(100% - 24px);
+      }
+      .toast .ico {
+        color: var(--success);
+      }
+      [data-theme='dark'] .toast .ico {
+        color: #047857;
+      }
+      .desk .toast {
+        bottom: 20px;
+      }
+      /* Sheet / dialog */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--scrim);
+        z-index: 30;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .desk .scrim {
+        align-items: center;
+      }
+      .sheet {
+        background: var(--raised);
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        padding: 8px 16px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .sheet .grab {
+        width: 36px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--line);
+        margin: 0 auto 6px;
+      }
+      .desk .sheet {
+        width: 420px;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .desk .sheet .grab {
+        display: none;
+      }
+      .sheet h4 {
+        margin: 0;
+        font-size: 17px;
+      }
+      .sheet p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .sheet .bt {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .desk .sheet .bt {
+        flex-direction: row-reverse;
+      }
+      .sheet .bt .btn {
+        min-height: 44px;
+      }
+      .desk .sheet .bt .btn {
+        min-height: 36px;
+      }
+      /* Editor */
+      .form {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .f label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .meter {
+        display: flex;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .meter i {
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--line);
+      }
+      .meter.s4 i {
+        background: var(--success);
+      }
+      .meter.s1 i:first-child {
+        background: var(--danger);
+      }
+      .mh {
+        font-size: 12px;
+        margin-top: 4px;
+        color: var(--muted);
+      }
+      .mh b {
+        color: var(--success);
+      }
+      .mh.bad b {
+        color: var(--danger);
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px 12px;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      legend {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 0 4px;
+      }
+      .rng {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .rng input[type='range'] {
+        flex: 1;
+        accent-color: var(--accent);
+      }
+      .rng .input {
+        width: 64px;
+      }
+      .checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        font-size: 13px;
+      }
+      /* Vazio */
+      .empty {
+        padding: 28px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 8px;
+      }
+      .empty .big {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        display: grid;
+        place-items: center;
+      }
+      .empty .big .ico {
+        width: 26px;
+        height: 26px;
+      }
+      .empty h3 {
+        margin: 6px 0 0;
+        font-size: 17px;
+      }
+      .empty p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .steps {
+        list-style: none;
+        margin: 12px 0 0;
+        padding: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        text-align: left;
+      }
+      .steps li {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--raised);
+        cursor: pointer;
+      }
+      .steps .n {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        border: 2px solid var(--line);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .steps .done .n {
+        background: var(--success);
+        border-color: var(--success);
+        color: #fff;
+      }
+      .steps .done .tt {
+        text-decoration: line-through;
+        color: var(--muted);
+      }
+      .steps .tt {
+        font-weight: 600;
+      }
+      .steps .ds {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .crash {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 24px;
+        text-align: center;
+      }
+      .crash .big {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: var(--danger-soft);
+        color: var(--danger);
+        display: grid;
+        place-items: center;
+      }
+      .crash .big .ico,
+      .empty .big .ico {
+        width: 26px;
+        height: 26px;
+      }
+      .fld.wrap {
+        flex-wrap: wrap;
+      }
+      .fld.wrap .lv {
+        flex-basis: 100%;
+      }
+      .fld.wrap .acts {
+        margin-left: auto;
+      }
+      .crash p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 300px;
+      }
+      /* "Antes" */
+      .old .row {
+        min-height: 44px;
+        padding: 10px;
+      }
+      .old .row .ti {
+        font-weight: 400;
+      }
+      .cmp {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend {
+        margin-top: 20px;
+        max-width: 820px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .legend li {
+        margin: 3px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="top">
+        <h1>BlindVault · Fase 7b · protótipo</h1>
+        <div class="seg" id="screens"></div>
+        <div class="seg" id="theme">
+          <button data-v="light" aria-pressed="true">Claro</button
+          ><button data-v="dark" aria-pressed="false">Escuro</button>
+        </div>
+        <div class="seg" id="ver">
+          <button data-v="new" aria-pressed="true">Depois (7b)</button
+          ><button data-v="old" aria-pressed="false">Antes (v0.6.0)</button>
+        </div>
+      </div>
+      <main class="page" id="page"></main>
+    </div>
+
+    <script>
+      const S = (p) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+      // Ícones no estilo Lucide (no app: copiados para ui/icons, D232).
+      const I = {
+        key: S(
+          '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+        ),
+        card: S('<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>'),
+        note: S(
+          '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8M16 13H8M16 17H8"/>',
+        ),
+        wallet: S(
+          '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+        ),
+        id: S(
+          '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7 21v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>',
+        ),
+        doc: S(
+          '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
+        ),
+        code: S('<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>'),
+        search: S('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+        plus: S('<path d="M5 12h14M12 5v14"/>'),
+        more: S(
+          '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+        ),
+        copy: S(
+          '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+        ),
+        eye: S(
+          '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+        ),
+        eyeoff: S(
+          '<path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M14.12 14.12a3 3 0 1 1-4.24-4.24M2 2l20 20"/>',
+        ),
+        back: S('<path d="m15 18-6-6 6-6"/>'),
+        list: S('<path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/>'),
+        trash: S(
+          '<path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+        ),
+        settings: S(
+          '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+        ),
+        lock: S(
+          '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+        ),
+        folder: S(
+          '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+        ),
+        globe: S(
+          '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/>',
+        ),
+        pencil: S(
+          '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5zM15 5l4 4"/>',
+        ),
+        dup: S(
+          '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2M15 12v6M12 15h6"/>',
+        ),
+        history: S(
+          '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
+        ),
+        check: S('<path d="M20 6 9 17l-5-5"/>'),
+        alert: S(
+          '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01"/>',
+        ),
+        upload: S('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>'),
+        phone: S('<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>'),
+        shield: S(
+          '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+        ),
+        wand: S(
+          '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72M14 7l3 3M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9"/>',
+        ),
+        tag: S(
+          '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+        ),
+      };
+      const TYPES = {
+        login: ['Login', I.key],
+        card: ['Cartão de pagamento', I.card],
+        note: ['Nota segura', I.note],
+        wallet: ['Carteira de criptomoedas', I.wallet],
+        identity: ['Identidade', I.id],
+        document: ['Documento', I.doc],
+        dev: ['Credencial de desenvolvedor', I.code],
+      };
+      const TYPE_SHORT = {
+        login: 'Logins',
+        card: 'Cartões',
+        note: 'Notas',
+        wallet: 'Carteiras',
+        identity: 'Identidades',
+        document: 'Documentos',
+        dev: 'Desenvolvedor',
+      };
+      // Dados fictícios.
+      const ITEMS = [
+        {
+          id: 'a',
+          t: 'Banco Horizonte',
+          ty: 'login',
+          folder: 'Finanças',
+          user: 'ana.souza',
+          host: 'horizonte.com.br',
+          pw: 'Tq7!vR2#mZ9p@Lk4',
+          strong: true,
+          totp: true,
+          tags: ['banco'],
+          notes: 'Agência 0001 — ligar para o gerente antes de transferências acima de R$ 10 mil.',
+        },
+        {
+          id: 'b',
+          t: 'Correio eletrônico',
+          ty: 'login',
+          folder: 'Pessoal',
+          user: 'ana@exemplo.com',
+          host: 'mail.exemplo.com',
+          pw: 'verao2024',
+          strong: false,
+          totp: false,
+          tags: [],
+        },
+        {
+          id: 'c',
+          t: 'Cartão Visa final 4421',
+          ty: 'card',
+          folder: 'Finanças',
+          sub: 'Ana Souza · •••• 4421',
+          tags: [],
+        },
+        {
+          id: 'd',
+          t: 'Carteira Bitcoin',
+          ty: 'wallet',
+          folder: 'Finanças',
+          sub: 'Frase de 12 palavras',
+          tags: ['cripto'],
+        },
+        {
+          id: 'e',
+          t: 'Fórum de fotografia',
+          ty: 'login',
+          folder: 'Pessoal',
+          user: 'ana_fotos',
+          host: 'forum.foto.net',
+          pw: 'verao2024',
+          strong: false,
+          totp: false,
+          tags: [],
+        },
+        {
+          id: 'f',
+          t: 'GitHub',
+          ty: 'login',
+          folder: 'Trabalho',
+          user: 'anasouza',
+          host: 'github.com',
+          pw: 'h8$Qw!e2Zr0^xN6v',
+          strong: true,
+          totp: true,
+          tags: ['trabalho'],
+        },
+        {
+          id: 'g',
+          t: 'Passaporte',
+          ty: 'document',
+          folder: 'Pessoal',
+          sub: 'Passaporte · válido até 03/2031',
+          tags: [],
+        },
+        {
+          id: 'h',
+          t: 'Servidor de homologação',
+          ty: 'dev',
+          folder: 'Trabalho',
+          sub: 'deploy@staging',
+          tags: ['trabalho'],
+        },
+        {
+          id: 'i',
+          t: 'Wi-Fi de casa',
+          ty: 'note',
+          folder: 'Pessoal',
+          sub: 'Nota segura',
+          tags: [],
+        },
+      ];
+      const SEED =
+        'abandon ability able about above absent absorb abstract absurd abuse access accident'.split(
+          ' ',
+        );
+      const st = Object.assign(
+        {
+          screen: 'list',
+          theme: 'light',
+          ver: 'new',
+          sel: 'a',
+          filter: 'all',
+          folder: 'all',
+          reveal: false,
+          menu: false,
+          toast: '',
+          kb: 'a',
+          seed: false,
+          sheet: true,
+        },
+        window.INIT || {},
+      );
+      const sub = (it) => it.sub ?? [it.user, it.host].filter(Boolean).join(' · ');
+      function hue(s) {
+        let h = 0;
+        for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+        return (h % 6) + 1;
+      }
+      function av(it, big) {
+        const n = hue(it.t);
+        return `<div class="av${big ? ' big' : ''}" style="background:var(--av${n});color:var(--av${n}t)">${it.t[0].toUpperCase()}<span class="ty">${TYPES[it.ty][1]}</span></div>`;
+      }
+      function visible() {
+        return ITEMS.filter(
+          (i) =>
+            (st.filter === 'all' || i.ty === st.filter) &&
+            (st.folder === 'all' || i.folder === st.folder),
+        );
+      }
+      function count(f) {
+        return ITEMS.filter(f).length;
+      }
+
+      function rows(list, phone) {
+        if (st.ver === 'old')
+          return `<ul class="rows old">${list.map((i) => `<li><div class="row" data-sel="${i.id}" ${!phone && st.sel === i.id ? 'aria-current="true"' : ''}><div class="txt"><div class="ti">${i.t}</div></div></div></li>`).join('')}</ul>`;
+        return `<ul class="rows">${list.map((i) => `<li><div class="row${!phone && st.kb === i.id && st.sel !== i.id ? ' kb' : ''}" data-sel="${i.id}" ${!phone && st.sel === i.id ? 'aria-current="true"' : ''}>${av(i)}<div class="txt"><div class="ti">${i.t}</div><div class="su">${sub(i)}</div></div>${i.pw ? `<button class="btn q sm" data-copy="Senha de ${i.t}" title="Copiar a senha">${I.copy}<span>Copiar</span></button>` : ''}</div></li>`).join('')}</ul>`;
+      }
+      function typeChips() {
+        const types = [...new Set(ITEMS.map((i) => i.ty))];
+        return `<div class="chips" role="group" aria-label="Filtrar por tipo"><button class="chip" data-filter="all" aria-pressed="${st.filter === 'all'}">Todos <span class="n">${ITEMS.length}</span></button>${types.map((t) => `<button class="chip" data-filter="${t}" aria-pressed="${st.filter === t}">${TYPE_SHORT[t]} <span class="n">${count((i) => i.ty === t)}</span></button>`).join('')}</div>`;
+      }
+      function searchBox() {
+        return `<div class="search">${st.ver === 'new' ? I.search : ''}<input class="input" type="search" placeholder="Buscar" aria-label="Buscar">${st.ver === 'new' ? '<kbd>⌘K</kbd>' : ''}</div>`;
+      }
+      function ring(sec) {
+        const r = 14,
+          c = 2 * Math.PI * r,
+          col = sec <= 5 ? 'var(--danger)' : sec <= 10 ? 'var(--warning)' : 'var(--accent)';
+        return `<div class="ring" role="img" aria-label="Muda em ${sec} s"><svg viewBox="0 0 34 34"><circle cx="17" cy="17" r="${r}" fill="none" stroke="var(--line)" stroke-width="3"/><circle cx="17" cy="17" r="${r}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - sec / 30)}"/></svg><span style="color:${col}">${sec}</span></div>`;
+      }
+      let tick = 30 - (Math.floor(Date.now() / 1000) % 30);
+
+      function fld(label, value, { mono, secret, copy, extra = '', open } = {}) {
+        const shown = secret && !st.reveal ? '••••••••••••' : value;
+        return `<div class="fld"><div class="lv"><div class="l">${label}${extra}</div><div class="v${mono || secret ? ' mono' : ''}${secret && !st.reveal ? ' mask' : ''}">${shown}</div></div><div class="acts">${secret ? `<button class="btn q sm" data-reveal>${st.reveal ? I.eyeoff + '<span>Ocultar</span>' : I.eye + '<span>Mostrar</span>'}</button>` : ''}${open ? `<a class="btn q sm" href="#" onclick="return false">${I.globe}<span>Abrir</span></a>` : ''}${copy ? `<button class="btn q sm" data-copy="${label}">${I.copy}<span>Copiar</span></button>` : ''}</div></div>`;
+      }
+      function detailNew(it, phone) {
+        const head = phone
+          ? `<div class="hdr"><button class="btn q icon" data-back aria-label="Voltar">${I.back}</button><div class="t">${it.t}</div><button class="btn sm" data-edit>${I.pencil}<span>Editar</span></button><button class="btn q icon" data-menu aria-label="Mais ações" aria-expanded="${st.menu}">${I.more}</button></div>`
+          : '';
+        let body = '';
+        if (it.ty === 'login') {
+          body += `<section class="card"><h3>Acesso</h3>${fld('Usuário', it.user, { copy: true })}${fld('Senha', it.pw, { secret: true, copy: true, extra: it.strong ? '<span class="badge ok">Forte</span>' : '<span class="badge weak">' + I.alert + ' Fraca</span>' })}${it.totp ? `<div class="fld"><div class="lv"><div class="l">Código atual</div><div class="totp"><span class="code" data-code>${code()}</span>${ring(tick)}</div></div><div class="acts"><button class="btn q sm" data-copy="Código">${I.copy}<span>Copiar código</span></button></div></div>` : ''}</section>`;
+          body += `<section class="card"><h3>Site</h3>${fld('Site', 'https://' + it.host, { open: true, copy: true })}</section>`;
+        } else if (it.ty === 'card') {
+          body += `<section class="card"><h3>Cartão</h3>${fld('Titular', 'Ana Souza', { copy: true })}${fld('Número do cartão', '4111 2222 3333 4421', { secret: true, copy: true })}${fld('Validade', '08/2029', {})}${fld('Código de segurança', '123', { secret: true, copy: true })}</section>`;
+        } else if (it.ty === 'wallet') {
+          body += `<section class="card"><h3>Carteira</h3><div class="fld wrap"><div class="lv"><div class="l">Frase semente</div>${st.reveal ? `<div class="seed">${SEED.map((w, i) => `<div><i>${i + 1}</i>${w}</div>`).join('')}</div>` : '<div class="v mono">•••• •••• •••• •••• •••• ••••</div>'}</div><div class="acts"><button class="btn q sm" data-reveal>${st.reveal ? I.eyeoff + '<span>Ocultar</span>' : I.eye + '<span>Mostrar</span>'}</button><button class="btn q sm" data-copy="Frase semente">${I.copy}<span>Copiar</span></button></div></div></section>`;
+        } else {
+          body += `<section class="card"><h3>${TYPES[it.ty][0]}</h3>${fld('Descrição', sub(it), { copy: true })}</section>`;
+        }
+        if (it.notes)
+          body += `<section class="card"><h3>Notas</h3><div class="fld"><div class="lv"><div class="v">${it.notes}</div></div></div></section>`;
+        const deskActs = phone
+          ? ''
+          : `<div style="margin-left:auto;display:flex;gap:6px;align-self:flex-start"><button class="btn sm" data-edit>${I.pencil}<span>Editar</span></button><button class="btn q icon" data-menu aria-label="Mais ações" aria-expanded="${st.menu}">${I.more}</button></div>`;
+        return `${head}<div class="${phone ? 'scroll' : ''}"><div class="det"><div class="hero">${av(it, true)}<div style="min-width:0"><h2>${it.t}</h2><div class="meta"><span class="chip">${TYPES[it.ty][1]} ${TYPES[it.ty][0]}</span>${it.host ? `<span class="chip link">${I.globe} ${it.host}</span>` : ''}<span class="chip">${I.folder} ${it.folder}</span>${it.tags.map((t) => `<span class="chip">${I.tag} ${t}</span>`).join('')}</div></div>${deskActs}</div>${body}</div></div>${st.menu ? menu() : ''}`;
+      }
+      function menu() {
+        return `<div class="menu" role="menu"><button role="menuitem">${I.pencil} Editar</button><button role="menuitem">${I.dup} Duplicar</button><button role="menuitem">${I.history} Histórico</button><hr><button role="menuitem" class="dz" data-sheet>${I.trash} Mover para a lixeira</button></div>`;
+      }
+      function detailOld(it, phone) {
+        const f =
+          it.ty === 'login'
+            ? [
+                ['Usuário', it.user],
+                ['Senha', '••••••••••••  <u>Mostrar</u>  <u>Copiar</u>'],
+                ...(it.totp
+                  ? [['Código atual', code() + '  Muda em ' + tick + ' s  <u>Copiar código</u>']]
+                  : []),
+                ['Site', 'https://' + it.host + '  <u>Abrir</u>'],
+              ]
+            : [['Descrição', sub(it)]];
+        return `${phone ? `<div class="hdr"><button class="btn q sm" data-back>Voltar</button><div class="t"></div></div>` : ''}<div class="${phone ? 'scroll' : ''}"><div class="det" style="gap:12px"><div><h2 style="margin:0;font-size:20px">${it.t}</h2><div style="color:var(--muted);font-size:13px">${TYPES[it.ty][0]}</div></div>${f.map(([l, v]) => `<div><div style="font-size:12px;color:var(--muted);font-weight:500">${l}</div><div>${v}</div></div>`).join('')}<div><div style="font-size:12px;color:var(--muted);font-weight:500">Pasta</div><div>${it.folder}</div></div>${it.notes ? `<div><div style="font-size:12px;color:var(--muted);font-weight:500">Notas</div><div>${it.notes}</div></div>` : ''}<div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn">Editar</button><button class="btn q">Mover para a lixeira</button><button class="btn q">Duplicar</button><button class="btn q">Histórico</button></div></div></div>`;
+      }
+      function code() {
+        const n = (Math.floor(Date.now() / 30000) * 7919) % 1000000;
+        return String(n)
+          .padStart(6, '0')
+          .replace(/(\d{3})(\d{3})/, '$1 $2');
+      }
+      const toast = () =>
+        st.toast ? `<div class="toast" role="status">${I.check}<span>${st.toast}</span></div>` : '';
+
+      function phoneList() {
+        const list = visible();
+        if (st.ver === 'old')
+          return `<div class="hdr"><div class="t">BlindVault</div><span class="badge">${I.lock.replace('class="ico"', 'class="ico" style="width:12px;height:12px"')} Desbloqueado</span><button class="btn q sm">Configurações</button><button class="btn q sm">Bloquear</button></div><div class="scroll" style="padding:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:13px">Itens</b><button class="btn p sm">${I.plus} Novo item</button></div>${searchBox()}<div style="margin-top:8px">${rows(list, true)}</div></div><div class="tabs" style="padding:4px"><button aria-current="true" style="flex-direction:row;justify-content:center">Itens</button><button style="flex-direction:row;justify-content:center">Configurações</button></div>`;
+        const groups = {};
+        list.forEach((i) => (groups[i.t[0].toUpperCase()] ??= []).push(i));
+        return `<div class="hdr"><div class="t" style="font-size:18px">Itens</div><button class="btn p icon" aria-label="Novo item" title="Novo item (N)">${I.plus}</button><button class="btn q icon" aria-label="Mais" title="Bloquear (Ctrl/⌘⇧L)">${I.more}</button></div><div style="padding:10px 12px 6px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)">${searchBox()}${typeChips()}</div><div class="scroll" style="padding:0 6px">${Object.entries(
+          groups,
+        )
+          .map(([k, v]) => `<div class="group">${k}</div>${rows(v, true)}`)
+          .join(
+            '',
+          )}</div>${toast()}<div class="tabs"><button aria-current="true">${I.list}Itens</button><button>${I.trash}Lixeira</button><button>${I.settings}Configurações</button></div>`;
+      }
+      function phoneDetail() {
+        const it = ITEMS.find((i) => i.id === st.sel);
+        return (
+          (st.ver === 'old' ? detailOld(it, true) : detailNew(it, true) + toast()) +
+          (st.ver === 'new'
+            ? `<div class="tabs"><button aria-current="true">${I.list}Itens</button><button>${I.trash}Lixeira</button><button>${I.settings}Configurações</button></div>`
+            : '')
+        );
+      }
+      function desktop() {
+        const it = ITEMS.find((i) => i.id === st.sel);
+        const folders = ['Finanças', 'Pessoal', 'Trabalho'];
+        if (st.ver === 'old')
+          return `<div class="hdr"><div class="brand">BlindVault</div><span class="badge">Desbloqueado</span><div style="flex:1"></div><button class="btn q sm">Configurações</button><button class="btn q sm">Bloquear</button></div><div class="cols"><nav class="side"><div class="it" aria-current="true">Todos os itens</div>${folders.map((f) => `<div class="it">${f}</div>`).join('')}<div class="it">Lixeira</div></nav><div class="listp"><div class="head"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Itens</b><button class="btn p sm">${I.plus} Novo item</button></div>${searchBox()}</div><div class="scroll" style="padding:6px">${rows(ITEMS, false)}</div></div><div class="detp">${detailOld(it, false)}</div></div>`;
+        return `<div class="hdr"><div class="brand">${I.shield} BlindVault</div><div style="flex:1"></div><button class="btn p sm" title="Novo item (N)">${I.plus}<span>Novo item</span> <kbd style="background:transparent;color:inherit;border-color:currentColor;opacity:.7">N</kbd></button><button class="btn q sm">${I.settings}<span>Configurações</span></button><button class="btn q sm" title="Ctrl/⌘⇧L">${I.lock}<span>Bloquear</span></button></div>
+  <div class="cols"><nav class="side" aria-label="Pastas"><div class="group" style="padding-top:2px">Cofre</div><div class="it" data-folder="all" aria-current="${st.folder === 'all'}">${I.list} Todos os itens <span class="n">${ITEMS.length}</span></div>${folders.map((f) => `<div class="it" data-folder="${f}" aria-current="${st.folder === f}">${I.folder} ${f} <span class="n">${count((i) => i.folder === f)}</span></div>`).join('')}<div class="it">${I.trash} Lixeira <span class="n">2</span></div></nav>
+  <div class="listp"><div class="head">${searchBox()}${typeChips()}</div><div class="scroll" style="padding:6px">${rows(visible(), false)}</div><div style="padding:6px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)"><kbd>↑</kbd> <kbd>↓</kbd> navegar · <kbd>Enter</kbd> abrir · <kbd>Esc</kbd> limpar busca</div></div>
+  <div class="detp" style="position:relative">${detailNew(it, false)}</div></div>${toast()}${st.sheet && st.screen === 'feedback' ? sheet() : ''}`;
+      }
+      function sheet() {
+        return `<div class="scrim"><div class="sheet" role="dialog" aria-labelledby="sh"><div class="grab"></div><h4 id="sh">Mover “Correio eletrônico” para a lixeira?</h4><p>O item fica na lixeira por 30 dias e pode ser restaurado nesse prazo.</p><div class="bt"><button class="btn d">${I.trash} Mover para a lixeira</button><button class="btn" data-closesheet>Cancelar</button></div></div></div>`;
+      }
+      function editor(phone) {
+        const g = phone ? 'mp' : 'md';
+        return `<div class="hdr">${phone ? `<button class="btn q icon" aria-label="Voltar">${I.back}</button>` : ''}<div class="t">Editar “Correio eletrônico”</div><button class="btn p sm" title="Ctrl/⌘ Enter">${I.check}<span>Salvar</span></button></div><div class="scroll"><div class="form">
+  <div class="f"><label>Título</label><input class="input" value="Correio eletrônico"></div>
+  <div class="f"><label>Usuário</label><input class="input" value="ana@exemplo.com"></div>
+  <div class="f"><label>Senha</label><input class="input" style="font-family:ui-monospace,monospace" id="pw" value="${st.gen ?? 'verao2024'}">
+    <div class="meter ${st.gen ? 's4' : 's1'}"><i></i><i></i><i></i><i></i></div>
+    <div class="mh ${st.gen ? '' : 'bad'}">${st.gen ? '<b>Forte</b> · levaria séculos para adivinhar' : '<b>Fraca</b> · palavra comum seguida de um ano; está em uso em outro item também. Salvar continua permitido.'}</div></div>
+  <fieldset><legend>${I.wand} Gerador</legend>
+    <div class="checks" role="radiogroup"><label><input type="radio" name="${g}" checked> Senha</label><label><input type="radio" name="${g}"> Frase de palavras</label></div>
+    <div class="rng"><label for="len" style="font-size:13px">Tamanho</label><input type="range" id="len" min="8" max="64" value="20"><input class="input" type="number" value="20" aria-label="Tamanho"></div>
+    <div class="checks"><label><input type="checkbox" checked> A–Z</label><label><input type="checkbox" checked> a–z</label><label><input type="checkbox" checked> 0–9</label><label><input type="checkbox" checked> !@#</label></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--muted)">≈ 131 bits de entropia</span><button class="btn sm" data-gen>${I.wand}<span>Gerar e usar</span></button></div>
+  </fieldset>
+  <div class="f"><label>Site</label><input class="input" value="https://mail.exemplo.com"></div>
+  <div style="font-size:12px;color:var(--muted)"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>Enter</kbd> salva</div>
+  </div></div>`;
+      }
+      function emptyPhone() {
+        return `<div class="hdr"><div class="t" style="font-size:18px">Itens</div><button class="btn p icon" aria-label="Novo item">${I.plus}</button><button class="btn q icon" aria-label="Mais">${I.more}</button></div><div class="scroll"><div class="empty"><div class="big">${I.shield}</div><h3>Seu cofre está pronto</h3><p>Ele vive só nos seus dispositivos. Três passos para começar:</p><ol class="steps"><li class="done"><span class="n">${I.check}</span><div><div class="tt">Criar o cofre e guardar a Frase de Recuperação</div></div></li><li><span class="n">2</span><div><div class="tt">Criar o primeiro item</div><div class="ds">Um login, um cartão, uma nota segura…</div></div></li><li><span class="n">3</span><div><div class="tt">Importar de outro gerenciador</div><div class="ds">BlindPass, Bitwarden, 1Password, Chrome…</div></div></li><li><span class="n">4</span><div><div class="tt">Parear outro dispositivo</div><div class="ds">Para não depender só deste aparelho.</div></div></li></ol></div></div><div class="tabs"><button aria-current="true">${I.list}Itens</button><button>${I.trash}Lixeira</button><button>${I.settings}Configurações</button></div>`;
+      }
+      function crashPhone() {
+        return `<div class="crash"><div class="big">${I.lock}</div><h3 style="margin:0">Algo deu errado</h3><p>O BlindVault encontrou um erro inesperado e <b style="color:var(--fg)">bloqueou o cofre</b> por segurança. Nada foi perdido: o que estava salvo continua no dispositivo.</p><button class="btn p">Recarregar</button></div>`;
+      }
+      function phoneSheetScreen() {
+        const s = st.sel;
+        st.sel = 'b';
+        const h = detailNew(ITEMS[1], true);
+        st.sel = s;
+        return h + (st.sheet ? sheet() : '') + toast();
+      }
+
+      const SCREENS = {
+        list: [
+          'Lista e detalhe',
+          () =>
+            frames([
+              ['Celular · lista', phoneList(), 'phone'],
+              ['Celular · detalhe', phoneDetail(), 'phone'],
+              ['Desktop', desktop(), 'desk'],
+            ]),
+          '<b>Linha da lista</b>: avatar com a inicial (cor derivada do título, sem favicon) e o ícone do tipo, subtítulo com usuário e host (só campos não secretos, como a busca, D132), <b>Copiar</b> a senha direto na linha. <b>Detalhe</b>: cabeçalho com chips (tipo, host, pasta, tags), campos em seções, ícone + texto nos botões, selo de força, TOTP com anel, ações no menu “…”. Clique numa linha, em <b>Mostrar</b>, em <b>Copiar</b> ou no “…”.',
+        ],
+        totp: [
+          'TOTP e seed',
+          () => {
+            const s = st.sel;
+            st.sel = 'd';
+            const a = detailNew(ITEMS[3], true);
+            st.sel = s;
+            return frames([
+              ['Celular · login com TOTP', detailNew(ITEMS[0], true) + toast(), 'phone'],
+              ['Celular · carteira (clique em Mostrar)', a, 'phone'],
+            ]);
+          },
+          '<b>TOTP</b>: anel de 30 s que fica âmbar aos 10 s e vermelho aos 5 s; o número no centro repete os segundos em texto. Ele avança um passo por segundo, sem transição, então não é animação (D236 intacta). <b>Seed</b>: depois de Mostrar, grade numerada de 3 colunas.',
+        ],
+        editor: [
+          'Editor',
+          () =>
+            frames([
+              ['Celular · editor', editor(true), 'phone'],
+              [
+                'Desktop · editor',
+                `<div style="display:flex;flex:1;min-height:0"><div style="width:600px;display:flex;flex-direction:column;border-right:1px solid var(--line)">${editor(false)}</div></div>`,
+                'desk',
+              ],
+            ]),
+          '<b>Força da senha do item</b>: barra de 4 segmentos com rótulo e explicação (zxcvbn, já no bundle); informa, não bloqueia. <b>Gerador</b>: continua inline, ganha o slider ao lado do campo numérico. Clique em <b>Gerar e usar</b>. <b>Salvar</b> com Ctrl/⌘ Enter.',
+        ],
+        feedback: [
+          'Feedback',
+          () =>
+            frames([
+              ['Celular · confirmação em bottom sheet', phoneSheetScreen(), 'phone'],
+              ['Desktop · a mesma confirmação em diálogo', desktop(), 'desk'],
+            ]),
+          '<b>Confirmação</b>: no celular, bottom sheet (CSS sobre o mesmo <code>&lt;dialog&gt;</code> nativo), botões de 44 px; no desktop, diálogo centrado. <b>Toast</b>: <code>role=status</code>, aparece ao copiar (“Copiado. Limpa em 30 s”) e ao salvar, mover, restaurar. Clique em Cancelar e depois em qualquer Copiar.',
+        ],
+        states: [
+          'Vazio e erro',
+          () =>
+            frames([
+              ['Celular · cofre vazio', emptyPhone(), 'phone'],
+              ['Celular · erro inesperado', crashPhone(), 'phone'],
+            ]),
+          '<b>Cofre vazio</b>: em vez de “Nenhum item ainda.”, um checklist de primeiros passos. <b>Error boundary</b>: um erro de renderização bloqueia o cofre e limpa o estado antes de mostrar esta tela; hoje a tela fica em branco.',
+        ],
+      };
+      function frames(fs) {
+        return `<div class="frames">${fs.map(([l, h, k]) => `<div class="frame"${k === 'desk' ? ' data-fit' : ''}><span>${l}</span>${k === 'desk' ? '<div class="fitbox">' : ''}<div class="dev ${k}${k === 'desk' ? ' fit' : ''}">${h}</div>${k === 'desk' ? '</div>' : ''}</div>`).join('')}</div>`;
+      }
+      function fit() {
+        document.querySelectorAll('[data-fit]').forEach((f) => {
+          f.style.width = '100%';
+          const box = f.querySelector('.fitbox'),
+            d = f.querySelector('.fit');
+          const k = Math.min(1, f.clientWidth / 1080);
+          d.style.transform = `scale(${k})`;
+          box.style.height = 640 * k + 'px';
+          box.style.width = 1080 * k + 'px';
+        });
+      }
+      window.addEventListener('resize', fit);
+
+      function render() {
+        document.documentElement.dataset.theme = st.theme;
+        document.getElementById('screens').innerHTML = Object.entries(SCREENS)
+          .map(
+            ([k, [l]]) =>
+              `<button data-screen="${k}" aria-pressed="${st.screen === k}">${l}</button>`,
+          )
+          .join('');
+        const [, fn, note] = SCREENS[st.screen];
+        document.getElementById('page').innerHTML =
+          `<p class="note">${st.ver === 'old' && st.screen === 'list' ? '<b>Antes (v0.6.0)</b>: reprodução aproximada das telas atuais, para comparar.' : note}</p>${fn()}<ul class="legend"><li>Cores, raios e sombras vêm dos tokens de <code>index.css</code> (acento azul); a única cor nova é a paleta de 6 pares para o avatar, que entraria nos tokens e no teste de contraste.</li><li>Fonte do sistema (D231), ícones no estilo Lucide copiados (D232), botões de segurança sempre com texto (§13.7).</li><li>Fica fora: seleção múltipla, vistos recentemente, densidade, página de saúde, HIBP, colar <code>otpauth://</code>.</li></ul>`;
+        fit();
+      }
+      document.addEventListener('click', (e) => {
+        const b = e.target.closest('button,[data-sel],[data-folder]');
+        if (!b) {
+          if (st.menu) {
+            st.menu = false;
+            render();
+          }
+          return;
+        }
+        const d = b.dataset;
+        if (d.screen) {
+          st.screen = d.screen;
+          st.menu = false;
+          st.reveal = false;
+          st.sheet = true;
+          st.toast = '';
+        } else if (b.parentElement.id === 'theme') {
+          st.theme = d.v;
+        } else if (b.parentElement.id === 'ver') {
+          st.ver = d.v;
+        } else if (d.copy !== undefined) {
+          e.stopPropagation();
+          st.toast = `${d.copy.startsWith('Senha') ? 'Senha copiada' : 'Copiado'}. Limpa em 30 s.`;
+          clearTimeout(st.tt);
+          st.tt = setTimeout(() => {
+            st.toast = '';
+            render();
+          }, 3500);
+        } else if (d.reveal !== undefined) {
+          st.reveal = !st.reveal;
+        } else if (d.menu !== undefined) {
+          st.menu = !st.menu;
+        } else if (d.sheet !== undefined) {
+          st.menu = false;
+          st.sheet = true;
+          st.screen = 'feedback';
+        } else if (d.closesheet !== undefined) {
+          st.sheet = false;
+        } else if (d.gen !== undefined) {
+          st.gen = 'p#7Lq!Rw2@vZ9xT4m$Kc';
+        } else if (d.filter) {
+          st.filter = d.filter;
+        } else if (d.folder) {
+          st.folder = d.folder;
+        } else if (d.sel) {
+          st.sel = d.sel;
+          st.kb = d.sel;
+          st.reveal = false;
+          st.menu = false;
+        } else return;
+        render();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (st.screen !== 'list' || st.ver !== 'new' || e.target.tagName === 'INPUT') return;
+        const list = visible();
+        const i = list.findIndex((x) => x.id === st.kb);
+        if (e.key === 'ArrowDown' || e.key === 'j') {
+          st.kb = list[Math.min(i + 1, list.length - 1)].id;
+          render();
+        }
+        if (e.key === 'ArrowUp' || e.key === 'k') {
+          st.kb = list[Math.max(i - 1, 0)].id;
+          render();
+        }
+        if (e.key === 'Enter') {
+          st.sel = st.kb;
+          st.reveal = false;
+          render();
+        }
+      });
+      setInterval(() => {
+        tick = 30 - (Math.floor(Date.now() / 1000) % 30);
+        if (['list', 'totp'].includes(st.screen) && st.ver === 'new' && !st.menu) {
+          document.querySelectorAll('.ring').forEach((r) => (r.outerHTML = ring(tick)));
+          document.querySelectorAll('[data-code]').forEach((c) => (c.textContent = code()));
+        }
+      }, 1000);
+      render();
+    </script>
+  </body>
+</html>

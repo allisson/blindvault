@@ -22,6 +22,7 @@ Phase 4 Pairing ──► Gate C
 Phase 5 Synchronization ──► Gate D
 Phase 6 Deployment on Cloudflare Pages ──► Deploy Gate
 Phase 7 User experience ──► UX Gate
+Phase 7b Essential UX ──► Essential UX Gate
 Phase 8 Import and final review ──► Security Gate ──► v1.0
 ```
 
@@ -408,6 +409,35 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Every security warning and confirmation is still shown and still asserted by the tests (the exact text in the e2e specs, or in `warnings.test.ts` for what only a forged input or a race reaches)
 - [x] Under `prefers-reduced-motion`, no animation runs (`motion.spec.ts` through a held press, a copy and a dialog; the class guard and the busy spinner in `contrast.test.ts`, D236)
 - [x] Visual and flow tests pass at the three layout widths, including resizing across breakpoints without losing state (`layout.spec.ts`, D197)
+
+---
+
+## Phase 7b — Essential UX
+
+**Goal:** the list and the item detail carry the information and finish of BlindPass's essentials, within section 13.7, with no new dependency and no security decision hidden (D244). Runs before the Security Gate of Phase 8: the final review checks the UI that ships.
+
+### Tasks
+
+- [x] Record the scope and what stays out (D244), and the list-row invariant (CRYPTO-INV-024)
+- [x] HTML prototype of the list, detail, TOTP, editor, feedback and empty states, approved before any code (D244)
+- [ ] Icons and navigation: more copied Lucide icons, phone footer with icons, "+" and the overflow menu on a phone, type filter, counts per folder and per type
+- [ ] List row: avatar (with its six color pairs in the tokens and the contrast test), subtitle from non-secret fields, Copy for the password, grouping by first letter on a phone
+- [ ] Item detail: header with avatar and chips, fields in sections inside cards, icon and text on secret buttons, the "…" menu, the seed-phrase grid
+- [ ] TOTP ring, stepping once a second with no transition
+- [ ] Password strength on item secrets: meter in the editor, Weak badge on the detail, never blocking a save
+- [ ] Feedback: toast region, bottom sheet on a phone, empty-vault checklist, error boundary that locks the vault
+- [ ] Keyboard: list movement, search to list, Esc, Ctrl/⌘+Enter; generator length slider
+- [ ] Release v0.7.0 for another hands-on test
+
+### Essential UX Gate
+
+- [ ] axe, `keyboard.spec.ts` and `screen-reader.spec.ts` cover every new screen and control (rich row, "…" menu, toast, bottom sheet, TOTP ring, new shortcuts) at the three widths, in both themes and the three browsers
+- [ ] Under `prefers-reduced-motion`, the TOTP ring and the toast run no animation (`motion.spec.ts`)
+- [ ] CRYPTO-INV-024: a negative test puts every field type in an item and finds no `secret`, `totp` or `seed-phrase` value in the row's DOM
+- [ ] Copying from the row clears the clipboard as copying from the detail does (D54, D151)
+- [ ] The error boundary locks the vault and clears plaintext state before its failure screen
+- [ ] Audit of every new screen in a real browser at the three widths and in both themes, as in D239
+- [ ] The owner approves v0.7.0 after a hands-on test
 
 ---
 
