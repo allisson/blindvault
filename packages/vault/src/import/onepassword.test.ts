@@ -2,6 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import { ImportRejectedError } from '../errors';
+import { MAX_ZIP_ENTRIES } from './zip';
 import { parseOnePasswordExport } from './onepassword';
 
 // Adapted from BlindPass (`apps/web/src/lib/import/__tests__/1password.test.ts`), with the login
@@ -320,6 +321,13 @@ describe('1Password .1pux export', () => {
       ],
       skipped: 2,
     });
+  });
+
+  it('refuses an archive beyond the entry cap (D130)', () => {
+    const files = Object.fromEntries(
+      Array.from({ length: MAX_ZIP_ENTRIES + 1 }, (_, i) => [`f${String(i)}`, new Uint8Array()]),
+    );
+    refused(zipSync(files), 'too-large');
   });
 
   it('refuses a file that is not a 1Password export', () => {

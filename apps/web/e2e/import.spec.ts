@@ -1,15 +1,20 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { createVault } from './create';
+import { storedPlaintext } from './stored';
 
 // Import (overview §15, D123, D125, D146): preview, one commit into a landing folder, the delete
-// reminder; an encrypted export refused; a lock before the commit writes nothing.
+// reminder; an encrypted export refused; a lock before the commit writes nothing; no plaintext of
+// the file stored.
 
 // Creation and the unlock each run Argon2id at about 1 s (D9).
 test.setTimeout(120_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
 const FOLDER = /^Imported from Bitwarden /;
+const USERNAME = 'lucas.prado.4417';
+const SECRET = 'Ember-Quill-8830-Fjord';
+const NOTE = 'Gate code 5512 behind the shed';
 
 function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
@@ -20,8 +25,14 @@ function exportFile(encrypted: boolean) {
     encrypted,
     folders: [{ id: 'f', name: 'Work' }],
     items: [
-      { id: '1', type: 1, name: 'Google', folderId: 'f', login: { username: 'a', password: 'p' } },
-      { id: '2', type: 2, name: 'Wifi', notes: 'n', secureNote: { type: 0 } },
+      {
+        id: '1',
+        type: 1,
+        name: 'Google',
+        folderId: 'f',
+        login: { username: USERNAME, password: SECRET },
+      },
+      { id: '2', type: 2, name: 'Wifi', notes: NOTE, secureNote: { type: 0 } },
     ],
   });
   return { name: 'bitwarden_export.json', mimeType: 'application/json', buffer: Buffer.from(json) };
@@ -70,4 +81,16 @@ test('imports a Bitwarden export into a landing folder in one commit, after a pr
   await expect(button(page, 'Wifi')).toBeVisible();
   await page.getByRole('list', { name: 'Folders' }).getByRole('button', { name: 'Work' }).click();
   await expect(button(page, 'Google')).toBeVisible();
+
+  // Nothing read from the file reaches IndexedDB or localStorage (§18, CRYPTO-INV-001).
+  const stored = await storedPlaintext(page, [
+    'Google',
+    'Wifi',
+    USERNAME,
+    SECRET,
+    NOTE,
+    'Imported from',
+  ]);
+  expect(stored.chunks).toBeGreaterThan(0);
+  expect(stored.found).toEqual([]);
 });
