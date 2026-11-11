@@ -9,9 +9,9 @@
     "test:coverage": "vitest run"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "5.0.2",
+    "@vitest/coverage-v8": "5.0.5",
     "fake-indexeddb": "6.2.5",
-    "vitest": "5.0.2"
+    "vitest": "5.0.5"
   },
   "dependencies": {
     "@blindvault/backup": "workspace:*",
