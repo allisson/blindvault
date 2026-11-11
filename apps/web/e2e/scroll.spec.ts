@@ -4,8 +4,8 @@ import { MEMLIMIT } from '@blindvault/crypto';
 
 import { buildVault, install } from './load-fixture';
 
-// A long list scrolls inside its pane, never the page (D239): the header and Lock stay put, and so
-// do New item, search and, on tablet, the Folders button.
+// A long list scrolls inside its pane, never the page (D239): the header and Lock (on a phone, its
+// "…" menu, D245) stay put, and so do New item, search and, on tablet, the Folders button.
 
 test.setTimeout(5 * 60_000);
 
@@ -29,7 +29,10 @@ for (const [layout, width, listX] of WIDTHS) {
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 2 * 60_000 });
 
-    const lock = page.getByRole('button', { name: 'Lock', exact: true });
+    const lock = page.getByRole('button', {
+      name: layout === 'mobile' ? 'More' : 'Lock',
+      exact: true,
+    });
     const before = await lock.boundingBox();
     await page.mouse.move(listX, 700);
     await page.mouse.wheel(0, 3000);

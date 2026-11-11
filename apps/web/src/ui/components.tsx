@@ -166,6 +166,58 @@ export function ConfirmDialog({
   );
 }
 
+/**
+ * A "…" button whose actions open below it in a native popover (D245): the browser closes it on
+ * Escape or a click outside, and Tab moves through its buttons, a disclosure rather than an ARIA
+ * menu. Choosing an action closes it.
+ */
+export function Overflow({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}) {
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const pop = popover.current;
+    if (!pop) return;
+    // No anchor positioning in every browser yet: placed under its button each time it opens.
+    const place = (e: Event) => {
+      const at = button.current?.getBoundingClientRect();
+      if (!at || (e as ToggleEvent).newState !== 'open') return;
+      pop.style.top = `${String(at.bottom + 4)}px`;
+      pop.style.right = `${String(document.documentElement.clientWidth - at.right)}px`;
+    };
+    pop.addEventListener('beforetoggle', place);
+    return () => {
+      pop.removeEventListener('beforetoggle', place);
+    };
+  }, []);
+  return (
+    <>
+      <Button ref={button} variant="quiet" aria-label={label} title={label} popoverTarget={id}>
+        <Icon name="ellipsis" />
+      </Button>
+      <div
+        ref={popover}
+        id={id}
+        popover="auto"
+        className="fixed inset-auto m-0 min-w-48 flex-col gap-1 rounded-card border border-line bg-raised p-1 text-fg shadow-raised [&:popover-open]:flex"
+        onClick={(e) => {
+          if (e.target instanceof Element && e.target.closest('button')) {
+            e.currentTarget.hidePopover();
+          }
+        }}
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
 const TONES = {
   danger: 'bg-danger-soft text-danger-text',
   warning: 'bg-warning-soft text-warning-text',

@@ -4,13 +4,21 @@ import {
   type FolderTree,
   type FolderView,
   RecordBlockedError,
+  type TreeItem,
   SubtreeBlockedError,
   VaultLockedError,
 } from '@blindvault/vault';
 import { describe, expect, it } from 'vitest';
 
 import { MESSAGES } from '../i18n/messages';
-import { findNode, folderFailure, folderNameOf, folderRows, moveTargets } from './folders';
+import {
+  findNode,
+  folderFailure,
+  folderNameOf,
+  folderRows,
+  moveTargets,
+  treeItems,
+} from './folders';
 
 const HLC = { physicalMs: 1, counter: 0, deviceId: new Uint8Array(16) };
 
@@ -62,6 +70,21 @@ describe('the displayed folder tree', () => {
       ['A2', 1],
       ['B', 0],
     ]);
+  });
+
+  it('counts the items directly in each folder, and every item for All items (D245)', () => {
+    const item = (name: string) => ({ name }) as TreeItem;
+    const counted: FolderTree = {
+      ...tree,
+      items: [item('root')],
+      folders: [{ ...a, items: [item('a'), item('b')], folders: [{ ...a1, items: [item('c')] }] }],
+    };
+    expect(folderRows(counted).map((r) => [r.folder.name, r.items])).toEqual([
+      ['A', 2],
+      ['A1', 1],
+      ['A1a', 0],
+    ]);
+    expect(treeItems(counted).map((t) => t.name)).toEqual(['root', 'a', 'b', 'c']);
   });
 
   it('finds a folder node by ID, and nothing for an unknown one', () => {

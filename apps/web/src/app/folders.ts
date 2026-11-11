@@ -33,13 +33,22 @@ export function folderNameOf(text: string, max = FOLDER_NAME_MAX): FolderNameRes
 export interface FolderRow {
   readonly folder: FolderView;
   readonly depth: number;
+  /** The items directly in it, as its list shows them (D245). */
+  readonly items: number;
 }
 
 /** Every folder of the tree, depth first in display order, with its depth. */
 export function folderRows(tree: FolderTree, depth = 0): FolderRow[] {
   return tree.folders.flatMap((n) =>
-    n.folder ? [{ folder: n.folder, depth }, ...folderRows(n, depth + 1)] : [],
+    n.folder
+      ? [{ folder: n.folder, depth, items: n.items.length }, ...folderRows(n, depth + 1)]
+      : [],
   );
+}
+
+/** Every item of the tree, in any folder: what All items lists. */
+export function treeItems(tree: FolderTree): FolderTree['items'] {
+  return [...tree.items, ...tree.folders.flatMap(treeItems)];
 }
 
 export function findNode(tree: FolderTree, id: Uint8Array): FolderTree | undefined {

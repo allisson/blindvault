@@ -420,7 +420,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 - [x] Record the scope and what stays out (D244), and the list-row invariant (CRYPTO-INV-024)
 - [x] HTML prototype of the list, detail, TOTP, editor, feedback and empty states, approved before any code (D244)
-- [ ] Icons and navigation: more copied Lucide icons, phone footer with icons, "+" and the overflow menu on a phone, type filter, counts per folder and per type
+- [x] Icons and navigation: more copied Lucide icons, phone footer with icons, "+" and the overflow menu on a phone, type filter, counts per folder and per type (D245)
 - [ ] List row: avatar (with its six color pairs in the tokens and the contrast test), subtitle from non-secret fields, Copy for the password, grouping by first letter on a phone
 - [ ] Item detail: header with avatar and chips, fields in sections inside cards, icon and text on secret buttons, the "…" menu, the seed-phrase grid
 - [ ] TOTP ring, stepping once a second with no transition
