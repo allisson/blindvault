@@ -236,6 +236,47 @@ describe('1Password .1pux export', () => {
     ]);
   });
 
+  it('reads a passport, driver license or SSN as a Document of that kind (D242)', () => {
+    expect(
+      one({
+        categoryUuid: '106',
+        overview: { title: 'Passport' },
+        details: section(
+          { title: 'number', id: 'number', value: { string: 'P1' } },
+          { title: 'full name', id: 'fullname', value: { string: 'Alice' } },
+          { title: 'issuing authority', id: 'issuing_authority', value: { string: 'USA' } },
+          { title: 'issued on', id: 'issue_date', value: { date: 1577836800 } },
+          { title: 'expiry date', id: 'expiry_date', value: { date: 1893456000 } },
+          { title: 'sex', id: 'sex', value: { string: 'F' } },
+        ),
+      }),
+    ).toEqual({
+      title: 'Passport',
+      template: 'document',
+      fields: [
+        { key: 'Document type', value: 'Passport', role: 'documentType' },
+        { key: 'number', value: 'P1', role: 'number' },
+        { key: 'full name', value: 'Alice', role: 'fullName' },
+        { key: 'issuing authority', value: 'USA', role: 'issuer' },
+        { key: 'issued on', value: '2020-01-01', role: 'issueDate' },
+        { key: 'expiry date', value: '2030-01-01', role: 'expiryDate' },
+        { key: 'sex', value: 'F' },
+      ],
+    });
+    expect(
+      one({
+        categoryUuid: '108',
+        details: section({ title: 'name', id: 'name', value: { string: 'Bob' } }),
+      })?.fields,
+    ).toEqual([
+      { key: 'Document type', value: 'Social Security Number', role: 'documentType' },
+      { key: 'name', value: 'Bob', role: 'fullName' },
+    ]);
+    expect(one({ categoryUuid: '103' })?.fields).toEqual([
+      { key: 'Document type', value: "Driver's License", role: 'documentType' },
+    ]);
+  });
+
   it('keeps any other category under its name, a document with its file as attachment', () => {
     expect(
       one({

@@ -95,30 +95,45 @@ describe('Dashlane .zip export', () => {
     ]);
   });
 
-  it('keeps an ID under its type, titled by name or number', () => {
+  it('reads a passport, license, SSN or ID card as a Document, any other ID under its type', () => {
     expect(
       parse(
         'ids.csv',
         'type,number,name,issue_date,expiration_date,place_of_issue,note',
         'passport,P12345,Alice Smith,2020-01-01,2030-01-01,USA,renew',
         'card,C9,,,,,',
+        'tax_number,T1,,,,,',
         ',,,,,,',
       ).items,
     ).toEqual([
       {
         title: 'Alice Smith',
-        category: 'Dashlane passport',
+        template: 'document',
         fields: [
-          { key: 'Number', value: 'P12345' },
-          { key: 'Issue date', value: '2020-01-01' },
-          { key: 'Expiration date', value: '2030-01-01' },
-          { key: 'Place of issue', value: 'USA' },
+          { key: 'Document type', value: 'Passport', role: 'documentType' },
+          { key: 'Number', value: 'P12345', role: 'number' },
+          { key: 'Name', value: 'Alice Smith', role: 'fullName' },
+          { key: 'Place of issue', value: 'USA', role: 'issuer' },
+          { key: 'Issue date', value: '2020-01-01', role: 'issueDate' },
+          { key: 'Expiration date', value: '2030-01-01', role: 'expiryDate' },
         ],
         notes: 'renew',
       },
-      { title: 'C9', category: 'Dashlane card', fields: [{ key: 'Number', value: 'C9' }] },
+      {
+        title: 'C9',
+        template: 'document',
+        fields: [
+          { key: 'Document type', value: 'ID card', role: 'documentType' },
+          { key: 'Number', value: 'C9', role: 'number' },
+        ],
+      },
+      { title: 'T1', category: 'Dashlane tax_number', fields: [{ key: 'Number', value: 'T1' }] },
       { title: '', category: 'Dashlane ID', fields: [] },
     ]);
+    const kinds = ['license', 'social_security'].map(
+      (type) => parse('ids.csv', 'type,number', `${type},1`).items[0]?.fields[0]?.value,
+    );
+    expect(kinds).toEqual(["Driver's License", 'Social Security Number']);
   });
 
   it('reads personal info as an identity, titled by item name or the full name', () => {
