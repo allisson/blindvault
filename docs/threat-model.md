@@ -86,6 +86,7 @@ encrypted backups and synchronized records (§3).
 | --- | --- | --- | --- |
 | Serves a modified app | Limited | Reproducible builds, published hashes, confirmed asset updates, changed `sw.js` detected and vault locked (D5, D63, D142) | overview §11 |
 | Other content on the app's origin | Excluded by deployment | Dedicated origin (D90) | overview §11 |
+| Ships a compromised dependency in the bundle | Limited | Few dependencies, each justified; exact versions, 14-day minimum release age, no install scripts, updates reviewed; the reproducible build proves only that the bundle matches the source (D243) | overview §16, `architecture.md` |
 
 ### A7. Hostile item content (imported or synced)
 
@@ -94,6 +95,17 @@ encrypted backups and synchronized records (§3).
 | Script injection | Protected | Strict CSP, Trusted Types, text-only rendering, `http:`/`https:` URLs only (D83) | overview §11 |
 | Reverse tabnabbing, Referer leak | Protected | `noopener`, `noreferrer`, `no-referrer` (D147) | overview §13 |
 | Clickjacking | Limited | The app does not open inside a frame (D83, D193) | overview §11 |
+
+### A8. Author or holder of an import file
+
+| Threat | Status | Mitigation | Specified in |
+| --- | --- | --- | --- |
+| Exhausts memory with an oversized file or a zip bomb | Protected | Any file above 100 MB rejected before parsing; a zip archive beyond 100 MB uncompressed or 10,000 entries rejected (D130) | overview §15 |
+| Exhausts memory through `.blindpass` parameters | Protected | BlindPass's Argon2id parameters are constants, never read from the file (D126) | overview §15, `blindpass-format.md` |
+| Sends a malformed file | Protected | Shape validated per format; rejected with a readable message, nothing written (D123) | overview §15 |
+| Gets plaintext persisted | Protected | File read only in memory; items encrypted like any write; a test asserts that no source plaintext reaches IndexedDB or `localStorage` (CRYPTO-INV-001) | overview §15, §18 |
+| Gets a hidden field shown unmasked | Protected | A field the source marks hidden becomes a `secret` field (D242) | overview §15 |
+| Reads the plaintext export left on disk | Limited | Outside the vault: warning before the file is chosen, reminder to delete it after the import (D123) | overview §15 |
 
 ## Non-adversarial risks
 
