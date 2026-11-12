@@ -5,6 +5,7 @@ import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { Button, CopyCheck, INPUT, Message, useCheck } from './components';
 import { Icon } from './icons';
+import { useToast } from './Toast';
 
 // Secrets are masked by default in every layout; revealing takes an explicit action, and the
 // mask never shows the value's length (overview §13.1, §13.2). A screen reader hears "hidden", not
@@ -31,33 +32,25 @@ function Toggle({ shown, onToggle }: { readonly shown: boolean; readonly onToggl
 
 /**
  * Copies on explicit action, then tries to clear the clipboard after `clearSeconds` (D54, D127);
- * `status` says so, and that clearing is not guaranteed.
+ * a toast says so, and that clearing is not guaranteed (D250).
  */
 export function useCopy(clearSeconds: number | undefined) {
   const m = useMessages();
-  const [state, setState] = useState<'copied' | 'failed'>();
+  const toast = useToast();
   const [checked, check] = useCheck();
   const copy = (text: string) => {
     if (clearSeconds === undefined) return;
     clipboard.copy(text, clearSeconds).then(
       () => {
-        setState('copied');
+        toast(format(m.items.copied, { seconds: String(clearSeconds) }));
         check();
       },
       () => {
-        setState('failed');
+        toast(m.items.copyFailed, false);
       },
     );
   };
-  const status =
-    state && clearSeconds !== undefined ? (
-      <p role="status" className="text-xs text-muted">
-        {state === 'copied'
-          ? format(m.items.copied, { seconds: String(clearSeconds) })
-          : m.items.copyFailed}
-      </p>
-    ) : null;
-  return { copy, status, checked };
+  return { copy, checked };
 }
 
 /** `label` shown; the field's `name` completes the accessible name. `checked` shows the check. */
@@ -115,7 +108,7 @@ export function SecretView({
 }) {
   const m = useMessages();
   const [shown, setShown] = useState(false);
-  const { copy, status, checked } = useCopy(clearSeconds);
+  const { copy, checked } = useCopy(clearSeconds);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
@@ -142,7 +135,6 @@ export function SecretView({
           />
         ) : null}
       </div>
-      {status}
     </div>
   );
 }

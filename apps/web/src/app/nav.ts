@@ -13,7 +13,7 @@ export type ListScreen =
  * from "Vault ready" (D198).
  */
 export type SettingsFocus =
-  'backup' | 'passkey' | 'recovery' | 'devices' | 'pair' | 'readmit' | 'refound';
+  'backup' | 'passkey' | 'recovery' | 'devices' | 'pair' | 'readmit' | 'refound' | 'import';
 
 export type Screen =
   | ListScreen

@@ -143,7 +143,7 @@ test('checks the Recovery Phrase while unlocked, keeping the typed words nowhere
 
   // As written on paper: one word per line, some in capitals.
   await check(words.map((w, i) => (i % 2 ? w.toUpperCase() : w)).join('\n'));
-  await expect(page.getByRole('status')).toHaveText(
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(
     'This phrase opens this vault and its backups.',
   );
 

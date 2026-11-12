@@ -100,7 +100,22 @@ for (const [layout, width] of WIDTHS) {
       - region "Items":
         - heading "Items" [level=2]
         - searchbox "Search"
-        - paragraph: No items yet.
+        - region "First steps":
+          - heading "First steps" [level=3]
+          - paragraph: "Your vault lives only on your devices. To start:"
+          - list:
+            - listitem:
+              - img "Done"
+              - text: Create the vault and keep its Recovery Phrase
+            - listitem:
+              - text: "Add your first item: a login, a card, a secure note…"
+              - button "Add an item"
+            - listitem:
+              - text: Import from another password manager.
+              - button "Import"
+            - listitem:
+              - text: Pair another device, so the vault has a second copy you can sync with.
+              - button "Pair a device"
     `);
 
     // A refused save: the field is invalid and the reason is an alert, at the field and the button.
@@ -144,18 +159,24 @@ for (const [layout, width] of WIDTHS) {
     `);
     await button(page, 'Copy: Password').click();
     await expect(page.locator('body')).toMatchAriaSnapshot(`
-      - status: /clear the clipboard in \\d+ s .* not guaranteed/
+      - status:
+        - paragraph: /clear the clipboard in \\d+ s .* not guaranteed/
     `);
 
     // The discard confirmation is a dialog named by its action.
     await button(page, 'Edit').click();
     await page.getByTestId('item-title').fill('Harbor Bank');
     await button(page, 'Cancel').click();
+    // On a phone, a bottom sheet with the action first (D250).
+    const buttons =
+      layout === 'mobile'
+        ? ['Discard the changes', 'Keep editing']
+        : ['Keep editing', 'Discard the changes'];
     await expect(page.getByRole('dialog')).toMatchAriaSnapshot(`
       - dialog "Discard the changes":
         - note: The changes made to this item are not saved and will be lost.
-        - button "Keep editing"
-        - button "Discard the changes"
+        - button "${buttons[0] ?? ''}"
+        - button "${buttons[1] ?? ''}"
     `);
     await button(page, 'Discard the changes').click();
 

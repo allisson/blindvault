@@ -79,7 +79,7 @@ for (const [layout, width] of WIDTHS) {
     await page.getByRole('button', { name: 'More actions', exact: true }).click();
     await page.getByRole('button', { name: 'Move to trash', exact: true }).click();
     await expect(page.getByRole('heading', { name: TITLE })).toHaveCount(0);
-    await expect(page.getByText('No items yet.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
 
     await showList(page, layout, 'Trash');
     await page.getByRole('button', { name: TITLE, exact: true }).click();

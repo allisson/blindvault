@@ -11,6 +11,7 @@ import { type Messages } from '../i18n/messages';
 import { Button, INPUT, ROW, TARGET } from './components';
 import { useLayout } from './hooks';
 import { Icon } from './icons';
+import { FirstSteps } from './FirstSteps';
 import { FolderActions, TrashedFolder } from './Folders';
 import { ItemRow } from './ItemRow';
 import { useCopy } from './Secret';
@@ -51,7 +52,7 @@ export function ItemList({
   const layout = useLayout();
   // In memory, kept across lists; a type the list shown lacks falls back to all (D245).
   const [type, setType] = useState<Template>();
-  const { copy, status } = useCopy(session.preferences.clipboardClearSeconds);
+  const { copy } = useCopy(session.preferences.clipboardClearSeconds);
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const list = useSyncExternalStore(nav.subscribe, nav.list);
   const collator = new Intl.Collator(language);
@@ -64,7 +65,8 @@ export function ItemList({
   });
 
   let heading = m.vault.items;
-  let empty = m.vault.empty;
+  // All items with nothing in them shows the first steps (D250).
+  let empty: string | undefined;
   let items: Row[];
   let subfolders: Row[] = [];
   let trashedFolders: Row[] = [];
@@ -188,7 +190,6 @@ export function ItemList({
             ))}
           </div>
         ) : null}
-        {status}
       </div>
       {list.name === 'folder' && !searching ? (
         <FolderActions
@@ -200,7 +201,11 @@ export function ItemList({
           onChange={onChange}
         />
       ) : null}
-      {nothing ? <p className="text-sm text-muted">{empty}</p> : null}
+      {!nothing ? null : empty === undefined ? (
+        <FirstSteps session={session} nav={nav} />
+      ) : (
+        <p className="text-sm text-muted">{empty}</p>
+      )}
       {subfolders.length > 0 ? (
         <ul className="flex flex-col" aria-label={m.vault.folders}>
           {subfolders.map((row) => (
