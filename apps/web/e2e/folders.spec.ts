@@ -24,10 +24,12 @@ function subfolder(page: Page, name: string) {
   return page.getByRole('list', { name: 'Folders' }).getByRole('button', { name, exact: true });
 }
 
-/** Shows the folder pane: on the root screen on mobile, in the drawer on tablet. */
+/** Shows the folder pane: in the list's sheet on mobile (D254), in the drawer on tablet. */
 async function folders(page: Page, layout: Layout) {
   if (layout === 'mobile') {
     while (await button(page, 'Back').isVisible()) await button(page, 'Back').click();
+    if (!(await button(page, 'All items').isVisible()))
+      await page.getByTestId('folder-pill').click();
   }
   if (layout === 'tablet' && !(await button(page, 'All items').isVisible())) {
     await button(page, 'Folders').click();
@@ -108,7 +110,8 @@ for (const [layout, width] of WIDTHS) {
     await expect(button(page, 'Clients')).toHaveCount(0);
     await button(page, 'All items').click();
     await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
-    await folders(page, layout);
+    // On mobile, the Trash is in the bottom navigation (D245).
+    if (layout !== 'mobile') await folders(page, layout);
     await button(page, 'Trash').click();
     await expect(page.getByText('Folder: Clients')).toBeVisible();
     await expect(button(page, 'Contract')).toBeVisible();

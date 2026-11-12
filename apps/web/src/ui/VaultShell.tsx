@@ -369,9 +369,9 @@ export function VaultShell({
   // the layout only styles or hides it. Settings hides the panes without unmounting them.
   const settings = screen.name === 'settings';
   const detailShown = isDetail(screen);
-  // Mobile drills down: folders and all items, then a folder or the trash, then the detail.
+  // Mobile drills down: a list, then the detail; its folders are the list's pill (D254).
   const shown = {
-    folders: layout === 'desktop' || open || (layout === 'mobile' && screen.name === 'vault'),
+    folders: layout === 'desktop' || open,
     list: layout !== 'mobile' || !detailShown,
     detail: layout !== 'mobile' || detailShown,
   };

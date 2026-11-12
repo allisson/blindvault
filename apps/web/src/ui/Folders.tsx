@@ -141,6 +141,7 @@ function ListEntry({
       className={`${ROW} flex items-center gap-2`}
       style={{ paddingLeft: `${String(0.5 + depth)}rem` }}
       aria-current={selected ? 'true' : undefined}
+      data-choice
       onClick={() => {
         nav.showList(list);
       }}

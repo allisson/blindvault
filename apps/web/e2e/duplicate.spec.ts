@@ -26,6 +26,8 @@ for (const [layout, width] of WIDTHS) {
     await page.goto('/');
     await createVault(page, PASSWORD);
 
+    // On mobile, the folders are in the sheet of the list's pill (D254).
+    if (layout === 'mobile') await page.getByTestId('folder-pill').click();
     await button(page, '+ New folder').click();
     await page.getByTestId('folder-name').fill('Work');
     await button(page, 'Create').click();

@@ -63,11 +63,12 @@ test('filters the list by type, with counts beside the types and the folder pane
   await createVault(page, PASSWORD);
   const pane = page.getByRole('navigation', { name: 'Folders' });
   const list = page.getByRole('region', { name: 'Items' }).getByTestId('row-title');
+  const pill = page.getByTestId('type-pill');
   const filter = page.getByRole('group', { name: 'Filter by type' });
 
   await newNote(page, 'Garden plan');
   // One type: nothing to filter.
-  await expect(filter).toBeHidden();
+  await expect(pill).toBeHidden();
   await button(page, 'New item').click();
   await button(page, 'Login').click();
   await page.getByTestId('item-title').fill('Harbor Credit Union');
@@ -77,18 +78,29 @@ test('filters the list by type, with counts beside the types and the folder pane
   // The counts are seen, not part of the names.
   await expect(pane.getByRole('button', { name: 'All items', exact: true })).toContainText('2');
   await expect(pane.getByRole('button', { name: 'Trash', exact: true })).toContainText('0');
-  await expect(filter.getByRole('button')).toHaveText(['All2', 'Login1', 'Secure note1']);
-  await expect(filter.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
+  // The type filter is a pill whose choices open in a popover (D254).
+  await expect(pill).toHaveText('All types');
+  await expect(filter).toBeHidden();
+  await pill.click();
+  await expect(pill).toHaveAttribute('aria-expanded', 'true');
+  await expect(filter.getByRole('button')).toHaveText(['All types2', 'Login1', 'Secure note1']);
+  await expect(filter.getByRole('button', { name: 'All types', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
 
+  // Choosing a type closes the popover, and the pill names it.
   await filter.getByRole('button', { name: 'Secure note', exact: true }).click();
+  await expect(filter).toBeHidden();
+  await expect(pill).toHaveText('Secure note');
   await expect(list).toHaveText(['Garden plan']);
+  await pill.click();
   await expect(filter.getByRole('button', { name: 'Secure note', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
+  await page.keyboard.press('Escape');
+  await expect(filter).toBeHidden();
 
   // Harbor Credit Union, just saved, is still shown. The trash then holds one type, so no filter
   // applies there.
@@ -96,7 +108,7 @@ test('filters the list by type, with counts beside the types and the folder pane
   await button(page, 'Move to trash').click();
   await expect(pane.getByRole('button', { name: 'Trash', exact: true })).toContainText('1');
   await pane.getByRole('button', { name: 'Trash', exact: true }).click();
-  await expect(filter).toBeHidden();
+  await expect(pill).toBeHidden();
   await expect(page.getByRole('region', { name: 'Trash' }).getByTestId('row-title')).toHaveText([
     'Harbor Credit Union',
   ]);

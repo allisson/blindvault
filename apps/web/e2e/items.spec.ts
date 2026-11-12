@@ -37,7 +37,7 @@ async function newLogin(page: Page) {
   await expect(page.getByRole('heading', { name: TITLE })).toBeVisible();
 }
 
-/** Opens a list from the folder pane: in the drawer on tablet, on the list screen on mobile. */
+/** Opens a list from the folder pane: in the drawer on tablet, the bottom navigation on mobile. */
 async function showList(page: Page, layout: Layout, name: 'All items' | 'Trash') {
   if (
     layout === 'mobile' &&
@@ -48,7 +48,12 @@ async function showList(page: Page, layout: Layout, name: 'All items' | 'Trash')
   if (layout === 'tablet' && !(await page.getByRole('button', { name, exact: true }).isVisible())) {
     await page.getByRole('button', { name: 'Folders', exact: true }).click();
   }
-  await page.getByRole('button', { name, exact: true }).click();
+  await page
+    .getByRole('button', {
+      name: layout === 'mobile' && name === 'All items' ? 'Items' : name,
+      exact: true,
+    })
+    .click();
 }
 
 for (const [layout, width] of WIDTHS) {
