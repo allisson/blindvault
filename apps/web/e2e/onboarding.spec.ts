@@ -67,7 +67,17 @@ test('says that no server can reset the vault, then offers the three starts (§1
   await button(page, 'Restore from a backup').click();
   await expect(page.getByRole('heading', { name: 'Restore from a backup' })).toBeVisible();
   await expect(page.getByTestId('restore-file')).toBeAttached();
+  await expect(page.getByTestId('wizard-step')).toHaveText('Step 1 of 3 · Choose the backup');
   await button(page, 'Cancel').click();
+  // Creation is a wizard too, and its Cancel returns to the starts (D253).
+  await button(page, 'Create a new vault').click();
+  await expect(page.getByTestId('wizard-step')).toHaveText(
+    'Step 1 of 3 · Write down the Recovery Phrase',
+  );
+  await button(page, 'I wrote them down').click();
+  await expect(page.getByTestId('wizard-step')).toHaveText('Step 2 of 3 · Confirm the phrase');
+  await button(page, 'Cancel').click();
+  await expect(page.getByTestId('recovery-phrase')).toHaveCount(0);
   await expect(button(page, 'Create a new vault')).toBeVisible();
 });
 

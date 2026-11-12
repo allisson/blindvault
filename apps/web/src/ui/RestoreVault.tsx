@@ -13,11 +13,13 @@ import { type Messages, format } from '../i18n/messages';
 import { Button, Card, Field, Notice, TARGET, TextArea } from './components';
 import { NewPassword } from './NewPassword';
 import { recordTypeName } from './Settings';
+import { Wizard } from './Wizard';
 
 // Restore from a backup (overview §10, backup-format.md §8): file → secret → local password. The
 // file is validated in full before the password step, and nothing is written before the commit
 // (D33, D104). The header is shown unverified until a keyslot opens it (D95). With `replace`, the
-// same steps replace the locked vault, after the warning and an explicit confirmation (D183).
+// same steps replace the locked vault, after the warning and an explicit confirmation (D183). One
+// step at a time (D253).
 
 type Step =
   | { readonly kind: 'file' }
@@ -46,6 +48,8 @@ export function RestoreVault({
     controller.cancelRestore();
     onCancel();
   };
+  const r = m.restore.steps;
+  const index = { file: 1, secret: 2, password: 3 }[step.kind];
   return (
     <Card title={replace ? m.replace.title : m.restore.title}>
       {replace ? (
@@ -54,45 +58,46 @@ export function RestoreVault({
           <p className="text-sm">{m.replace.retire}</p>
         </div>
       ) : null}
-      {step.kind === 'file' ? (
-        <ChooseFile
-          error={error}
-          onFile={(check) => {
-            if (check.kind === 'ok') {
+      <Wizard
+        steps={[{ name: r.file }, { name: r.secret }, { name: r.password }]}
+        step={index}
+        onCancel={working ? undefined : cancel}
+      >
+        {step.kind === 'file' ? (
+          <ChooseFile
+            error={error}
+            onFile={(check) => {
+              if (check.kind === 'ok') {
+                setError(undefined);
+                setStep({ kind: 'secret', header: check.header });
+              } else {
+                setError(fileError(m, check));
+              }
+            }}
+            controller={controller}
+          />
+        ) : null}
+        {step.kind === 'secret' ? (
+          <OpenBackup
+            controller={controller}
+            header={step.header}
+            onOpened={(exportedAt) => {
               setError(undefined);
-              setStep({ kind: 'secret', header: check.header });
-            } else {
-              setError(fileError(m, check));
-            }
-          }}
-          controller={controller}
-        />
-      ) : null}
-      {step.kind === 'secret' ? (
-        <OpenBackup
-          controller={controller}
-          header={step.header}
-          onOpened={(exportedAt) => {
-            setError(undefined);
-            setStep({ kind: 'password', exportedAt });
-          }}
-          onDropped={back}
-        />
-      ) : null}
-      {step.kind === 'password' ? (
-        <RestorePassword
-          controller={controller}
-          working={working}
-          replace={replace}
-          exportedAt={step.exportedAt}
-          onFailed={back}
-        />
-      ) : null}
-      {working ? null : (
-        <Button variant="quiet" className="self-start" onClick={cancel}>
-          {m.restore.cancel}
-        </Button>
-      )}
+              setStep({ kind: 'password', exportedAt });
+            }}
+            onDropped={back}
+          />
+        ) : null}
+        {step.kind === 'password' ? (
+          <RestorePassword
+            controller={controller}
+            working={working}
+            replace={replace}
+            exportedAt={step.exportedAt}
+            onFailed={back}
+          />
+        ) : null}
+      </Wizard>
     </Card>
   );
 }

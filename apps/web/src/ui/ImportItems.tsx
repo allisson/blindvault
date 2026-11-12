@@ -12,10 +12,12 @@ import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Field, INPUT, Notice } from './components';
 import { writeError } from './errors';
+import { Wizard } from './Wizard';
 
 // Import (overview §15, D123, D125): source → file → passphrase for a `.blindpass` → preview →
 // one commit into a new landing folder. Nothing is written before the confirmation, and a lock
-// unmounts this screen, dropping what was read.
+// unmounts this screen, dropping what was read. One step at a time; the file's password is a step
+// only when the file has one, so the count is set once it is read (D253).
 
 type Step =
   | { readonly kind: 'idle' }
@@ -51,11 +53,13 @@ export function ImportItems({
   const [passphrase, setPassphrase] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [withPassphrase, setWithPassphrase] = useState(false);
   const name = IMPORT_SOURCES[source].name;
 
   const cancel = () => {
     setError(undefined);
     setPassphrase('');
+    setWithPassphrase(false);
     setStep({ kind: 'idle' });
   };
   const read = async (bytes: Uint8Array, fileName: string, secret?: string) => {
@@ -74,18 +78,170 @@ export function ImportItems({
       });
     } else if (result.kind === 'passphrase' || result.kind === 'wrong-passphrase') {
       setError(result.kind === 'wrong-passphrase' ? m.import.wrongPassphrase : undefined);
+      setWithPassphrase(true);
       setStep({ kind: 'passphrase', bytes, fileName });
     } else if (result.kind === 'locked') {
       cancel();
     } else {
       setError(readError(m, result, name));
+      setWithPassphrase(false);
       setStep({ kind: 'file' });
     }
   };
 
+  const g = m.import.steps;
+  const steps = [
+    { name: g.file },
+    ...(withPassphrase ? [{ name: g.passphrase }] : []),
+    { name: g.preview },
+    { name: g.done },
+  ];
+  const later = withPassphrase ? 1 : 0;
+  const index = { idle: 1, file: 1, passphrase: 2, preview: 2 + later, done: 3 + later }[step.kind];
   return (
     <section className="flex flex-col gap-4" data-section="import">
       <p className="text-sm">{m.import.intro}</p>
+      {step.kind === 'idle' ? null : (
+        <Wizard
+          steps={steps}
+          step={index}
+          onCancel={step.kind === 'done' || busy ? undefined : cancel}
+        >
+          {step.kind === 'file' ? (
+            <>
+              <label className="flex flex-col gap-1 text-sm font-medium">
+                {m.import.source}
+                <select
+                  className={INPUT}
+                  value={source}
+                  disabled={busy}
+                  data-testid="import-source"
+                  onChange={(e) => {
+                    const next = SOURCES.find((s) => s === e.target.value);
+                    if (next) setSource(next);
+                    setError(undefined);
+                  }}
+                >
+                  {SOURCES.map((s) => (
+                    <option key={s} value={s}>
+                      {IMPORT_SOURCES[s].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Notice>{m.import.plaintext}</Notice>
+              <Field
+                label={m.import.file}
+                type="file"
+                accept={IMPORT_SOURCES[source].accept}
+                disabled={busy}
+                error={error}
+                className={FILE_INPUT}
+                data-testid="import-file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  // Refused before reading it into memory (D130).
+                  if (file.size > MAX_IMPORT_SIZE) {
+                    setError(m.import.tooLarge);
+                    return;
+                  }
+                  setBusy(true);
+                  void file.arrayBuffer().then((buffer) => read(new Uint8Array(buffer), file.name));
+                }}
+              />
+            </>
+          ) : null}
+          {step.kind === 'passphrase' ? (
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void read(step.bytes, step.fileName, passphrase);
+              }}
+            >
+              <Field
+                label={m.import.passphrase}
+                hint={m.import.passphraseHint}
+                type="password"
+                value={passphrase}
+                disabled={busy}
+                error={error}
+                data-testid="import-passphrase"
+                onChange={(e) => {
+                  setPassphrase(e.target.value);
+                }}
+              />
+              <Button type="submit" className="self-start" busy={busy} disabled={passphrase === ''}>
+                {busy ? m.import.opening : m.import.open}
+              </Button>
+            </form>
+          ) : null}
+          {step.kind === 'preview' ? (
+            <div className="flex flex-col gap-4" data-testid="import-preview">
+              <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
+                <li>
+                  {format(m.import.found, {
+                    count: String(step.mapped.items.length),
+                    folder: step.folder,
+                  })}
+                </li>
+                <li>{format(m.import.skipped, { count: String(step.mapped.skipped) })}</li>
+                <li>{format(m.import.attachments, { count: String(step.mapped.attachments) })}</li>
+                <li>{format(m.import.notes, { count: String(step.mapped.notes) })}</li>
+              </ul>
+              {error ? (
+                <p role="alert" className="text-sm text-danger">
+                  {error}
+                </p>
+              ) : null}
+              {step.mapped.items.length > 0 ? (
+                <Button
+                  className="self-start"
+                  busy={busy}
+                  data-testid="import-confirm"
+                  onClick={() => {
+                    setBusy(true);
+                    session.importItems(step.folder, step.mapped.items).then(
+                      () => {
+                        setBusy(false);
+                        setError(undefined);
+                        const { fileName, folder } = step;
+                        setStep({
+                          kind: 'done',
+                          count: step.mapped.items.length,
+                          fileName,
+                          folder,
+                        });
+                      },
+                      (e: unknown) => {
+                        setBusy(false);
+                        if (e instanceof VaultLockedError) return;
+                        setError(
+                          e instanceof HlcReadOnlyError ? m.import.readOnly : writeError(e, m),
+                        );
+                      },
+                    );
+                  }}
+                >
+                  {busy ? m.import.importing : m.import.submit}
+                </Button>
+              ) : (
+                <p className="text-sm">{m.import.nothing}</p>
+              )}
+            </div>
+          ) : null}
+          {step.kind === 'done' ? (
+            <div className="flex flex-col gap-2" data-testid="import-result">
+              <p role="status" className="text-sm">
+                {format(m.import.done, { count: String(step.count), folder: step.folder })}
+              </p>
+              <Notice>{format(m.import.deleteFile, { file: step.fileName })}</Notice>
+            </div>
+          ) : null}
+        </Wizard>
+      )}
       {!session.writable ? (
         <Notice>{m.import.readOnly}</Notice>
       ) : step.kind === 'idle' || step.kind === 'done' ? (
@@ -95,141 +251,11 @@ export function ImportItems({
           data-testid="import-start"
           onClick={() => {
             setError(undefined);
+            setWithPassphrase(false);
             setStep({ kind: 'file' });
           }}
         >
           {m.import.choose}
-        </Button>
-      ) : null}
-      {step.kind === 'file' ? (
-        <>
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {m.import.source}
-            <select
-              className={INPUT}
-              value={source}
-              disabled={busy}
-              data-testid="import-source"
-              onChange={(e) => {
-                const next = SOURCES.find((s) => s === e.target.value);
-                if (next) setSource(next);
-                setError(undefined);
-              }}
-            >
-              {SOURCES.map((s) => (
-                <option key={s} value={s}>
-                  {IMPORT_SOURCES[s].name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Notice>{m.import.plaintext}</Notice>
-          <Field
-            label={m.import.file}
-            type="file"
-            accept={IMPORT_SOURCES[source].accept}
-            disabled={busy}
-            error={error}
-            className={FILE_INPUT}
-            data-testid="import-file"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (!file) return;
-              // Refused before reading it into memory (D130).
-              if (file.size > MAX_IMPORT_SIZE) {
-                setError(m.import.tooLarge);
-                return;
-              }
-              setBusy(true);
-              void file.arrayBuffer().then((buffer) => read(new Uint8Array(buffer), file.name));
-            }}
-          />
-        </>
-      ) : null}
-      {step.kind === 'passphrase' ? (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void read(step.bytes, step.fileName, passphrase);
-          }}
-        >
-          <Field
-            label={m.import.passphrase}
-            hint={m.import.passphraseHint}
-            type="password"
-            value={passphrase}
-            disabled={busy}
-            error={error}
-            data-testid="import-passphrase"
-            onChange={(e) => {
-              setPassphrase(e.target.value);
-            }}
-          />
-          <Button type="submit" className="self-start" busy={busy} disabled={passphrase === ''}>
-            {busy ? m.import.opening : m.import.open}
-          </Button>
-        </form>
-      ) : null}
-      {step.kind === 'preview' ? (
-        <div className="flex flex-col gap-4" data-testid="import-preview">
-          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-            <li>
-              {format(m.import.found, {
-                count: String(step.mapped.items.length),
-                folder: step.folder,
-              })}
-            </li>
-            <li>{format(m.import.skipped, { count: String(step.mapped.skipped) })}</li>
-            <li>{format(m.import.attachments, { count: String(step.mapped.attachments) })}</li>
-            <li>{format(m.import.notes, { count: String(step.mapped.notes) })}</li>
-          </ul>
-          {error ? (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-          {step.mapped.items.length > 0 ? (
-            <Button
-              className="self-start"
-              busy={busy}
-              data-testid="import-confirm"
-              onClick={() => {
-                setBusy(true);
-                session.importItems(step.folder, step.mapped.items).then(
-                  () => {
-                    setBusy(false);
-                    setError(undefined);
-                    const { fileName, folder } = step;
-                    setStep({ kind: 'done', count: step.mapped.items.length, fileName, folder });
-                  },
-                  (e: unknown) => {
-                    setBusy(false);
-                    if (e instanceof VaultLockedError) return;
-                    setError(e instanceof HlcReadOnlyError ? m.import.readOnly : writeError(e, m));
-                  },
-                );
-              }}
-            >
-              {busy ? m.import.importing : m.import.submit}
-            </Button>
-          ) : (
-            <p className="text-sm">{m.import.nothing}</p>
-          )}
-        </div>
-      ) : null}
-      {step.kind === 'done' ? (
-        <div className="flex flex-col gap-2" data-testid="import-result">
-          <p role="status" className="text-sm">
-            {format(m.import.done, { count: String(step.count), folder: step.folder })}
-          </p>
-          <Notice>{format(m.import.deleteFile, { file: step.fileName })}</Notice>
-        </div>
-      ) : null}
-      {(step.kind === 'file' || step.kind === 'passphrase' || step.kind === 'preview') && !busy ? (
-        <Button variant="quiet" className="self-start" onClick={cancel}>
-          {m.import.cancel}
         </Button>
       ) : null}
     </section>

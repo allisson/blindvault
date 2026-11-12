@@ -316,8 +316,7 @@ function NoVault({
     setChoice(next);
   };
   if (shown === 'create') {
-    // No way back from here but a reload: the phrase screen has a single control (D179).
-    return <CreateVault controller={controller} working={status === 'creating'} />;
+    return <CreateVault controller={controller} working={status === 'creating'} onCancel={back} />;
   }
   if (shown === 'restore') {
     return (

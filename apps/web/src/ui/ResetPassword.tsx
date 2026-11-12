@@ -5,10 +5,11 @@ import { useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Card, TextArea } from './components';
 import { NewPassword } from './NewPassword';
+import { Wizard } from './Wizard';
 
 // A forgotten local password reset with the Recovery Phrase (§14, D173, D184): the phrase, then
 // the new password. The vault stays locked until the reset commits, and the phrase is checked
-// only then, against the Recovery Envelope this device holds.
+// only then, against the Recovery Envelope this device holds. One step at a time (D253).
 
 export function ResetPassword({
   controller,
@@ -29,71 +30,72 @@ export function ResetPassword({
   }, []);
   return (
     <Card title={m.reset.title}>
-      {step === 'phrase' ? (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError(undefined);
-            setStep('password');
-          }}
-        >
-          <p className="text-sm">{m.reset.intro}</p>
-          <TextArea
-            label={m.restore.phrase}
-            hint={m.reset.hint}
-            autoCapitalize="none"
-            autoFocus
-            value={words}
-            error={error}
-            onChange={(e) => {
-              setWords(e.target.value);
+      <Wizard
+        steps={[{ name: m.reset.steps.phrase }, { name: m.reset.steps.password }]}
+        step={step === 'phrase' ? 1 : 2}
+        onCancel={
+          working
+            ? undefined
+            : () => {
+                setWords('');
+                onCancel();
+              }
+        }
+      >
+        {step === 'phrase' ? (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setError(undefined);
+              setStep('password');
             }}
-            data-testid="reset-phrase"
-          />
-          <Button type="submit" disabled={words.trim() === ''}>
-            {m.reset.next}
-          </Button>
-        </form>
-      ) : (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!password) return;
-            const typed = words;
-            // The words leave the field at once, whatever the result.
-            setWords('');
-            void controller.resetPassword(typed, password).then((outcome) => {
-              if (outcome.kind === 'ok') return;
-              setError(resetError(m, outcome));
-              setStep('phrase');
-            });
-          }}
-        >
-          <p className="text-sm">{m.reset.passwordIntro}</p>
-          <NewPassword
-            label={m.restore.local}
-            confirmLabel={m.restore.confirm}
-            onChange={onChange}
-          />
-          <Button type="submit" disabled={!password || working}>
-            {working ? m.reset.working : m.reset.submit}
-          </Button>
-        </form>
-      )}
-      {working ? null : (
-        <Button
-          variant="quiet"
-          className="self-start"
-          onClick={() => {
-            setWords('');
-            onCancel();
-          }}
-        >
-          {m.restore.cancel}
-        </Button>
-      )}
+          >
+            <p className="text-sm">{m.reset.intro}</p>
+            <TextArea
+              label={m.restore.phrase}
+              hint={m.reset.hint}
+              autoCapitalize="none"
+              autoFocus
+              value={words}
+              error={error}
+              onChange={(e) => {
+                setWords(e.target.value);
+              }}
+              data-testid="reset-phrase"
+            />
+            <Button type="submit" disabled={words.trim() === ''}>
+              {m.reset.next}
+            </Button>
+          </form>
+        ) : (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!password) return;
+              const typed = words;
+              // The words leave the field at once, whatever the result.
+              setWords('');
+              void controller.resetPassword(typed, password).then((outcome) => {
+                if (outcome.kind === 'ok') return;
+                setError(resetError(m, outcome));
+                setStep('phrase');
+              });
+            }}
+          >
+            <p className="text-sm">{m.reset.passwordIntro}</p>
+            <NewPassword
+              label={m.restore.local}
+              confirmLabel={m.restore.confirm}
+              onChange={onChange}
+            />
+            <Button type="submit" disabled={!password || working}>
+              {working ? m.reset.working : m.reset.submit}
+            </Button>
+          </form>
+        )}
+      </Wizard>
     </Card>
   );
 }

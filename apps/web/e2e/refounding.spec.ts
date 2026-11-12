@@ -50,6 +50,8 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   ).toBeVisible();
   await refound.getByTestId('refound-start').click();
   const warnings = refound.getByTestId('refound-warnings');
+  // The warnings are the wizard's step 1, as in every destructive flow (D253).
+  await expect(refound.getByTestId('wizard-step')).toHaveText('Step 1 of 5 · Read the warnings');
   await expect(warnings).toContainText(
     'Sync this device first with every other device still in your hands: changes that are not on this device are lost. Afterwards, replace each other device’s vault by pairing it with this one, and destroy the backups of the old vault: they still open it with the old Recovery Phrase.',
   );
