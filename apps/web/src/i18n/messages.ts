@@ -691,7 +691,8 @@ const en = {
     results: 'Results',
     noResults: 'No items match.',
     filterType: 'Filter by type',
-    allTypes: 'All',
+    allTypes: 'All types',
+    allFolders: 'All folders',
     copyPassword: 'Copy password',
     clockBehind:
       "This device's clock went back, so the vault is read-only until {date}. Sync still receives records.",
@@ -1861,7 +1862,8 @@ const ptBR: Messages = {
     results: 'Resultados',
     noResults: 'Nenhum item corresponde.',
     filterType: 'Filtrar por tipo',
-    allTypes: 'Todos',
+    allTypes: 'Todos os tipos',
+    allFolders: 'Todas as pastas',
     copyPassword: 'Copiar a senha',
     clockBehind:
       'O relógio deste dispositivo voltou, então o cofre está somente leitura até {date}. A sincronização continua recebendo registros.',

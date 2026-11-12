@@ -19,7 +19,7 @@ import { format } from '../i18n/messages';
 import { AboutBuild } from './About';
 import { useAbout } from './about-context';
 import { useLayout } from './hooks';
-import { Icon } from './icons';
+import { Icon, type IconName } from './icons';
 import { useUpdates } from './update-context';
 
 // Touch targets of at least 44 px on coarse pointers (overview §13.1).
@@ -236,6 +236,88 @@ export function Overflow({
         className="fixed inset-auto m-0 min-w-48 flex-col gap-1 rounded-card border border-line bg-raised p-1 text-fg shadow-raised [&:popover-open]:flex"
         onClick={(e) => {
           if (e.target instanceof Element && e.target.closest('button')) {
+            e.currentTarget.hidePopover();
+          }
+        }}
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
+/**
+ * A list filter's pill (D254): its choices open below it in a native popover, or as a bottom sheet
+ * on a phone. The browser closes it on Escape or a click outside; choosing an entry marked
+ * `data-choice` closes it too.
+ */
+export function Pill({
+  label,
+  icon,
+  on,
+  children,
+  ...props
+}: ComponentProps<'button'> & {
+  readonly label: string;
+  readonly icon?: IconName;
+  /** A choice other than all is in force. */
+  readonly on: boolean;
+  readonly children: ReactNode;
+}) {
+  const sheet = useLayout() === 'mobile';
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const pop = popover.current;
+    if (!pop) return;
+    const place = (e: Event) => {
+      const at = button.current?.getBoundingClientRect();
+      if (!at || (e as ToggleEvent).newState !== 'open') return;
+      // A sheet sits at the bottom; a popover under its button, inside the viewport.
+      const width = document.documentElement.clientWidth;
+      pop.style.top = sheet ? '' : `${String(at.bottom + 4)}px`;
+      pop.style.left = sheet
+        ? ''
+        : `${String(Math.max(16, Math.min(at.left, width - 16 - 256)))}px`;
+    };
+    const toggle = (e: Event) => {
+      setOpen((e as ToggleEvent).newState === 'open');
+    };
+    pop.addEventListener('beforetoggle', place);
+    pop.addEventListener('toggle', toggle);
+    return () => {
+      pop.removeEventListener('beforetoggle', place);
+      pop.removeEventListener('toggle', toggle);
+    };
+  }, [sheet]);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        popoverTarget={id}
+        aria-expanded={open}
+        data-on={on || undefined}
+        className={`${TARGET} inline-flex min-w-0 items-center gap-1.5 rounded-full border border-line bg-raised px-3 text-sm hover:bg-subtle data-on:border-accent data-on:bg-accent-soft data-on:text-accent-text`}
+        {...props}
+      >
+        {icon ? <Icon name={icon} className="shrink-0" /> : null}
+        <span className="truncate">{label}</span>
+        <Icon name="chevron-down" className="shrink-0" />
+      </button>
+      <div
+        ref={popover}
+        id={id}
+        popover="auto"
+        className={`fixed m-0 overflow-y-auto bg-raised p-1 text-fg shadow-raised ${
+          sheet
+            ? 'inset-x-0 top-auto bottom-0 max-h-[80dvh] w-full max-w-none rounded-t-card p-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] backdrop:bg-scrim'
+            : 'inset-auto max-h-[60dvh] w-64 rounded-card border border-line'
+        }`}
+        onClick={(e) => {
+          if (e.target instanceof Element && e.target.closest('[data-choice]')) {
             e.currentTarget.hidePopover();
           }
         }}

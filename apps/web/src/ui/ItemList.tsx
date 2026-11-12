@@ -9,11 +9,11 @@ import { type SearchIndex } from '../app/search';
 import { listMove } from '../app/shortcuts';
 import { useLanguage } from '../i18n/context';
 import { type Messages } from '../i18n/messages';
-import { Button, INPUT, ROW, TARGET } from './components';
+import { Button, INPUT, Pill, ROW } from './components';
 import { useLayout } from './hooks';
 import { Icon } from './icons';
 import { FirstSteps } from './FirstSteps';
-import { FolderActions, TrashedFolder } from './Folders';
+import { FolderActions, FolderPane, TrashedFolder } from './Folders';
 import { ItemRow } from './ItemRow';
 import { useCopy } from './Secret';
 
@@ -27,9 +27,6 @@ interface Row {
 }
 
 type Template = keyof Messages['templates'];
-
-/** A type filter's chip; the pressed one takes the accent's soft fill (D245). */
-const CHIP = `${TARGET} shrink-0 whitespace-nowrap rounded-full border border-line px-3 text-sm hover:bg-subtle aria-pressed:border-accent aria-pressed:bg-accent-soft aria-pressed:font-medium`;
 
 /** The list shown: every item not in the trash, one folder's contents, or the trash. */
 export function ItemList({
@@ -129,11 +126,13 @@ export function ItemList({
   for (const { type: t } of items) if (t !== undefined) counts.set(t, (counts.get(t) ?? 0) + 1);
   // In the templates' order; an unknown template is counted in All only.
   const types = (Object.keys(m.templates) as Template[]).filter((t) => counts.has(t));
-  // Applied only while its chips show, so no item is ever hidden by a filter out of sight.
+  // Applied only while its pill shows, so no item is ever hidden by a filter out of sight.
   const filter = types.length > 1 && type !== undefined && counts.has(type) ? type : undefined;
   const all = items.length;
   if (filter !== undefined) items = items.filter((row) => row.type === filter);
   const nothing = items.length + subfolders.length + trashedFolders.length === 0;
+  // On a phone the folders are a pill's sheet, not a screen of their own (D254).
+  const folderPill = layout === 'mobile' && list.name !== 'trash';
   return (
     <section aria-label={heading} className="flex min-w-0 flex-col gap-2 p-4">
       {/* Stays at the top of its scrolling pane, so New item and search are always at hand. */}
@@ -184,29 +183,61 @@ export function ItemList({
             data-testid="search"
           />
         ) : null}
-        {types.length > 1 ? (
-          // The counts are seen only: the list read next announces its length (D245).
-          <div
-            role="group"
-            aria-label={m.vault.filterType}
-            className="-mx-4 flex gap-1 overflow-x-auto px-4"
-          >
-            {[undefined, ...types].map((t) => (
-              <button
-                key={t ?? ''}
-                type="button"
-                className={CHIP}
-                aria-pressed={filter === t}
-                onClick={() => {
-                  setType(t);
-                }}
+        {folderPill || types.length > 1 ? (
+          <div className="flex gap-2">
+            {folderPill ? (
+              <Pill
+                // A new list closes the sheet, a folder just created included.
+                key={list.name === 'folder' ? hex(list.id) : list.name}
+                data-testid="folder-pill"
+                icon="folder"
+                label={
+                  list.name === 'folder'
+                    ? (findNode(tree, list.id)?.folder?.name ?? m.vault.allFolders)
+                    : m.vault.allFolders
+                }
+                on={list.name === 'folder'}
               >
-                {t === undefined ? m.vault.allTypes : m.templates[t]}
-                <span aria-hidden="true" className="ms-1.5 text-xs">
-                  {t === undefined ? all : counts.get(t)}
-                </span>
-              </button>
-            ))}
+                <FolderPane session={session} nav={nav} onChange={onChange} />
+              </Pill>
+            ) : null}
+            {types.length > 1 ? (
+              <Pill
+                data-testid="type-pill"
+                label={filter === undefined ? m.vault.allTypes : m.templates[filter]}
+                on={filter !== undefined}
+              >
+                {/* The counts are seen only: the list read next announces its length (D245). */}
+                <div role="group" aria-label={m.vault.filterType} className="flex flex-col gap-0.5">
+                  {/* A sheet is titled, as the folders' (D254). */}
+                  {layout === 'mobile' ? (
+                    <h2
+                      aria-hidden="true"
+                      className="px-2 py-1 text-xs font-semibold uppercase text-muted"
+                    >
+                      {m.vault.filterType}
+                    </h2>
+                  ) : null}
+                  {[undefined, ...types].map((t) => (
+                    <button
+                      key={t ?? ''}
+                      type="button"
+                      data-choice
+                      className={`${ROW} flex items-center justify-between gap-4 aria-pressed:bg-accent-soft aria-pressed:font-medium`}
+                      aria-pressed={filter === t}
+                      onClick={() => {
+                        setType(t);
+                      }}
+                    >
+                      {t === undefined ? m.vault.allTypes : m.templates[t]}
+                      <span aria-hidden="true" className="text-xs text-muted">
+                        {t === undefined ? all : counts.get(t)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Pill>
+            ) : null}
           </div>
         ) : null}
       </div>

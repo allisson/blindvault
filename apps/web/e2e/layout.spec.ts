@@ -79,13 +79,18 @@ for (const [layout, width] of WIDTHS) {
       await expect(search).toBeVisible();
       await expect(heading).toBeVisible();
     } else {
-      // The detail alone, then back to the folders and the list.
+      // The detail alone, then back to the list, its folders in the sheet of its pill (D254).
       await expect(folders(page)).toBeHidden();
       await expect(search).toBeHidden();
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await expect(heading).toBeHidden();
-      await expect(folders(page)).toBeVisible();
+      await expect(folders(page)).toBeHidden();
       await expect(search).toBeVisible();
+      await page.getByTestId('folder-pill').click();
+      await expect(folders(page)).toBeVisible();
+      await noOverflow(page, 'the folder sheet');
+      await page.keyboard.press('Escape');
+      await expect(folders(page)).toBeHidden();
       await page.getByRole('button', { name: TITLE, exact: true }).click();
     }
 
