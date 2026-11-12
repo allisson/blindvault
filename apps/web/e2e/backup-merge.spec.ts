@@ -4,7 +4,7 @@ import { type Browser, type BrowserContext, type Page, expect, test } from '@pla
 
 import { FUTURE_CLOCK_BOUND_MS } from '@blindvault/vault';
 
-import { createVault, openVault, startScreen } from './create';
+import { createVault, openSettingsPage, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -42,19 +42,16 @@ async function installation(browser: Browser, logged: string[]): Promise<Page> {
   return page;
 }
 
-async function openSettings(page: Page) {
-  await page.getByRole('button', { name: 'Settings' }).first().click();
-}
-
 /** Exports from Settings with the local password and returns the file the browser received. */
 async function exportBackup(page: Page, password: string): Promise<Buffer> {
-  await openSettings(page);
+  await openSettingsPage(page, 'backup');
   await page.getByTestId('backup-password').fill(password);
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),
     button(page, 'Export').click(),
   ]);
   const bytes = await readFile(await download.path());
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   return bytes;
 }
@@ -70,7 +67,7 @@ async function setPassword(page: Page, value: string) {
 /** Settings › Merge a backup: the file, the Recovery Phrase, then the confirmation. */
 async function openForMerge(page: Page, file: Buffer, words: readonly string[]) {
   // After a merge, Settings still shows it, with no Settings button of its own.
-  if (!(await page.getByTestId('merge-start').isVisible())) await openSettings(page);
+  if (!(await page.getByTestId('merge-start').isVisible())) await openSettingsPage(page, 'merge');
   await page.getByTestId('merge-start').click();
   await page.getByTestId('restore-file').setInputFiles({
     name: 'blindvault-backup.bvault',
@@ -127,6 +124,7 @@ test('merges a backup made on another installation, keeping the losing edit in h
   await expect(a.getByTestId('merge-result')).toContainText('Merged: 0 added, 1 replaced.');
 
   // B's edit won; A's own edit is in the history, above the first state.
+  await button(a, 'Back').click();
   await button(a, 'Back').click();
   await button(a, 'ACME').click();
   await button(a, 'Show').click();
@@ -221,7 +219,7 @@ test('a merge of a backup opened by its export password recommends Check Recover
   const logged: string[] = [];
   const a = await installation(browser, logged);
   await createVault(a, PASSWORD);
-  await openSettings(a);
+  await openSettingsPage(a, 'backup');
   await a.getByTestId('backup-protect').check();
   await button(a, 'Generate a passphrase').click();
   const passphrase = await a.getByTestId('export-password').inputValue();
@@ -235,6 +233,8 @@ test('a merge of a backup opened by its export password recommends Check Recover
   await expect(a.getByTestId('after-restore')).toHaveCount(0);
 
   // Its own backup merges with nothing to change; the export password opened it.
+  await button(a, 'Back').click();
+  await a.getByTestId('settings-merge').click();
   await a.getByTestId('merge-start').click();
   await a.getByTestId('restore-file').setInputFiles({
     name: 'blindvault-backup.bvault',
@@ -273,7 +273,7 @@ test.describe('devices a merge brings', () => {
 
   /** A pairs a new installation, same network only; A ends back in its vault. */
   async function pair(browser: Browser, a: Page, logged: string[]) {
-    await openSettings(a);
+    await openSettingsPage(a, 'devices');
     await button(a, 'Pair a device…').click();
     await a.getByTestId('pairing-same-network').check();
     await fillPassword(a.getByTestId('invite-password'), PASSWORD);
@@ -299,6 +299,7 @@ test.describe('devices a merge brings', () => {
     await button(b, 'Yes, the same').click();
     await expect(a.getByTestId('pairing-done')).toBeVisible({ timeout: 60_000 });
     await button(a, 'Close').click();
+    await button(a, 'Back').click();
     await button(a, 'Back').click();
   }
 
@@ -339,10 +340,11 @@ test.describe('devices a merge brings', () => {
     await expect(result).not.toContainText('Devices now retired');
 
     // A retires the paired device; its next backup tells C.
-    await openSettings(a);
+    await openSettingsPage(a, 'devices');
     await a.getByTestId('device-retire').click();
     await a.getByRole('button', { name: /^Retire / }).click();
     await expect(a.getByTestId('device')).toHaveCount(1);
+    await button(a, 'Back').click();
     await button(a, 'Back').click();
     const retired = await exportBackup(a, PASSWORD);
 

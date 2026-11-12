@@ -62,7 +62,17 @@ test('reflows at 320 px with no horizontal scroll: start, list, editor and Setti
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   expect(await fits()).toBe(true);
   // Longer labels in Brazilian Portuguese.
+  await page.getByTestId('settings-language').click();
   await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
+  await expect(page.getByRole('heading', { name: 'Idioma', level: 1 })).toBeVisible();
+  expect(await fits()).toBe(true);
+  // The densest pages, in Portuguese too.
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configurações', level: 1 })).toBeVisible();
   expect(await fits()).toBe(true);
+  for (const row of ['devices', 'backup']) {
+    await page.getByTestId(`settings-${row}`).click();
+    expect(await fits()).toBe(true);
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  }
 });

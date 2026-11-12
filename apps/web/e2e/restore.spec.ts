@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault, openVault, startScreen } from './create';
+import { createVault, openSettingsPage, openVault, startScreen } from './create';
 import { fillPassword } from './password';
 
 // Creation, export and restore each calibrate or derive Argon2id at about 1 s (D9).
@@ -35,7 +35,7 @@ async function vaultWithItem(page: Page): Promise<string[]> {
   await page.getByTestId('input-Password').fill(SECRET);
   await button(page, 'Save').click();
   await expect(page.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'backup');
   return words;
 }
 
@@ -185,6 +185,7 @@ test('restores a backup by its export password, then recommends Check Recovery P
   // Its action opens Settings with the cursor in the check; back returns to "Vault ready".
   await button(page, 'Check Recovery Phrase').click();
   await expect(page.getByTestId('check-phrase')).toBeFocused();
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   await expect(ready).toBeVisible();
   // Closing it counts as both one-time notices: no banner repeats them.

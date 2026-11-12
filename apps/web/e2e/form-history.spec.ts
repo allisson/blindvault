@@ -1,6 +1,12 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { answerConfirmation, openVault, readPhrase } from './create';
+import {
+  answerConfirmation,
+  openSettingsPage,
+  openVault,
+  readPhrase,
+  switchSettingsPage,
+} from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(180_000);
@@ -121,9 +127,10 @@ test('keeps vault content out of the form history and the spellchecker (D174, D1
   await page.getByTestId('search').fill('harbor');
   await expectNoneKept(page);
   await page.getByTestId('search').fill('');
-  await button(page, 'Settings').click();
+  await openSettingsPage(page, 'password');
   await expectNoneKept(page);
   await expect(page.getByText(BROWSER_SAVE)).toBeVisible();
+  await switchSettingsPage(page, 'backup');
   // The export password fields, with a generated passphrase shown as text (D181).
   await page.getByTestId('backup-protect').check();
   await button(page, 'Generate a passphrase').click();

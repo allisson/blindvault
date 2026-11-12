@@ -1,7 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { formAlert } from './alerts';
-import { confirmPhrase, createVault } from './create';
+import { confirmPhrase, createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(90_000);
@@ -125,7 +125,7 @@ test('keeps the vault after a reload, locked', async ({ page }) => {
 
 test('changes the password only with the current one (D168)', async ({ page }) => {
   await create(page);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'password');
   const change = page.getByRole('button', { name: 'Change password' });
   await page.getByTestId('current-password').fill('not the password at all');
   await page.getByTestId('new-password').fill(NEXT);
@@ -144,7 +144,7 @@ test('changes the password only with the current one (D168)', async ({ page }) =
 
 test('refuses a lock preference outside its range (D151)', async ({ page }) => {
   await create(page);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'locking');
   await page.getByTestId('autoLockMinutes').fill('0');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('A value is outside its range.')).toBeVisible();

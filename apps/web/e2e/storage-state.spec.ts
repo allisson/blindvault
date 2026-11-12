@@ -3,7 +3,7 @@
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9).
 test.setTimeout(120_000);
@@ -60,7 +60,7 @@ async function returnToVisible(page: Page): Promise<void> {
 }
 
 async function openSettings(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'storage');
   await expect(page.getByTestId('device-storage')).toBeVisible();
 }
 

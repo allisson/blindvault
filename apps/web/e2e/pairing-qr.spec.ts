@@ -1,7 +1,7 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { deniedCamera, expectCameraReleased, fakeQrCamera, noCamera, showQr } from './camera';
-import { createVault, openVault, startScreen } from './create';
+import { createVault, openVault, startScreen, openSettingsPage } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -59,7 +59,7 @@ async function invite(a: Page): Promise<void> {
   await a.getByTestId('item-title').fill(TITLE);
   await button(a, 'Save').click();
   await expect(a.getByRole('heading', { name: TITLE })).toBeVisible();
-  await button(a, 'Settings').click();
+  await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);

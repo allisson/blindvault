@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen } from './create';
+import { createVault, startScreen, openSettingsPage } from './create';
 
 // Erase (§7, D41, D154, D183, D205): the warning, the Device record advice, the confirmation, then
 // no vault. Creation derives Argon2id at about 1 s (D9).
@@ -45,7 +45,7 @@ test('erases the unlocked vault from Settings, saying it is the only device (D11
   const words = await createVault(page, PASSWORD);
   expect(await databases(page)).toHaveLength(1);
 
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'erase');
   await expect(page.getByText(INTRO)).toBeVisible();
   await button(page, 'Erase this vault from this device…').click();
   const warning = page.getByTestId('erase-warning');
@@ -54,6 +54,9 @@ test('erases the unlocked vault from Settings, saying it is the only device (D11
   // The backup is one click away: the export password field takes the cursor.
   await button(page, 'Make a backup now').click();
   await expect(page.getByTestId('backup-password')).toBeFocused();
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-erase').click();
+  await button(page, 'Erase this vault from this device…').click();
   await confirmErase(page);
 
   await startScreen(page);
@@ -114,7 +117,7 @@ test('a second app window that takes over an erased vault shows the start screen
   await second.goto('/');
   await expect(second.getByText('BlindVault is open in another window.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'erase');
   await button(page, 'Erase this vault from this device…').click();
   await confirmErase(page);
   await startScreen(page);

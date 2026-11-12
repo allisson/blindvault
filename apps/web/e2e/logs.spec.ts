@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -68,7 +68,7 @@ test('logs nothing, and no secret, through a full use (CRYPTO-INV-005, 006)', as
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
   await unlock(page, PASSWORD);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'password');
   const change = page.getByRole('button', { name: 'Change password' });
   await page.getByTestId('current-password').fill(WRONG);
   await page.getByTestId('new-password').fill(NEXT);

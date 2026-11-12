@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 import { storedPlaintext } from './stored';
 
 // Import (overview §15, D123, D125, D146): preview, one commit into a landing folder, the delete
@@ -39,7 +39,7 @@ function exportFile(encrypted: boolean) {
 }
 
 async function preview(page: Page) {
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'import');
   await page.getByTestId('import-start').click();
   await page.getByTestId('import-source').selectOption('bitwarden');
   await expect(page.getByText('holds every secret in plaintext')).toBeVisible();
@@ -76,6 +76,7 @@ test('imports a Bitwarden export into a landing folder in one commit, after a pr
   );
   await expect(page.getByTestId('import-result')).toContainText('Delete bitwarden_export.json now');
 
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   await page.getByRole('button', { name: FOLDER }).click();
   await expect(button(page, 'Wifi')).toBeVisible();

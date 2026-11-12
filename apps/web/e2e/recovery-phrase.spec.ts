@@ -1,7 +1,7 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { formAlert } from './alerts';
-import { answerConfirmation, createVault, readPhrase } from './create';
+import { answerConfirmation, createVault, readPhrase, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -131,7 +131,7 @@ test('checks the Recovery Phrase while unlocked, keeping the typed words nowhere
   page.on('console', (message) => logged.push(message.text()));
   await page.goto('/');
   const words = await createVault(page, PASSWORD);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'recovery');
   await expect(page.getByText(/The current Recovery Phrase was created on/)).toBeVisible();
   const field = page.getByTestId('check-phrase');
   const check = async (typed: string) => {

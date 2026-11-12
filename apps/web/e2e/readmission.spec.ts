@@ -4,7 +4,7 @@ import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
-import { createVault, openVault, startScreen } from './create';
+import { createVault, openSettingsPage, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -56,7 +56,7 @@ async function addItem(page: Page, title: string): Promise<void> {
 
 /** Settings › Devices › Re-admission, same network only; `first` shows its text first. */
 async function startReadmission(page: Page, first: boolean): Promise<void> {
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'devices');
   await button(page, 'Re-admit with another device of this vault…').click();
   await page.getByTestId('readmit-device').getByTestId('pairing-same-network').check();
   await page.getByTestId(first ? 'readmission-first' : 'readmission-paste').click();
@@ -89,13 +89,14 @@ async function restored(browser: Browser, logged: string[]) {
   const a = await device(browser, logged);
   const words = await createVault(a, PASSWORD_A);
   await addItem(a, 'Harbor Bank');
-  await a.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(a, 'backup');
   await a.getByTestId('backup-password').fill(PASSWORD_A);
   const [download] = await Promise.all([
     a.waitForEvent('download', { timeout: 60_000 }),
     button(a, 'Export').click(),
   ]);
   const backup = await readFile(await download.path());
+  await button(a, 'Back').click();
   await button(a, 'Back').click();
 
   // B: a fresh restore of A's backup, unregistered, with an item of its own.
@@ -143,6 +144,7 @@ test('re-admits a restored device: both know each other and hold every item (§9
     await expect(page.getByTestId('device-last-sync')).not.toContainText('never');
     await expect(page.getByTestId('devices-readmit')).toHaveCount(0);
     await button(page, 'Back').click();
+    await button(page, 'Back').click();
     await expect(page.getByRole('button', { name: /Harbor Bank/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Copper Mail/ })).toBeVisible();
   }
@@ -158,7 +160,7 @@ test('a pairing answered by a device of the vault is refused, and a restored dev
   const { a, b } = await restored(browser, logged);
 
   // A invites; B answers from its re-admission, as a device that already holds the vault.
-  await a.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
@@ -248,6 +250,7 @@ test('numbers said to differ stop the re-admission on both, and nothing is merge
   await expect(a.getByTestId('device')).toHaveCount(1);
   await expect(b.getByTestId('devices-readmit')).toBeVisible();
   await button(a, 'Back').click();
+  await button(a, 'Back').click();
   await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });
 
@@ -274,6 +277,7 @@ test('a stored record of A that fails verification stops the re-admission on bot
   await expect(a.getByTestId('device-pending')).toHaveText(
     'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
   );
+  await button(a, 'Back').click();
   await button(a, 'Back').click();
   await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });

@@ -121,7 +121,6 @@ export function DeviceStorage({
   const quota = status?.quota ?? null;
   return (
     <section className="flex flex-col gap-4" data-testid="device-storage">
-      <h2 className="font-semibold">{m.storage.title}</h2>
       <p className="text-sm" data-testid="storage-persistence">
         {persisted === true
           ? m.storage.kept

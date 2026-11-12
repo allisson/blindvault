@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen } from './create';
+import { createVault, openSettingsPage, startScreen, switchSettingsPage } from './create';
 
 // Creation, export and restore each calibrate or derive Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -48,7 +48,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   const logged = watchLogs(page);
   await page.goto('/');
   const words = await createVault(page, PASSWORD);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'devices');
 
   // The creator: its own record only, so it is the only device (D119), with nothing to retire.
   const devices = page.getByTestId('devices');
@@ -63,6 +63,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
     .trim();
   expect(name).not.toBe('');
 
+  await switchSettingsPage(page, 'backup');
   await page.getByTestId('backup-password').fill(PASSWORD);
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),
@@ -98,6 +99,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(devices.getByTestId('device')).toContainText(name);
   await expect(devices.getByTestId('device')).not.toContainText('(this device)');
   // Erasing it now leaves no Device record of its own to retire (D205).
+  await switchSettingsPage(page, 'erase');
   await button(page, 'Erase this vault from this device…').click();
   const erase = page.getByTestId('erase-warning');
   await expect(
@@ -105,6 +107,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   ).toBeVisible();
   await erase.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(erase).toHaveCount(0);
+  await switchSettingsPage(page, 'devices');
 
   // Retiring asks for a confirmation that says what it is not; cancel writes nothing.
   await devices.getByTestId('device-retire').click();
@@ -134,7 +137,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
   await expect(page.getByTestId('ready')).toHaveCount(0);
   await expect(page.getByTestId('readmission')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'devices');
   await expect(devices.getByTestId('devices-retired-count')).toBeVisible();
 
   const secrets = [PASSWORD, NEW_PASSWORD, ...words];

@@ -428,6 +428,10 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Feedback: toast region, bottom sheet on a phone, empty-vault checklist, error boundary that locks the vault (D250)
 - [x] Keyboard: list movement, search to list, Esc, Ctrl/⌘+Enter; generator length slider (D251)
 - [x] Release v0.7.0 for another hands-on test
+- [x] Settings pages: an index in groups, each row opening its page (D252)
+- [ ] A wizard for pairing, joining, re-admission and sync: one step at a time, what to do on the other device (D253)
+- [ ] The same wizard on the other step flows: create, restore, reset the password, regenerate the phrase, re-found, merge, import (D253)
+- [ ] Release v0.7.1 for another hands-on test
 
 ### Essential UX Gate
 
@@ -437,7 +441,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Copying from the row clears the clipboard as copying from the detail does (D54, D151)
 - [ ] The error boundary locks the vault and clears plaintext state before its failure screen
 - [ ] Audit of every new screen in a real browser at the three widths and in both themes, as in D239
-- [ ] The owner approves v0.7.0 after a hands-on test
+- [ ] The owner approves v0.7.1 after a hands-on test
 
 ---
 

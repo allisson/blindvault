@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // The list row (D246): avatar, a subtitle of non-secret fields, Copy for the password, and the
 // phone's letter groups.
@@ -42,10 +42,11 @@ test('a row shows non-secret fields only and copies the password, cleared after 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await createVault(page, PASSWORD);
-  await button(page, 'Settings').first().click();
+  await openSettingsPage(page, 'locking');
   await page.getByTestId('clipboardClearSeconds').fill('10');
   await button(page, 'Save').click();
   await expect(page.getByText('Saved.', { exact: true })).toBeVisible();
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
 
   await newLogin(page, 'Harbor Credit Union');

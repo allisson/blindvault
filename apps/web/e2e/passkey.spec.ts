@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type CDPSession, type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -45,7 +45,7 @@ async function create(page: Page) {
 }
 
 async function setUp(page: Page, password = PASSWORD) {
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'passkey');
   await expect(page.getByText(/needs only its screen lock, fingerprint or face/)).toBeVisible();
   await page.getByTestId('passkey-password').fill(password);
   await page.getByRole('button', { name: 'Set up passkey', exact: true }).click();
@@ -79,7 +79,7 @@ test('sets up a device-bound passkey and unlocks with it (§5.5, D75)', async ({
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
 
   // Removed: no longer offered.
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'passkey');
   await page.getByRole('button', { name: 'Remove passkey', exact: true }).click();
   await expect(
     page.getByText('Passkey removed. Your passkey manager was asked to delete it.', {
@@ -197,6 +197,8 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
 
   // Replaced with its own backup while a passkey is set up.
   await setUpAgain(page);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByTestId('settings-backup').click();
   await page.getByTestId('backup-password').fill(PASSWORD);
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),
@@ -227,8 +229,10 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
   ).toBeVisible();
 
   // Erased while a passkey is set up.
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'passkey');
   await setUpAgain(page);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByTestId('settings-erase').click();
   await page
     .getByRole('button', { name: 'Erase this vault from this device…', exact: true })
     .click();
