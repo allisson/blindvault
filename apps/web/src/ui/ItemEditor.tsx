@@ -22,6 +22,7 @@ import {
   newDraft,
 } from '../app/item-draft';
 import { type Navigation } from '../app/nav';
+import { saveShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, roleName } from '../i18n/messages';
 import { Button, ConfirmDialog, Field, INPUT, Notice, TextArea } from './components';
@@ -270,6 +271,12 @@ export function ItemEditor({
       ref={form}
       noValidate
       className="flex w-full max-w-2xl flex-col gap-4 p-4"
+      onKeyDown={(e) => {
+        // Ctrl/⌘ + Enter saves from any field, the notes included; not under the dialog (D251).
+        if (!saveShortcut(e) || leaving || saving) return;
+        e.preventDefault();
+        form.current?.requestSubmit();
+      }}
       onSubmit={(e) => {
         e.preventDefault();
         const result = inputOf(draft);
@@ -418,7 +425,12 @@ export function ItemEditor({
         </p>
       ) : null}
       <div className="flex gap-2">
-        <Button type="submit" disabled={saving}>
+        <Button
+          type="submit"
+          disabled={saving}
+          title={`${m.items.save} (Ctrl/⌘ Enter)`}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
+        >
           {saving ? m.items.saving : m.items.save}
         </Button>
         <Button

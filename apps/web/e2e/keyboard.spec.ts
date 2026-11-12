@@ -5,6 +5,7 @@
 import { type Locator, type Page, expect, test } from '@playwright/test';
 
 import { WIDTHS } from './axe';
+import { createVault } from './create';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9), and the unlock runs it again.
 test.setTimeout(180_000);
@@ -125,3 +126,70 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
   });
 }
+
+test('the list moves with the arrows and J/K, the search clears with Esc, Ctrl/⌘+Enter saves and the slider sets the length (D251)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+  await createVault(page, PASSWORD);
+
+  // Ctrl/⌘ + Enter saves from the notes, where Enter alone is a new line.
+  for (const title of ['Charlie', 'Alpha', 'Bravo']) {
+    await button(page, 'New item').click();
+    await button(page, 'Login').click();
+    await page.getByTestId('item-title').fill(title);
+    await page.getByTestId('item-notes').fill('note');
+    await page.getByTestId('item-notes').press('ControlOrMeta+Enter');
+    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+  }
+  await expect(button(page, 'Save')).toHaveCount(0);
+
+  const search = page.getByTestId('search');
+  const row = (name: string) => button(page, name);
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(search).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(row('Alpha')).toBeFocused();
+  await page.keyboard.press('j');
+  await expect(row('Bravo')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(row('Charlie')).toBeFocused();
+  // Past the last row, the focus stays.
+  await page.keyboard.press('ArrowDown');
+  await expect(row('Charlie')).toBeFocused();
+  await page.keyboard.press('k');
+  await expect(row('Bravo')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Bravo', level: 1 })).toBeVisible();
+  await row('Bravo').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(row('Alpha')).toBeFocused();
+  // Above the first row is the search.
+  await page.keyboard.press('ArrowUp');
+  await expect(search).toBeFocused();
+
+  // Esc clears the search and keeps the focus in it.
+  await page.keyboard.type('zzz');
+  await expect(page.getByText('No items match.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+  await expect(row('Alpha')).toBeVisible();
+
+  // The slider and the field set the same length.
+  await button(page, 'New item').click();
+  await button(page, 'Login').click();
+  await button(page, 'Generate').click();
+  const slider = page.getByTestId('generator-length-slider');
+  const field = page.getByRole('textbox', { name: 'Length (12–128)' });
+  await expect(field).toHaveValue('20');
+  await slider.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(field).toHaveValue('21');
+  await page.keyboard.press('End');
+  await expect(field).toHaveValue('128');
+  await field.fill('40');
+  await expect(slider).toHaveValue('40');
+  await expect(page.getByTestId('generator-entropy')).toHaveText('262 bits of entropy');
+});
