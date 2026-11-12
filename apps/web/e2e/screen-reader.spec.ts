@@ -34,7 +34,7 @@ for (const [layout, width] of WIDTHS) {
 
     await startScreen(page);
     await expect(main).toMatchAriaSnapshot(`
-      - text: BlindVault Locked
+      - button "Preview"
       - heading "BlindVault" [level=1]
       - list:
         - listitem: /no account and no server/
@@ -186,7 +186,9 @@ for (const [layout, width] of WIDTHS) {
     await page.keyboard.press('Enter');
     await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
     await expect(main).toMatchAriaSnapshot(`
-      - text: BlindVault Locked
+      - text: BlindVault
+      - button "Preview"
+      - text: Locked
       - heading "Unlock the vault" [level=1]
       - textbox "Local password" [invalid]
       - alert: Wrong password.
