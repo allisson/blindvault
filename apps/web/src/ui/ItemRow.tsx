@@ -84,6 +84,7 @@ export function ItemRow({
       <button
         type="button"
         aria-current={selected ? 'true' : undefined}
+        data-row
         aria-describedby={sub ? id : undefined}
         className={`${TARGET} flex min-w-0 flex-1 items-center gap-3 rounded-control px-2 py-1.5 text-left text-sm`}
         onClick={onSelect}

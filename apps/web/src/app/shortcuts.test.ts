@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type ShortcutKey, newItemShortcut } from './shortcuts';
+import { type ShortcutKey, listMove, newItemShortcut, saveShortcut } from './shortcuts';
 import { type Screen } from './nav';
 
 const ID = new Uint8Array([1]);
@@ -60,5 +60,34 @@ describe('the new item shortcut (D197)', () => {
       newItemShortcut(KEY, { ...READY, screen: { name: 'trash' }, list: { name: 'trash' } }),
     ).toBe(false);
     expect(newItemShortcut(KEY, { ...READY, writable: false })).toBe(false);
+  });
+});
+
+describe('the list movement keys (D251)', () => {
+  it('moves down with ↓ or J and up with ↑ or K, with or without caps lock', () => {
+    for (const key of ['ArrowDown', 'j', 'J']) expect(listMove({ ...KEY, key }), key).toBe(1);
+    for (const key of ['ArrowUp', 'k', 'K']) expect(listMove({ ...KEY, key }), key).toBe(-1);
+  });
+
+  it('ignores a modifier and every other key', () => {
+    for (const modifier of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey'] as const) {
+      expect(listMove({ ...KEY, key: 'j', [modifier]: true }), modifier).toBeUndefined();
+    }
+    for (const key of ['n', 'Enter', 'ArrowLeft', ' '])
+      expect(listMove({ ...KEY, key })).toBeUndefined();
+  });
+});
+
+describe('the save shortcut (D251)', () => {
+  it('is Ctrl + Enter or ⌘ + Enter', () => {
+    expect(saveShortcut({ ...KEY, key: 'Enter', ctrlKey: true })).toBe(true);
+    expect(saveShortcut({ ...KEY, key: 'Enter', metaKey: true })).toBe(true);
+  });
+
+  it('is not Enter alone, with Shift or Alt, nor another key', () => {
+    expect(saveShortcut({ ...KEY, key: 'Enter' })).toBe(false);
+    expect(saveShortcut({ ...KEY, key: 'Enter', ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(saveShortcut({ ...KEY, key: 'Enter', metaKey: true, altKey: true })).toBe(false);
+    expect(saveShortcut({ ...KEY, key: 's', ctrlKey: true })).toBe(false);
   });
 });

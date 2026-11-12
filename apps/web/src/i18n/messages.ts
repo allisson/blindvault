@@ -615,7 +615,8 @@ const en = {
     trash: 'Trash',
     trashEmpty: 'The trash is empty.',
     search: 'Search',
-    searchHint: 'Searches titles, tags, folders, notes and fields that are not secret.',
+    searchHint:
+      'Searches titles, tags, folders, notes and fields that are not secret. ↓ moves to the list; Esc clears.',
     results: 'Results',
     noResults: 'No items match.',
     filterType: 'Filter by type',
@@ -1671,7 +1672,8 @@ const ptBR: Messages = {
     trash: 'Lixeira',
     trashEmpty: 'A lixeira está vazia.',
     search: 'Buscar',
-    searchHint: 'Busca em títulos, tags, pastas, notas e campos que não são secretos.',
+    searchHint:
+      'Busca em títulos, tags, pastas, notas e campos que não são secretos. ↓ leva à lista; Esc limpa.',
     results: 'Resultados',
     noResults: 'Nenhum item corresponde.',
     filterType: 'Filtrar por tipo',

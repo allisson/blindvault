@@ -1,11 +1,12 @@
 import { type Item, type TreeItem, type VaultSession } from '@blindvault/vault';
-import { type RefObject, useState, useSyncExternalStore } from 'react';
+import { type RefObject, useRef, useState, useSyncExternalStore } from 'react';
 
 import { findNode, treeItems } from '../app/folders';
 import { hex } from '../app/ids';
 import { type Navigation } from '../app/nav';
 import { letter } from '../app/row';
 import { type SearchIndex } from '../app/search';
+import { listMove } from '../app/shortcuts';
 import { useLanguage } from '../i18n/context';
 import { type Messages } from '../i18n/messages';
 import { Button, INPUT, ROW, TARGET } from './components';
@@ -55,6 +56,9 @@ export function ItemList({
   const { copy } = useCopy(session.preferences.clipboardClearSeconds);
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const list = useSyncExternalStore(nav.subscribe, nav.list);
+  const rowsRef = useRef<HTMLUListElement>(null);
+  // The items' own buttons, in the order shown; a row's Copy is reached with Tab.
+  const rows = () => [...(rowsRef.current?.querySelectorAll<HTMLElement>('[data-row]') ?? [])];
   const collator = new Intl.Collator(language);
   const tree = session.tree(collator.compare);
   const named = (t: TreeItem): Row => ({
@@ -162,6 +166,18 @@ export function ItemList({
             onChange={(e) => {
               onQuery(e.target.value);
             }}
+            onKeyDown={(e) => {
+              // ↓ moves into the list; Esc clears the search, in every browser (D251).
+              if (e.key === 'ArrowDown' && !e.altKey) {
+                const first = rows()[0];
+                if (!first) return;
+                e.preventDefault();
+                first.focus();
+              } else if (e.key === 'Escape' && query !== '') {
+                e.preventDefault();
+                onQuery('');
+              }
+            }}
             data-testid="search"
           />
         ) : null}
@@ -234,7 +250,23 @@ export function ItemList({
         </ul>
       ) : null}
       {items.length > 0 ? (
-        <ul className="flex flex-col">
+        <ul
+          ref={rowsRef}
+          className="flex flex-col"
+          onKeyDown={(e) => {
+            // ↑/↓ and J/K move between the rows; above the first is the search (D251).
+            const move = listMove(e);
+            const { target } = e;
+            if (move === undefined || !(target instanceof HTMLElement)) return;
+            const all = rows();
+            const at = all.findIndex((row) => row.closest('li') === target.closest('li'));
+            if (at < 0) return;
+            e.preventDefault();
+            const next = at + move;
+            if (next < 0) searchRef.current?.focus();
+            else all[next]?.focus();
+          }}
+        >
           {items.flatMap((row, i) => {
             const id = hex(row.id);
             const group = letter(row.name);

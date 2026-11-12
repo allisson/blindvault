@@ -32,3 +32,16 @@ export function newItemShortcut(
     screen.name === 'history';
   return !context.editing && from && context.list.name !== 'trash' && context.writable;
 }
+
+/** ↓ or J moves to the next row of the list, ↑ or K to the one before (D251); no modifier. */
+export function listMove(e: ShortcutKey): 1 | -1 | undefined {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return undefined;
+  if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') return 1;
+  if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k') return -1;
+  return undefined;
+}
+
+/** Ctrl/⌘ + Enter saves the item editor (D251). */
+export function saveShortcut(e: ShortcutKey): boolean {
+  return e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
+}

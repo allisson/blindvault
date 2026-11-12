@@ -1,5 +1,6 @@
 import {
   type CharacterSetName,
+  GENERATOR_LIMITS,
   generatePassphrase,
   generatePassword,
   passphraseEntropyBits,
@@ -64,15 +65,36 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
       </div>
       {settings.mode === 'characters' ? (
         <>
-          <Field
-            label={m.generator.length}
-            inputMode="numeric"
-            value={length}
-            onChange={(e) => {
-              setLength(e.target.value);
-              update({ ...settings, length: Number(e.target.value) });
-            }}
-          />
+          {/* The slider moves the same length as the field beside it (D251). */}
+          <div className="flex items-end gap-3">
+            <div className="w-32">
+              <Field
+                label={m.generator.length}
+                inputMode="numeric"
+                value={length}
+                onChange={(e) => {
+                  setLength(e.target.value);
+                  update({ ...settings, length: Number(e.target.value) });
+                }}
+              />
+            </div>
+            <input
+              type="range"
+              // As every control of the app: nothing for the form history or a spellchecker (D174, D176).
+              autoComplete="off"
+              spellCheck={false}
+              aria-label={m.generator.length}
+              min={GENERATOR_LIMITS.characters.min}
+              max={GENERATOR_LIMITS.characters.max}
+              value={settings.length}
+              onChange={(e) => {
+                setLength(e.target.value);
+                update({ ...settings, length: Number(e.target.value) });
+              }}
+              className={`${TARGET} min-w-0 flex-1 accent-accent`}
+              data-testid="generator-length-slider"
+            />
+          </div>
           <div className="flex flex-wrap gap-4 text-sm">
             {SETS.map((set) => (
               <label key={set} className={`${TARGET} flex items-center gap-2`}>
