@@ -432,6 +432,15 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] A wizard for pairing, joining, re-admission and sync: one step at a time, what to do on the other device (D253)
 - [x] The same wizard on the other step flows: create, restore, reset the password, regenerate the phrase, re-found, merge, import (D253)
 - [x] Release v0.7.1 for another hands-on test
+- [x] Capture every v0.7.1 screen and approve an HTML prototype of the layout and presentation changes (`docs/prototypes/phase-7b-layout.html`, D254)
+- [ ] Notices: the Preview badge, the storage warning on one line with Details, the backup reminder at the top of the list, a neutral lock badge (D254)
+- [ ] Lists: folders and types as pills opening a bottom sheet on a phone, the toast above the bottom navigation (D254)
+- [ ] Item detail and editor: the header bar, divided field rows, icon buttons on non-secret fields, the fixed Cancel and Save bar, the generator in a dialog or bottom sheet (D254)
+- [ ] Show and Hide on every password field, masked again on submit, on a screen change and on lock (D254)
+- [ ] Settings inside the vault frame on tablet and desktop; Devices with the Pair and Re-admit cards (D254)
+- [ ] Wizards on a screen of their own: "Next:", Cancel's place, the fixed action on a phone, the file drop area with Continue (D254)
+- [ ] Type scale and spacing within D231 (D254)
+- [ ] Release v0.7.2 for another hands-on test
 
 ### Essential UX Gate
 
@@ -441,7 +450,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Copying from the row clears the clipboard as copying from the detail does (D54, D151)
 - [ ] The error boundary locks the vault and clears plaintext state before its failure screen
 - [ ] Audit of every new screen in a real browser at the three widths and in both themes, as in D239
-- [ ] The owner approves v0.7.1 after a hands-on test
+- [ ] The owner approves v0.7.2 after a hands-on test
 
 ---
 

@@ -1,0 +1,2788 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BlindVault UX prototype</title>
+    <style>
+      /* Page chrome (not the app) */
+      :root {
+        --page-bg: #f4f4f5;
+        --page-fg: #18181b;
+        --page-muted: #52525b;
+        --page-line: #e4e4e7;
+        --page-card: #fff;
+      }
+      :root[data-page='dark'] {
+        --page-bg: #111113;
+        --page-fg: #f4f4f5;
+        --page-muted: #a1a1aa;
+        --page-line: #27272a;
+        --page-card: #18181b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page-bg);
+        color: var(--page-fg);
+        font:
+          14px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      .top {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--page-card);
+        border-bottom: 1px solid var(--page-line);
+      }
+      .top h1 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .top .sub {
+        color: var(--page-muted);
+        font-size: 13px;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--page-line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+        color: var(--page-fg);
+        padding: 6px 12px;
+        font: inherit;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--page-fg);
+        color: var(--page-bg);
+      }
+      .parts {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .parts span {
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--page-line);
+        color: var(--page-muted);
+      }
+      .parts span.on {
+        background: var(--page-fg);
+        color: var(--page-bg);
+        border-color: var(--page-fg);
+      }
+      main {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+      section.sc {
+        background: var(--page-card);
+        border: 1px solid var(--page-line);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      section.sc h2 {
+        margin: 0 0 4px;
+        font-size: 17px;
+      }
+      section.sc ul.notes {
+        margin: 6px 0 14px;
+        padding-left: 18px;
+        color: var(--page-muted);
+      }
+      section.sc ul.notes b {
+        color: var(--page-fg);
+        font-weight: 600;
+      }
+      .pair {
+        display: grid;
+        gap: 16px;
+      }
+      .pair.wide {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .col {
+        min-width: 0;
+      }
+      .pair.narrow {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 460px;
+      }
+      .col > h3 {
+        margin: 0 0 6px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--page-muted);
+      }
+      .col img {
+        width: 100%;
+        display: block;
+        border: 1px solid var(--page-line);
+        border-radius: 10px;
+      }
+      .shot {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--page-line);
+        border-radius: 10px;
+      }
+      .only-after .before {
+        display: none;
+      }
+      .only-after .pair.narrow {
+        max-width: 460px;
+      }
+
+      /* ===== App tokens: copied from apps/web/src/index.css (D231, D246) ===== */
+      .app {
+        --bv-surface: #fafafa;
+        --bv-raised: #ffffff;
+        --bv-subtle: #f4f4f5;
+        --bv-fg: #18181b;
+        --bv-muted: #52525b;
+        --bv-line: #e4e4e7;
+        --bv-control: #71717a;
+        --bv-scrim: #09090b4d;
+        --bv-shadow: #0000001a;
+        --bv-edge: #00000000;
+        --bv-danger: #b91c1c;
+        --bv-danger-soft: #fef2f2;
+        --bv-danger-text: #7f1d1d;
+        --bv-warning: #b45309;
+        --bv-warning-soft: #fef3c7;
+        --bv-warning-text: #78350f;
+        --bv-info: #0369a1;
+        --bv-info-soft: #f0f9ff;
+        --bv-info-text: #082f49;
+        --bv-success: #047857;
+        --a1: #dbeafe;
+        --a1i: #1e3a8a;
+        --a2: #dcfce7;
+        --a2i: #14532d;
+        --a3: #fef3c7;
+        --a3i: #78350f;
+        --a4: #fce7f3;
+        --a4i: #831843;
+        --a5: #ede9fe;
+        --a5i: #4c1d95;
+        --a6: #ccfbf1;
+        --a6i: #134e4a;
+        --bv-accent: #2563eb;
+        --bv-accent-hover: #1d4ed8;
+        --bv-accent-ink: #ffffff;
+        --bv-accent-soft: #eff6ff;
+        --bv-accent-text: #1d4ed8;
+        --r-control: 0.375rem;
+        --r-card: 0.75rem;
+        --shadow: 0 1px 3px 0 var(--bv-shadow), 0 0 0 1px var(--bv-edge);
+        color-scheme: light;
+        position: relative;
+        overflow: hidden;
+        background: var(--bv-surface);
+        color: var(--bv-fg);
+        font:
+          14px/1.45 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      .app[data-theme='dark'] {
+        --bv-surface: #09090b;
+        --bv-raised: #18181b;
+        --bv-subtle: #27272a;
+        --bv-fg: #f4f4f5;
+        --bv-muted: #a1a1aa;
+        --bv-line: #27272a;
+        --bv-scrim: #0000008c;
+        --bv-shadow: #00000000;
+        --bv-edge: #27272aff;
+        --bv-danger: #f87171;
+        --bv-danger-soft: #450a0a;
+        --bv-danger-text: #fee2e2;
+        --bv-warning: #fbbf24;
+        --bv-warning-soft: #451a03;
+        --bv-warning-text: #fef3c7;
+        --bv-info: #38bdf8;
+        --bv-info-soft: #082f49;
+        --bv-info-text: #f0f9ff;
+        --bv-success: #34d399;
+        --a1: #1e3a8a;
+        --a1i: #dbeafe;
+        --a2: #14532d;
+        --a2i: #dcfce7;
+        --a3: #78350f;
+        --a3i: #fef3c7;
+        --a4: #831843;
+        --a4i: #fce7f3;
+        --a5: #4c1d95;
+        --a5i: #ede9fe;
+        --a6: #134e4a;
+        --a6i: #ccfbf1;
+        --bv-accent: #60a5fa;
+        --bv-accent-hover: #93c5fd;
+        --bv-accent-ink: #09090b;
+        --bv-accent-soft: #172554;
+        --bv-accent-text: #93c5fd;
+        color-scheme: dark;
+      }
+      .app button {
+        font: inherit;
+        color: inherit;
+      }
+      .app svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 34px;
+        padding: 0 12px;
+        border-radius: var(--r-control);
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .btn.primary {
+        background: var(--bv-accent);
+        color: var(--bv-accent-ink);
+      }
+      .btn.primary:hover {
+        background: var(--bv-accent-hover);
+      }
+      .btn.secondary {
+        border-color: var(--bv-line);
+        background: var(--bv-raised);
+      }
+      .btn.quiet:hover,
+      .icon-btn:hover {
+        background: var(--bv-subtle);
+      }
+      .icon-btn {
+        display: inline-grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--r-control);
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        color: var(--bv-muted);
+      }
+      .icon-btn[aria-pressed='true'] {
+        color: var(--bv-accent-text);
+        background: var(--bv-accent-soft);
+      }
+      .icon-btn.sm {
+        width: 30px;
+        height: 30px;
+      }
+
+      /* Header */
+      .hdr {
+        height: 56px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--bv-line);
+        background: var(--bv-surface);
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand .mark {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        background: var(--bv-fg);
+        color: var(--bv-surface);
+        display: grid;
+        place-items: center;
+      }
+      .brand .mark svg {
+        width: 14px;
+        height: 14px;
+      }
+      .badge-preview {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--bv-warning-soft);
+        color: var(--bv-warning-text);
+        border: 0;
+        cursor: pointer;
+      }
+      .hdr .grow {
+        flex: 1;
+      }
+      .popover {
+        position: absolute;
+        z-index: 20;
+        width: 320px;
+        padding: 12px;
+        border-radius: var(--r-card);
+        background: var(--bv-raised);
+        box-shadow:
+          0 8px 24px var(--bv-shadow),
+          0 0 0 1px var(--bv-line);
+        font-size: 13px;
+      }
+      .popover b {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      /* Danger strip */
+      .strip {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 16px;
+        background: var(--bv-danger-soft);
+        color: var(--bv-danger-text);
+        font-size: 13px;
+        border-bottom: 1px solid var(--bv-line);
+      }
+      .strip svg {
+        margin-top: 2px;
+        color: var(--bv-danger);
+      }
+      .strip .txt {
+        flex: 1;
+        min-width: 0;
+      }
+      .strip .txt.clip {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .strip button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font-weight: 600;
+        text-decoration: underline;
+        cursor: pointer;
+        padding: 0;
+        white-space: nowrap;
+      }
+
+      /* Shell */
+      .shell {
+        display: grid;
+        grid-template-columns: 15rem 21rem 1fr;
+        height: calc(100% - 56px - var(--strip-h, 37px));
+      }
+      .pane {
+        min-height: 0;
+        overflow: auto;
+      }
+      .pane + .pane {
+        border-left: 1px solid var(--bv-line);
+      }
+      .nav {
+        padding: 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nav .lbl {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--bv-muted);
+        padding: 12px 10px 4px;
+      }
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 10px;
+        border-radius: var(--r-control);
+        color: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .nav a .n {
+        margin-left: auto;
+        color: var(--bv-muted);
+        font-size: 12px;
+      }
+      .nav a.on {
+        background: var(--bv-accent-soft);
+        color: var(--bv-accent-text);
+        font-weight: 600;
+      }
+      .nav a.add {
+        color: var(--bv-muted);
+      }
+
+      .listhead {
+        padding: 14px 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        position: sticky;
+        top: 0;
+        background: var(--bv-surface);
+        z-index: 2;
+      }
+      .listhead .row1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .listhead h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .listhead .count {
+        color: var(--bv-muted);
+        font-size: 13px;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--bv-line);
+        border-radius: var(--r-control);
+        background: var(--bv-raised);
+        color: var(--bv-muted);
+      }
+      .search kbd {
+        margin-left: auto;
+        font:
+          11px ui-monospace,
+          monospace;
+        border: 1px solid var(--bv-line);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      .pills {
+        display: flex;
+        gap: 6px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid var(--bv-line);
+        background: var(--bv-raised);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .pill.on {
+        border-color: var(--bv-accent);
+        background: var(--bv-accent-soft);
+        color: var(--bv-accent-text);
+      }
+      .pill svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .reminder {
+        margin: 4px 12px 8px;
+        padding: 10px 12px;
+        border-radius: var(--r-card);
+        background: var(--bv-info-soft);
+        color: var(--bv-info-text);
+        font-size: 13px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 8px;
+      }
+      .reminder .acts {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 8px;
+      }
+      .reminder .btn {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 13px;
+      }
+      .reminder .btn.secondary {
+        background: transparent;
+        border-color: currentColor;
+      }
+      .reminder .x {
+        color: inherit;
+      }
+
+      .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0 8px 12px;
+      }
+      .rows li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px;
+        border-radius: var(--r-card);
+        cursor: pointer;
+      }
+      .rows li:hover {
+        background: var(--bv-subtle);
+      }
+      .rows li.on {
+        background: var(--bv-accent-soft);
+      }
+      .rows .t {
+        font-weight: 550;
+      }
+      .rows .s {
+        color: var(--bv-muted);
+        font-size: 12.5px;
+      }
+      .rows .mid {
+        flex: 1;
+        min-width: 0;
+      }
+      .rows .mid > div {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .rows .icon-btn {
+        opacity: 0;
+      }
+      .rows li:hover .icon-btn,
+      .rows li.on .icon-btn {
+        opacity: 1;
+      }
+      .letter {
+        padding: 10px 16px 2px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--bv-muted);
+      }
+
+      .av {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        font-weight: 650;
+        flex: none;
+      }
+      .av .tb {
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        background: var(--bv-raised);
+        box-shadow: 0 0 0 1px var(--bv-line);
+        display: grid;
+        place-items: center;
+        color: var(--bv-muted);
+      }
+      .av .tb svg {
+        width: 11px;
+        height: 11px;
+      }
+      .av.lg {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        font-size: 22px;
+      }
+      .av.lg .tb {
+        width: 22px;
+        height: 22px;
+      }
+      .av.lg .tb svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* Detail */
+      .detail {
+        padding: 20px 28px 32px;
+        max-width: 760px;
+      }
+      .dbar {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      .dbar h1 {
+        margin: 0;
+        font-size: 22px;
+        letter-spacing: -0.015em;
+        font-weight: 650;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--bv-subtle);
+        color: var(--bv-muted);
+      }
+      .chip svg {
+        width: 12px;
+        height: 12px;
+      }
+      .chip.link {
+        color: var(--bv-accent-text);
+      }
+      .dbar .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 4px;
+      }
+      .sect {
+        margin-top: 22px;
+      }
+      .sect .lbl {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--bv-muted);
+        margin: 0 0 6px 2px;
+      }
+      .card {
+        background: var(--bv-raised);
+        border-radius: var(--r-card);
+        box-shadow: var(--shadow);
+        border: 1px solid var(--bv-line);
+      }
+      .app[data-theme='dark'] .card {
+        border-color: transparent;
+      }
+      .frow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 8px 10px 14px;
+        min-height: 58px;
+      }
+      .frow + .frow {
+        border-top: 1px solid var(--bv-line);
+      }
+      .frow .k {
+        font-size: 12px;
+        color: var(--bv-muted);
+      }
+      .frow .v {
+        font-size: 15px;
+      }
+      .frow .v.mono {
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        letter-spacing: 0.02em;
+      }
+      .frow .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .frow .v.link {
+        color: var(--bv-accent-text);
+      }
+      .notes {
+        padding: 12px 14px;
+        white-space: pre-line;
+        font-size: 14px;
+      }
+      .meta {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--bv-muted);
+        font-size: 12.5px;
+      }
+      .meta a {
+        color: var(--bv-accent-text);
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .copied {
+        color: var(--bv-success) !important;
+      }
+
+      .toast {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 20px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 9px 14px;
+        border-radius: 10px;
+        background: var(--bv-fg);
+        color: var(--bv-surface);
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: 0 6px 20px #0003;
+        z-index: 30;
+      }
+
+      /* Mobile */
+      .m {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .m .hdr {
+        padding: 0 8px 0 16px;
+      }
+      .m .body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      .m .listhead {
+        padding: 12px 16px 8px;
+      }
+      .m .rows {
+        padding: 0 4px 12px;
+      }
+      .m .rows li {
+        padding: 10px 12px;
+      }
+      .tabbar {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 1px solid var(--bv-line);
+        background: var(--bv-surface);
+        height: 60px;
+      }
+      .tabbar a {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 11px;
+        color: var(--bv-muted);
+        cursor: pointer;
+      }
+      .tabbar a.on {
+        color: var(--bv-accent-text);
+        font-weight: 600;
+      }
+      .tabbar svg {
+        width: 20px;
+        height: 20px;
+      }
+      .m .toast {
+        bottom: 76px;
+      }
+      .m .detail {
+        padding: 8px 16px 24px;
+      }
+      .hero {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 4px;
+        padding: 10px 0 4px;
+      }
+      .hero h1 {
+        margin: 6px 0 0;
+        font-size: 22px;
+        font-weight: 650;
+      }
+      .hero .chips {
+        justify-content: center;
+      }
+      .sheet-scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--bv-scrim);
+        z-index: 40;
+      }
+      .sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 41;
+        background: var(--bv-raised);
+        border-radius: 16px 16px 0 0;
+        padding: 8px 8px 20px;
+        box-shadow: 0 -8px 30px #0003;
+      }
+      .sheet .grab {
+        width: 36px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bv-line);
+        margin: 4px auto 10px;
+      }
+      .sheet h3 {
+        margin: 0 12px 6px;
+        font-size: 15px;
+      }
+      .menu {
+        position: absolute;
+        right: 8px;
+        top: 50px;
+        z-index: 42;
+        min-width: 190px;
+        padding: 6px;
+        border-radius: var(--r-card);
+        background: var(--bv-raised);
+        box-shadow:
+          0 8px 24px var(--bv-shadow),
+          0 0 0 1px var(--bv-line);
+      }
+      .menu button {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        border: 0;
+        background: transparent;
+        border-radius: var(--r-control);
+        cursor: pointer;
+        text-align: left;
+      }
+      .menu button:hover {
+        background: var(--bv-subtle);
+      }
+      .menu hr {
+        border: 0;
+        border-top: 1px solid var(--bv-line);
+        margin: 4px 0;
+      }
+
+      /* Unlock */
+      .center {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+      }
+      .ucard {
+        width: 100%;
+        max-width: 380px;
+        background: var(--bv-raised);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--bv-line);
+        padding: 28px 24px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .app[data-theme='dark'] .ucard {
+        border-color: transparent;
+      }
+      .ucard .brand {
+        justify-content: center;
+        font-size: 18px;
+      }
+      .ucard h1 {
+        margin: 0;
+        text-align: center;
+        font-size: 20px;
+        font-weight: 650;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        font-weight: 550;
+        margin-bottom: 6px;
+      }
+      .pw {
+        display: flex;
+        align-items: center;
+        border: 1px solid var(--bv-line);
+        border-radius: var(--r-control);
+        background: var(--bv-raised);
+        padding-right: 3px;
+      }
+      .pw:focus-within {
+        outline: 2px solid var(--bv-accent);
+        outline-offset: -1px;
+      }
+      .pw input {
+        flex: 1;
+        min-width: 0;
+        height: 40px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: inherit;
+        padding: 0 12px;
+        font:
+          15px ui-sans-serif,
+          system-ui;
+      }
+      .err {
+        color: var(--bv-danger);
+        font-size: 13px;
+        margin-top: 6px;
+      }
+      .ucard .btn.primary {
+        height: 40px;
+        justify-content: center;
+      }
+      .ucard .links {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        border-top: 1px solid var(--bv-line);
+        padding-top: 10px;
+      }
+      .ucard .links .btn {
+        height: 30px;
+        font-size: 13px;
+        color: var(--bv-muted);
+        font-weight: 500;
+      }
+      .ver {
+        text-align: center;
+        color: var(--bv-muted);
+        font-size: 12px;
+      }
+      .shell.s2 {
+        grid-template-columns: 17rem 1fr;
+      }
+      .navmini .sep {
+        height: 1px;
+        background: var(--bv-line);
+        margin: 8px 4px;
+      }
+      .sidx ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .sidx li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 10px;
+        border-radius: var(--r-control);
+        cursor: pointer;
+      }
+      .sidx li:hover {
+        background: var(--bv-subtle);
+      }
+      .sidx li.on {
+        background: var(--bv-accent-soft);
+        color: var(--bv-accent-text);
+        font-weight: 600;
+      }
+      .sidx li.danger {
+        color: var(--bv-danger);
+      }
+      .sidx .hint {
+        color: var(--bv-muted);
+        font-size: 12px;
+      }
+      .sidx .grow {
+        flex: 1;
+      }
+      .sidx .lbl {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--bv-muted);
+        padding: 12px 10px 4px;
+      }
+      .sidx.m {
+        padding: 8px 16px 16px;
+      }
+      .sidx.m .ptitle {
+        font-size: 22px;
+        margin: 8px 0 0;
+      }
+      .sidx.m ul.card li {
+        padding: 12px 14px;
+        border-radius: 0;
+      }
+      .sidx.m ul.card li + li {
+        border-top: 1px solid var(--bv-line);
+      }
+      .sidx.m .lbl {
+        padding: 14px 2px 6px;
+      }
+      .sidx.m .chev {
+        color: var(--bv-muted);
+      }
+      .pagewrap {
+        padding: 24px 32px 40px;
+      }
+      .pagewrap.m {
+        padding: 12px 16px 24px;
+      }
+      .spage {
+        max-width: 640px;
+      }
+      .spage h1,
+      .wiz h1 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+      .spage p,
+      .wiz p {
+        margin: 0 0 12px;
+      }
+      .muted {
+        color: var(--bv-muted);
+      }
+      .inote {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: var(--r-card);
+        background: var(--bv-subtle);
+        font-size: 13px;
+        margin: 0 0 12px;
+      }
+      .inote svg {
+        margin-top: 2px;
+        color: var(--bv-muted);
+      }
+      .acards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      .acard {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .acard p {
+        font-size: 13px;
+        color: var(--bv-muted);
+        flex: 1;
+        margin: 0;
+      }
+      .acard .ah {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .acard .btn {
+        align-self: flex-start;
+        white-space: normal;
+        height: auto;
+        min-height: 34px;
+        padding: 6px 12px;
+        text-align: left;
+      }
+      .form {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .form p {
+        margin: 0;
+      }
+      .chk {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .seg2 {
+        display: inline-flex;
+        border: 1px solid var(--bv-line);
+        border-radius: var(--r-control);
+        overflow: hidden;
+        background: var(--bv-raised);
+      }
+      .seg2 button {
+        border: 0;
+        background: transparent;
+        padding: 7px 16px;
+        cursor: pointer;
+      }
+      .seg2 button[aria-pressed='true'] {
+        background: var(--bv-accent-soft);
+        color: var(--bv-accent-text);
+        font-weight: 600;
+      }
+      .swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .sw {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid var(--bv-line);
+        border-radius: 999px;
+        background: var(--bv-raised);
+        cursor: pointer;
+      }
+      .sw span {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--c);
+      }
+      .sw.on {
+        box-shadow: 0 0 0 2px var(--c);
+        border-color: transparent;
+      }
+      .wiz {
+        max-width: 560px;
+      }
+      .wiz .back {
+        margin: 0 0 8px -8px;
+      }
+      .wstep {
+        font-size: 13px;
+        color: var(--bv-muted);
+        font-weight: 500;
+      }
+      .wbar {
+        display: flex;
+        gap: 4px;
+        margin: 6px 0 14px;
+      }
+      .wbar span {
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bv-line);
+      }
+      .wbar span.on {
+        background: var(--bv-accent);
+      }
+      .wacts {
+        display: flex;
+        gap: 8px;
+      }
+      .adv summary {
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .adv .chk {
+        margin-top: 8px;
+        font-size: 13px;
+      }
+      .wiz .inote {
+        margin-top: 12px;
+      }
+      .frow .chip {
+        margin-left: 6px;
+      }
+      .mono {
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      .hintx {
+        font-size: 12.5px;
+        color: var(--bv-muted);
+        margin-top: 4px;
+      }
+      .inp {
+        width: 100%;
+        height: 40px;
+        border: 1px solid var(--bv-line);
+        border-radius: var(--r-control);
+        background: var(--bv-raised);
+        color: inherit;
+        padding: 0 12px;
+        font:
+          15px ui-sans-serif,
+          system-ui;
+      }
+      textarea.inp {
+        height: auto;
+        padding: 10px 12px;
+        resize: vertical;
+      }
+      .inp.big {
+        height: auto;
+        border: 0;
+        border-bottom: 1px solid var(--bv-line);
+        border-radius: 0;
+        background: transparent;
+        padding: 2px 0 6px;
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+      .inp.num {
+        width: 70px;
+        text-align: center;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        font-weight: 550;
+        margin-bottom: 6px;
+      }
+      .form {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .chk {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .addf {
+        display: flex;
+        gap: 8px;
+        padding-top: 12px;
+        border-top: 1px dashed var(--bv-line);
+      }
+      .addf .inp {
+        width: 140px;
+      }
+      .form.two {
+        gap: 14px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .edtitle {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+      }
+      .edtitle .grow {
+        flex: 1;
+      }
+      .kicker {
+        font-size: 12px;
+        color: var(--bv-muted);
+        margin-bottom: 2px;
+      }
+      .edpane {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .edscroll {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      .edbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--bv-line);
+        background: var(--bv-surface);
+      }
+      .m .edbar {
+        padding: 10px 16px 14px;
+      }
+      .dialog {
+        position: absolute;
+        z-index: 41;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 440px;
+        background: var(--bv-raised);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow:
+          0 20px 50px #0004,
+          0 0 0 1px var(--bv-line);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .sheet {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 8px 16px 20px;
+      }
+      .dh {
+        display: flex;
+        align-items: center;
+      }
+      .dh h3 {
+        margin: 0;
+        flex: 1;
+        font-size: 17px;
+        font-weight: 650;
+      }
+      .gprev {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 8px 12px 14px;
+        border-radius: var(--r-card);
+        background: var(--bv-subtle);
+        font-size: 16px;
+        word-break: break-all;
+      }
+      .gprev .mono {
+        flex: 1;
+      }
+      .gmeter {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bv-line);
+        overflow: hidden;
+        margin-bottom: -8px;
+      }
+      .gmeter span {
+        display: block;
+        height: 100%;
+        background: var(--bv-success);
+      }
+      .seg2 {
+        display: inline-flex;
+        border: 1px solid var(--bv-line);
+        border-radius: var(--r-control);
+        overflow: hidden;
+        background: var(--bv-raised);
+      }
+      .seg2.full {
+        display: flex;
+      }
+      .seg2.full button {
+        flex: 1;
+      }
+      .seg2 button {
+        border: 0;
+        background: transparent;
+        padding: 7px 16px;
+        cursor: pointer;
+      }
+      .seg2 button[aria-pressed='true'] {
+        background: var(--bv-accent-soft);
+        color: var(--bv-accent-text);
+        font-weight: 600;
+      }
+      .lenrow {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .lenrow input[type='range'] {
+        flex: 1;
+        accent-color: var(--bv-accent);
+      }
+      .toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .tog {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid var(--bv-line);
+        border-radius: 999px;
+        font-size: 13px;
+      }
+      .tog input {
+        accent-color: var(--bv-accent);
+      }
+      .dacts {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .startw {
+        padding: 24px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .hero2 {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        text-align: center;
+        padding-top: 16px;
+      }
+      .hero2 h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .mark.xl {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+      }
+      .mark.xl svg {
+        width: 28px;
+        height: 28px;
+      }
+      .facts {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .facts li {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        font-size: 14px;
+      }
+      .facts li svg {
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        color: var(--bv-accent-text);
+      }
+      .starts {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .btn.big {
+        height: 46px;
+        justify-content: center;
+        font-size: 15px;
+      }
+      .spec {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+        padding: 28px 32px;
+      }
+      .specrow {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 16px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--bv-line);
+      }
+      .specname {
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .spbar {
+        display: inline-block;
+        height: 12px;
+        border-radius: 3px;
+        background: var(--bv-accent);
+        vertical-align: middle;
+      }
+      .wbody {
+        padding: 16px 16px 24px;
+      }
+      .wtitle {
+        margin: 4px 0 12px;
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+      .wnext {
+        font-size: 12.5px;
+        color: var(--bv-muted);
+        margin: -8px 0 14px;
+      }
+      .wbody p,
+      .wcol p {
+        margin: 0 0 12px;
+      }
+      .wfoot {
+        padding: 10px 16px 16px;
+        border-top: 1px solid var(--bv-line);
+        background: var(--bv-surface);
+        display: flex;
+      }
+      .wfoot .btn {
+        flex: 1;
+      }
+      .phrase {
+        list-style: none;
+        margin: 4px 0 14px;
+        padding: 12px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 10px;
+        background: var(--bv-subtle);
+        border-radius: var(--r-card);
+      }
+      .phrase li {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        padding: 6px 10px;
+        border-radius: var(--r-control);
+        background: var(--bv-raised);
+        font:
+          15px ui-monospace,
+          'SF Mono',
+          Menlo,
+          monospace;
+      }
+      .phrase li span {
+        width: 20px;
+        text-align: right;
+        font-size: 12px;
+        color: var(--bv-muted);
+      }
+      .wnote {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: var(--r-card);
+        background: var(--bv-subtle);
+        font-size: 13px;
+        margin: 0 0 12px;
+      }
+      .wnote svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--bv-muted);
+      }
+      .wnote.warn {
+        background: var(--bv-warning-soft);
+        color: var(--bv-warning-text);
+      }
+      .wnote.warn svg {
+        color: var(--bv-warning);
+      }
+      .cwords {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .smeter {
+        display: flex;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .smeter span {
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bv-line);
+      }
+      .smeter span.on {
+        background: var(--bv-success);
+      }
+      .wbody .field {
+        margin-bottom: 14px;
+      }
+      .other {
+        display: flex;
+        gap: 10px;
+        padding: 12px;
+        border-radius: var(--r-card);
+        background: var(--bv-accent-soft);
+        color: var(--bv-fg);
+        font-size: 13px;
+        margin-top: 14px;
+        border-left: 3px solid var(--bv-accent);
+      }
+      .other svg {
+        width: 18px;
+        height: 18px;
+        color: var(--bv-accent-text);
+        flex: none;
+      }
+      .field label.drop,
+      .drop {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 22px;
+        border: 1.5px dashed var(--bv-line);
+        border-radius: var(--r-card);
+        background: var(--bv-raised);
+        cursor: pointer;
+        text-align: center;
+        font-weight: 400 !important;
+      }
+      .drop svg {
+        width: 22px;
+        height: 22px;
+        color: var(--bv-accent-text);
+      }
+      .drop b {
+        color: var(--bv-accent-text);
+      }
+      .drop .muted {
+        font-size: 12.5px;
+      }
+      .wdesk {
+        display: grid;
+        place-items: start center;
+        padding-top: 64px;
+        height: calc(100% - 56px);
+      }
+      .wcol {
+        width: 520px;
+      }
+      .wacts.end {
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+      .lockb {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: var(--bv-subtle);
+        color: var(--bv-muted);
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .lockb svg {
+        width: 13px;
+        height: 13px;
+      }
+      .btn.sm {
+        height: 30px;
+        padding: 0 8px;
+        font-size: 13px;
+        color: var(--bv-muted);
+      }
+      .hero2 .mark {
+        background: var(--bv-fg);
+        color: var(--bv-surface);
+        display: grid;
+        place-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <h1>BlindVault · protótipo da D254</h1>
+        <div class="sub">
+          Layout e apresentação após a v0.7.1, aprovado parte por parte antes do código. Tokens de
+          <code>apps/web/src/index.css</code> (D231). O "antes" é a v0.7.1: recapture a partir da
+          tag.
+        </div>
+      </div>
+      <div class="seg" id="parts">
+        <button data-v="1">1 · Tela principal</button
+        ><button data-v="2">2 · Navegação e Settings</button
+        ><button data-v="3">3 · Aparência e editor</button><button data-v="4">4 · Wizards</button>
+      </div>
+      <div class="seg" id="theme">
+        <button data-v="light" aria-pressed="true">Claro</button
+        ><button data-v="dark" aria-pressed="false">Escuro</button>
+      </div>
+    </header>
+    <main id="main"></main>
+
+    <script>
+      const ICONS = {
+        lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+        settings:
+          '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+        plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+        search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+        copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+        check: '<path d="M20 6 9 17l-5-5"/>',
+        eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+        'eye-off':
+          '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
+        ellipsis:
+          '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+        'chevron-left': '<path d="m15 18-6-6 6-6"/>',
+        'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+        key: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+        card: '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+        note: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+        folder:
+          '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+        trash:
+          '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+        alert:
+          '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+        pencil:
+          '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
+        list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+        external:
+          '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+        history:
+          '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+        shield:
+          '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+        upload:
+          '<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+        copyplus:
+          '<line x1="15" x2="15" y1="12" y2="18"/><line x1="12" x2="18" y1="15" y2="15"/><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+      };
+      ICONS['lock-open'] =
+        '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
+      const ic = (n, cls = '') =>
+        `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+
+      // The texts are those of apps/web/src/i18n/messages.ts (EN), unchanged (D254).
+      const T = {
+        preview:
+          'Preview build: vaults and backups made here may not open in a later version, and no migration is planned for them. Do not keep anything here you cannot lose.',
+        storage:
+          'The browser may delete this vault’s storage, and this is the only device of the vault: if it does, only a backup and the Recovery Phrase bring the vault back. Make a backup, and pair another device.',
+        reminder:
+          'No backup has been made on this device: make one, so you can restore the vault if you lose this device.',
+      };
+      const TYPES = {
+        login: ['Login', 'key'],
+        card: ['Payment card', 'card'],
+        note: ['Secure note', 'note'],
+      };
+      const ITEMS = [
+        {
+          id: 'bank',
+          title: 'Bank of Brazil',
+          type: 'login',
+          sub: 'agency 1234 · ana.souza',
+          av: 4,
+          host: 'bb.com.br',
+          user: 'ana.souza',
+          pw: 'Mx7-Harbor-Quartz-91',
+          folder: 'Finance',
+        },
+        {
+          id: 'gh',
+          title: 'GitHub',
+          type: 'login',
+          sub: 'dev@example.com',
+          av: 4,
+          host: 'github.com',
+          user: 'dev@example.com',
+          pw: 'Tulip-Orbit-5528-Granite',
+          folder: 'Work',
+          notes: 'Recovery codes are in the "GitHub recovery" note.',
+        },
+        {
+          id: 'google',
+          title: 'Google',
+          type: 'login',
+          sub: 'ana@example.com',
+          av: 6,
+          host: 'accounts.google.com',
+          user: 'ana@example.com',
+          pw: 'Velvet-Lantern-3310',
+          folder: null,
+        },
+        {
+          id: 'nubank',
+          title: 'Nubank Visa',
+          type: 'card',
+          sub: '•••• 4821',
+          av: 5,
+          folder: 'Finance',
+        },
+        {
+          id: 'wifi',
+          title: 'Wi-Fi at home',
+          type: 'note',
+          sub: 'Secure note',
+          av: 5,
+          folder: null,
+        },
+      ];
+
+      const S = {
+        theme: 'light',
+        mode: 'both',
+        sel: 'gh',
+        reveal: {},
+        copied: null,
+        stripOpen: {},
+        previewOpen: null,
+        sheet: null,
+        reminder: true,
+        menu: null,
+        mview: 'list',
+        mfolder: 'All items',
+        mtype: 'All types',
+        uReveal: false,
+        uPw: 'harbor quartz lantern',
+        uErr: false,
+        toast: null,
+      };
+
+      const av = (it, lg) =>
+        `<div class="av ${lg ? 'lg' : ''}" style="background:var(--a${it.av});color:var(--a${it.av}i)">${it.title[0]}<span class="tb">${ic(TYPES[it.type][1])}</span></div>`;
+
+      function header(key, mobile) {
+        const right = mobile
+          ? `<button class="icon-btn" style="background:var(--bv-accent);color:var(--bv-accent-ink)" aria-label="New item">${ic('plus')}</button>
+       <button class="icon-btn" aria-label="More" data-act="menu" data-k="${key}">${ic('ellipsis')}</button>`
+          : `<button class="btn quiet">${ic('settings')} Settings</button>
+       <button class="btn secondary">${ic('lock')} Lock</button>`;
+        return `<div class="hdr" style="position:relative${mobile ? ';gap:6px' : ''}">
+    <div class="brand">${mobile ? '' : `<span class="mark">${ic('shield')}</span>`}BlindVault</div>
+    <button class="badge-preview" data-act="preview" data-k="${key}" aria-expanded="${S.previewOpen === key}">Preview</button>
+    <div class="grow"></div><span class="lockb" data-testid="lock-state">${ic('lock-open')}Unlocked</span>${right}
+    ${S.previewOpen === key ? `<div class="popover" style="left:${mobile ? 12 : 120}px;top:48px"><b>Preview build</b>${T.preview}</div>` : ''}
+    ${S.menu === key ? `<div class="menu"><button>${ic('settings')} Settings</button><hr><button>${ic('lock')} Lock</button></div>` : ''}
+  </div>`;
+      }
+      function strip(key) {
+        const open = S.stripOpen[key];
+        return `<div class="strip" role="alert">${ic('alert')}<div class="txt ${open ? '' : 'clip'}">${T.storage}</div><button data-act="strip" data-k="${key}">${open ? 'Less' : 'Details'}</button></div>`;
+      }
+      function reminder() {
+        if (!S.reminder) return '';
+        return `<div class="reminder" role="note"><span>${T.reminder}</span><button class="icon-btn sm x" aria-label="Dismiss" data-act="dismiss">${ic('x')}</button>
+    <div class="acts"><button class="btn secondary">${ic('upload')} Make a backup</button></div></div>`;
+      }
+      function rows(mobile) {
+        return `<ul class="rows">${ITEMS.map(
+          (
+            it,
+          ) => `<li class="${!mobile && S.sel === it.id ? 'on' : ''}" data-act="sel" data-id="${it.id}">
+    ${av(it)}<div class="mid"><div class="t">${it.title}</div><div class="s">${it.sub}</div></div>
+    ${it.type === 'login' ? `<button class="icon-btn sm ${S.copied === 'row-' + it.id ? 'copied' : ''}" aria-label="Copy password" data-act="copy" data-c="row-${it.id}">${ic(S.copied === 'row-' + it.id ? 'check' : 'copy')}</button>` : ''}
+  </li>`,
+        ).join('')}</ul>`;
+      }
+      function frow(k, v, opts = {}) {
+        const id = opts.id;
+        const secret = opts.secret;
+        const shown = secret && S.reveal[id];
+        const val = secret ? (shown ? v : '•'.repeat(12)) : v;
+        return `<div class="frow"><div class="grow"><div class="k">${k}</div><div class="v ${secret ? 'mono' : ''} ${opts.link ? 'link' : ''}">${val}</div></div>
+    ${secret ? `<button class="btn quiet sm" aria-pressed="${!!shown}" data-act="reveal" data-id="${id}">${ic(shown ? 'eye-off' : 'eye')}${shown ? 'Hide' : 'Show'}</button>` : ''}
+    ${opts.link ? `<button class="icon-btn" aria-label="Open ${k}" title="Open">${ic('external')}</button>` : ''}
+    ${secret ? `<button class="btn quiet sm ${S.copied === id ? 'copied' : ''}" data-act="copy" data-c="${id}">${ic(S.copied === id ? 'check' : 'copy')}Copy</button>` : `<button class="icon-btn ${S.copied === id ? 'copied' : ''}" aria-label="Copy ${k}" title="Copy" data-act="copy" data-c="${id}">${ic(S.copied === id ? 'check' : 'copy')}</button>`}</div>`;
+      }
+      function detailBody(it, key) {
+        if (it.type === 'card')
+          return `<div class="sect"><div class="lbl">Card</div><div class="card">${frow('Cardholder', 'ANA SOUZA', { id: key + 'ch' })}${frow('Number', '4821 0033 7712 4821', { id: key + 'num', secret: true })}${frow('Expiry', '08/29', { id: key + 'exp' })}${frow('Security code', '713', { id: key + 'cvv', secret: true })}</div></div>`;
+        if (it.type === 'note')
+          return `<div class="sect"><div class="lbl">Note</div><div class="card"><div class="notes">Network: Casa-5G\nPassword is on the router label.</div></div></div>`;
+        return `<div class="sect"><div class="lbl">Login</div><div class="card">${frow('Username', it.user, { id: key + 'u' })}${frow('Password', it.pw, { id: key + 'p', secret: true })}${frow('Website', 'https://' + it.host, { id: key + 'w', link: true })}</div></div>
+    ${it.notes ? `<div class="sect"><div class="lbl">Notes</div><div class="card"><div class="notes">${it.notes}</div></div></div>` : ''}`;
+      }
+      function chips(it) {
+        return `<div class="chips"><span class="chip">${ic(TYPES[it.type][1])}${TYPES[it.type][0]}</span>${it.host ? `<span class="chip link">${ic('external')}${it.host}</span>` : ''}${it.folder ? `<span class="chip">${ic('folder')}${it.folder}</span>` : ''}</div>`;
+      }
+      function meta() {
+        return `<div class="meta">Modified Nov 12, 2026 · <a>${ic('history')} History</a></div>`;
+      }
+
+      function desktop(key) {
+        const it = ITEMS.find((x) => x.id === S.sel);
+        return `<div class="app" data-theme="${S.theme}" style="width:1280px;height:820px">
+    ${header(key)}${strip(key)}
+    <div class="shell" style="--strip-h:${S.stripOpen[key] ? 56 : 37}px">
+      <nav class="pane nav">
+        <a class="on">${ic('list')} All items <span class="n">5</span></a>
+        <a>${ic('trash')} Trash <span class="n">0</span></a>
+        <div class="lbl">Folders</div>
+        <a>${ic('folder')} Finance <span class="n">2</span></a>
+        <a>${ic('folder')} Work <span class="n">1</span></a>
+        <a class="add">${ic('plus')} New folder</a>
+      </nav>
+      <div class="pane">
+        <div class="listhead">
+          <div class="row1"><h2>All items</h2><span class="count">5</span><div style="flex:1"></div><button class="btn primary">${ic('plus')} New item</button></div>
+          <div class="search">${ic('search')} Search<kbd>⌘K</kbd></div>
+          <div class="pills"><button class="pill">All types ${ic('chevron-down')}</button></div>
+        </div>
+        ${reminder()}${rows(false)}
+      </div>
+      <div class="pane"><div class="detail">
+        <div class="dbar">${av(it, true)}<div><h1>${it.title}</h1>${chips(it)}</div>
+          <div class="acts"><button class="btn primary">${ic('pencil')} Edit</button><button class="icon-btn" aria-label="More actions">${ic('ellipsis')}</button></div></div>
+        ${detailBody(it, key)}${meta()}
+      </div></div>
+    </div>
+    ${S.toast === key ? `<div class="toast">${ic('check')} Copied. BlindVault tries to clear the clipboard in 30 s while it has focus.</div>` : ''}
+  </div>`;
+      }
+
+      function mobileList(key) {
+        const sheet = S.sheet === key;
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px"><div class="m">
+    ${header(key, true)}${strip(key)}
+    <div class="body">
+      <div class="listhead">
+        <div class="row1"><h2>${S.mfolder}</h2><span class="count">5</span></div>
+        <div class="search">${ic('search')} Search</div>
+        <div class="pills">
+          <button class="pill ${S.mfolder !== 'All items' ? 'on' : ''}" data-act="sheet" data-k="${key}">${ic('folder')} ${S.mfolder === 'All items' ? 'All folders' : S.mfolder} ${ic('chevron-down')}</button>
+          <button class="pill">All types ${ic('chevron-down')}</button>
+        </div>
+      </div>
+      ${reminder()}
+      ${rows(true)}
+    </div>
+    <div class="tabbar"><a class="on">${ic('list')}Items</a><a>${ic('trash')}Trash</a><a>${ic('settings')}Settings</a></div>
+    ${S.toast === key ? `<div class="toast">${ic('check')} Saved.</div>` : ''}
+    ${
+      sheet
+        ? `<div class="sheet-scrim" data-act="sheet" data-k="${key}"></div><div class="sheet" role="dialog" aria-label="Folders"><div class="grab"></div><h3>Folders</h3><nav class="nav">
+      ${['All items', 'Finance', 'Work'].map((f, i) => `<a class="${S.mfolder === f ? 'on' : ''}" data-act="folder" data-f="${f}" data-k="${key}">${ic(i ? 'folder' : 'list')} ${f} <span class="n">${[5, 2, 1][i]}</span></a>`).join('')}
+      <a class="add">${ic('plus')} New folder</a></nav></div>`
+        : ''
+    }
+  </div></div>`;
+      }
+      function mobileItem(key) {
+        const it = ITEMS.find((x) => x.id === 'gh');
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px"><div class="m">
+    <div class="hdr" style="position:relative"><button class="btn quiet" style="padding:0 6px">${ic('chevron-left')} All items</button><div class="grow"></div><span class="lockb">${ic('lock-open')}Unlocked</span>
+      <button class="btn primary">${ic('pencil')} Edit</button><button class="icon-btn" aria-label="More actions">${ic('ellipsis')}</button></div>
+    ${strip(key)}
+    <div class="body"><div class="detail">
+      <div class="hero">${av(it, true)}<h1>${it.title}</h1>${chips(it)}</div>
+      ${detailBody(it, key)}${meta()}
+    </div></div>
+  </div></div>`;
+      }
+      function unlock(key, mobile) {
+        return `<div class="app" data-theme="${S.theme}" style="width:${mobile ? 375 : 1280}px;height:${mobile ? 812 : 720}px">
+    <div class="hdr"><div class="brand"><span class="mark">${ic('shield')}</span>BlindVault</div><button class="badge-preview" data-act="preview" data-k="${key}">Preview</button><div class="grow"></div><span class="lockb">${ic('lock')}Locked</span></div>
+    <div class="center" style="height:calc(100% - 56px)"><form class="ucard" data-act="unlock" onsubmit="return false">
+      <h1>Unlock the vault</h1>
+      <div class="field"><label for="pw-${key}">Local password</label>
+        <div class="pw"><input id="pw-${key}" type="${S.uReveal ? 'text' : 'password'}" value="${S.uPw}" data-act="pwin" autocomplete="current-password" />
+          <button type="button" class="icon-btn" aria-label="${S.uReveal ? 'Hide password' : 'Show password'}" aria-pressed="${S.uReveal}" data-act="ureveal" title="${S.uReveal ? 'Hide password' : 'Show password'}">${ic(S.uReveal ? 'eye-off' : 'eye')}</button></div>
+        ${S.uErr ? '<div class="err" role="alert">Wrong password.</div>' : ''}</div>
+      <button type="button" class="btn primary" data-act="submit">Unlock</button>
+      <div class="links"><button type="button" class="btn quiet">Forgot the password?</button><button type="button" class="btn quiet">Replace with a backup…</button><button type="button" class="btn quiet">Erase this vault from this device…</button></div>
+      <div class="ver">v0.7.1</div>
+    </form></div>
+  </div>`;
+      }
+
+      Object.assign(ICONS, {
+        'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+        palette:
+          '<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+        languages:
+          '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+        timer:
+          '<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',
+        fingerprint:
+          '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>',
+        devices:
+          '<path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/>',
+        download:
+          '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
+        merge:
+          '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+        drive:
+          '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+        refresh:
+          '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+        info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+        link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+      });
+
+      const ST = {
+        groups: [
+          [
+            'Preferences',
+            [
+              ['appearance', 'Appearance', 'palette', 'System'],
+              ['language', 'Language', 'languages', 'English'],
+              ['locking', 'Locking', 'timer', '5 min'],
+            ],
+          ],
+          [
+            'Security',
+            [
+              ['password', 'Local password', 'key'],
+              ['passkey', 'Passkey unlock', 'fingerprint', 'Off'],
+              ['recovery', 'Recovery Phrase', 'shield'],
+            ],
+          ],
+          ['Devices', [['devices', 'Devices', 'devices', '1']]],
+          [
+            'Data',
+            [
+              ['backup', 'Backup', 'upload', 'Never'],
+              ['merge', 'Merge a backup', 'merge'],
+              ['import', 'Import', 'download'],
+              ['storage', 'This device', 'drive'],
+            ],
+          ],
+          [
+            'Danger zone',
+            [
+              ['refound', 'Re-found the vault', 'refresh'],
+              ['erase', 'Erase from this device', 'trash'],
+            ],
+          ],
+          [null, [['about', 'About BlindVault', 'info']]],
+        ],
+        pair: 'The other device gets this whole vault. On it, open BlindVault and choose “Pair with an existing device”.',
+        readmit:
+          'Two devices of this vault get to know each other and merge everything they hold, both ways: a device restored from a backup becomes registered, and two devices that never synced meet. No key leaves either device.',
+        only: 'This is the only device of this vault. If this browser loses its storage, only a backup and the Recovery Phrase bring the vault back: make a backup, and pair another device.',
+        backupIntro:
+          'A backup is an encrypted file with a full copy of this vault. Your Recovery Phrase always opens it. Keep copies away from this device, so you can restore if you lose it.',
+        backupAsk:
+          "A backup holds the vault's Master Key, so exporting asks for your local password again.",
+        pairAsk:
+          'Pairing hands this vault’s Master Key to the other device for good: enter the local password again.',
+      };
+      Object.assign(S, {
+        spage: { ds: 'devices', dw: 'devices', ms: null, md: 'devices' },
+        wizard: { dw: true },
+        pwShow: {},
+        accent: 'blue',
+        thm: 'system',
+      });
+
+      function pwField(id, label) {
+        const on = S.pwShow[id];
+        return `<div class="field"><label>${label}</label><div class="pw"><input type="${on ? 'text' : 'password'}" value="" placeholder="" />
+    <button type="button" class="icon-btn" aria-label="${on ? 'Hide password' : 'Show password'}" aria-pressed="${!!on}" data-act="pwshow" data-id="${id}">${ic(on ? 'eye-off' : 'eye')}</button></div></div>`;
+      }
+      function settingsIndex(key, mobile) {
+        const cur = S.spage[key];
+        return `<div class="sidx ${mobile ? 'm' : ''}">${mobile ? '<h2 class="ptitle">Settings</h2>' : '<div class="lbl" style="padding:14px 12px 0">Settings</div>'}
+    ${ST.groups
+      .map(
+        ([
+          g,
+          pages,
+        ]) => `<div class="sgroup">${g ? `<div class="lbl">${g}</div>` : ''}<ul class="${mobile ? 'card' : ''}">
+      ${pages.map(([id, name, icon, hint]) => `<li class="${!mobile && cur === id ? 'on' : ''} ${g === 'Danger zone' ? 'danger' : ''}" data-act="spage" data-k="${key}" data-p="${id}">${ic(icon)}<span class="grow">${name}</span>${hint ? `<span class="hint">${hint}</span>` : ''}${mobile ? ic('chevron-right', 'chev') : ''}</li>`).join('')}
+    </ul></div>`,
+      )
+      .join('')}</div>`;
+      }
+      function settingsPage(key, page) {
+        const name = ST.groups.flatMap((g) => g[1]).find((p) => p[0] === page)[1];
+        let body = `<p class="muted">The page content stays as it is today; only where it opens changes.</p>`;
+        if (page === 'devices' && S.wizard[key]) return pairWizard(key);
+        if (page === 'devices')
+          body = `
+    <div class="inote">${ic('info')}<span>${ST.only}</span></div>
+    <div class="sect"><div class="lbl">Devices of this vault</div><div class="card">
+      <div class="frow"><div class="av" style="background:var(--a1);color:var(--a1i)">${ic('devices')}</div><div class="grow"><div class="v">Chrome on Windows <span class="chip">This device</span></div><div class="k">Registered on November 12, 2026</div></div><button class="btn quiet">Rename</button></div>
+    </div></div>
+    <div class="sect"><div class="lbl">Add or meet a device</div><div class="acards">
+      <div class="card acard"><div class="ah">${ic('plus')}<b>Pair a device</b></div><p>${ST.pair}</p><button class="btn primary" data-act="wizard" data-k="${key}">Pair a device…</button></div>
+      <div class="card acard"><div class="ah">${ic('link')}<b>Re-admit a device</b></div><p>${ST.readmit}</p><button class="btn secondary">Re-admit with another device of this vault…</button></div>
+    </div></div>`;
+        if (page === 'backup')
+          body = `
+    <p>${ST.backupIntro}</p>
+    <div class="inote">${ic('info')}<span>No backup has been made on this device yet.</span></div>
+    <div class="card form">
+      <label class="chk"><input type="checkbox"> Also protect it with an export password</label>
+      <p class="muted">${ST.backupAsk}</p>
+      ${pwField(key + 'bk', 'Local password')}
+      <div><button class="btn primary">${ic('upload')} Export</button></div>
+    </div>`;
+        if (page === 'appearance')
+          body = `
+    <div class="sect"><div class="lbl">Theme</div><div class="seg2">${['System', 'Light', 'Dark'].map((t) => `<button aria-pressed="${S.thm === t.toLowerCase()}" data-act="thm" data-v="${t.toLowerCase()}">${t}</button>`).join('')}</div></div>
+    <div class="sect"><div class="lbl">Accent color</div><div class="swatches">${[
+      ['blue', '#2563eb'],
+      ['indigo', '#4f46e5'],
+      ['violet', '#7c3aed'],
+      ['teal', '#0f766e'],
+      ['green', '#15803d'],
+      ['rose', '#e11d48'],
+    ]
+      .map(
+        ([a, c]) =>
+          `<button class="sw ${S.accent === a ? 'on' : ''}" style="--c:${c}" data-act="accent" data-v="${a}"><span></span>${a[0].toUpperCase() + a.slice(1)}</button>`,
+      )
+      .join('')}</div></div>`;
+        return `<div class="spage"><h1>${name}</h1>${body}</div>`;
+      }
+      function pairWizard(key) {
+        return `<div class="wiz"><button class="btn quiet back" data-act="unwizard" data-k="${key}">${ic('chevron-left')} Devices</button>
+    <h1>Pair a device</h1>
+    <div class="wstep">Step 1 of 4 · Confirm it is you</div><div class="wbar"><span class="on"></span><span></span><span></span><span></span></div>
+    <div class="card form"><p>${ST.pairAsk}</p>${pwField(key + 'pair', 'Local password')}
+      <details class="adv"><summary>Advanced options</summary><label class="chk"><input type="checkbox"> Same network only</label></details>
+      <div class="wacts"><button class="btn primary">Start pairing</button><button class="btn quiet" data-act="unwizard" data-k="${key}">Cancel</button></div></div>
+    <aside class="inote">${ic('info')}<span><b>Meanwhile, on the other device:</b> open BlindVault and choose “Pair with an existing device”.</span></aside>
+  </div>`;
+      }
+      function desktopSettings(key) {
+        const page = S.spage[key];
+        return `<div class="app" data-theme="${S.theme}" style="width:1280px;height:820px">
+    ${header(key)}${strip(key)}
+    <div class="shell s2" style="--strip-h:${S.stripOpen[key] ? 56 : 37}px">
+      <nav class="pane nav navmini">
+        <a>${ic('list')} All items <span class="n">5</span></a><a>${ic('trash')} Trash <span class="n">0</span></a>
+        <div class="sep"></div>${settingsIndex(key)}
+      </nav>
+      <div class="pane"><div class="pagewrap">${settingsPage(key, page)}</div></div>
+    </div></div>`;
+      }
+      function mobileSettings(key) {
+        const page = S.spage[key];
+        const top = page
+          ? `<div class="hdr"><button class="btn quiet" style="padding:0 6px" data-act="spage" data-k="${key}" data-p="">${ic('chevron-left')} Settings</button><div class="grow"></div><button class="icon-btn" aria-label="More">${ic('ellipsis')}</button></div>`
+          : header(key, true);
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px"><div class="m">
+    ${top}${strip(key)}
+    <div class="body">${page ? `<div class="pagewrap m">${settingsPage(key, page)}</div>` : settingsIndex(key, true)}</div>
+    ${page && !S.wizard[key] ? '' : page ? '' : `<div class="tabbar"><a>${ic('list')}Items</a><a>${ic('trash')}Trash</a><a class="on">${ic('settings')}Settings</a></div>`}
+  </div></div>`;
+      }
+
+      Object.assign(ICONS, {
+        dices:
+          '<rect width="12" height="12" x="2" y="10" rx="2" ry="2"/><path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"/><path d="M6 18h.01"/><path d="M10 14h.01"/><path d="M15 6h.01"/><path d="M18 9h.01"/>',
+        refresh:
+          '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+        tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+        server:
+          '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+        users:
+          '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+        info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+        devices:
+          '<path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/>',
+      });
+      const SAMPLES = ['k7#Vq9!mT2$wLx4@Rn8z', 'Hb3&pZ8*eW1^sK6!fY2q', 'u9@Lc4#Xr7%nD2$gM5vj'];
+      const WORDS = [
+        'orbit-velvet-harbor-quartz-lantern',
+        'granite-tulip-meadow-signal-ember',
+        'cobalt-river-lantern-maple-orbit',
+      ];
+      Object.assign(S, {
+        gen: { de: false, dg: true, mg: true },
+        gmode: 'chars',
+        gi: 0,
+        glen: 20,
+        gpw: { de: '', dg: '', mg: '' },
+        edShow: {},
+      });
+
+      function pwInput(key, opts = {}) {
+        const on = S.edShow[key];
+        const val = S.gpw[key] || opts.value || '';
+        return `<div class="pw"><input type="${on ? 'text' : 'password'}" value="${val}" />
+    <button type="button" class="icon-btn" aria-label="${on ? 'Hide password' : 'Show password'}" aria-pressed="${!!on}" data-act="edshow" data-k="${key}" title="${on ? 'Hide' : 'Show'}">${ic(on ? 'eye-off' : 'eye')}</button>
+    <button type="button" class="icon-btn" aria-label="Password generator" data-act="gen" data-k="${key}" title="Password generator">${ic('dices')}</button></div>`;
+      }
+      function input(label, value = '', hint = '') {
+        return `<div class="field"><label>${label}</label><input class="inp" value="${value}" />${hint ? `<div class="hintx">${hint}</div>` : ''}</div>`;
+      }
+      function editorBody(key, mobile) {
+        return `<div class="edtitle">
+      <div class="av lg" style="background:var(--a4);color:var(--a4i)">${ic('key')}</div>
+      <div class="grow"><div class="kicker">New item · Login</div><input class="inp big" placeholder="Title" value="GitHub" aria-label="Title" /></div></div>
+    <div class="sect"><div class="lbl">Login</div><div class="card form">
+      ${input('Username', 'dev@example.com')}
+      <div class="field"><label>Password</label>${pwInput(key)}</div>
+      ${input('Website', 'https://github.com')}
+      <div class="addf"><select class="inp" aria-label="Field type"><option>Text</option><option>Secret</option><option>URL</option></select><button class="btn secondary">${ic('plus')} Add a field</button></div>
+    </div></div>
+    <div class="sect"><div class="lbl">Organize</div><div class="card form ${mobile ? '' : 'two'}">
+      <div class="field"><label>Folder</label><select class="inp"><option>Work</option><option>No folder (vault root)</option></select></div>
+      ${input('Tags', 'dev, work', 'Separate tags with commas.')}
+    </div></div>
+    <div class="sect"><div class="lbl">Notes</div><div class="card form"><textarea class="inp" rows="3"></textarea></div></div>`;
+      }
+      function genPanel(key, sheet) {
+        const words = S.gmode === 'words';
+        const sample = words ? WORDS[S.gi % 3] : SAMPLES[S.gi % 3];
+        return `<div class="${sheet ? 'sheet' : 'dialog'}" role="dialog" aria-label="Password generator">${sheet ? '<div class="grab"></div>' : ''}
+    <div class="dh"><h3>Password generator</h3><button class="icon-btn" aria-label="Close" data-act="gen" data-k="${key}">${ic('x')}</button></div>
+    <div class="gprev"><span class="mono">${sample}</span><button class="icon-btn" aria-label="Generate" title="Generate" data-act="regen">${ic('refresh')}</button></div>
+    <div class="gmeter"><span style="width:${words ? 70 : 85}%"></span></div>
+    <div class="hintx">${words ? 'Entropy as computed today' : '131 bits of entropy'}</div>
+    <div class="seg2 full">${[
+      ['chars', 'Characters'],
+      ['words', 'Words'],
+    ]
+      .map(
+        ([v, l]) =>
+          `<button aria-pressed="${S.gmode === v}" data-act="gmode" data-v="${v}">${l}</button>`,
+      )
+      .join('')}</div>
+    <div class="field"><label>${words ? 'Words (4–24)' : 'Length (12–128)'}</label><div class="lenrow"><input type="range" min="${words ? 4 : 12}" max="${words ? 24 : 128}" value="${words ? 5 : S.glen}" /><input class="inp num" value="${words ? 5 : S.glen}" /></div></div>
+    ${words ? '' : `<div class="toggles">${['a–z', 'A–Z', '0–9', 'Symbols'].map((t) => `<label class="tog"><input type="checkbox" checked> ${t}</label>`).join('')}</div>`}
+    <div class="dacts"><button class="btn quiet" data-act="gen" data-k="${key}">Cancel</button><button class="btn primary" data-act="usepw" data-k="${key}" data-v="${sample}">Use this password</button></div>
+  </div>`;
+      }
+      function desktopEditor(key) {
+        return `<div class="app" data-theme="${S.theme}" style="width:1280px;height:820px">
+    ${header(key)}${strip(key)}
+    <div class="shell" style="--strip-h:37px">
+      <nav class="pane nav"><a class="on">${ic('list')} All items <span class="n">5</span></a><a>${ic('trash')} Trash <span class="n">0</span></a><div class="lbl">Folders</div><a>${ic('folder')} Finance <span class="n">2</span></a><a>${ic('folder')} Work <span class="n">1</span></a></nav>
+      <div class="pane"><div class="listhead"><div class="row1"><h2>All items</h2><span class="count">5</span><div style="flex:1"></div><button class="btn primary">${ic('plus')} New item</button></div><div class="search">${ic('search')} Search<kbd>⌘K</kbd></div></div>${rows(false)}</div>
+      <div class="pane edpane"><div class="edscroll"><div class="detail">${editorBody(key)}</div></div>
+        <div class="edbar"><span class="hintx">Unsaved changes</span><div style="flex:1"></div><button class="btn quiet">Cancel</button><button class="btn primary">Save</button></div></div>
+    </div>
+    ${S.gen[key] ? `<div class="sheet-scrim" data-act="gen" data-k="${key}"></div>${genPanel(key)}` : ''}
+  </div>`;
+      }
+      function mobileEditor(key) {
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px"><div class="m">
+    <div class="hdr"><button class="btn quiet" style="padding:0 6px">${ic('chevron-left')} All items</button><div class="grow"></div></div>
+    ${strip(key)}
+    <div class="body"><div class="detail">${editorBody(key, true)}</div></div>
+    <div class="edbar"><button class="btn quiet" style="flex:1;justify-content:center">Cancel</button><button class="btn primary" style="flex:1;justify-content:center">Save</button></div>
+    ${S.gen[key] ? `<div class="sheet-scrim" data-act="gen" data-k="${key}"></div>${genPanel(key, true)}` : ''}
+  </div></div>`;
+      }
+      function start(key) {
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px">
+    <div class="hdr"><div class="brand"><span class="mark">${ic('shield')}</span>BlindVault</div><button class="badge-preview" data-act="preview" data-k="${key}">Preview</button><div class="grow"></div><button class="btn quiet">About</button></div>
+    ${S.previewOpen === key ? `<div class="popover" style="left:12px;top:52px"><b>Preview build</b>${T.preview}</div>` : ''}
+    <div class="startw">
+      <div class="hero2"><span class="mark xl">${ic('shield')}</span><h1>Your vault, only on your devices</h1></div>
+      <ul class="facts">
+        <li>${ic('server')}<span>BlindVault has no account and no server: your vault lives only on your devices and in your backups.</span></li>
+        <li>${ic('lock')}<span>Nobody, BlindVault included, can reset your local password or recover your vault for you.</span></li>
+        <li>${ic('key')}<span>Your Recovery Phrase and a backup are the only way to get the vault back.</span></li>
+      </ul>
+      <div class="starts">
+        <button class="btn primary big">${ic('plus')} Create a new vault</button>
+        <button class="btn secondary big">${ic('devices')} Pair with an existing device</button>
+        <button class="btn secondary big">${ic('upload')} Restore from a backup</button>
+      </div>
+      <div class="ver">v0.7.1</div>
+    </div></div>`;
+      }
+      function specimen(key) {
+        const row = (name, spec, el) =>
+          `<div class="specrow"><div class="specname">${name}<div class="hintx">${spec}</div></div><div>${el}</div></div>`;
+        return `<div class="app" data-theme="${S.theme}" style="width:1280px;height:600px"><div class="spec">
+    <div>
+      <div class="lbl" style="margin-bottom:8px">Escala tipográfica</div>
+      ${row('Título de tela', '22 px · 650 · -0,015em', '<div style="font-size:22px;font-weight:650;letter-spacing:-.015em">GitHub</div>')}
+      ${row('Título de painel', '18 px · 650', '<div style="font-size:18px;font-weight:650">All items</div>')}
+      ${row('Valor de campo', '15 px · 400', '<div style="font-size:15px">dev@example.com</div>')}
+      ${row('Corpo', '14 px · 400', '<div>A backup is an encrypted file with a full copy of this vault.</div>')}
+      ${row('Rótulo de campo / hint', '12–12,5 px · muted', '<div class="hintx">Username</div>')}
+      ${row('Rótulo de seção', '11 px · 600 · caixa alta · 0,06em', '<div class="lbl">Login</div>')}
+      ${row('Segredo', 'mono 15 px', '<div class="mono" style="font-size:15px">k7#Vq9!mT2$wLx4@Rn8z</div>')}
+    </div>
+    <div>
+      <div class="lbl" style="margin-bottom:8px">Espaçamento (múltiplos de 4)</div>
+      ${[4, 8, 12, 16, 24, 32].map((n) => `<div class="specrow"><div class="specname">${n} px<div class="hintx">${{ 4: 'ícone ↔ texto curto', 8: 'entre botões, chips', 12: 'padding de linha, gap de form', 16: 'gutter do celular, padding de card', 24: 'entre seções', 32: 'margem do painel no desktop' }[n]}</div></div><div><span class="spbar" style="width:${n * 4}px"></span></div></div>`).join('')}
+      <div class="lbl" style="margin:18px 0 8px">Botões</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary">Primary</button><button class="btn secondary">Secondary</button><button class="btn quiet">Quiet</button><button class="icon-btn" aria-label="Copy">${ic('copy')}</button><button class="icon-btn" aria-pressed="true" aria-label="Hide">${ic('eye-off')}</button></div>
+      <div class="hintx" style="margin-top:6px">Ações por campo (Show, Copy, Open, Generate) viram ícones de 34 px com tooltip e rótulo acessível. Ações de tela continuam com texto.</div>
+    </div>
+  </div></div>`;
+      }
+
+      Object.assign(ICONS, {
+        file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+        'camera-off':
+          '<path d="M14.564 14.558a3 3 0 1 1-4.122-4.121"/><path d="m2 2 20 20"/><path d="M20 20H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 .819-.175"/><path d="M9.695 4.024A2 2 0 0 1 10.004 4h3.993a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v7.344"/>',
+      });
+      const PHRASE =
+        'box receive income east know scan labor flee frost match abstract sell energy trade label business say retire alarm grant bring orphan robot junior'.split(
+          ' ',
+        );
+      const ORDER = [
+        0, 12, 1, 13, 2, 14, 3, 15, 4, 16, 5, 17, 6, 18, 7, 19, 8, 20, 9, 21, 10, 22, 11, 23,
+      ];
+      Object.assign(S, { cstep: 1, jShow: {} });
+
+      function wizHead(title, n, total, name, next) {
+        return `<h1 class="wtitle">${title}</h1>
+    <div class="wstep">Step ${n} of ${total} · ${name}</div>
+    <div class="wbar">${Array.from({ length: total }, (_, i) => `<span class="${i < n ? 'on' : ''}"></span>`).join('')}</div>
+    ${next ? `<div class="wnext">Next: ${next}</div>` : ''}`;
+      }
+      function preHeader(key, cancel) {
+        return `<div class="hdr"><div class="brand"><span class="mark">${ic('shield')}</span>BlindVault</div><button class="badge-preview" data-act="preview" data-k="${key}">Preview</button><span class="sr">Locked</span><div class="grow"></div>
+    ${cancel ? `<button class="btn quiet" data-act="${cancel}" data-k="${key}">Cancel</button>` : ''}</div>`;
+      }
+      function createWizard(key) {
+        const step = S.cstep;
+        let body, action;
+        if (step === 1) {
+          body = `${wizHead('Create a vault', 1, 3, 'Write down the Recovery Phrase', 'Confirm the phrase')}
+      <p class="muted">BlindVault has no server: nobody can reset your local password or recover your vault for you. Your data stays on your devices.</p>
+      <p>These 24 words, with a backup, recover the vault if you forget the local password or lose this device. BlindVault has no server, so nobody else can recover it for you. Write them on paper, in order, and keep them somewhere safe.</p>
+      <ol class="phrase">${ORDER.map((i) => `<li><span>${i + 1}</span>${PHRASE[i]}</li>`).join('')}</ol>
+      <div class="wnote warn">${ic('camera-off')}<div><b>They are shown only now: BlindVault does not keep them and cannot show them again.</b><br>Do not take a screenshot or a photo: it lands in the gallery and in its cloud backup.</div></div>`;
+          action = `<button class="btn primary big" data-act="cnext">I wrote them down</button>`;
+        } else if (step === 2) {
+          body = `${wizHead('Create a vault', 2, 3, 'Confirm the phrase', 'Create the local password')}
+      <p>From what you wrote down, type the words at these positions.</p>
+      <div class="cwords">${[11, 13, 22].map((n) => `<div class="field"><label>Word ${n}</label><input class="inp mono" autocomplete="off" /></div>`).join('')}</div>`;
+          action = `<button class="btn primary big" data-act="cnext">Confirm</button>`;
+        } else {
+          body = `${wizHead('Create a vault', 3, 3, 'Create the local password')}
+      <div class="field"><label>Local password</label>${jpw(key + 'n')}<div class="smeter"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div></div>
+      <div class="field"><label>Repeat the password</label>${jpw(key + 'r')}</div>
+      <div class="wnote">${ic('info')}<div>Do not let the browser save this password: depending on the browser, a copy of its data could then be enough to open the vault.</div></div>`;
+          action = `<button class="btn primary big" data-act="cnext">Create vault</button>`;
+        }
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px"><div class="m">
+    ${preHeader(key, 'creset')}
+    <div class="body"><div class="wbody">${body}</div></div>
+    <div class="wfoot">${action}</div>
+  </div></div>`;
+      }
+      function jpw(id) {
+        const on = S.jShow[id];
+        return `<div class="pw"><input type="${on ? 'text' : 'password'}" /><button type="button" class="icon-btn" aria-label="${on ? 'Hide password' : 'Show password'}" aria-pressed="${!!on}" data-act="jshow" data-id="${id}">${ic(on ? 'eye-off' : 'eye')}</button></div>`;
+      }
+      function joinWizard(key) {
+        return `<div class="app" data-theme="${S.theme}" style="width:375px;height:812px"><div class="m">
+    ${preHeader(key, 'noop')}
+    <div class="body"><div class="wbody">
+      ${wizHead('Pair with an existing device', 1, 5, 'Create the local password', 'Read the other device’s code')}
+      <p>This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a device”.</p>
+      <div class="field"><label>Local password</label>${jpw(key + 'n')}<div class="smeter"><span></span><span></span><span></span><span></span></div></div>
+      <div class="field"><label>Repeat the password</label>${jpw(key + 'r')}</div>
+      <div class="wnote">${ic('info')}<div>Do not let the browser save this password: depending on the browser, a copy of its data could then be enough to open the vault.</div></div>
+      <details class="adv"><summary>Advanced options</summary><label class="chk"><input type="checkbox"> Same network only</label></details>
+      <aside class="other">${ic('devices')}<div><b>On the other device</b><br>On the device that holds the vault, open Settings › Devices › “Pair a device…” and enter its local password.</div></aside>
+    </div></div>
+    <div class="wfoot"><button class="btn primary big">Start pairing</button></div>
+  </div></div>`;
+      }
+      function dropzone(label, accept) {
+        return `<div class="field"><label>${label}</label><label class="drop">${ic('upload')}<b>Choose a file</b><span class="muted">or drop it here · ${accept}</span><input type="file" hidden></label></div>`;
+      }
+      function restoreWizard(key) {
+        return `<div class="app" data-theme="${S.theme}" style="width:1280px;height:760px">
+    ${preHeader(key, 'noop')}
+    <div class="wdesk"><div class="wcol">
+      ${wizHead('Restore from a backup', 1, 3, 'Choose the backup', 'Open the backup')}
+      <p>Choose a .bvault file. It opens with its Recovery Phrase, or with its export password if it has one.</p>
+      ${dropzone('Backup file', '.bvault')}
+      <div class="wacts end"><button class="btn quiet" data-act="noop">Cancel</button><button class="btn primary" disabled style="opacity:.5">Continue</button></div>
+    </div></div>
+    <div class="ver" style="position:absolute;bottom:14px;left:0;right:0">v0.7.1 · About</div>
+  </div>`;
+      }
+      function importWizard(key) {
+        return `<div class="app" data-theme="${S.theme}" style="width:1280px;height:820px">
+    ${header(key)}${strip(key)}
+    <div class="shell s2" style="--strip-h:37px">
+      <nav class="pane nav navmini"><a>${ic('list')} All items <span class="n">5</span></a><a>${ic('trash')} Trash <span class="n">0</span></a><div class="sep"></div>${settingsIndex(key)}</nav>
+      <div class="pane"><div class="pagewrap"><div class="wiz">
+        <button class="btn quiet back">${ic('chevron-left')} Import</button>
+        ${wizHead('Import', 1, 3, 'Choose the file', 'Check what comes in')}
+        <p class="muted">Brings the items of another password manager’s export into a new folder of this vault, with no history. Nothing is merged into your folders, and importing the same file again makes a second folder.</p>
+        <div class="card form">
+          <div class="field"><label>Exported from</label><select class="inp"><option>Bitwarden</option><option>1Password</option><option>BlindPass</option></select></div>
+          <div class="wnote warn">${ic('alert')}<div>An export file other than an encrypted .blindpass holds every secret in plaintext: anyone who reads it reads them all. Delete it once the import is done.</div></div>
+          ${dropzone('Export file', '.json, .csv')}
+          <div class="wacts end"><button class="btn quiet">Cancel</button><button class="btn primary" disabled style="opacity:.5">Continue</button></div>
+        </div>
+      </div></div></div>
+    </div></div>`;
+      }
+
+      const SC1 = [
+        {
+          id: 'd',
+          title: 'Desktop · cofre com um item aberto',
+          wide: true,
+          before: 'desktop/18-item-view-selected',
+          render: desktop,
+          notes: [
+            'As 3 faixas viram: o selo <i>Preview</i> no header (clique), uma linha de perigo com <i>Details</i> e o lembrete de backup no alto da lista, com dispensa. Os textos não mudam.',
+            'O selo <i>Unlocked</i> fica neutro, com cadeado aberto, sem o âmbar. Lock passa de primário a secundário.',
+            'As pastas ficam na coluna esquerda, e os tipos viram a pílula <i>All types ▾</i>, sem a fileira cortada.',
+            'O item ganha um cabeçalho com avatar, título, chips (tipo, host, pasta) e Edit primário com "…". Os campos ficam num card com linhas divididas: Show e Copy de um segredo mantêm o texto (§13.7), e Copy e Open nos outros campos viram ícones. O History passa para o rodapé.',
+            'Teste: clique nas linhas, no olho, no copiar, em Details e em Preview.',
+          ],
+        },
+        {
+          id: 'ml',
+          title: 'Celular · lista',
+          before: 'mobile/17-item-list',
+          render: mobileList,
+          notes: [
+            'As pastas saem do topo da lista e viram a pílula <i>All folders ▾</i>, que abre um sheet (clique). O primeiro item sobe de cerca de 700 px para cerca de 330 px.',
+            'Uma linha de perigo, com <i>Details</i>, no lugar de 3 blocos de cerca de 330 px.',
+            'O toast fica acima da barra de abas e não cobre a lista. Lock fica no menu "…" (D245).',
+          ],
+        },
+        {
+          id: 'mi',
+          title: 'Celular · item aberto',
+          before: 'mobile/13-item-view-login',
+          render: mobileItem,
+          notes: [
+            'Edit e "…" ficam na barra, sem cair para a linha de baixo do título. O avatar e os chips aparecem centralizados no topo, e os campos ficam em linhas com olho e copiar.',
+            'O botão Back mostra para onde volta (<i>All items</i>).',
+          ],
+        },
+        {
+          id: 'u',
+          title: 'Desbloqueio · exibir a senha',
+          before: 'mobile/39-unlock',
+          render: (k) => unlock(k, true),
+          notes: [
+            'O olho dentro do campo (<i>Show password</i>/<i>Hide password</i>, <code>aria-pressed</code>), igual nos 13 campos de senha.',
+            'Volta a mascarar ao enviar, mesmo com a senha errada, ao sair da tela e ao bloquear. Teste: revele e clique em Unlock.',
+            'Um cabeçalho só, com a marca e o selo neutro <i>Locked</i> (§13.2), e as ações secundárias agrupadas abaixo de uma linha.',
+          ],
+        },
+      ];
+
+      const SC2 = [
+        {
+          id: 'ds',
+          title: 'Desktop · Settings dentro do cofre',
+          wide: true,
+          before: 'desktop/19-settings-index',
+          render: desktopSettings,
+          notes: [
+            'Settings abre dentro do layout do cofre. O índice fica na coluna esquerda, abaixo de All items e Trash, e a página aparece à direita. O header e o Lock não saem do lugar, e não há tela vazia ao lado.',
+            'A linha ativa do índice fica destacada, e o valor atual aparece à direita (System, 5 min, Never), como já acontece hoje.',
+            'Teste: clique em Appearance, Devices e Backup. As outras páginas mantêm o conteúdo de hoje.',
+            'Em Backup, o campo de senha já tem o olho.',
+          ],
+        },
+        {
+          id: 'dw',
+          title: 'Desktop · wizard numa tela própria (Pair a device)',
+          wide: true,
+          before: 'desktop/28-settings-devices-wizard',
+          render: desktopSettings,
+          notes: [
+            'O wizard abre numa tela própria, com cerca de 560 px de largura, título, barra de passos, Cancel e a caixa "on the other device". Não fica mais embaixo do texto de Re-admission com o botão cortado.',
+            '"‹ Devices" volta para a página, o mesmo que Cancel enquanto houver algo a cancelar. Não existe Voltar entre os passos (D253).',
+            'Teste: Cancel leva à página Devices, com os cards Pair e Re-admit. "Pair a device…" abre o wizard de novo.',
+          ],
+        },
+        {
+          id: 'ms',
+          title: 'Celular · índice do Settings',
+          before: 'mobile/19-settings-index',
+          render: mobileSettings,
+          notes: [
+            'O celular continua a navegar por níveis (índice, depois a página), agora com a barra de abas e uma linha de perigo só.',
+            'Teste: toque numa linha para abrir a página. "‹ Settings" volta ao índice.',
+          ],
+        },
+        {
+          id: 'md',
+          title: 'Celular · página Devices',
+          before: 'mobile/27-settings-devices',
+          render: mobileSettings,
+          notes: [
+            'A página lista os dispositivos num card e mostra dois cards de ação, Pair e Re-admit. Cada um explica o que faz e tem um botão próprio.',
+            'O Back mostra o destino (‹ Settings), e as abas somem dentro das páginas, como hoje.',
+          ],
+        },
+      ];
+      const SC3 = [
+        {
+          id: 'sp',
+          title: 'Escala e espaçamento',
+          wide: true,
+          before: null,
+          render: specimen,
+          notes: [
+            'Dentro da D231: zinc, os mesmos dois raios (0,375 e 0,75 rem), a mesma sombra e o accent escolhido. Nenhum token de cor muda.',
+            'O que muda: títulos com mais peso e tracking negativo, rótulos de seção em caixa alta pequena, valores em 15 px, espaçamento só em múltiplos de 4 e ações por campo como ícones.',
+            'As partes 1 e 2 já usam essa escala.',
+          ],
+        },
+        {
+          id: 'de',
+          title: 'Desktop · editor com barra fixa',
+          wide: true,
+          before: 'desktop/11-editor-login',
+          render: desktopEditor,
+          notes: [
+            'Cancel e Save ficam numa barra fixa embaixo do painel e não somem ao rolar o formulário.',
+            'O editor segue a mesma anatomia do item aberto: um título grande no topo e cards de campos (Login, Organize, Notes).',
+            'O campo de senha tem o olho e um botão para o gerador. O "Generate" solto abaixo do campo deixa de existir.',
+            'Teste: clique no ícone de dados para abrir o gerador. "Use this password" preenche o campo.',
+          ],
+        },
+        {
+          id: 'dg',
+          title: 'Desktop · gerador em diálogo',
+          wide: true,
+          before: 'desktop/12-editor-generator',
+          render: desktopEditor,
+          notes: [
+            'O gerador abre num diálogo modal, sem empurrar o formulário para baixo. A senha gerada aparece no topo em mono, com o botão de gerar de novo.',
+            'As opções são as de hoje (Characters/Words, tamanho, conjuntos) e os textos também. A barra de entropia só desenha o número que já existe.',
+            'Teste: alterne Characters/Words, clique em ↻ e em "Use this password".',
+          ],
+        },
+        {
+          id: 'mg',
+          title: 'Celular · gerador em sheet',
+          before: 'mobile/12-editor-generator',
+          render: mobileEditor,
+          notes: [
+            'No celular, o mesmo conteúdo abre num sheet que sobe de baixo, e a barra Cancel/Save fica fixa no rodapé.',
+          ],
+        },
+        {
+          id: 'st',
+          title: 'Celular · primeira tela',
+          before: 'mobile/01-start',
+          render: start,
+          notes: [
+            'Um cabeçalho só, com a marca e o selo Preview. Sai o "BlindVault" repetido e o "Locked" de quando ainda não existe cofre.',
+            'As três frases sem servidor ganham ícones, e o texto não muda (D198). Pair e Restore viram botões secundários com borda, e não texto solto.',
+            'Título novo: "Your vault, only on your devices". Ele resume as três frases, que ficam como estão.',
+          ],
+        },
+      ];
+      const SC4 = [
+        {
+          id: 'c',
+          title: 'Celular · criar o cofre (os 3 passos)',
+          before: 'mobile/05-create-phrase',
+          render: createWizard,
+          notes: [
+            'Mesma moldura em todo wizard: o header com Cancel no canto (enquanto houver algo a cancelar, D253), o título, "Step N of M · nome" com a barra e, novo, "Next: …" para mostrar o que vem depois. A ação principal fica fixa no rodapé.',
+            'A frase aparece em 2 colunas numeradas, em ordem de leitura (1–12 à esquerda, 13–24 à direita). Os dois avisos (mostrada só agora, sem screenshot) ficam juntos numa caixa de aviso, com o texto inalterado.',
+            'Teste: "I wrote them down" → Confirm → Create vault. Cancel volta ao passo 1, como o cancelCreation descarta a frase. Não existe Voltar entre os passos (D253).',
+            'Para decidir depois: o primeiro parágrafo repete o "sem servidor" que o segundo já diz. Mantive o texto (D244), mas ele é candidato a sair.',
+          ],
+        },
+        {
+          id: 'j',
+          title: 'Celular · entrar com outro dispositivo (Join)',
+          before: 'mobile/03-join-step1',
+          render: joinWizard,
+          notes: [
+            'Os dois campos de senha ganham o olho. O medidor de força continua embaixo do primeiro.',
+            'A caixa "On the other device" ganha ícone e destaque de accent, e "Start pairing" fica fixo no rodapé, sem precisar rolar.',
+            '"Next: …" usa o nome do passo 2. No app, o texto vem do <code>steps</code> que já existe em messages.ts.',
+          ],
+        },
+        {
+          id: 'r',
+          title: 'Desktop · restaurar (passo 1)',
+          wide: true,
+          before: 'desktop/04-restore-step1',
+          render: restoreWizard,
+          notes: [
+            'No desktop, o wizard é uma coluna de cerca de 520 px direto na página, sem o card dentro da página com "BlindVault" e "Locked" repetidos.',
+            'O campo de arquivo vira uma área de soltar com o mesmo input por baixo. Arrastar um .bvault também funciona.',
+            'Cancel e a ação principal ficam juntos à direita. "Continue" aparece desabilitado até escolher o arquivo. Hoje o passo avança sozinho ao escolher, e isso pode continuar assim.',
+          ],
+        },
+        {
+          id: 'i',
+          title: 'Desktop · import dentro do Settings',
+          wide: true,
+          before: 'desktop/33-settings-import-wizard',
+          render: importWizard,
+          notes: [
+            'O wizard abre na área do Settings (parte 2). A explicação fica acima, e os passos ficam num card.',
+            'O aviso de texto plano vira uma caixa de aviso com ícone, e o texto não muda.',
+            'Merge, regenerate e re-found seguem a mesma moldura. Os passos e as confirmações não mudam (D253, D244).',
+          ],
+        },
+      ];
+
+      const PARTS = ['Tela principal', 'Navegação e Settings', 'Aparência e editor', 'Wizards'];
+      const SC = [SC1, SC2, SC3, SC4].flatMap((l, i) => l.map((x) => ({ ...x, part: i + 1 })));
+      S.part = 1;
+      S.spage.i = 'import';
+      function render() {
+        document.documentElement.dataset.page = S.theme;
+        document
+          .querySelectorAll('#parts button')
+          .forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === S.part)));
+        document.getElementById('main').innerHTML = SC.filter((sc) => sc.part === S.part)
+          .map(
+            (sc) => `<section class="sc" id="sc-${sc.id}">
+    <h2>${sc.title}</h2><ul class="notes">${sc.notes.map((n) => `<li>${n}</li>`).join('')}</ul>
+    <div class="pair ${sc.wide ? 'wide' : 'narrow'}">
+      
+      <div class="col after"><div class="shot" data-fit>${sc.render(sc.id)}</div></div>
+    </div></section>`,
+          )
+          .join('');
+        fit();
+      }
+      function fit() {
+        document.querySelectorAll('[data-fit]').forEach((box) => {
+          const app = box.firstElementChild;
+          const w = parseFloat(app.style.width),
+            h = parseFloat(app.style.height);
+          const z = Math.min(1, box.clientWidth / w);
+          app.style.zoom = z;
+          box.style.height = h * z + 'px';
+        });
+      }
+      let copyTimer;
+      document.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-act]');
+        const seg = e.target.closest('.seg button');
+        if (seg) {
+          S[seg.parentElement.id] =
+            seg.parentElement.id === 'parts' ? Number(seg.dataset.v) : seg.dataset.v;
+          seg.parentElement
+            .querySelectorAll('button')
+            .forEach((b) => b.setAttribute('aria-pressed', b === seg));
+          render();
+          return;
+        }
+        if (!el) {
+          if (S.previewOpen || S.menu) {
+            S.previewOpen = null;
+            S.menu = null;
+            render();
+          }
+          return;
+        }
+        const k = el.dataset.k,
+          a = el.dataset.act;
+        if (a === 'pwin') return;
+        const sc = el.closest('section')?.id.slice(3);
+        if (a === 'sel') S.sel = el.dataset.id;
+        if (a === 'copy') {
+          e.stopPropagation();
+          S.copied = el.dataset.c;
+          S.toast = sc;
+          clearTimeout(copyTimer);
+          copyTimer = setTimeout(() => {
+            S.copied = null;
+            S.toast = null;
+            render();
+          }, 1800);
+        }
+        if (a === 'reveal') S.reveal[el.dataset.id] = !S.reveal[el.dataset.id];
+        if (a === 'strip') S.stripOpen[k] = !S.stripOpen[k];
+        if (a === 'preview') {
+          S.previewOpen = S.previewOpen === k ? null : k;
+          S.menu = null;
+        }
+        if (a === 'menu') {
+          S.menu = S.menu === k ? null : k;
+          S.previewOpen = null;
+        }
+        if (a === 'dismiss') S.reminder = false;
+        if (a === 'sheet') S.sheet = S.sheet === k ? null : k;
+        if (a === 'folder') {
+          S.mfolder = el.dataset.f;
+          S.sheet = null;
+        }
+        if (a === 'ureveal') S.uReveal = !S.uReveal;
+        if (a === 'spage') {
+          S.spage[k] = el.dataset.p || null;
+          S.wizard[k] = false;
+        }
+        if (a === 'wizard') S.wizard[k] = true;
+        if (a === 'unwizard') S.wizard[k] = false;
+        if (a === 'pwshow') S.pwShow[el.dataset.id] = !S.pwShow[el.dataset.id];
+        if (a === 'thm') S.thm = el.dataset.v;
+        if (a === 'accent') S.accent = el.dataset.v;
+        if (a === 'gen') S.gen[k] = !S.gen[k];
+        if (a === 'regen') S.gi++;
+        if (a === 'gmode') S.gmode = el.dataset.v;
+        if (a === 'usepw') {
+          S.gpw[k] = el.dataset.v;
+          S.gen[k] = false;
+        }
+        if (a === 'edshow') S.edShow[k] = !S.edShow[k];
+        if (a === 'jshow') S.jShow[el.dataset.id] = !S.jShow[el.dataset.id];
+        if (a === 'cnext') S.cstep = S.cstep === 3 ? 1 : S.cstep + 1;
+        if (a === 'creset') S.cstep = 1;
+        if (a === 'submit') {
+          S.uReveal = false;
+          S.uErr = true;
+        }
+        render();
+      });
+      document.addEventListener('input', (e) => {
+        if (e.target.dataset.act === 'pwin') S.uPw = e.target.value;
+      });
+      addEventListener('resize', fit);
+      render();
+    </script>
+  </body>
+</html>
