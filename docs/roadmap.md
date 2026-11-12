@@ -423,7 +423,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Icons and navigation: more copied Lucide icons, phone footer with icons, "+" and the overflow menu on a phone, type filter, counts per folder and per type (D245)
 - [x] List row: avatar (with its six color pairs in the tokens and the contrast test), subtitle from non-secret fields, Copy for the password, grouping by first letter on a phone (D246)
 - [x] Item detail: header with avatar and chips, fields in sections inside cards, icon and text on secret buttons, the "…" menu, the seed-phrase grid (D247)
-- [ ] TOTP ring, stepping once a second with no transition
+- [x] TOTP ring, stepping once a second with no transition (D248)
 - [ ] Password strength on item secrets: meter in the editor, Weak badge on the detail, never blocking a save
 - [ ] Feedback: toast region, bottom sheet on a phone, empty-vault checklist, error boundary that locks the vault
 - [ ] Keyboard: list movement, search to list, Esc, Ctrl/⌘+Enter; generator length slider

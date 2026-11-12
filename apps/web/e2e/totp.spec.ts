@@ -80,6 +80,17 @@ test('adds a TOTP field from an otpauth:// link, masks its TOTP secret and shows
   await expect(page.getByTestId('totp-expires-2FA')).toHaveText(
     /^Changes in ([1-9]|[12][0-9]|30) s$/,
   );
+  // The ring beside the code: decorative, stepping with no transition (D248, D236).
+  const ring = page.getByTestId('totp-ring');
+  await expect(ring).toBeVisible();
+  await expect(ring).toHaveAttribute('aria-hidden', 'true');
+  await expect(ring).toHaveAttribute('data-seconds', /^([1-9]|[12][0-9]|30)$/);
+  expect(
+    await ring
+      .locator('circle')
+      .last()
+      .evaluate((c) => getComputedStyle(c).transitionDuration),
+  ).toBe('0s');
 
   // Kept as stored on an edit that leaves the field empty (D165).
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
