@@ -16,6 +16,7 @@ import { writeError } from './errors';
 import { Icon, type IconName } from './icons';
 import { Avatar, TEMPLATE_ICON, known } from './ItemRow';
 import { SecretView } from './Secret';
+import { WeakBadge, rated } from './Strength';
 import { TotpView } from './Totp';
 
 /** A field's name: the user's label, else its role's localized name (D165). */
@@ -194,7 +195,12 @@ export function ItemDetail({
         return (
           // Fields have no ID; their order is fixed while the item is shown.
           <div key={i} className="flex flex-col gap-0.5 px-4 py-3">
-            <dt className="text-xs font-medium text-muted">{name}</dt>
+            <dt className="flex items-center gap-2 text-xs font-medium text-muted">
+              {name}
+              {rated(field) && typeof field.value === 'string' ? (
+                <WeakBadge value={field.value} />
+              ) : null}
+            </dt>
             <dd>
               <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
             </dd>
