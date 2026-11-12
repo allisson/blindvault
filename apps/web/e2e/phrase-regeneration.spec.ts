@@ -34,6 +34,7 @@ async function exportBackup(page: Page): Promise<Buffer> {
 async function newPhrase(page: Page): Promise<string[]> {
   await page.getByTestId('regenerate-start').click();
   await expect(page.getByTestId('regenerate-exposed')).toContainText('re-founded');
+  await expect(page.getByTestId('wizard-step')).toHaveText('Step 1 of 5 · Read the warning');
   await expect(
     page.getByText(
       'Backups made until now open only with the current phrase. Your other devices keep it, and keep making backups for it, until they sync with this one.',

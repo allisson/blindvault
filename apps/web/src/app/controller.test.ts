@@ -2062,6 +2062,12 @@ describe('asset update offered only between flows (D152, D191)', () => {
     expect(seen).toEqual([true]);
     expect(c.holdsPhrase).toBe(true);
     expect(c.updateAllowed).toBe(false);
+    // Cancel drops the phrase, and a creation without one does nothing (D253).
+    c.cancelCreation();
+    expect(c.holdsPhrase).toBe(false);
+    await c.create(PASSWORD, 'Test device');
+    expect(c.status.kind).toBe('no-vault');
+    c.newRecoveryPhrase();
     await c.create(PASSWORD, 'Test device');
     expect(c.status.kind).toBe('unlocked');
     expect(c.holdsPhrase).toBe(false);

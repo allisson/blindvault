@@ -637,6 +637,15 @@ export class VaultController {
     return words;
   }
 
+  /** Drops the phrase handed out for a creation: Cancel returns to the start's menu (D253). */
+  cancelCreation(): void {
+    const status = this.#status;
+    if (status.kind !== 'no-vault' || !this.#phrase) return;
+    this.#phrase.keyring.wipeAll();
+    this.#phrase = undefined;
+    this.#set({ ...status });
+  }
+
   /**
    * Whether a Recovery Phrase is held, shown or being confirmed (creation, regeneration,
    * re-founding): its screens keep their single control, with no About button (D179, D192).

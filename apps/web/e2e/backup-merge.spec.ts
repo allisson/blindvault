@@ -120,8 +120,10 @@ test('merges a backup made on another installation, keeping the losing edit in h
     ),
   ).toBeVisible();
   await expect(a.getByTestId('merge-confirm')).toContainText('verified.', { timeout: 30_000 });
+  await expect(a.getByTestId('wizard-step')).toHaveText('Step 3 of 4 · Merge');
   await button(a, 'Merge').click();
   await expect(a.getByTestId('merge-result')).toContainText('Merged: 0 added, 1 replaced.');
+  await expect(a.getByTestId('wizard-step')).toHaveText('Step 4 of 4 · Done');
 
   // B's edit won; A's own edit is in the history, above the first state.
   await button(a, 'Back').click();

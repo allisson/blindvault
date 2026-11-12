@@ -9,9 +9,11 @@ import { Button, Notice } from './components';
 import { useOpenBackup } from './RegeneratePhrase';
 import { ChooseFile, OpenBackup, fileError } from './RestoreVault';
 import { recordTypeName } from './Settings';
+import { Wizard } from './Wizard';
 
 // Backup merge (overview §10, sync-protocol.md §1, D182): file → secret → confirmation → result.
-// The file is validated in full before the confirmation, and a merge writes nothing until then.
+// The file is validated in full before the confirmation, and a merge writes nothing until then. One
+// step at a time (D253).
 
 type Step =
   | { readonly kind: 'idle' }
@@ -45,9 +47,74 @@ export function MergeBackup({
       dateStyle: 'long',
       ...(time ? { timeStyle: 'short' as const } : {}),
     }).format(at);
+  const g = m.merge.steps;
+  const index = { idle: 1, file: 1, secret: 2, confirm: 3, done: 4 }[step.kind];
   return (
     <section className="flex flex-col gap-4">
       <p className="text-sm">{m.merge.intro}</p>
+      {step.kind === 'idle' ? null : (
+        <Wizard
+          steps={[{ name: g.file }, { name: g.secret }, { name: g.confirm }, { name: g.done }]}
+          step={index}
+          onCancel={step.kind === 'done' || merging ? undefined : cancel}
+        >
+          {step.kind === 'file' ? (
+            <ChooseFile
+              controller={controller}
+              error={error}
+              onFile={(check) => {
+                if (check.kind === 'ok') {
+                  setError(undefined);
+                  setStep({ kind: 'secret', header: check.header });
+                } else {
+                  setError(fileError(m, check));
+                }
+              }}
+            />
+          ) : null}
+          {step.kind === 'secret' ? (
+            <OpenBackup
+              controller={controller}
+              header={step.header}
+              onOpened={(exportedAt) => {
+                setError(undefined);
+                setStep({ kind: 'confirm', exportedAt });
+              }}
+              onDropped={back}
+            />
+          ) : null}
+          {step.kind === 'confirm' ? (
+            <div className="flex flex-col gap-4" data-testid="merge-confirm">
+              <p className="text-sm">
+                {format(m.merge.confirm, { date: date(step.exportedAt, true) })}
+              </p>
+              <Button
+                busy={merging}
+                onClick={() => {
+                  setMerging(true);
+                  void controller.mergeBackup().then((outcome) => {
+                    setMerging(false);
+                    if (outcome.kind === 'ok') {
+                      setStep({ kind: 'done', result: outcome.result });
+                    } else {
+                      back(mergeError(m, outcome, (at) => date(at, true)));
+                    }
+                  });
+                }}
+              >
+                {merging ? m.merge.merging : m.merge.submit}
+              </Button>
+            </div>
+          ) : null}
+          {step.kind === 'done' ? (
+            <MergeNotices
+              result={step.result}
+              recovery={session.recovery}
+              date={(at) => date(at, false)}
+            />
+          ) : null}
+        </Wizard>
+      )}
       {step.kind === 'idle' || step.kind === 'done' ? (
         <Button
           variant="quiet"
@@ -59,66 +126,6 @@ export function MergeBackup({
           }}
         >
           {m.merge.choose}
-        </Button>
-      ) : null}
-      {step.kind === 'file' ? (
-        <ChooseFile
-          controller={controller}
-          error={error}
-          onFile={(check) => {
-            if (check.kind === 'ok') {
-              setError(undefined);
-              setStep({ kind: 'secret', header: check.header });
-            } else {
-              setError(fileError(m, check));
-            }
-          }}
-        />
-      ) : null}
-      {step.kind === 'secret' ? (
-        <OpenBackup
-          controller={controller}
-          header={step.header}
-          onOpened={(exportedAt) => {
-            setError(undefined);
-            setStep({ kind: 'confirm', exportedAt });
-          }}
-          onDropped={back}
-        />
-      ) : null}
-      {step.kind === 'confirm' ? (
-        <div className="flex flex-col gap-4" data-testid="merge-confirm">
-          <p className="text-sm">
-            {format(m.merge.confirm, { date: date(step.exportedAt, true) })}
-          </p>
-          <Button
-            busy={merging}
-            onClick={() => {
-              setMerging(true);
-              void controller.mergeBackup().then((outcome) => {
-                setMerging(false);
-                if (outcome.kind === 'ok') {
-                  setStep({ kind: 'done', result: outcome.result });
-                } else {
-                  back(mergeError(m, outcome, (at) => date(at, true)));
-                }
-              });
-            }}
-          >
-            {merging ? m.merge.merging : m.merge.submit}
-          </Button>
-        </div>
-      ) : null}
-      {step.kind === 'done' ? (
-        <MergeNotices
-          result={step.result}
-          recovery={session.recovery}
-          date={(at) => date(at, false)}
-        />
-      ) : null}
-      {step.kind === 'file' || step.kind === 'secret' || (step.kind === 'confirm' && !merging) ? (
-        <Button variant="quiet" className="self-start" onClick={cancel}>
-          {m.restore.cancel}
         </Button>
       ) : null}
     </section>

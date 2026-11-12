@@ -76,8 +76,8 @@ test('shows the phrase once, asks for three of its words, and shows it again on 
       { exact: true },
     ),
   ).toBeVisible();
-  // No copy or download control on the phrase screen.
-  await expect(page.getByRole('button')).toHaveText(['I wrote them down']);
+  // No copy or download control on the phrase screen: only the wizard's Cancel (D253).
+  await expect(page.getByRole('button')).toHaveText(['I wrote them down', 'Cancel']);
   await expect(page.getByRole('link')).toHaveCount(0);
 
   await button(page, 'I wrote them down').click();

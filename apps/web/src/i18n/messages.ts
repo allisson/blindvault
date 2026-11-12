@@ -168,7 +168,6 @@ const en = {
       'The other devices of this vault do not know this device or {name} yet: re-admit this device with one of them, so they can sync with both.',
     close: 'Close',
     again: 'Start again',
-    cancel: 'Cancel',
     steps: {
       auth: 'Confirm it is you',
       codes: 'Exchange the codes',
@@ -346,7 +345,6 @@ const en = {
       syncing: '{name} exchanges its records with this device.',
       done: '{name} shows the sync done.',
     },
-    cancel: 'Cancel',
     unavailable: 'This browser cannot sync: it offers no WebRTC.',
     refused: {
       unregistered:
@@ -440,6 +438,11 @@ const en = {
     open: 'Open the vault',
   },
   restore: {
+    steps: {
+      file: 'Choose the backup',
+      secret: 'Open the backup',
+      password: 'Create the local password',
+    },
     title: 'Restore from a backup',
     intro:
       'Choose a .bvault file. It opens with its Recovery Phrase, or with its export password if it has one.',
@@ -473,7 +476,6 @@ const en = {
     submit: 'Restore',
     restoring: 'Restoring the vault…',
     locked: 'The restore stopped before anything was saved. Open the file again.',
-    cancel: 'Cancel',
     checkPhrase:
       'This vault was restored with an export password. In Settings, check that your Recovery Phrase still opens it.',
     dismiss: 'Dismiss',
@@ -482,6 +484,7 @@ const en = {
     openSettings: 'Open Settings',
   },
   reset: {
+    steps: { phrase: 'Type the Recovery Phrase', password: 'Choose the new password' },
     forgot: 'Forgot the password?',
     title: 'Reset the local password',
     intro:
@@ -539,6 +542,7 @@ const en = {
       'The passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
   },
   merge: {
+    steps: { file: 'Choose the backup', secret: 'Open the backup', confirm: 'Merge', done: 'Done' },
     title: 'Merge a backup',
     intro:
       'Brings the records of a backup of this vault into it, as a sync would: the newer copy of each record wins, and the older version of an item goes to its history. A merge cannot be undone.',
@@ -573,6 +577,12 @@ const en = {
       'This device was retired from the vault. To sync again, replace it by pairing with another device. If you did not retire it, someone holding the Master Key did: re-found the vault.',
   },
   import: {
+    steps: {
+      file: 'Choose the file',
+      passphrase: 'Open the file',
+      preview: 'Check what comes in',
+      done: 'Done',
+    },
     title: 'Import',
     intro:
       'Brings the items of another password manager’s export into a new folder of this vault, with no history. Nothing is merged into your folders, and importing the same file again makes a second folder.',
@@ -597,7 +607,6 @@ const en = {
     done: 'Imported {count} items into {folder}.',
     deleteFile:
       'Delete {file} now, and empty the trash it goes to: an export holds every secret in plaintext.',
-    cancel: 'Cancel',
     readOnly: 'Import is not available while the vault is read-only.',
     tooLarge:
       'This file is above 100 MB, or its archive unpacks beyond 100 MB or 10,000 files. It cannot be imported.',
@@ -611,6 +620,11 @@ const en = {
       'This device could not open the .blindpass export: its key needs 1 GiB of memory. Import it on another device of this vault, then sync.',
   },
   create: {
+    steps: {
+      phrase: 'Write down the Recovery Phrase',
+      confirm: 'Confirm the phrase',
+      password: 'Create the local password',
+    },
     title: 'Create a vault',
     intro:
       'BlindVault has no server: nobody can reset your local password or recover your vault for you. Your data stays on your devices.',
@@ -909,6 +923,13 @@ const en = {
     recoveryCreated: 'The current Recovery Phrase was created on {date} ({id}).',
     recoveryNoBackup:
       'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings › Backup.',
+    regenSteps: {
+      warn: 'Read the warning',
+      phrase: 'Write down the new phrase',
+      confirm: 'Confirm the phrase',
+      auth: 'Confirm it is you',
+      done: 'Done',
+    },
     regenTitle: 'Regenerate the Recovery Phrase',
     regenIntro:
       'If you lost the Recovery Phrase, regenerate it while the vault is unlocked: a new phrase replaces it, and nothing in the vault changes.',
@@ -918,7 +939,6 @@ const en = {
       'Backups made until now open only with the current phrase. Your other devices keep it, and keep making backups for it, until they sync with this one.',
     regenStart: 'Regenerate the Recovery Phrase…',
     regenContinue: 'Show the new phrase',
-    regenCancel: 'Cancel',
     regenPhraseTitle: 'Your new Recovery Phrase',
     regenAuthIntro:
       'The new phrase recovers the Master Key, so regenerating asks for your local password again.',
@@ -1049,6 +1069,13 @@ const en = {
     },
   },
   refound: {
+    steps: {
+      warn: 'Read the warnings',
+      auth: 'Confirm it is you',
+      phrase: 'Write down the new phrase',
+      confirm: 'Confirm the phrase',
+      password: 'Choose the new local password',
+    },
     title: 'Re-found the vault',
     intro:
       'If someone else may hold the Master Key (an exposed Recovery Phrase or export password, a retirement you did not make, a device you did not pair), re-found the vault: what this device holds moves to a new vault under entirely new keys.',
@@ -1083,7 +1110,6 @@ const en = {
     submit: 'Re-found',
     working: 'Re-founding the vault…',
     busy: 'BlindVault is busy in another window. Try again once it is done.',
-    cancel: 'Cancel',
     done: 'The vault was re-founded. Make a backup of the new vault now, replace your other devices’ vault by pairing them with this one, and destroy the backups of the old vault. A passkey can be set up again in Settings.',
   },
   templates: {
@@ -1298,7 +1324,6 @@ const ptBR: Messages = {
       'Os outros dispositivos deste cofre ainda não conhecem este dispositivo nem {name}: readmita este dispositivo com um deles, para que possam sincronizar com os dois.',
     close: 'Fechar',
     again: 'Começar de novo',
-    cancel: 'Cancelar',
     steps: {
       auth: 'Confirmar que é você',
       codes: 'Trocar os códigos',
@@ -1483,7 +1508,6 @@ const ptBR: Messages = {
       syncing: '{name} troca os registros dele com este dispositivo.',
       done: '{name} mostra a sincronização concluída.',
     },
-    cancel: 'Cancelar',
     unavailable: 'Este navegador não consegue sincronizar: ele não oferece WebRTC.',
     refused: {
       unregistered:
@@ -1579,6 +1603,7 @@ const ptBR: Messages = {
     open: 'Abrir o cofre',
   },
   restore: {
+    steps: { file: 'Escolher o backup', secret: 'Abrir o backup', password: 'Criar a senha local' },
     title: 'Restaurar de um backup',
     intro:
       'Escolha um arquivo .bvault. Ele abre com a Frase de Recuperação, ou com a senha de exportação, se tiver uma.',
@@ -1613,7 +1638,6 @@ const ptBR: Messages = {
     submit: 'Restaurar',
     restoring: 'Restaurando o cofre…',
     locked: 'A restauração parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
-    cancel: 'Cancelar',
     checkPhrase:
       'Este cofre foi restaurado com uma senha de exportação. Em Configurações, confira se a sua Frase de Recuperação ainda o abre.',
     dismiss: 'Dispensar',
@@ -1622,6 +1646,7 @@ const ptBR: Messages = {
     openSettings: 'Abrir Configurações',
   },
   reset: {
+    steps: { phrase: 'Digitar a Frase de Recuperação', password: 'Escolher a nova senha' },
     forgot: 'Esqueceu a senha?',
     title: 'Redefinir a senha local',
     intro:
@@ -1679,6 +1704,12 @@ const ptBR: Messages = {
       'A passkey do cofre apagado não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
   },
   merge: {
+    steps: {
+      file: 'Escolher o backup',
+      secret: 'Abrir o backup',
+      confirm: 'Mesclar',
+      done: 'Pronto',
+    },
     title: 'Mesclar um backup',
     intro:
       'Traz para este cofre os registros de um backup dele, como uma sincronização faria: a cópia mais nova de cada registro vence, e a versão mais antiga de um item vai para o histórico dele. Uma mesclagem não pode ser desfeita.',
@@ -1714,6 +1745,12 @@ const ptBR: Messages = {
       'Este dispositivo foi aposentado do cofre. Para sincronizar de novo, substitua-o pareando com outro dispositivo. Se não foi você quem o aposentou, foi alguém com a Chave Mestra: refunde o cofre.',
   },
   import: {
+    steps: {
+      file: 'Escolher o arquivo',
+      passphrase: 'Abrir o arquivo',
+      preview: 'Conferir o que entra',
+      done: 'Pronto',
+    },
     title: 'Importar',
     intro:
       'Traz os itens da exportação de outro gerenciador de senhas para uma pasta nova deste cofre, sem histórico. Nada se mistura às suas pastas, e importar o mesmo arquivo de novo cria uma segunda pasta.',
@@ -1738,7 +1775,6 @@ const ptBR: Messages = {
     done: '{count} itens importados para {folder}.',
     deleteFile:
       'Apague {file} agora, e esvazie a lixeira para onde ele for: uma exportação guarda todos os segredos em texto puro.',
-    cancel: 'Cancelar',
     readOnly: 'A importação não está disponível enquanto o cofre é somente leitura.',
     tooLarge:
       'Este arquivo passa de 100 MB, ou o arquivo compactado se expande além de 100 MB ou 10.000 arquivos. Ele não pode ser importado.',
@@ -1752,6 +1788,11 @@ const ptBR: Messages = {
       'Este dispositivo não conseguiu abrir a exportação .blindpass: a chave dela precisa de 1 GiB de memória. Importe em outro dispositivo deste cofre e sincronize.',
   },
   create: {
+    steps: {
+      phrase: 'Anotar a Frase de Recuperação',
+      confirm: 'Confirmar a frase',
+      password: 'Criar a senha local',
+    },
     title: 'Criar um cofre',
     intro:
       'O BlindVault não tem servidor: ninguém pode redefinir a sua senha local ou recuperar o seu cofre por você. Seus dados ficam nos seus dispositivos.',
@@ -2048,6 +2089,13 @@ const ptBR: Messages = {
     recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
     recoveryNoBackup:
       'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Configurações › Backup.',
+    regenSteps: {
+      warn: 'Ler o aviso',
+      phrase: 'Anotar a nova frase',
+      confirm: 'Confirmar a frase',
+      auth: 'Confirmar que é você',
+      done: 'Pronto',
+    },
     regenTitle: 'Regenerar a Frase de Recuperação',
     regenIntro:
       'Se você perdeu a Frase de Recuperação, regenere-a com o cofre desbloqueado: uma frase nova substitui a atual, e nada no cofre muda.',
@@ -2057,7 +2105,6 @@ const ptBR: Messages = {
       'Os backups feitos até agora só abrem com a frase atual. Os seus outros dispositivos continuam com ela, e continuam fazendo backups para ela, até sincronizarem com este.',
     regenStart: 'Regenerar a Frase de Recuperação…',
     regenContinue: 'Mostrar a nova frase',
-    regenCancel: 'Cancelar',
     regenPhraseTitle: 'Sua nova Frase de Recuperação',
     regenAuthIntro:
       'A nova frase recupera a Chave Mestra, então regenerar pede a sua senha local de novo.',
@@ -2189,6 +2236,13 @@ const ptBR: Messages = {
     },
   },
   refound: {
+    steps: {
+      warn: 'Ler os avisos',
+      auth: 'Confirmar que é você',
+      phrase: 'Anotar a nova frase',
+      confirm: 'Confirmar a frase',
+      password: 'Escolher a nova senha local',
+    },
     title: 'Refundar o cofre',
     intro:
       'Se outra pessoa pode ter a Chave Mestra (uma Frase de Recuperação ou senha de exportação exposta, uma aposentadoria que você não fez, um dispositivo que você não pareou), refunde o cofre: o que este dispositivo tem passa para um cofre novo, com chaves totalmente novas.',
@@ -2223,7 +2277,6 @@ const ptBR: Messages = {
     submit: 'Refundar',
     working: 'Refundando o cofre…',
     busy: 'O BlindVault está ocupado em outra janela. Tente de novo quando ela terminar.',
-    cancel: 'Cancelar',
     done: 'O cofre foi refundado. Faça agora um backup do cofre novo, substitua por pareamento com este o cofre dos outros dispositivos e destrua os backups do cofre antigo. Uma passkey pode ser configurada de novo em Configurações.',
   },
   templates: {

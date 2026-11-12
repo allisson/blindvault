@@ -52,6 +52,8 @@ async function preview(page: Page) {
   await expect(shown).toContainText('2 items to import into a new folder, Imported from Bitwarden');
   await expect(shown).toContainText('0 entries skipped');
   await expect(shown).toContainText('0 attachments dropped');
+  // No file password: the wizard counts three steps (D253).
+  await expect(page.getByTestId('wizard-step')).toHaveText('Step 2 of 3 · Check what comes in');
 }
 
 test('imports a Bitwarden export into a landing folder in one commit, after a preview (D125)', async ({
