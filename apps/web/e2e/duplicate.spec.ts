@@ -40,6 +40,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByRole('heading', { name: 'Harbor', level: 1 })).toBeVisible();
 
     // The history says old values stay, and keeps them masked.
+    await button(page, 'More actions').click();
     await button(page, 'History').click();
     await expect(page.getByRole('heading', { name: 'History of Harbor' })).toBeVisible();
     await expect(page.getByText(/Earlier values stay in this history/)).toBeVisible();
@@ -56,11 +57,13 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByTestId('secret-Password')).toHaveText(OLD);
 
     // The copy: same folder, current content, the suffix, no history.
+    await button(page, 'More actions').click();
     await button(page, 'Duplicate').click();
     await expect(page.getByRole('heading', { name: 'Harbor (copy)', level: 1 })).toBeVisible();
     await expect(page.getByText('Work', { exact: true }).last()).toBeVisible();
     await button(page, 'Show').click();
     await expect(page.getByTestId('secret-Password')).toHaveText(OLD);
+    await button(page, 'More actions').click();
     await button(page, 'History').click();
     await expect(page.getByText('No earlier versions.')).toBeVisible();
     await button(page, 'Back to the item').click();
@@ -68,6 +71,7 @@ for (const [layout, width] of WIDTHS) {
     // The original in the trash: only restore, no Duplicate (D140).
     if (layout === 'mobile') await button(page, 'Back').click();
     await button(page, 'Harbor').click();
+    await button(page, 'More actions').click();
     await page
       .locator('article')
       .getByRole('button', { name: 'Move to trash', exact: true })

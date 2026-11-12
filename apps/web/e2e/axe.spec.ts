@@ -79,6 +79,7 @@ for (const [layout, width] of WIDTHS) {
       await button(page, 'Cancel').click();
       await audit(page, 'the discard confirmation');
       await button(page, 'Discard the changes').click();
+      await button(page, 'More actions').click();
       await button(page, 'History').click();
       await audit(page, 'an item history');
 

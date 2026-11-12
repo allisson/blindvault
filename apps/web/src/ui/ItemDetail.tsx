@@ -5,13 +5,16 @@ import {
   type VaultSession,
   seedPhraseChecksumValid,
 } from '@blindvault/vault';
-import { useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 
 import { type Navigation } from '../app/nav';
+import { host } from '../app/row';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format, roleName } from '../i18n/messages';
-import { Button, Notice } from './components';
+import { Button, Notice, Overflow } from './components';
 import { writeError } from './errors';
+import { Icon, type IconName } from './icons';
+import { Avatar, TEMPLATE_ICON, known } from './ItemRow';
 import { SecretView } from './Secret';
 import { TotpView } from './Totp';
 
@@ -55,7 +58,7 @@ export function FieldValue({
     case 'seed-phrase':
       return (
         <div className="flex flex-col gap-1">
-          <SecretView value={value} label={name} clearSeconds={clearSeconds} />
+          <SecretView value={value} label={name} clearSeconds={clearSeconds} words />
           {seedPhraseChecksumValid(value) ? null : (
             <p className="text-sm text-warning">{m.items.checksum}</p>
           )}
@@ -81,6 +84,40 @@ export function FieldValue({
     default:
       return <span className="break-words whitespace-pre-wrap">{value}</span>;
   }
+}
+
+/** A chip of the detail's header (D247): an icon, named when the text alone does not say what it is. */
+function Chip({
+  icon,
+  label,
+  text,
+}: {
+  readonly icon: IconName;
+  readonly label?: string;
+  readonly text: string;
+}) {
+  return (
+    <li className="inline-flex max-w-full items-center gap-1 rounded-full bg-subtle px-2.5 py-0.5 text-xs">
+      <Icon name={icon} {...(label === undefined ? {} : { label })} className="size-3.5!" />
+      <span className="truncate">{text}</span>
+    </li>
+  );
+}
+
+/** A titled card of the detail (D247). */
+function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+  const id = useId();
+  return (
+    <section
+      aria-labelledby={id}
+      className="rounded-card border border-line bg-raised shadow-raised"
+    >
+      <h2 id={id} className="px-4 pt-3 text-xs font-bold tracking-wide text-muted uppercase">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
 }
 
 export function ItemDetail({
@@ -141,14 +178,120 @@ export function ItemDetail({
     );
   };
 
+  const clearSeconds = session.preferences.clipboardClearSeconds;
+  const template = item !== undefined && known(item.templateId) ? item.templateId : undefined;
+  const folder =
+    item?.folderId && session.folder(item.folderId)?.inTrash === false
+      ? session.folder(item.folderId)?.name
+      : undefined;
+  const url = item?.fields.find(
+    (f) => f.type === 'url' && typeof f.value === 'string' && f.value.trim() !== '',
+  )?.value;
+  const fields = (list: readonly Field[]) => (
+    <dl className="divide-y divide-line">
+      {list.map((field, i) => {
+        const name = fieldName(m, item ?? { templateId: '' }, field);
+        return (
+          // Fields have no ID; their order is fixed while the item is shown.
+          <div key={i} className="flex flex-col gap-0.5 px-4 py-3">
+            <dt className="text-xs font-medium text-muted">{name}</dt>
+            <dd>
+              <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+  const roles = item?.fields.filter((f) => f.role !== undefined) ?? [];
+  const others = item?.fields.filter((f) => f.role === undefined) ?? [];
+  const trashable = editable && !view.inTrash;
+
   return (
     <article className="flex w-full max-w-2xl flex-col gap-4 p-4" aria-label={item?.title}>
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold break-words">{item?.title ?? m.items.newerTitle}</h1>
-        {item ? (
-          <p className="text-sm text-muted">
-            {m.templates[item.templateId as keyof Messages['templates']]}
-          </p>
+      <header className="flex flex-wrap items-start gap-3">
+        {item ? <Avatar title={item.title} templateId={item.templateId} large /> : null}
+        <div className="flex min-w-0 flex-1 basis-48 flex-col gap-2">
+          <h1 className="text-xl font-semibold break-words">{item?.title ?? m.items.newerTitle}</h1>
+          {item ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {template ? (
+                <Chip icon={TEMPLATE_ICON[template]} text={m.templates[template]} />
+              ) : null}
+              {typeof url === 'string' ? <Chip icon="globe" text={host(url.trim())} /> : null}
+              {folder !== undefined ? (
+                <Chip icon="folder" label={m.folders.folder} text={folder} />
+              ) : null}
+              {item.tags.map((tag) => (
+                <Chip key={tag} icon="tag" label={m.items.tags} text={tag} />
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        {editable || duplicable ? (
+          <div className="ms-auto flex items-center gap-1">
+            {!editable ? null : view.inTrash ? (
+              // An item in the trash allows only restore from the trash (D143).
+              <Button
+                disabled={working}
+                onClick={() => {
+                  act(() => session.restoreItem(id));
+                }}
+              >
+                {m.items.restore}
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={working}
+                onClick={() => {
+                  nav.open({ name: 'edit', id });
+                }}
+              >
+                <Icon name="pencil" className="me-1.5" />
+                {m.items.edit}
+              </Button>
+            )}
+            {!view.inTrash ? (
+              // Out of the trash, History is always there, so the menu is never empty.
+              <Overflow label={m.items.moreActions}>
+                {duplicable ? (
+                  <Button
+                    variant="quiet"
+                    className="text-left"
+                    disabled={working}
+                    onClick={duplicate}
+                  >
+                    <Icon name="copy-plus" className="me-1.5" />
+                    {m.items.duplicate}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="quiet"
+                  className="text-left"
+                  onClick={() => {
+                    nav.open({ name: 'history', id });
+                  }}
+                >
+                  <Icon name="history" className="me-1.5" />
+                  {m.items.history}
+                </Button>
+                {trashable ? (
+                  <Button
+                    variant="quiet"
+                    className="text-left text-danger!"
+                    disabled={working}
+                    onClick={() => {
+                      act(() => session.trashItem(id));
+                    }}
+                  >
+                    <Icon name="trash-2" className="me-1.5" />
+                    {m.items.moveToTrash}
+                  </Button>
+                ) : null}
+              </Overflow>
+            ) : null}
+          </div>
         ) : null}
       </header>
       {view.readOnly === 'newer-content' ? <Notice>{m.items.readOnlyNewer}</Notice> : null}
@@ -160,99 +303,16 @@ export function ItemDetail({
           })}
         </Notice>
       ) : null}
-      {item ? (
-        <dl className="flex flex-col gap-3">
-          {item.fields.map((field, i) => {
-            const name = fieldName(m, item, field);
-            return (
-              // Fields have no ID; their order is fixed while the item is shown.
-              <div key={i} className="flex flex-col gap-0.5">
-                <dt className="text-xs font-medium text-muted">{name}</dt>
-                <dd>
-                  <FieldValue
-                    field={field}
-                    name={name}
-                    clearSeconds={session.preferences.clipboardClearSeconds}
-                  />
-                </dd>
-              </div>
-            );
-          })}
-          {item.folderId && session.folder(item.folderId)?.inTrash === false ? (
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium text-muted">{m.folders.folder}</dt>
-              <dd>{session.folder(item.folderId)?.name}</dd>
-            </div>
-          ) : null}
-          {item.tags.length > 0 ? (
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium text-muted">{m.items.tags}</dt>
-              <dd className="flex flex-wrap gap-1">
-                {item.tags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-subtle px-2 py-0.5 text-sm">
-                    {tag}
-                  </span>
-                ))}
-              </dd>
-            </div>
-          ) : null}
-          {item.notes !== undefined ? (
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-medium text-muted">{m.items.notes}</dt>
-              <dd className="break-words whitespace-pre-wrap">{item.notes}</dd>
-            </div>
-          ) : null}
-        </dl>
+      {roles.length > 0 ? (
+        <Section title={template ? m.templates[template] : m.items.otherFields}>
+          {fields(roles)}
+        </Section>
       ) : null}
-      {editable || duplicable ? (
-        <div className="flex flex-wrap gap-2">
-          {!editable ? null : view.inTrash ? (
-            // An item in the trash allows only restore from the trash (D143).
-            <Button
-              disabled={working}
-              onClick={() => {
-                act(() => session.restoreItem(id));
-              }}
-            >
-              {m.items.restore}
-            </Button>
-          ) : (
-            <>
-              <Button
-                disabled={working}
-                onClick={() => {
-                  nav.open({ name: 'edit', id });
-                }}
-              >
-                {m.items.edit}
-              </Button>
-              <Button
-                variant="quiet"
-                disabled={working}
-                onClick={() => {
-                  act(() => session.trashItem(id));
-                }}
-              >
-                {m.items.moveToTrash}
-              </Button>
-            </>
-          )}
-          {duplicable ? (
-            <Button variant="quiet" disabled={working} onClick={duplicate}>
-              {m.items.duplicate}
-            </Button>
-          ) : null}
-          {!view.inTrash ? (
-            <Button
-              variant="quiet"
-              onClick={() => {
-                nav.open({ name: 'history', id });
-              }}
-            >
-              {m.items.history}
-            </Button>
-          ) : null}
-        </div>
+      {others.length > 0 ? <Section title={m.items.otherFields}>{fields(others)}</Section> : null}
+      {item?.notes !== undefined ? (
+        <Section title={m.items.notes}>
+          <p className="px-4 pt-1 pb-3 break-words whitespace-pre-wrap">{item.notes}</p>
+        </Section>
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-danger">

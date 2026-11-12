@@ -16,7 +16,8 @@ const SUBTITLE = new Map<string, readonly string[]>([
   ['document', ['documentType', 'issuer']],
 ]);
 
-function host(url: string): string {
+/** A URL's host, or the text itself when it is not a URL. */
+export function host(url: string): string {
   try {
     return new URL(url).host || url;
   } catch {

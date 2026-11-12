@@ -20,7 +20,7 @@ const AVATAR = [
   'bg-avatar-6 text-avatar-6-ink',
 ] as const;
 
-const TEMPLATE_ICON: Record<keyof Messages['templates'], IconName> = {
+export const TEMPLATE_ICON: Record<keyof Messages['templates'], IconName> = {
   login: 'key-round',
   'secure-note': 'sticky-note',
   card: 'credit-card',
@@ -30,23 +30,25 @@ const TEMPLATE_ICON: Record<keyof Messages['templates'], IconName> = {
   document: 'file-text',
 };
 
-type Template = keyof Messages['templates'];
+export type Template = keyof Messages['templates'];
 
-const known = (id: string): id is Template => Object.hasOwn(TEMPLATE_ICON, id);
+export const known = (id: string): id is Template => Object.hasOwn(TEMPLATE_ICON, id);
 
 /** A title's initial on its color pair, with the template's icon in a corner. Decorative. */
 export function Avatar({
   title,
   templateId,
+  large = false,
 }: {
   readonly title: string;
   readonly templateId?: string | undefined;
+  readonly large?: boolean;
 }) {
   const { initial, color } = avatar(title);
   return (
     <span
       aria-hidden="true"
-      className={`relative grid size-9 shrink-0 place-items-center rounded-card font-semibold ${AVATAR[color] ?? AVATAR[0]}`}
+      className={`relative grid shrink-0 place-items-center rounded-card font-semibold ${large ? 'size-14 text-2xl' : 'size-9'} ${AVATAR[color] ?? AVATAR[0]}`}
     >
       {initial}
       {templateId !== undefined && known(templateId) ? (

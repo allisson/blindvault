@@ -422,6 +422,7 @@ test('concurrent edits converge in one sync: the newer wins on both, the other i
   for (const page of [a, b]) {
     await expect(button(page, 'ACME on A')).toHaveCount(0);
     await button(page, 'ACME on B').click();
+    await button(page, 'More actions').click();
     await button(page, 'History').click();
     // A's edit lost on both, and both keep it, above the first state.
     const versions = page.locator('article').getByRole('listitem');
@@ -458,6 +459,7 @@ test('the history cut drops an edit of A in one sync: only A tells its user, and
   await closed(a, b);
   for (const page of [a, b]) {
     await button(page, title).click();
+    await button(page, 'More actions').click();
     await button(page, 'History').click();
     const versions = page.locator('article').getByRole('listitem');
     await expect(versions).toHaveCount(20);
@@ -479,6 +481,7 @@ test('an edit older than a trash never brings the item back: in the trash on bot
   // A edits first, then B trashes, so the trash is the newer write.
   await rename(a, 'ACME', 'ACME on A');
   await button(b, 'ACME').click();
+  await button(b, 'More actions').click();
   await button(b, 'Move to trash').click();
   for (const page of [a, b]) await button(page, 'Settings').click();
   await synced(a, b);
@@ -493,6 +496,7 @@ test('an edit older than a trash never brings the item back: in the trash on bot
     await expect(page.getByText('The trash is empty.')).toBeVisible();
     await button(page, 'All items').click();
     await button(page, 'ACME').click();
+    await button(page, 'More actions').click();
     await button(page, 'History').click();
     const versions = page.locator('article').getByRole('listitem');
     await expect(versions.filter({ hasText: 'ACME on A' })).toHaveCount(1);
@@ -511,6 +515,7 @@ test('an item trashed on A is in the trash of both with the same purge date, off
   await button(b, 'Open the vault').click();
 
   await button(a, 'ACME').click();
+  await button(a, 'More actions').click();
   await button(a, 'Move to trash').click();
   await button(a, 'Settings').click();
   await button(b, 'Settings').click();
