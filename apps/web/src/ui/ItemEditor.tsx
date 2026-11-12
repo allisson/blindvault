@@ -28,6 +28,7 @@ import { Button, ConfirmDialog, Field, INPUT, Notice, TextArea } from './compone
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { SecretInput } from './Secret';
+import { rated, useMeter } from './Strength';
 
 const INPUT_TYPES: Partial<Record<FieldType, string>> = {
   url: 'url',
@@ -63,6 +64,8 @@ function FieldEditor({
   const set = (value: string) => {
     onChange({ ...field, value });
   };
+  // Informs only: a weak password is saved like any other (D249).
+  const { meter, hint } = useMeter(field.value, rated(field));
 
   let input;
   if (field.type === 'totp') {
@@ -85,6 +88,7 @@ function FieldEditor({
         value={field.value}
         onChange={set}
         error={error}
+        hint={hint}
         shown={shown}
         onShownChange={setShown}
       />
@@ -139,6 +143,7 @@ function FieldEditor({
         </div>
       ) : null}
       {input}
+      {meter}
       {field.type === 'secret' ? (
         <div className="flex flex-col gap-2">
           <Button

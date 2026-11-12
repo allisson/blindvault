@@ -665,6 +665,9 @@ const en = {
     history: 'History',
     moreActions: 'More actions',
     otherFields: 'Other fields',
+    strength: 'Strength: {level}.',
+    strengthLevels: { weak: 'Weak', fair: 'Fair', strong: 'Strong' },
+    strengthAdvice: 'A longer password, or one from the generator, is harder to guess.',
     historyTitle: 'History of {title}',
     historyNote:
       'Earlier values stay in this history, on every device and in later backups, in up to 20 versions. To remove them, duplicate the item and move the original to the trash: its history is deleted when it is purged from the trash.',
@@ -1704,6 +1707,9 @@ const ptBR: Messages = {
     history: 'Histórico',
     moreActions: 'Mais ações',
     otherFields: 'Outros campos',
+    strength: 'Força: {level}.',
+    strengthLevels: { weak: 'Fraca', fair: 'Razoável', strong: 'Forte' },
+    strengthAdvice: 'Uma senha mais longa, ou uma do gerador, é mais difícil de adivinhar.',
     historyTitle: 'Histórico de {title}',
     historyNote:
       'Valores antigos ficam neste histórico, em todos os dispositivos e nos backups seguintes, em até 20 versões. Para removê-los, duplique o item e mova o original para a lixeira: o histórico dele é apagado quando ele é removido de vez da lixeira.',
