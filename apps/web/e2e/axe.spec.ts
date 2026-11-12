@@ -38,7 +38,7 @@ for (const [layout, width] of WIDTHS) {
 
       await button(page, 'Pair with an existing device').click();
       await audit(page, 'joining a vault');
-      await button(page, 'Back').click();
+      await button(page, 'Cancel').click();
       await button(page, 'Restore from a backup').click();
       await audit(page, 'restoring a backup');
       await button(page, 'Cancel').click();

@@ -58,8 +58,11 @@ test('says that no server can reset the vault, then offers the three starts (§1
   await expect(page.getByRole('heading', { name: 'Pair with an existing device' })).toBeVisible();
   await expect(page.getByText(/First create this device’s local password/)).toBeVisible();
   await expect(page.getByTestId('new-password')).toBeVisible();
+  await expect(page.getByTestId('wizard-step')).toHaveText(
+    'Step 1 of 5 · Create the local password',
+  );
   await expect(page.getByTestId('pairing-same-network')).not.toBeChecked();
-  await button(page, 'Back').click();
+  await button(page, 'Cancel').click();
   await expect(button(page, 'Pair with an existing device')).toBeVisible();
   await button(page, 'Restore from a backup').click();
   await expect(page.getByRole('heading', { name: 'Restore from a backup' })).toBeVisible();

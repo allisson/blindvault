@@ -4,6 +4,7 @@ import { type Browser, type Page, expect, test } from '@playwright/test';
 import { corruptRecords } from './corrupt';
 import {
   answerConfirmation,
+  checkSameNetwork,
   createVault,
   openSettingsPage,
   startScreen,
@@ -64,7 +65,7 @@ async function paired(browser: Browser) {
   await createVault(a, PASSWORD_A);
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   const offer = a.getByTestId('pairing-text');
@@ -74,7 +75,7 @@ async function paired(browser: Browser) {
   await button(b, 'Pair with an existing device').click();
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
-  await b.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(b);
   await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(await offer.inputValue(), { timeout: 30_000 });
   await button(b, 'Show my answer').click();
@@ -106,7 +107,7 @@ test('two paired devices connect from their sync codes, each with the other pick
   // Each picks the other device; A shows its code first, B reads it.
   await a.getByTestId('device-sync').click();
   const syncA = a.getByTestId('sync');
-  await syncA.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncA);
   await syncA.getByTestId('sync-first').click();
   const offer = syncA.getByTestId('pairing-text');
   await expect(offer).not.toHaveValue('', { timeout: 30_000 });
@@ -121,7 +122,7 @@ test('two paired devices connect from their sync codes, each with the other pick
 
   await b.getByTestId('device-sync').click();
   const syncB = b.getByTestId('sync');
-  await syncB.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncB);
   await syncB.getByTestId('sync-read').click();
   await expect(
     syncB.getByText(
@@ -184,7 +185,7 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   await expect(syncA).toContainText(
     `On ${nameB}, open Settings → Devices and choose “Sync” next to this device. This device sends ${nameB} only its Device record, marked retired, and the sync ends: ${nameB} then shows that it was retired and stops syncing.`,
   );
-  await syncA.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncA);
   await syncA.getByTestId('sync-first').click();
   const offer = syncA.getByTestId('pairing-text');
   await expect(offer).not.toHaveValue('', { timeout: 30_000 });
@@ -192,7 +193,7 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   // B does not know yet: it picks A as for any sync.
   await b.getByTestId('device-sync').click();
   const syncB = b.getByTestId('sync');
-  await syncB.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncB);
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
   await button(b, 'Show my answer').click();
@@ -241,13 +242,13 @@ test('A retires B during an open sync: B merges its retired record and shows the
 
   await a.getByTestId('device-sync').click();
   const syncA = a.getByTestId('sync');
-  await syncA.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncA);
   await syncA.getByTestId('sync-first').click();
   const offer = syncA.getByTestId('pairing-text');
   await expect(offer).not.toHaveValue('', { timeout: 30_000 });
   await b.getByTestId('device-sync').click();
   const syncB = b.getByTestId('sync');
-  await syncB.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncB);
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
   await button(b, 'Show my answer').click();
@@ -274,13 +275,13 @@ test('A retires B during an open sync: B merges its retired record and shows the
 async function connect(a: Page, b: Page) {
   await a.getByTestId('device-sync').click();
   const syncA = a.getByTestId('sync');
-  await syncA.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncA);
   await syncA.getByTestId('sync-first').click();
   const offer = syncA.getByTestId('pairing-text');
   await expect(offer).not.toHaveValue('', { timeout: 30_000 });
   await b.getByTestId('device-sync').click();
   const syncB = b.getByTestId('sync');
-  await syncB.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncB);
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
   await button(b, 'Show my answer').click();
@@ -385,13 +386,13 @@ test('the stored record of a retired B that fails verification: A sends nothing,
   await retired.locator('summary').click();
   await retired.getByTestId('device-notify').click();
   const syncA = a.getByTestId('sync');
-  await syncA.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncA);
   await syncA.getByTestId('sync-first').click();
   const offer = syncA.getByTestId('pairing-text');
   await expect(offer).not.toHaveValue('', { timeout: 30_000 });
   await b.getByTestId('device-sync').click();
   const syncB = b.getByTestId('sync');
-  await syncB.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(syncB);
   await syncB.getByTestId('sync-read').click();
   await syncB.getByTestId('pairing-paste').fill(await offer.inputValue());
   await button(b, 'Show my answer').click();

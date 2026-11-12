@@ -104,6 +104,15 @@ const en = {
       'Share → Add to Home Screen on iPhone and iPad, File → Add to Dock on a Mac. Then open BlindVault from there.',
     continueTab: 'Continue in this tab',
   },
+  wizard: {
+    step: 'Step {n} of {total} · {name}',
+    other: 'On the other device',
+    cancel: 'Cancel',
+    advanced: 'Advanced options',
+    codes:
+      'One device shows a code and the other scans or pastes it; the answer comes back the same way.',
+    sas: 'The same six digits show there: answer on both devices.',
+  },
   pairing: {
     title: 'Pair a device',
     intro:
@@ -160,6 +169,17 @@ const en = {
     close: 'Close',
     again: 'Start again',
     cancel: 'Cancel',
+    steps: {
+      auth: 'Confirm it is you',
+      codes: 'Exchange the codes',
+      sas: 'Compare the numbers',
+      done: 'Done',
+    },
+    other: {
+      auth: 'Open BlindVault, choose “Pair with an existing device” and create its local password.',
+      codes: 'Scan or paste this device’s code there, then scan or paste its answer here.',
+      done: 'It holds the vault now, unlocked with the local password created there.',
+    },
     pasteInvalid: 'This is not a BlindVault pairing text. Copy it again, whole.',
     pasteVersion: 'This text comes from another version of BlindVault: update both devices.',
     pasteWrongSession:
@@ -225,6 +245,20 @@ const en = {
     answerLabel: 'This device’s answer',
     waitingConnection: 'Waiting for the other device to connect…',
     receiving: 'Receiving the vault…',
+    steps: {
+      password: 'Create the local password',
+      scan: 'Read the other device’s code',
+      answer: 'Show the answer',
+      sas: 'Compare the numbers',
+      done: 'Done',
+    },
+    other: {
+      password:
+        'On the device that holds the vault, open Settings › Devices › “Pair a device…” and enter its local password.',
+      scan: 'It shows a code: scan it, or paste its text here.',
+      answer: 'Scan or paste this answer there.',
+      done: 'It shows the pairing done.',
+    },
   },
   readmission: {
     title: 'Re-admission',
@@ -234,6 +268,15 @@ const en = {
     how: 'On the other device, open Settings → Devices → “Re-admit with another device of this vault…” too. One device shows its text first; the other pastes it.',
     first: 'Show this device’s text first',
     paste: 'Paste the other device’s text',
+    chooseRole:
+      'Choose which device shows its text first. On the other device, choose the other option.',
+    steps: {
+      role: 'Choose who shows first',
+      codes: 'Exchange the codes',
+      sas: 'Compare the numbers',
+      done: 'Done',
+    },
+    otherDone: 'It shows the re-admission done.',
     readOnly:
       'The device clock went back, so the vault is read-only: re-admission comes back once writing does.',
     retired: 'This device was retired: it cannot be re-admitted. Replace it by pairing to sync.',
@@ -292,6 +335,17 @@ const en = {
     how: 'On {name}, open Settings → Devices and choose “Sync” next to this device too. One device shows its code first; the other scans or pastes it.',
     first: 'Show this device’s code first',
     read: 'Read the code of {name}',
+    chooseRole: 'Choose which device shows its code first. On {name}, choose the other option.',
+    steps: {
+      role: 'Choose who shows first',
+      codes: 'Exchange the codes',
+      syncing: 'Syncing',
+      done: 'Done',
+    },
+    other: {
+      syncing: '{name} exchanges its records with this device.',
+      done: '{name} shows the sync done.',
+    },
     cancel: 'Cancel',
     unavailable: 'This browser cannot sync: it offers no WebRTC.',
     refused: {
@@ -1180,6 +1234,15 @@ const ptBR: Messages = {
       'Compartilhar → Adicionar à Tela de Início no iPhone e no iPad, Arquivo → Adicionar ao Dock no Mac. Depois abra o BlindVault por lá.',
     continueTab: 'Continuar nesta aba',
   },
+  wizard: {
+    step: 'Passo {n} de {total} · {name}',
+    other: 'No outro dispositivo',
+    cancel: 'Cancelar',
+    advanced: 'Opções avançadas',
+    codes:
+      'Um dispositivo mostra um código e o outro o escaneia ou cola; a resposta volta do mesmo jeito.',
+    sas: 'Os mesmos seis dígitos aparecem lá: responda nos dois dispositivos.',
+  },
   pairing: {
     title: 'Parear um dispositivo',
     intro:
@@ -1236,6 +1299,18 @@ const ptBR: Messages = {
     close: 'Fechar',
     again: 'Começar de novo',
     cancel: 'Cancelar',
+    steps: {
+      auth: 'Confirmar que é você',
+      codes: 'Trocar os códigos',
+      sas: 'Conferir os números',
+      done: 'Pronto',
+    },
+    other: {
+      auth: 'Abra o BlindVault, escolha “Parear com um dispositivo existente” e crie a senha local dele.',
+      codes:
+        'Escaneie ou cole lá o código deste dispositivo; depois escaneie ou cole aqui a resposta dele.',
+      done: 'Ele já tem o cofre, que abre com a senha local criada nele.',
+    },
     pasteInvalid: 'Isto não é um texto de pareamento do BlindVault. Copie-o de novo, inteiro.',
     pasteVersion: 'Este texto vem de outra versão do BlindVault: atualize os dois dispositivos.',
     pasteWrongSession: 'Esta resposta é de outro pareamento: cole a resposta ao texto acima.',
@@ -1303,6 +1378,20 @@ const ptBR: Messages = {
     answerLabel: 'Resposta deste dispositivo',
     waitingConnection: 'Aguardando o outro dispositivo conectar…',
     receiving: 'Recebendo o cofre…',
+    steps: {
+      password: 'Criar a senha local',
+      scan: 'Ler o código do outro dispositivo',
+      answer: 'Mostrar a resposta',
+      sas: 'Conferir os números',
+      done: 'Pronto',
+    },
+    other: {
+      password:
+        'No dispositivo que tem o cofre, abra Configurações › Dispositivos › “Parear um dispositivo…” e digite a senha local dele.',
+      scan: 'Ele mostra um código: escaneie-o, ou cole aqui o texto dele.',
+      answer: 'Escaneie ou cole esta resposta lá.',
+      done: 'Ele mostra o pareamento concluído.',
+    },
   },
   readmission: {
     title: 'Readmissão',
@@ -1312,6 +1401,15 @@ const ptBR: Messages = {
     how: 'No outro dispositivo, abra também Configurações → Dispositivos → “Readmitir com outro dispositivo deste cofre…”. Um dispositivo mostra o texto dele primeiro; o outro o cola.',
     first: 'Mostrar primeiro o texto deste dispositivo',
     paste: 'Colar o texto do outro dispositivo',
+    chooseRole:
+      'Escolha qual dispositivo mostra o texto primeiro. No outro dispositivo, escolha a outra opção.',
+    steps: {
+      role: 'Escolher quem mostra primeiro',
+      codes: 'Trocar os códigos',
+      sas: 'Conferir os números',
+      done: 'Pronto',
+    },
+    otherDone: 'Ele mostra a readmissão concluída.',
     readOnly:
       'O relógio do dispositivo voltou, então o cofre está somente leitura: a readmissão volta quando a escrita voltar.',
     retired:
@@ -1373,6 +1471,18 @@ const ptBR: Messages = {
     how: 'Em {name}, abra também Configurações → Dispositivos e escolha “Sincronizar” ao lado deste dispositivo. Um dispositivo mostra o código dele primeiro; o outro o escaneia ou cola.',
     first: 'Mostrar primeiro o código deste dispositivo',
     read: 'Ler o código de {name}',
+    chooseRole:
+      'Escolha qual dispositivo mostra o código primeiro. Em {name}, escolha a outra opção.',
+    steps: {
+      role: 'Escolher quem mostra primeiro',
+      codes: 'Trocar os códigos',
+      syncing: 'Sincronizando',
+      done: 'Pronto',
+    },
+    other: {
+      syncing: '{name} troca os registros dele com este dispositivo.',
+      done: '{name} mostra a sincronização concluída.',
+    },
     cancel: 'Cancelar',
     unavailable: 'Este navegador não consegue sincronizar: ele não oferece WebRTC.',
     refused: {

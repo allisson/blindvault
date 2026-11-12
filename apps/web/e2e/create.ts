@@ -1,7 +1,7 @@
 // Vault creation as a user goes through it (§13.3, D179): the Recovery Phrase, its confirmation,
 // then the local password.
 
-import { type Page, expect } from '@playwright/test';
+import { type Locator, type Page, expect } from '@playwright/test';
 
 /**
  * Waits for the three starts. Playwright's WebKit is Safari in a plain tab, where the first screen
@@ -112,4 +112,18 @@ export async function openSettingsPage(page: Page, name: SettingsPageName): Prom
 export async function switchSettingsPage(page: Page, name: SettingsPageName): Promise<void> {
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByTestId(`settings-${name}`).click();
+}
+
+/** Opens the advanced options of a device wizard's first step, unless open already (D253). */
+export async function openAdvanced(scope: Page | Locator): Promise<void> {
+  const box = scope.getByTestId('pairing-same-network');
+  if (!(await box.isVisible()))
+    await scope.getByTestId('advanced-options').locator('summary').click();
+  await expect(box).toBeVisible();
+}
+
+/** Checks "Same network only" in the advanced options (D203, D253). */
+export async function checkSameNetwork(scope: Page | Locator): Promise<void> {
+  await openAdvanced(scope);
+  await scope.getByTestId('pairing-same-network').check();
 }

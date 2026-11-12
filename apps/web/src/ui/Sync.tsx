@@ -8,8 +8,9 @@ import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Notice } from './components';
 import { MergeNotices } from './MergeBackup';
-import { PasteText, PayloadText, Rejected, SameNetwork } from './Pairing';
+import { NetworkOptions, PasteText, PayloadText, Rejected } from './Pairing';
 import { recordTypeName } from './Settings';
+import { Wizard, type WizardStep, useStep } from './Wizard';
 
 // The sync screens (§9.1, D216): the user picks the peer in Settings › Devices on both devices, then
 // chooses on each whether it shows its code first or reads the other's. Each code is shown as a QR
@@ -51,11 +52,41 @@ function leavingText(m: Messages, session: VaultSession): string {
     : format(m.sync.leaving, { seconds: String(hidden) });
 }
 
+/** The steps of a sync, with what to do on `name` (D253). */
+function syncSteps(m: Messages, name: string, how: string): readonly WizardStep[] {
+  const s = m.sync;
+  return [
+    { name: s.steps.role, other: how },
+    { name: s.steps.codes, other: m.wizard.codes },
+    { name: s.steps.syncing, other: format(s.other.syncing, { name }) },
+    { name: s.steps.done, other: format(s.other.done, { name }) },
+  ];
+}
+
+/** The step `stage` belongs to; `undefined` for a failure (D253). */
+function stageStep(stage: SyncStage): number | undefined {
+  switch (stage.kind) {
+    case 'preparing':
+    case 'offer':
+    case 'scan':
+    case 'answer':
+    case 'connecting':
+      return 2;
+    case 'connected':
+      return 3;
+    case 'synced':
+      return 4;
+    case 'failed':
+      return undefined;
+  }
+}
+
 function Stage({
   controller,
   session,
   stage,
   name,
+  steps,
   leaving,
   onClose,
 }: {
@@ -63,29 +94,59 @@ function Stage({
   readonly session: VaultSession;
   readonly stage: SyncStage;
   readonly name: string;
+  readonly steps: readonly WizardStep[];
   readonly leaving: string;
   readonly onClose: () => void;
 }) {
-  const { messages: m, language } = useLanguage();
-  const s = m.sync;
+  const step = useStep(stageStep(stage));
   const close = () => {
     controller.cancelSync();
     onClose();
   };
-  const cancel = (
-    <Button variant="quiet" className="self-start" onClick={close} data-testid="sync-cancel">
-      {s.cancel}
-    </Button>
+  const final = stage.kind === 'synced' || stage.kind === 'failed';
+  return (
+    <Wizard
+      steps={steps}
+      step={step}
+      onCancel={final ? undefined : close}
+      cancelTestId="sync-cancel"
+    >
+      <StageBody
+        controller={controller}
+        session={session}
+        stage={stage}
+        name={name}
+        leaving={leaving}
+        onClose={onClose}
+        close={close}
+      />
+    </Wizard>
   );
+}
+
+function StageBody({
+  controller,
+  session,
+  stage,
+  name,
+  leaving,
+  onClose,
+  close,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+  readonly stage: SyncStage;
+  readonly name: string;
+  readonly leaving: string;
+  readonly onClose: () => void;
+  readonly close: () => void;
+}) {
+  const { messages: m, language } = useLanguage();
+  const s = m.sync;
   const channel = format(s.channel, { name });
   switch (stage.kind) {
     case 'preparing':
-      return (
-        <>
-          <p role="status">{s.preparing}</p>
-          {cancel}
-        </>
-      );
+      return <p role="status">{s.preparing}</p>;
     case 'offer':
       return (
         <>
@@ -98,7 +159,6 @@ function Stage({
             onPaste={(text) => controller.syncPayload(text)}
             errorOf={(check) => pasteError(m, check, name)}
           />
-          {cancel}
         </>
       );
     case 'scan':
@@ -112,7 +172,6 @@ function Stage({
             onPaste={(text) => controller.syncPayload(text)}
             errorOf={(check) => pasteError(m, check, name)}
           />
-          {cancel}
         </>
       );
     case 'answer':
@@ -122,24 +181,15 @@ function Stage({
           <PayloadText text={stage.text} label={s.answerLabel} channel={channel} />
           <Notice>{leaving}</Notice>
           <p role="status">{s.waiting}</p>
-          {cancel}
         </>
       );
     case 'connecting':
-      return (
-        <>
-          <p role="status">{s.connecting}</p>
-          {cancel}
-        </>
-      );
+      return <p role="status">{s.connecting}</p>;
     case 'connected':
       return (
-        <>
-          <p role="status" data-testid="sync-connected">
-            {format(s.connected, { name })}
-          </p>
-          {cancel}
-        </>
+        <p role="status" data-testid="sync-connected">
+          {format(s.connected, { name })}
+        </p>
       );
     case 'synced':
       return (
@@ -242,6 +292,11 @@ export function SyncDevice({
     setOutcome(controller.startSync(peer.deviceId, role, { sameNetwork }, purpose));
   };
   const error = startError(m, outcome, name);
+  const steps = syncSteps(
+    m,
+    name,
+    format(purpose === 'retirement' ? s.notifyHow : s.how, { name }),
+  );
   // The panel opens below the device list: bring it into view where the user clicked (D234).
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -259,15 +314,14 @@ export function SyncDevice({
           session={session}
           stage={mine}
           name={name}
+          steps={steps}
           leaving={leavingText(m, session)}
           onClose={onClose}
         />
       ) : (
-        <>
-          <p className="text-sm">
-            {format(purpose === 'retirement' ? s.notifyHow : s.how, { name })}
-          </p>
-          <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
+        <Wizard steps={steps} step={1} onCancel={onClose}>
+          <p className="text-sm">{format(s.chooseRole, { name })}</p>
+          <NetworkOptions checked={sameNetwork} onChange={setSameNetwork} />
           {error ? (
             <p role="alert" className="text-sm text-danger">
               {error}
@@ -291,11 +345,8 @@ export function SyncDevice({
             >
               {format(s.read, { name })}
             </Button>
-            <Button variant="quiet" onClick={onClose}>
-              {s.cancel}
-            </Button>
           </div>
-        </>
+        </Wizard>
       )}
     </div>
   );

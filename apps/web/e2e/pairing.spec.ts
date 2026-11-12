@@ -3,6 +3,7 @@ import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
 import {
+  checkSameNetwork,
   createVault,
   openSettingsPage,
   openVault,
@@ -62,11 +63,16 @@ async function invite(a: Page): Promise<string> {
 
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  // One step at a time, with what to do on the other device (D253).
+  await expect(a.getByTestId('wizard-step')).toHaveText('Step 1 of 4 · Confirm it is you');
+  await expect(a.getByTestId('wizard-other')).toContainText('Pair with an existing device');
+  await expect(a.getByTestId('pairing-same-network')).toBeHidden();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   const text = a.getByTestId('pairing-text');
   await expect(text).not.toHaveValue('', { timeout: 30_000 });
+  await expect(a.getByTestId('wizard-step')).toHaveText('Step 2 of 4 · Exchange the codes');
   // What the code or the text carries shows this device's network addresses (D208).
   await expect(a.getByText(CHANNEL)).toBeVisible();
   return text.inputValue();
@@ -78,12 +84,13 @@ async function join(b: Page, offer: string): Promise<string> {
   await button(b, 'Pair with an existing device').click();
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
-  await b.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(b);
   await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(offer, { timeout: 30_000 });
   await button(b, 'Show my answer').click();
   const text = b.getByTestId('pairing-text');
   await expect(text).not.toHaveValue('', { timeout: 30_000 });
+  await expect(b.getByTestId('wizard-step')).toHaveText('Step 3 of 5 · Show the answer');
   await expect(b.getByText(CHANNEL)).toBeVisible();
   return text.inputValue();
 }
@@ -103,6 +110,8 @@ async function toSas(browser: Browser, clockA = false) {
   await expect(sasB).toHaveText(/^\d{3} \d{3}$/, { timeout: 30_000 });
   const sas = await sasA.textContent();
   expect(await sasB.textContent()).toBe(sas);
+  await expect(a.getByTestId('wizard-step')).toHaveText('Step 3 of 4 · Compare the numbers');
+  await expect(b.getByTestId('wizard-step')).toHaveText('Step 4 of 5 · Compare the numbers');
   return { a, b };
 }
 
@@ -286,7 +295,7 @@ test('a hidden-app lock at 0 says it locks at once, in Settings, the export and 
 
   await switchSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   await expect(a.getByTestId('pairing-text')).not.toHaveValue('', { timeout: 30_000 });
@@ -306,7 +315,7 @@ test('a hidden-app lock at 0 says it locks at once, in Settings, the export and 
   await expect(a.getByText(exportHidden)).toHaveCount(0);
   await switchSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   await expect(a.getByTestId('pairing-text')).not.toHaveValue('', { timeout: 30_000 });
@@ -336,7 +345,7 @@ async function replacing(browser: Browser) {
   );
   await fillPassword(b.getByTestId('new-password'), PASSWORD_NEW);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_NEW);
-  await b.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(b);
   // Nothing starts before the user confirms the replacement (D183, D204).
   await expect(button(b, 'Start pairing')).toBeDisabled();
   await b.getByTestId('replace-understood').check();
@@ -382,7 +391,7 @@ test('numbers said to differ leave the vault being replaced intact (D150, D153)'
   await button(b, 'No, it differs').click();
   await expect(a.getByTestId('pairing-failed')).toHaveAttribute('data-reason', 'sas-mismatch');
   await button(b, 'Start again').click();
-  await button(b, 'Back').click();
+  await button(b, 'Cancel').click();
   await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
   await button(b, 'Unlock').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

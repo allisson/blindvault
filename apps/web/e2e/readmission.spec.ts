@@ -4,7 +4,7 @@ import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
-import { createVault, openSettingsPage, openVault, startScreen } from './create';
+import { checkSameNetwork, createVault, openSettingsPage, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -58,7 +58,7 @@ async function addItem(page: Page, title: string): Promise<void> {
 async function startReadmission(page: Page, first: boolean): Promise<void> {
   await openSettingsPage(page, 'devices');
   await button(page, 'Re-admit with another device of this vault…').click();
-  await page.getByTestId('readmit-device').getByTestId('pairing-same-network').check();
+  await checkSameNetwork(page.getByTestId('readmit-device'));
   await page.getByTestId(first ? 'readmission-first' : 'readmission-paste').click();
 }
 
@@ -162,7 +162,7 @@ test('a pairing answered by a device of the vault is refused, and a restored dev
   // A invites; B answers from its re-admission, as a device that already holds the vault.
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   const offer = a.getByTestId('pairing-text');
@@ -184,7 +184,7 @@ test('a pairing answered by a device of the vault is refused, and a restored dev
 
   // B, restored and unregistered, pairs a new device C: the others know neither yet.
   await button(b, 'Pair a device…').click();
-  await b.getByTestId('invite').getByTestId('pairing-same-network').check();
+  await checkSameNetwork(b.getByTestId('invite'));
   await fillPassword(b.getByTestId('invite-password'), PASSWORD_B);
   await button(b, 'Start pairing').click();
   const invite = b.getByTestId('pairing-text');
@@ -194,7 +194,7 @@ test('a pairing answered by a device of the vault is refused, and a restored dev
   await button(c, 'Pair with an existing device').click();
   await fillPassword(c.getByTestId('new-password'), PASSWORD_A);
   await fillPassword(c.getByTestId('confirm-password'), PASSWORD_A);
-  await c.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(c);
   await button(c, 'Start pairing').click();
   await c.getByTestId('pairing-paste').fill(await invite.inputValue(), { timeout: 30_000 });
   await button(c, 'Show my answer').click();
