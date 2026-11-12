@@ -76,7 +76,7 @@ test('exports a backup, asking for the local password again, then one under a ge
   expect(plain.bytes.includes(SECRET)).toBe(false);
   expect(plain.bytes.includes('ACME')).toBe(false);
   // The status names the phrase the file opens with, by its phraseId and date (D185).
-  await expect(page.getByRole('status')).toHaveText(
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(
     new RegExp(
       `^Backup exported as ${plain.name.replaceAll('.', '\\.')}\\. It opens with the Recovery Phrase [0-9a-f]{8}, created on .+\\. Keep it somewhere other than this device\\.$`,
     ),

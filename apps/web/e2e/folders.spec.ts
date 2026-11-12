@@ -107,7 +107,7 @@ for (const [layout, width] of WIDTHS) {
     await folders(page, layout);
     await expect(button(page, 'Clients')).toHaveCount(0);
     await button(page, 'All items').click();
-    await expect(page.getByText('No items yet.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
     await folders(page, layout);
     await button(page, 'Trash').click();
     await expect(page.getByText('Folder: Clients')).toBeVisible();

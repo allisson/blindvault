@@ -10,6 +10,7 @@ import { type UpdateMonitor } from './app/updates';
 import { LanguageProvider } from './i18n/context';
 import { AboutContext } from './ui/about-context';
 import { ChangedWorker } from './ui/ChangedWorker';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Start } from './ui/Start';
 import { UpdatesContext } from './ui/update-context';
 import { VaultShell } from './ui/VaultShell';
@@ -132,7 +133,9 @@ export function App({ controller, monitor }: RootProps) {
     <LanguageProvider>
       <UpdatesContext.Provider value={updates}>
         <AboutContext.Provider value={about}>
-          <Root controller={controller} monitor={monitor} />
+          <ErrorBoundary controller={controller}>
+            <Root controller={controller} monitor={monitor} />
+          </ErrorBoundary>
         </AboutContext.Provider>
       </UpdatesContext.Provider>
     </LanguageProvider>

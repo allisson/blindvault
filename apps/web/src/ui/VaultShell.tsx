@@ -29,6 +29,7 @@ import { focusBackup } from './RegeneratePhrase';
 import { Settings } from './Settings';
 import { StorageWarningBanner } from './StorageState';
 import { Icon } from './icons';
+import { ToastRegion } from './Toast';
 
 // One set of panes, three shells (overview §13.1, D15): the shells place the panes and hold no
 // vault or security logic.
@@ -403,167 +404,172 @@ export function VaultShell({
   );
 
   return (
-    <div data-layout={layout} className="flex h-dvh flex-col overflow-hidden bg-surface text-fg">
-      <Header controller={controller} session={session} nav={nav} mobile={layout === 'mobile'} />
-      <LiveSync controller={controller} nav={nav} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
-        <SharedOriginWarning />
-        <PreviewBanner />
-        <UpdateBanner />
-        <StorageWarningBanner controller={controller} session={session} />
-        {clock ? (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="clock-behind">
-            <Notice>
-              {format(m.vault.clockBehind, {
-                date: new Intl.DateTimeFormat(language, {
-                  dateStyle: 'long',
-                  timeStyle: 'short',
-                }).format(clock.until),
-              })}
-            </Notice>
-            {clock.far ? (
-              <>
-                <Notice>{m.vault.clockFar}</Notice>
-                <Button
-                  variant="quiet"
-                  data-testid="clock-refound"
-                  onClick={() => {
-                    nav.open({ name: 'settings', focus: 'refound' });
-                  }}
-                >
-                  {m.refound.title}
-                </Button>
-                {clock.pairAgain ? <Notice>{m.vault.clockPairAgain}</Notice> : null}
-              </>
-            ) : null}
-          </div>
-        ) : null}
-        {session.retired ? (
-          <div className="px-4 py-2" data-testid="own-retired">
-            <Notice>{m.merge.ownRetired}</Notice>
-          </div>
-        ) : null}
-        {controller.afterRestore === 'check-phrase' && !ready ? (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="after-restore">
-            <Notice>{m.restore.checkPhrase}</Notice>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                controller.dismissAfterRestore();
-              }}
+    <ToastRegion>
+      <div data-layout={layout} className="flex h-dvh flex-col overflow-hidden bg-surface text-fg">
+        <Header controller={controller} session={session} nav={nav} mobile={layout === 'mobile'} />
+        <LiveSync controller={controller} nav={nav} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
+          <SharedOriginWarning />
+          <PreviewBanner />
+          <UpdateBanner />
+          <StorageWarningBanner controller={controller} session={session} />
+          {clock ? (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="clock-behind">
+              <Notice>
+                {format(m.vault.clockBehind, {
+                  date: new Intl.DateTimeFormat(language, {
+                    dateStyle: 'long',
+                    timeStyle: 'short',
+                  }).format(clock.until),
+                })}
+              </Notice>
+              {clock.far ? (
+                <>
+                  <Notice>{m.vault.clockFar}</Notice>
+                  <Button
+                    variant="quiet"
+                    data-testid="clock-refound"
+                    onClick={() => {
+                      nav.open({ name: 'settings', focus: 'refound' });
+                    }}
+                  >
+                    {m.refound.title}
+                  </Button>
+                  {clock.pairAgain ? <Notice>{m.vault.clockPairAgain}</Notice> : null}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {session.retired ? (
+            <div className="px-4 py-2" data-testid="own-retired">
+              <Notice>{m.merge.ownRetired}</Notice>
+            </div>
+          ) : null}
+          {controller.afterRestore === 'check-phrase' && !ready ? (
+            <div
+              className="flex flex-wrap items-center gap-2 px-4 py-2"
+              data-testid="after-restore"
             >
-              {m.restore.dismiss}
-            </Button>
-          </div>
-        ) : null}
-        {controller.afterRefounding ? (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="refounded">
-            <Notice>{m.refound.done}</Notice>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                controller.dismissRefounded();
-                nav.open({ name: 'settings' });
-              }}
-            >
-              {m.restore.openSettings}
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                controller.dismissRefounded();
-              }}
-            >
-              {m.restore.dismiss}
-            </Button>
-          </div>
-        ) : null}
-        {reminder ? (
-          <div
-            className="flex flex-wrap items-center gap-2 px-4 py-2"
-            data-testid="backup-reminder"
-          >
-            <Notice>{reminderText(m, language, reminder)}</Notice>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                if (screen.name === 'settings') focusBackup();
-                else nav.open({ name: 'settings', focus: 'backup' });
-              }}
-            >
-              {m.vault.reminderBackup}
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                controller.dismissBackupReminder();
-              }}
-            >
-              {m.restore.dismiss}
-            </Button>
-          </div>
-        ) : null}
-        {controller.leftoverPasskey ? (
-          <div
-            className="flex flex-wrap items-center gap-2 px-4 py-2"
-            data-testid="leftover-passkey"
-          >
-            <Notice>{m.replace.leftoverPasskey}</Notice>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                controller.dismissLeftoverPasskey();
-              }}
-            >
-              {m.restore.dismiss}
-            </Button>
-          </div>
-        ) : null}
-        <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>{body}</main>
-      </div>
-      {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
-        <footer className="grid grid-cols-3 gap-1 border-t border-line p-1">
-          {(
-            [
-              [
-                'list',
-                m.vault.items,
-                screen.name === 'vault' || screen.name === 'folder',
-                () => {
-                  nav.showList({ name: 'vault' });
-                },
-              ],
-              [
-                'trash-2',
-                m.vault.trash,
-                screen.name === 'trash',
-                () => {
-                  nav.showList({ name: 'trash' });
-                },
-              ],
-              [
-                'settings',
-                m.app.settings,
-                false,
-                () => {
+              <Notice>{m.restore.checkPhrase}</Notice>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  controller.dismissAfterRestore();
+                }}
+              >
+                {m.restore.dismiss}
+              </Button>
+            </div>
+          ) : null}
+          {controller.afterRefounding ? (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2" data-testid="refounded">
+              <Notice>{m.refound.done}</Notice>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  controller.dismissRefounded();
                   nav.open({ name: 'settings' });
-                },
-              ],
-            ] as const
-          ).map(([icon, label, current, go]) => (
-            <Button
-              key={icon}
-              variant="quiet"
-              className="flex flex-col items-center justify-center gap-0.5 px-1 text-xs aria-[current]:text-accent-text"
-              aria-current={current ? 'page' : undefined}
-              onClick={go}
+                }}
+              >
+                {m.restore.openSettings}
+              </Button>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  controller.dismissRefounded();
+                }}
+              >
+                {m.restore.dismiss}
+              </Button>
+            </div>
+          ) : null}
+          {reminder ? (
+            <div
+              className="flex flex-wrap items-center gap-2 px-4 py-2"
+              data-testid="backup-reminder"
             >
-              <Icon name={icon} />
-              {label}
-            </Button>
-          ))}
-        </footer>
-      ) : null}
-    </div>
+              <Notice>{reminderText(m, language, reminder)}</Notice>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  if (screen.name === 'settings') focusBackup();
+                  else nav.open({ name: 'settings', focus: 'backup' });
+                }}
+              >
+                {m.vault.reminderBackup}
+              </Button>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  controller.dismissBackupReminder();
+                }}
+              >
+                {m.restore.dismiss}
+              </Button>
+            </div>
+          ) : null}
+          {controller.leftoverPasskey ? (
+            <div
+              className="flex flex-wrap items-center gap-2 px-4 py-2"
+              data-testid="leftover-passkey"
+            >
+              <Notice>{m.replace.leftoverPasskey}</Notice>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  controller.dismissLeftoverPasskey();
+                }}
+              >
+                {m.restore.dismiss}
+              </Button>
+            </div>
+          ) : null}
+          <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>{body}</main>
+        </div>
+        {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
+          <footer className="grid grid-cols-3 gap-1 border-t border-line p-1">
+            {(
+              [
+                [
+                  'list',
+                  m.vault.items,
+                  screen.name === 'vault' || screen.name === 'folder',
+                  () => {
+                    nav.showList({ name: 'vault' });
+                  },
+                ],
+                [
+                  'trash-2',
+                  m.vault.trash,
+                  screen.name === 'trash',
+                  () => {
+                    nav.showList({ name: 'trash' });
+                  },
+                ],
+                [
+                  'settings',
+                  m.app.settings,
+                  false,
+                  () => {
+                    nav.open({ name: 'settings' });
+                  },
+                ],
+              ] as const
+            ).map(([icon, label, current, go]) => (
+              <Button
+                key={icon}
+                variant="quiet"
+                className="flex flex-col items-center justify-center gap-0.5 px-1 text-xs aria-[current]:text-accent-text"
+                aria-current={current ? 'page' : undefined}
+                onClick={go}
+              >
+                <Icon name={icon} />
+                {label}
+              </Button>
+            ))}
+          </footer>
+        ) : null}
+      </div>
+    </ToastRegion>
   );
 }

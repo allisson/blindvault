@@ -488,7 +488,7 @@ test('an edit older than a trash never brings the item back: in the trash on bot
 
   await closed(a, b);
   for (const page of [a, b]) {
-    await expect(page.getByText('No items yet.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
     await button(page, 'Trash').click();
     await button(page, 'ACME').click();
     // An item in the trash offers only restore (D143): restored, its history shows A's edit.
@@ -524,7 +524,7 @@ test('an item trashed on A is in the trash of both with the same purge date, off
   await closed(a, b);
   const dates: string[] = [];
   for (const page of [a, b]) {
-    await expect(page.getByText('No items yet.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
     await button(page, 'Trash').click();
     await button(page, 'ACME').click();
     const notice = page.getByText(/It can only be restored from the trash; it is purged on /);

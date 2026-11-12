@@ -64,7 +64,7 @@ export function TotpView({
   const m = useMessages();
   const [now, setNow] = useState(() => Date.now());
   const [code, setCode] = useState<{ readonly step: number; readonly code: string }>();
-  const { copy, status, checked } = useCopy(clearSeconds);
+  const { copy, checked } = useCopy(clearSeconds);
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Date.now());
@@ -123,7 +123,6 @@ export function TotpView({
           />
         ) : null}
       </div>
-      {status}
       {account !== '' ? <p className="text-sm break-words text-muted">{account}</p> : null}
       <div className="flex flex-col gap-0.5">
         <span className="text-xs font-medium text-muted">{m.items.totpSecret}</span>

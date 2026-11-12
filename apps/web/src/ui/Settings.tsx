@@ -59,7 +59,12 @@ export function Settings({
   useEffect(() => {
     if (focus === 'backup') focusBackup();
     // The passkey section shows once support is known: it focuses itself.
-    else if (focus === 'recovery' || focus === 'devices' || focus === 'refound')
+    else if (
+      focus === 'recovery' ||
+      focus === 'devices' ||
+      focus === 'refound' ||
+      focus === 'import'
+    )
       focusSection(focus);
     else if (focus === 'pair') focusField('invite-password');
     else if (focus === 'readmit') focusField('readmission-first');

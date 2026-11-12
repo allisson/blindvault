@@ -425,7 +425,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Item detail: header with avatar and chips, fields in sections inside cards, icon and text on secret buttons, the "…" menu, the seed-phrase grid (D247)
 - [x] TOTP ring, stepping once a second with no transition (D248)
 - [x] Password strength on item secrets: meter in the editor, Weak badge on the detail, never blocking a save (D249)
-- [ ] Feedback: toast region, bottom sheet on a phone, empty-vault checklist, error boundary that locks the vault
+- [x] Feedback: toast region, bottom sheet on a phone, empty-vault checklist, error boundary that locks the vault (D250)
 - [ ] Keyboard: list movement, search to list, Esc, Ctrl/⌘+Enter; generator length slider
 - [ ] Release v0.7.0 for another hands-on test
 

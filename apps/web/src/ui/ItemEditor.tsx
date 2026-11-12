@@ -29,6 +29,7 @@ import { writeError } from './errors';
 import { Generator } from './Generator';
 import { SecretInput } from './Secret';
 import { rated, useMeter } from './Strength';
+import { useToast } from './Toast';
 
 const INPUT_TYPES: Partial<Record<FieldType, string>> = {
   url: 'url',
@@ -212,6 +213,7 @@ export function ItemEditor({
   readonly onChange: () => void;
 }) {
   const { messages: m, language } = useLanguage();
+  const toast = useToast();
   const [draft, setDraft] = useState<Draft | undefined>(() => {
     const item = id ? session.item(id)?.item : undefined;
     return item ? draftOf(item) : undefined;
@@ -286,6 +288,7 @@ export function ItemEditor({
         write.then(
           (saved) => {
             onChange();
+            toast(m.items.saved);
             // An edit goes back to its item; a new item replaces the editor. Unless the user went
             // elsewhere meanwhile (D210).
             nav.follow(from, () => {

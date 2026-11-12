@@ -17,6 +17,7 @@ import { Icon, type IconName } from './icons';
 import { Avatar, TEMPLATE_ICON, known } from './ItemRow';
 import { SecretView } from './Secret';
 import { WeakBadge, rated } from './Strength';
+import { useToast } from './Toast';
 import { TotpView } from './Totp';
 
 /** A field's name: the user's label, else its role's localized name (D165). */
@@ -135,6 +136,7 @@ export function ItemDetail({
   const { messages: m, language } = useLanguage();
   const [error, setError] = useState<string>();
   const [working, setWorking] = useState(false);
+  const toast = useToast();
   const view = session.item(id);
   if (!view) return null;
   const { item } = view;
@@ -143,13 +145,14 @@ export function ItemDetail({
   // it is, since the copy takes a fresh HLC (D140).
   const duplicable = item !== undefined && !view.inTrash && session.writable;
 
-  const act = (write: () => Promise<unknown>) => {
+  const act = (write: () => Promise<unknown>, done: string) => {
     setWorking(true);
     setError(undefined);
     write().then(
       () => {
         onChange();
         nav.close(id);
+        toast(done);
       },
       (e: unknown) => {
         setWorking(false);
@@ -241,7 +244,7 @@ export function ItemDetail({
               <Button
                 disabled={working}
                 onClick={() => {
-                  act(() => session.restoreItem(id));
+                  act(() => session.restoreItem(id), m.items.restored);
                 }}
               >
                 {m.items.restore}
@@ -288,7 +291,7 @@ export function ItemDetail({
                     className="text-left text-danger!"
                     disabled={working}
                     onClick={() => {
-                      act(() => session.trashItem(id));
+                      act(() => session.trashItem(id), m.items.trashed);
                     }}
                   >
                     <Icon name="trash-2" className="me-1.5" />

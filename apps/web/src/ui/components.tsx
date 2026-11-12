@@ -18,6 +18,7 @@ import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { AboutBuild } from './About';
 import { useAbout } from './about-context';
+import { useLayout } from './hooks';
 import { Icon } from './icons';
 import { useUpdates } from './update-context';
 
@@ -112,7 +113,8 @@ export function CopyCheck({ shown }: { readonly shown: boolean }) {
 /**
  * A destructive or security confirmation in the native modal dialog (D231, D233): the focus stays
  * inside, Escape cancels and the rest of the page is inert. Shown while mounted; its text is the
- * caller's, unchanged from the inline confirmation it replaces.
+ * caller's, unchanged from the inline confirmation it replaces. On a phone the same dialog is a
+ * bottom sheet, its buttons full width with the action first (D250).
  */
 export function ConfirmDialog({
   confirm,
@@ -132,6 +134,7 @@ export function ConfirmDialog({
   readonly tone?: 'danger' | 'primary';
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const sheet = useLayout() === 'mobile';
   useEffect(() => {
     const dialog = ref.current;
     if (dialog && !dialog.open) dialog.showModal();
@@ -143,7 +146,12 @@ export function ConfirmDialog({
     <dialog
       ref={ref}
       aria-label={confirm}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card bg-raised p-6 text-fg shadow-raised backdrop:bg-scrim motion-safe:animate-enter"
+      data-sheet={sheet || undefined}
+      className={`bg-raised text-fg shadow-raised backdrop:bg-scrim motion-safe:animate-enter ${
+        sheet
+          ? 'mx-0 mt-auto mb-0 w-full max-w-none rounded-t-card p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]'
+          : 'm-auto w-[calc(100%-2rem)] max-w-md rounded-card p-6'
+      }`}
       onCancel={(e) => {
         // Escape: the caller unmounts the dialog, unless the work already started.
         e.preventDefault();
@@ -153,14 +161,25 @@ export function ConfirmDialog({
     >
       <div className="flex flex-col gap-4">
         {children}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" disabled={busy} onClick={onCancel}>
-            {cancel}
-          </Button>
-          <Button variant={tone} busy={busy} onClick={onConfirm}>
-            {confirm}
-          </Button>
-        </div>
+        {sheet ? (
+          <div className="flex flex-col gap-2">
+            <Button variant={tone} busy={busy} className="min-h-11" onClick={onConfirm}>
+              {confirm}
+            </Button>
+            <Button variant="secondary" disabled={busy} className="min-h-11" onClick={onCancel}>
+              {cancel}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" disabled={busy} onClick={onCancel}>
+              {cancel}
+            </Button>
+            <Button variant={tone} busy={busy} onClick={onConfirm}>
+              {confirm}
+            </Button>
+          </div>
+        )}
       </div>
     </dialog>
   );
