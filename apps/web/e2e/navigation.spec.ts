@@ -92,6 +92,7 @@ test('filters the list by type, with counts beside the types and the folder pane
 
   // Harbor Credit Union, just saved, is still shown. The trash then holds one type, so no filter
   // applies there.
+  await button(page, 'More actions').click();
   await button(page, 'Move to trash').click();
   await expect(pane.getByRole('button', { name: 'Trash', exact: true })).toContainText('1');
   await pane.getByRole('button', { name: 'Trash', exact: true }).click();

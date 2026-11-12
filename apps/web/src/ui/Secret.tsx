@@ -4,6 +4,7 @@ import { clipboard } from '../app/clipboard';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { Button, CopyCheck, INPUT, Message, useCheck } from './components';
+import { Icon } from './icons';
 
 // Secrets are masked by default in every layout; revealing takes an explicit action, and the
 // mask never shows the value's length (overview §13.1, §13.2). A screen reader hears "hidden", not
@@ -22,6 +23,7 @@ function Toggle({ shown, onToggle }: { readonly shown: boolean; readonly onToggl
   const m = useMessages();
   return (
     <Button variant="quiet" aria-pressed={shown} onClick={onToggle}>
+      <Icon name={shown ? 'eye-off' : 'eye'} className="me-1.5" />
       {shown ? m.items.hide : m.items.show}
     </Button>
   );
@@ -72,21 +74,44 @@ export function CopyButton({
 }) {
   return (
     <Button variant="quiet" aria-label={`${label}: ${name}`} onClick={onCopy}>
-      <CopyCheck shown={checked} />
+      {checked ? <CopyCheck shown /> : <Icon name="copy" className="me-1.5" />}
       {label}
     </Button>
   );
 }
 
-/** A stored secret, masked until shown; copied without being shown when `clearSeconds` is set. */
+/** Shown seed-phrase words in a numbered grid (D247); the copy keeps the stored text. */
+function Words({ value }: { readonly value: string }) {
+  return (
+    <ol className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+      {value
+        .trim()
+        .split(/\s+/)
+        .map((word, i) => (
+          // Words repeat; their place is their identity.
+          <li key={i} className="rounded-control bg-subtle px-2 py-1">
+            <span className="me-1.5 text-xs text-muted">{i + 1}</span>
+            {word}{' '}
+          </li>
+        ))}
+    </ol>
+  );
+}
+
+/**
+ * A stored secret, masked until shown; copied without being shown when `clearSeconds` is set. A
+ * shown seed phrase (`words`) is a numbered grid.
+ */
 export function SecretView({
   value,
   label,
   clearSeconds,
+  words = false,
 }: {
   readonly value: string;
   readonly label: string;
   readonly clearSeconds?: number | undefined;
+  readonly words?: boolean;
 }) {
   const m = useMessages();
   const [shown, setShown] = useState(false);
@@ -94,12 +119,12 @@ export function SecretView({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <span
+        <div
           data-testid={`secret-${label}`}
           className="min-w-0 flex-1 font-mono text-sm break-all whitespace-pre-wrap"
         >
-          {shown ? value : <Mask />}
-        </span>
+          {!shown ? <Mask /> : words ? <Words value={value} /> : value}
+        </div>
         <Toggle
           shown={shown}
           onToggle={() => {

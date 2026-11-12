@@ -76,6 +76,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByRole('article').getByText('ana.lima.0042')).toBeVisible();
     await expect(page.getByTestId('secret-Password')).toHaveText('••••••••Hidden');
 
+    await page.getByRole('button', { name: 'More actions', exact: true }).click();
     await page.getByRole('button', { name: 'Move to trash', exact: true }).click();
     await expect(page.getByRole('heading', { name: TITLE })).toHaveCount(0);
     await expect(page.getByText('No items yet.')).toBeVisible();

@@ -130,14 +130,17 @@ for (const [layout, width] of WIDTHS) {
       - region "Details":
         - article "Harbor":
           - heading "Harbor" [level=1]
-          - term: Password
-          - definition:
-            - text: Hidden
-            - button "Show"
-            - 'button "Copy: Password"'
+          - list:
+            - listitem: Login
           - button "Edit"
-          - button "Move to trash"
-          - button "History"
+          - button "More actions"
+          - region "Login":
+            - heading "Login" [level=2]
+            - term: Password
+            - definition:
+              - text: Hidden
+              - button "Show"
+              - 'button "Copy: Password"'
     `);
     await button(page, 'Copy: Password').click();
     await expect(page.locator('body')).toMatchAriaSnapshot(`

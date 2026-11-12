@@ -131,6 +131,7 @@ test('merges a backup made on another installation, keeping the losing edit in h
   await button(a, 'ACME').click();
   await button(a, 'Show').click();
   await expect(a.getByTestId('secret-Password')).toHaveText(ON_B);
+  await button(a, 'More actions').click();
   await button(a, 'History').click();
   const versions = a.locator('article').getByRole('listitem');
   await expect(versions).toHaveCount(2);

@@ -33,6 +33,7 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   const oldWords = await createVault(page, PASSWORD);
   await newLogin(page, 'ACME');
   await newLogin(page, 'Discarded');
+  await button(page, 'More actions').click();
   await button(page, 'Move to trash').click();
   await page.getByRole('button', { name: 'Settings' }).first().click();
   const before = (await page.getByTestId('recovery-current').textContent()) ?? '';

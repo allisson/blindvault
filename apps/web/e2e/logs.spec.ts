@@ -57,6 +57,7 @@ test('logs nothing, and no secret, through a full use (CRYPTO-INV-005, 006)', as
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByTestId('input-Password').fill(ROTATED);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'More actions', exact: true }).click();
   await page.getByRole('button', { name: 'History', exact: true }).click();
   await page.getByRole('button', { name: 'Show', exact: true }).first().click();
   await expect(page.getByText(SECRET)).toBeVisible();

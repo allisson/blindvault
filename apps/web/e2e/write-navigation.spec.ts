@@ -77,6 +77,7 @@ test('another item chosen while a version is restored stays shown (D210)', async
   await page.getByTestId('item-title').fill('ACME 2');
   await button(page, 'Save').click();
   await expect(heading(page, 'ACME 2', 1)).toBeVisible();
+  await button(page, 'More actions').click();
   await button(page, 'History').click();
   await together(button(page, 'Restore this version'), button(page, 'Beta'));
   await expect(button(page, 'ACME')).toBeVisible();
@@ -86,6 +87,7 @@ test('another item chosen while a version is restored stays shown (D210)', async
 test('another item chosen while an item is duplicated stays shown (D210)', async ({ page }) => {
   await newLogin(page, 'ACME');
   await newLogin(page, 'Beta');
+  await button(page, 'More actions').click();
   await together(button(page, 'Duplicate'), button(page, 'ACME'));
   await expect(button(page, 'Beta (copy)')).toBeVisible();
   await expect(heading(page, 'ACME', 1)).toBeVisible();
