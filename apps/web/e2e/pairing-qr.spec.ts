@@ -1,7 +1,7 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { deniedCamera, expectCameraReleased, fakeQrCamera, noCamera, showQr } from './camera';
-import { createVault, openVault, startScreen, openSettingsPage } from './create';
+import { checkSameNetwork, createVault, openSettingsPage, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -61,7 +61,7 @@ async function invite(a: Page): Promise<void> {
   await expect(a.getByRole('heading', { name: TITLE })).toBeVisible();
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   await expect(a.getByTestId('pairing-qr')).toBeVisible({ timeout: 30_000 });
@@ -73,7 +73,7 @@ async function join(b: Page): Promise<void> {
   await button(b, 'Pair with an existing device').click();
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
-  await b.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(b);
   await button(b, 'Start pairing').click();
   await expect(b.getByTestId('pairing-paste')).toBeVisible({ timeout: 30_000 });
 }

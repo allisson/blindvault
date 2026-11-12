@@ -429,7 +429,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Keyboard: list movement, search to list, Esc, Ctrl/⌘+Enter; generator length slider (D251)
 - [x] Release v0.7.0 for another hands-on test
 - [x] Settings pages: an index in groups, each row opening its page (D252)
-- [ ] A wizard for pairing, joining, re-admission and sync: one step at a time, what to do on the other device (D253)
+- [x] A wizard for pairing, joining, re-admission and sync: one step at a time, what to do on the other device (D253)
 - [ ] The same wizard on the other step flows: create, restore, reset the password, regenerate the phrase, re-found, merge, import (D253)
 - [ ] Release v0.7.1 for another hands-on test
 

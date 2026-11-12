@@ -28,6 +28,7 @@ import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { QrCode, QrScanner } from './Qr';
 import { recordTypeName } from './Settings';
+import { AdvancedOptions, Wizard, type WizardStep, useStep } from './Wizard';
 
 // The pairing screens (§8.4, D202, D203): A invites from Settings › Devices, B joins from the pair
 // start. Each payload is shown as a QR code and as text; the other device scans it or pastes it
@@ -170,6 +171,25 @@ export function SameNetwork({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * "Same network only" in the advanced options of a wizard's first step, open at once when the stored
+ * STUN list cannot be read, which forces it (D209, D253).
+ */
+export function NetworkOptions({
+  checked,
+  onChange,
+}: {
+  readonly checked: boolean;
+  readonly onChange: (checked: boolean) => void;
+}) {
+  const [unreadable] = useState(() => loadStunSettings().kind === 'unreadable');
+  return (
+    <AdvancedOptions open={unreadable}>
+      <SameNetwork checked={checked} onChange={onChange} />
+    </AdvancedOptions>
   );
 }
 
@@ -432,7 +452,67 @@ export function rejectedText(m: Messages, rejected: readonly RejectedRecord[]): 
   return format(r.rejected, { n: String(rejected.length), records });
 }
 
-/** Every stage after the start, on either device. */
+/** The steps of each flow, with what to do on the other device (D253). */
+function flowSteps(m: Messages, flow: PairingFlow): readonly WizardStep[] {
+  const w = m.wizard;
+  switch (flow) {
+    case 'invite': {
+      const p = m.pairing;
+      return [
+        { name: p.steps.auth, other: p.other.auth },
+        { name: p.steps.codes, other: p.other.codes },
+        { name: p.steps.sas, other: w.sas },
+        { name: p.steps.done, other: p.other.done },
+      ];
+    }
+    case 'join': {
+      const j = m.join;
+      return [
+        { name: j.steps.password, other: j.other.password },
+        { name: j.steps.scan, other: j.other.scan },
+        { name: j.steps.answer, other: j.other.answer },
+        { name: j.steps.sas, other: w.sas },
+        { name: j.steps.done, other: j.other.done },
+      ];
+    }
+    case 'readmit': {
+      const r = m.readmission;
+      return [
+        { name: r.steps.role, other: r.how },
+        { name: r.steps.codes, other: w.codes },
+        { name: r.steps.sas, other: w.sas },
+        { name: r.steps.done, other: r.otherDone },
+      ];
+    }
+  }
+}
+
+/**
+ * The step `stage` belongs to: preparing and connecting wait within the exchange of codes, and the
+ * transfer within the numbers' step (D253). `undefined` for a failure.
+ */
+function stageStep(flow: PairingFlow, stage: PairingStage): number | undefined {
+  const join = flow === 'join';
+  switch (stage.kind) {
+    case 'preparing':
+    case 'offer':
+    case 'scan':
+      return 2;
+    case 'answer':
+    case 'connecting':
+      return join ? 3 : 2;
+    case 'sas':
+    case 'transfer':
+      return join ? 4 : 3;
+    case 'done':
+    case 'readmitted':
+      return join ? 5 : 4;
+    case 'failed':
+      return undefined;
+  }
+}
+
+/** Every stage after the start, on either device, as a step of the wizard (D253). */
 function Stage({
   controller,
   session,
@@ -450,30 +530,61 @@ function Stage({
   readonly leaving: string;
   readonly onAgain: () => void;
 }) {
+  const m = useMessages();
+  const step = useStep(stageStep(flow, stage));
+  // Nothing to cancel once the vault is on its way, done or failed.
+  const final =
+    stage.kind === 'transfer' ||
+    stage.kind === 'done' ||
+    stage.kind === 'readmitted' ||
+    stage.kind === 'failed';
+  return (
+    <Wizard
+      steps={flowSteps(m, flow)}
+      step={step}
+      onCancel={
+        final
+          ? undefined
+          : () => {
+              controller.cancelPairing();
+            }
+      }
+      cancelTestId="pairing-cancel"
+    >
+      <StageBody
+        controller={controller}
+        session={session}
+        stage={stage}
+        flow={flow}
+        leaving={leaving}
+        onAgain={onAgain}
+      />
+    </Wizard>
+  );
+}
+
+function StageBody({
+  controller,
+  session,
+  stage,
+  flow,
+  leaving,
+  onAgain,
+}: {
+  readonly controller: VaultController;
+  readonly session?: VaultSession | undefined;
+  readonly stage: PairingStage;
+  readonly flow: PairingFlow;
+  readonly leaving: string;
+  readonly onAgain: () => void;
+}) {
   const { messages: m, language } = useLanguage();
   const p = m.pairing;
   const r = m.readmission;
   const readmit = flow === 'readmit';
-  const cancel = (
-    <Button
-      variant="quiet"
-      className="self-start"
-      onClick={() => {
-        controller.cancelPairing();
-      }}
-      data-testid="pairing-cancel"
-    >
-      {p.cancel}
-    </Button>
-  );
   switch (stage.kind) {
     case 'preparing':
-      return (
-        <>
-          <p role="status">{p.preparing}</p>
-          {cancel}
-        </>
-      );
+      return <p role="status">{p.preparing}</p>;
     case 'offer':
       return (
         <>
@@ -486,7 +597,6 @@ function Stage({
             onPaste={(text) => Promise.resolve(controller.pairingAnswer(text))}
             errorOf={(check) => payloadError(m, check, flow)}
           />
-          {cancel}
         </>
       );
     case 'scan':
@@ -500,7 +610,6 @@ function Stage({
             onPaste={(text) => controller.joinOffer(text)}
             errorOf={(check) => payloadError(m, check, flow)}
           />
-          {cancel}
         </>
       );
     case 'answer':
@@ -510,16 +619,10 @@ function Stage({
           <PayloadText text={stage.text} label={m.join.answerLabel} />
           <Notice>{leaving}</Notice>
           <p role="status">{m.join.waitingConnection}</p>
-          {cancel}
         </>
       );
     case 'connecting':
-      return (
-        <>
-          <p role="status">{p.connecting}</p>
-          {cancel}
-        </>
-      );
+      return <p role="status">{p.connecting}</p>;
     case 'sas':
       return (
         <>
@@ -555,7 +658,6 @@ function Stage({
               </Button>
             </div>
           )}
-          {cancel}
         </>
       );
     case 'transfer':
@@ -752,9 +854,20 @@ export function InviteDevice({
           </Button>
         </>
       ) : (
-        <>
+        <Wizard
+          steps={flowSteps(m, 'invite')}
+          step={1}
+          onCancel={
+            working
+              ? undefined
+              : () => {
+                  setOpen(false);
+                  setPassword('');
+                  setOutcome(undefined);
+                }
+          }
+        >
           <p className="text-sm">{p.auth}</p>
-          <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
           {passkeys && controller.hasPasskey ? (
             <Button
               variant="quiet"
@@ -787,24 +900,12 @@ export function InviteDevice({
               autoFocus
               data-testid="invite-password"
             />
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={password === '' || working}>
-                {working ? p.preparing : p.begin}
-              </Button>
-              <Button
-                variant="quiet"
-                disabled={working}
-                onClick={() => {
-                  setOpen(false);
-                  setPassword('');
-                  setOutcome(undefined);
-                }}
-              >
-                {p.cancel}
-              </Button>
-            </div>
+            <NetworkOptions checked={sameNetwork} onChange={setSameNetwork} />
+            <Button type="submit" className="self-start" disabled={password === '' || working}>
+              {working ? p.preparing : p.begin}
+            </Button>
           </form>
-        </>
+        </Wizard>
       )}
     </div>
   );
@@ -854,9 +955,16 @@ export function JoinVault({
       />
     );
   }
-  if (working) return <p role="status">{m.pairing.preparing}</p>;
+  const steps = flowSteps(m, 'join');
+  if (working) {
+    return (
+      <Wizard steps={steps} step={1}>
+        <p role="status">{m.pairing.preparing}</p>
+      </Wizard>
+    );
+  }
   return (
-    <>
+    <Wizard steps={steps} step={1} onCancel={onCancel}>
       <p className="text-sm">{j.intro}</p>
       <form
         className="flex flex-col gap-4"
@@ -877,7 +985,7 @@ export function JoinVault({
           onChange={onChange}
           autoFocus={!replace}
         />
-        <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
+        <NetworkOptions checked={sameNetwork} onChange={setSameNetwork} />
         {replace ? (
           <label className={`${TARGET} flex items-center gap-2 text-sm`}>
             <input
@@ -891,16 +999,11 @@ export function JoinVault({
             {m.replace.understand}
           </label>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={!ready}>
-            {j.submit}
-          </Button>
-          <Button variant="quiet" onClick={onCancel}>
-            {m.app.back}
-          </Button>
-        </div>
+        <Button type="submit" className="self-start" disabled={!ready}>
+          {j.submit}
+        </Button>
       </form>
-    </>
+    </Wizard>
   );
 }
 
@@ -1005,9 +1108,20 @@ export function ReadmitDevice({
           </Button>
         </>
       ) : (
-        <>
-          <p className="text-sm">{r.how}</p>
-          <SameNetwork checked={sameNetwork} onChange={setSameNetwork} />
+        <Wizard
+          steps={flowSteps(m, 'readmit')}
+          step={1}
+          onCancel={
+            working
+              ? undefined
+              : () => {
+                  setOpen(false);
+                  setOutcome(undefined);
+                }
+          }
+        >
+          <p className="text-sm">{r.chooseRole}</p>
+          <NetworkOptions checked={sameNetwork} onChange={setSameNetwork} />
           {error ? (
             <p role="alert" className="text-sm text-danger">
               {error}
@@ -1033,18 +1147,8 @@ export function ReadmitDevice({
             >
               {r.paste}
             </Button>
-            <Button
-              variant="quiet"
-              disabled={working}
-              onClick={() => {
-                setOpen(false);
-                setOutcome(undefined);
-              }}
-            >
-              {m.pairing.cancel}
-            </Button>
           </div>
-        </>
+        </Wizard>
       )}
     </div>
   );

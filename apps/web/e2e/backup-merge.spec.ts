@@ -4,7 +4,7 @@ import { type Browser, type BrowserContext, type Page, expect, test } from '@pla
 
 import { FUTURE_CLOCK_BOUND_MS } from '@blindvault/vault';
 
-import { createVault, openSettingsPage, openVault, startScreen } from './create';
+import { checkSameNetwork, createVault, openSettingsPage, openVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -275,7 +275,7 @@ test.describe('devices a merge brings', () => {
   async function pair(browser: Browser, a: Page, logged: string[]) {
     await openSettingsPage(a, 'devices');
     await button(a, 'Pair a device…').click();
-    await a.getByTestId('pairing-same-network').check();
+    await checkSameNetwork(a);
     await fillPassword(a.getByTestId('invite-password'), PASSWORD);
     await button(a, 'Start pairing').click();
     const offer = a.getByTestId('pairing-text');
@@ -286,7 +286,7 @@ test.describe('devices a merge brings', () => {
     await button(b, 'Pair with an existing device').click();
     await fillPassword(b.getByTestId('new-password'), B_PASSWORD);
     await fillPassword(b.getByTestId('confirm-password'), B_PASSWORD);
-    await b.getByTestId('pairing-same-network').check();
+    await checkSameNetwork(b);
     await button(b, 'Start pairing').click();
     await b.getByTestId('pairing-paste').fill(await offer.inputValue(), { timeout: 30_000 });
     await button(b, 'Show my answer').click();

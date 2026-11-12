@@ -5,7 +5,7 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { THEMES, WIDTHS, audit } from './axe';
-import { createVault, startScreen } from './create';
+import { checkSameNetwork, createVault, startScreen } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -66,7 +66,7 @@ for (const [layout, width] of WIDTHS) {
       await settings(a);
       await button(a, 'Pair a device…').click();
       await audit(a, 'the pairing password');
-      await a.getByTestId('pairing-same-network').check();
+      await checkSameNetwork(a);
       await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
       await button(a, 'Start pairing').click();
       const offer = a.getByTestId('pairing-text');
@@ -77,7 +77,7 @@ for (const [layout, width] of WIDTHS) {
       await button(b, 'Pair with an existing device').click();
       await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
       await fillPassword(b.getByTestId('confirm-password'), PASSWORD_B);
-      await b.getByTestId('pairing-same-network').check();
+      await checkSameNetwork(b);
       await button(b, 'Start pairing').click();
       await expect(b.getByTestId('pairing-paste')).toBeVisible({ timeout: 30_000 });
       await audit(b, "B waiting for A's text");
@@ -109,14 +109,14 @@ for (const [layout, width] of WIDTHS) {
       await a.getByTestId('device-sync').click();
       const syncA = a.getByTestId('sync');
       await audit(a, 'the sync choice');
-      await syncA.getByTestId('pairing-same-network').check();
+      await checkSameNetwork(syncA);
       await syncA.getByTestId('sync-first').click();
       const code = syncA.getByTestId('pairing-text');
       await expect(code).not.toHaveValue('', { timeout: 30_000 });
       await audit(a, "A's sync code");
       await b.getByTestId('device-sync').click();
       const syncB = b.getByTestId('sync');
-      await syncB.getByTestId('pairing-same-network').check();
+      await checkSameNetwork(syncB);
       await syncB.getByTestId('sync-read').click();
       await syncB.getByTestId('pairing-paste').fill(await code.inputValue());
       await button(b, 'Show my answer').click();

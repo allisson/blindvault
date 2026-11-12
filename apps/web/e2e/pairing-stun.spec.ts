@@ -1,6 +1,12 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen, openSettingsPage } from './create';
+import {
+  checkSameNetwork,
+  openAdvanced,
+  createVault,
+  openSettingsPage,
+  startScreen,
+} from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -66,6 +72,7 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
   await createVault(a, PASSWORD_A);
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
+  await openAdvanced(a);
   const hint = a.getByTestId('same-network-hint');
   await expect(hint).toContainText('(stun.l.google.com, stun.cloudflare.com)');
   await a.getByTestId('stun-open').click();
@@ -115,6 +122,7 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
 
   // Cancelled, the screen reads the list again: it stays, until the defaults are restored.
   await expect(a.getByTestId('invite-password')).toBeVisible();
+  await openAdvanced(a);
   await a.getByTestId('stun-open').click();
   await expect(list).toHaveText(['stun:127.0.0.1:3478', 'stun:stun.invalid:3479']);
   await a.getByTestId('stun-reset').click();
@@ -123,7 +131,7 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
   expect(await stored(a)).toBeNull();
 
   // The same network only hides the list and uses no STUN server.
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await expect(a.getByTestId('stun')).toHaveCount(0);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
@@ -146,7 +154,7 @@ test('an unreadable stored list: the same network only, locked on, and the pairi
   await createVault(a, PASSWORD_A);
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
-  await a.getByTestId('pairing-same-network').check();
+  await checkSameNetwork(a);
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();
   const offerText = a.getByTestId('pairing-text');
