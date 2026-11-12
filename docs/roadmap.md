@@ -427,7 +427,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Password strength on item secrets: meter in the editor, Weak badge on the detail, never blocking a save (D249)
 - [x] Feedback: toast region, bottom sheet on a phone, empty-vault checklist, error boundary that locks the vault (D250)
 - [x] Keyboard: list movement, search to list, Esc, Ctrl/⌘+Enter; generator length slider (D251)
-- [ ] Release v0.7.0 for another hands-on test
+- [x] Release v0.7.0 for another hands-on test
 
 ### Essential UX Gate
 
