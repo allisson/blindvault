@@ -13,8 +13,9 @@ import {
   LockState,
   Notice,
   Overflow,
-  PreviewBanner,
+  PreviewBadge,
   SharedOriginWarning,
+  TARGET,
   UpdateBanner,
 } from './components';
 import { useLayout } from './hooks';
@@ -110,7 +111,9 @@ function Header({
   // Under "Vault ready" a new item would open unseen (D198).
   const adds = isList(screen) && screen.name !== 'trash' && session.writable && !controller.ready;
   return (
-    <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
+    <header
+      className={`flex items-center border-b border-line py-2 ${mobile ? 'gap-1 px-3' : 'gap-2 px-4'}`}
+    >
       {back ? (
         <Button
           variant="quiet"
@@ -123,9 +126,14 @@ function Header({
           {m.app.back}
         </Button>
       ) : null}
-      <span className="font-semibold">{m.app.name}</span>
-      <LockState unlocked />
-      <span className="flex-1" />
+      {/* A phone's drill-down keeps Back and the lock state only (D254). */}
+      {mobile && back ? null : (
+        <>
+          <span className="min-w-0 truncate font-semibold">{m.app.name}</span>
+          <PreviewBadge />
+        </>
+      )}
+      <LockState unlocked className="ms-auto shrink-0 whitespace-nowrap" />
       {!mobile && screen.name !== 'settings' ? (
         <Button
           variant="quiet"
@@ -141,6 +149,7 @@ function Header({
         <>
           {adds ? (
             <Button
+              className="px-3.5"
               aria-label={m.items.new}
               title={`${m.items.new} (N)`}
               aria-keyshortcuts="N"
@@ -151,12 +160,12 @@ function Header({
               <Icon name="plus" />
             </Button>
           ) : null}
-          <Overflow label={m.app.more}>
+          <Overflow label={m.app.more} className="px-3.5">
             <Button variant="quiet" className="text-left" {...lock} />
           </Overflow>
         </>
       ) : (
-        <Button {...lock} />
+        <Button variant="secondary" {...lock} />
       )}
     </header>
   );
@@ -284,8 +293,40 @@ export function VaultShell({
       window.removeEventListener('keydown', keys);
     };
   }, [controller, nav, session]);
+  // At the top of the item list, with its two actions (§13.4, D188, D254).
+  const backupReminder = reminder ? (
+    <div
+      role="note"
+      className="grid grid-cols-[1fr_auto] items-start gap-2 rounded-card bg-info-soft px-3 py-2.5 text-sm text-info-text"
+      data-testid="backup-reminder"
+    >
+      <p>{reminderText(m, language, reminder)}</p>
+      <button
+        type="button"
+        className={`${TARGET} -me-1 -mt-1 min-w-10 rounded-control hover:bg-subtle`}
+        aria-label={m.restore.dismiss}
+        title={m.restore.dismiss}
+        onClick={() => {
+          controller.dismissBackupReminder();
+        }}
+      >
+        <Icon name="x" />
+      </button>
+      <button
+        type="button"
+        className={`${TARGET} col-span-2 justify-self-start rounded-control border border-current px-3 font-medium hover:bg-subtle`}
+        onClick={() => {
+          nav.openSettings('backup');
+        }}
+      >
+        <Icon name="upload" className="me-1.5" />
+        {m.vault.reminderBackup}
+      </button>
+    </div>
+  ) : null;
   const list = (
     <ItemList
+      notice={backupReminder}
       session={session}
       nav={nav}
       onChange={refresh}
@@ -415,7 +456,6 @@ export function VaultShell({
         <LiveSync controller={controller} nav={nav} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
           <SharedOriginWarning />
-          <PreviewBanner />
           <UpdateBanner />
           <StorageWarningBanner controller={controller} session={session} />
           {clock ? (
@@ -482,30 +522,6 @@ export function VaultShell({
                 variant="quiet"
                 onClick={() => {
                   controller.dismissRefounded();
-                }}
-              >
-                {m.restore.dismiss}
-              </Button>
-            </div>
-          ) : null}
-          {reminder ? (
-            <div
-              className="flex flex-wrap items-center gap-2 px-4 py-2"
-              data-testid="backup-reminder"
-            >
-              <Notice>{reminderText(m, language, reminder)}</Notice>
-              <Button
-                variant="quiet"
-                onClick={() => {
-                  nav.openSettings('backup');
-                }}
-              >
-                {m.vault.reminderBackup}
-              </Button>
-              <Button
-                variant="quiet"
-                onClick={() => {
-                  controller.dismissBackupReminder();
                 }}
               >
                 {m.restore.dismiss}

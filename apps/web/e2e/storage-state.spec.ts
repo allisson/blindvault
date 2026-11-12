@@ -108,8 +108,13 @@ test('warns while storage is not kept on the only device, in every layout, until
     await page.setViewportSize({ width, height: 800 });
     await expect(banner).toHaveAttribute('data-warning', 'not-kept');
     await expect(banner).toContainText('this is the only device of the vault');
-    // Nothing dismisses it.
-    await expect(banner.getByRole('button')).toHaveCount(0);
+    // Nothing dismisses it: its one button shows the whole text (D254).
+    const details = banner.getByRole('button');
+    await expect(details).toHaveText('Details');
+    await details.click();
+    await expect(details).toHaveText('Less');
+    await expect(details).toHaveAttribute('aria-expanded', 'true');
+    await details.click();
   }
 
   await openSettings(page);
