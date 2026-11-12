@@ -106,8 +106,6 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
       timeout: 60_000,
     },
   );
-  // The new vault also shows the backup reminder, with its own Dismiss (D188).
-  await expect(page.getByTestId('backup-reminder')).toBeVisible();
   await page.getByTestId('refounded').getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('refounded')).toHaveCount(0);
   expect(await page.evaluate(async () => (await indexedDB.databases()).length)).toBe(1);
@@ -126,6 +124,8 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await button(page, 'Back').click();
   await button(page, 'Back').click();
   await expect(button(page, 'ACME')).toBeVisible();
+  // The new vault also shows the backup reminder, at the top of the list (D188, D254).
+  await expect(page.getByTestId('backup-reminder')).toBeVisible();
   await expect(button(page, 'Discarded')).toHaveCount(0);
   await button(page, 'Trash').click();
   await expect(button(page, 'Discarded')).toHaveCount(0);

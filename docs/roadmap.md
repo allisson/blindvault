@@ -433,7 +433,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] The same wizard on the other step flows: create, restore, reset the password, regenerate the phrase, re-found, merge, import (D253)
 - [x] Release v0.7.1 for another hands-on test
 - [x] Capture every v0.7.1 screen and approve an HTML prototype of the layout and presentation changes (`docs/prototypes/phase-7b-layout.html`, D254)
-- [ ] Notices: the Preview badge, the storage warning on one line with Details, the backup reminder at the top of the list, a neutral lock badge (D254)
+- [x] Notices: the Preview badge, the storage warning on one line with Details, the backup reminder at the top of the list, a neutral lock badge (D254)
 - [ ] Lists: folders and types as pills opening a bottom sheet on a phone, the toast above the bottom navigation (D254)
 - [ ] Item detail and editor: the header bar, divided field rows, icon buttons on non-secret fields, the fixed Cancel and Save bar, the generator in a dialog or bottom sheet (D254)
 - [ ] Show and Hide on every password field, masked again on submit, on a screen change and on lock (D254)

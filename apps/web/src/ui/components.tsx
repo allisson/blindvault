@@ -192,9 +192,11 @@ export function ConfirmDialog({
  */
 export function Overflow({
   label,
+  className = '',
   children,
 }: {
   readonly label: string;
+  readonly className?: string;
   readonly children: ReactNode;
 }) {
   const id = useId();
@@ -217,7 +219,14 @@ export function Overflow({
   }, []);
   return (
     <>
-      <Button ref={button} variant="quiet" aria-label={label} title={label} popoverTarget={id}>
+      <Button
+        ref={button}
+        variant="quiet"
+        className={className}
+        aria-label={label}
+        title={label}
+        popoverTarget={id}
+      >
         <Icon name="ellipsis" />
       </Button>
       <div
@@ -363,23 +372,86 @@ export function Notice({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/** The always-visible lock state (overview §13.2). */
-export function LockState({ unlocked }: { readonly unlocked: boolean }) {
+/** The always-visible lock state (overview §13.2), neutral with its padlock (D254). */
+export function LockState({
+  unlocked,
+  className = '',
+}: {
+  readonly unlocked: boolean;
+  readonly className?: string;
+}) {
   const m = useMessages();
   return (
-    <Badge data-testid="lock-state" tone={unlocked ? 'warning' : 'neutral'}>
+    <Badge
+      data-testid="lock-state"
+      className={`inline-flex items-center gap-1 text-muted ${className}`}
+    >
+      <Icon name={unlocked ? 'lock-open' : 'lock'} className="size-3.5" />
       {unlocked ? m.app.unlocked : m.app.locked}
     </Badge>
   );
 }
 
-/** Vaults and backups of the preview build are throwaway, with no migration owed (D177). */
-export function PreviewBanner() {
+/**
+ * Vaults and backups of the preview build are throwaway, with no migration owed (D177): a badge
+ * beside the app's name whose popover holds the whole text (D254). The browser closes it on Escape
+ * or a click outside.
+ */
+export function PreviewBadge() {
   const m = useMessages();
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const pop = popover.current;
+    if (!pop) return;
+    // Placed under its button each time it opens, kept inside the viewport.
+    const place = (e: Event) => {
+      const at = button.current?.getBoundingClientRect();
+      if (!at || (e as ToggleEvent).newState !== 'open') return;
+      const width = Math.min(320, document.documentElement.clientWidth - 32);
+      const left = Math.max(
+        16,
+        Math.min(at.left, document.documentElement.clientWidth - 16 - width),
+      );
+      pop.style.top = `${String(at.bottom + 4)}px`;
+      pop.style.left = `${String(left)}px`;
+      pop.style.width = `${String(width)}px`;
+    };
+    const toggle = (e: Event) => {
+      setOpen((e as ToggleEvent).newState === 'open');
+    };
+    pop.addEventListener('beforetoggle', place);
+    pop.addEventListener('toggle', toggle);
+    return () => {
+      pop.removeEventListener('beforetoggle', place);
+      pop.removeEventListener('toggle', toggle);
+    };
+  }, []);
   return (
-    <Banner tone="warning" role="note" data-testid="preview-banner">
-      {m.preview.banner}
-    </Banner>
+    <>
+      <button
+        ref={button}
+        type="button"
+        popoverTarget={id}
+        aria-expanded={open}
+        className="shrink-0 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning-text hover:underline pointer-coarse:min-h-11 pointer-coarse:px-3"
+        data-testid="preview-badge"
+      >
+        {m.preview.badge}
+      </button>
+      <div
+        ref={popover}
+        id={id}
+        popover="auto"
+        role="note"
+        className="fixed inset-auto m-0 rounded-card border border-line bg-warning-soft px-3 py-2 text-sm text-warning-text shadow-raised"
+        data-testid="preview-banner"
+      >
+        {m.preview.banner}
+      </div>
+    </>
   );
 }
 
@@ -440,7 +512,10 @@ export function SharedOriginWarning() {
   );
 }
 
-/** A storage warning: none can be dismissed, each goes once its condition ends (D196). */
+/**
+ * A storage warning: none can be dismissed, each goes once its condition ends (D196). One line with
+ * its icon; "Details" shows the whole text (D254).
+ */
 export function StorageAlert({
   warning,
   text,
@@ -448,9 +523,32 @@ export function StorageAlert({
   readonly warning: StorageWarning;
   readonly text: string;
 }) {
+  const m = useMessages();
+  const [open, setOpen] = useState(false);
+  const id = useId();
   return (
-    <Banner tone="danger" role="alert" data-testid="storage-warning" data-warning={warning}>
-      {text}
+    <Banner
+      tone="danger"
+      role="alert"
+      data-testid="storage-warning"
+      data-warning={warning}
+      className="flex items-start gap-2 border-b border-line"
+    >
+      <Icon name="triangle-alert" className="mt-0.5" />
+      <p id={id} className={`min-w-0 flex-1 ${open ? '' : 'truncate'}`}>
+        {text}
+      </p>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        className="font-semibold whitespace-nowrap underline pointer-coarse:-my-2 pointer-coarse:min-h-11"
+        onClick={() => {
+          setOpen(!open);
+        }}
+      >
+        {open ? m.storage.less : m.storage.details}
+      </button>
     </Banner>
   );
 }
@@ -486,6 +584,7 @@ export function Card({
   readonly children: ReactNode;
 }) {
   const m = useMessages();
+  const held = useContext(VaultHeld);
   // Before unlock is where verifying the build matters most (D192).
   const [about, setAbout] = useAbout();
   const updates = useUpdates();
@@ -497,13 +596,17 @@ export function Card({
     <div className="flex min-h-dvh flex-col bg-surface text-fg">
       <SharedOriginWarning />
       <SafariTabWarning />
-      <PreviewBanner />
       <UpdateBanner />
       <main className="flex flex-1 items-center justify-center p-4">
         <section className="flex w-full max-w-sm flex-col gap-4 rounded-card bg-raised p-6 shadow-raised">
-          <header className="flex items-center justify-between">
-            <span className="text-sm font-semibold">{m.app.name}</span>
-            <LockState unlocked={false} />
+          {/* The app's name once (D254), and no lock state before a vault exists. */}
+          <header className="flex flex-wrap items-center gap-2">
+            {title === m.app.name ? null : (
+              <span className="text-sm font-semibold">{m.app.name}</span>
+            )}
+            <PreviewBadge />
+            <span className="flex-1" />
+            {held === 'yes' ? <LockState unlocked={false} /> : null}
           </header>
           <h1 className="text-xl font-semibold">{about ? m.about.title : title}</h1>
           {about ? (

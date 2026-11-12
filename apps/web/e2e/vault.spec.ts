@@ -36,6 +36,10 @@ test('refuses a weak or mismatched password before creating (D71)', async ({ pag
   await page.getByTestId('confirm-password').fill(`${PASSWORD}x`);
   await expect(page.getByText('The passwords do not match.')).toBeVisible();
   await expect(submit).toBeDisabled();
+  // A badge beside the app's name opens the whole text (D254).
+  await expect(page.getByTestId('preview-banner')).toBeHidden();
+  await page.getByTestId('preview-badge').click();
+  await expect(page.getByTestId('preview-badge')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('preview-banner')).toHaveText(
     'Preview build: vaults and backups made here may not open in a later version, and no migration is planned for them. Do not keep anything here you cannot lose.',
   );
@@ -45,7 +49,7 @@ test('creates, locks, refuses a wrong password and unlocks, keeping the URL and 
   page,
 }) => {
   await create(page);
-  await expect(page.getByTestId('preview-banner')).toBeVisible();
+  await expect(page.getByTestId('preview-badge')).toHaveText('Preview');
   const before = await page.evaluate(() => window.history.length);
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -193,6 +197,7 @@ test.describe('in Portuguese', () => {
     await expect(create.or(advice)).toBeVisible();
     if (await advice.isVisible()) await advice.click();
     await expect(create).toBeVisible();
-    await expect(page.getByTestId('lock-state')).toHaveText('Bloqueado');
+    // No vault yet, so no lock state; the preview badge is translated (D254).
+    await expect(page.getByTestId('preview-badge')).toHaveText('Prévia');
   });
 });

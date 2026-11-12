@@ -43,6 +43,7 @@ const en = {
     continue: 'I verified, continue',
   },
   preview: {
+    badge: 'Preview',
     banner:
       'Preview build: vaults and backups made here may not open in a later version, and no migration is planned for them. Do not keep anything here you cannot lose.',
   },
@@ -51,6 +52,8 @@ const en = {
       'This copy of BlindVault runs under a sub-path of a github.io address, which other sites share: they can read and delete its storage. Do not keep anything here; use a copy served from its own address.',
   },
   storage: {
+    details: 'Details',
+    less: 'Less',
     title: 'This device',
     kept: 'The browser keeps this vault’s storage, even when space runs low.',
     notKept:
@@ -1197,6 +1200,7 @@ const ptBR: Messages = {
     continue: 'Verifiquei, continuar',
   },
   preview: {
+    badge: 'Prévia',
     banner:
       'Versão de prévia: cofres e backups feitos aqui podem não abrir numa versão futura, e não há migração prevista para eles. Não guarde aqui nada que você não possa perder.',
   },
@@ -1205,6 +1209,8 @@ const ptBR: Messages = {
       'Esta cópia do BlindVault roda num subcaminho de um endereço github.io, que outros sites compartilham: eles podem ler e apagar os dados dela. Não guarde nada aqui; use uma cópia servida no próprio endereço.',
   },
   storage: {
+    details: 'Detalhes',
+    less: 'Menos',
     title: 'Este dispositivo',
     kept: 'O navegador mantém o armazenamento deste cofre, mesmo quando falta espaço.',
     notKept:

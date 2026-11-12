@@ -1,5 +1,5 @@
 import { type Item, type TreeItem, type VaultSession } from '@blindvault/vault';
-import { type RefObject, useRef, useState, useSyncExternalStore } from 'react';
+import { type ReactNode, type RefObject, useRef, useState, useSyncExternalStore } from 'react';
 
 import { findNode, treeItems } from '../app/folders';
 import { hex } from '../app/ids';
@@ -40,6 +40,7 @@ export function ItemList({
   query,
   onQuery,
   searchRef,
+  notice,
 }: {
   readonly session: VaultSession;
   readonly nav: Navigation;
@@ -48,6 +49,8 @@ export function ItemList({
   readonly query: string;
   readonly onQuery: (query: string) => void;
   readonly searchRef: RefObject<HTMLInputElement | null>;
+  /** Shown below the list's head, such as the backup reminder (D254). */
+  readonly notice?: ReactNode;
 }) {
   const { messages: m, language } = useLanguage();
   const layout = useLayout();
@@ -207,6 +210,7 @@ export function ItemList({
           </div>
         ) : null}
       </div>
+      {notice}
       {list.name === 'folder' && !searching ? (
         <FolderActions
           // Keyed by folder: an open form never carries to another folder.

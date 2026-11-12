@@ -61,7 +61,8 @@ test('erases the unlocked vault from Settings, saying it is the only device (D11
 
   await startScreen(page);
   await expect(page.getByTestId('erased')).toContainText('The vault was erased from this device.');
-  await expect(page.getByTestId('lock-state')).toHaveText('Locked');
+  // No vault left, so no lock state (D254).
+  await expect(page.getByTestId('lock-state')).toHaveCount(0);
   expect(await databases(page)).toEqual([]);
 
   // Not kept anywhere: a reload shows the start screen alone.
