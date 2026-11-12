@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Browser, type BrowserContext, type Page, expect, test } from '@playwright/test';
 
-import { createVault, openVault } from './create';
+import { createVault, openVault, openSettingsPage } from './create';
 
 // Creation, export and replacement each derive Argon2id at about 1 s (D9).
 test.setTimeout(300_000);
@@ -43,13 +43,14 @@ async function newItem(page: Page, title: string) {
 
 /** Exports from Settings with the local password and returns the file the browser received. */
 async function exportBackup(page: Page): Promise<Buffer> {
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'backup');
   await page.getByTestId('backup-password').fill(PASSWORD);
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),
     button(page, 'Export').click(),
   ]);
   const bytes = await readFile(await download.path());
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   return bytes;
 }

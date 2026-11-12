@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen } from './create';
+import { createVault, openSettingsPage, startScreen } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9).
 test.setTimeout(120_000);
@@ -49,7 +49,7 @@ test('shows the version and the hash of the running build, before unlock and in 
   await startScreen(page);
 
   await createVault(page, PASSWORD);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'about');
   await expectAbout(page, hash);
 
   // Opening About before unlock hides the screen without losing what was typed.

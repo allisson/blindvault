@@ -25,7 +25,6 @@ import { ItemHistory } from './ItemHistory';
 import { FolderPane } from './Folders';
 import { ItemList } from './ItemList';
 import { Ready } from './Ready';
-import { focusBackup } from './RegeneratePhrase';
 import { Settings } from './Settings';
 import { StorageWarningBanner } from './StorageState';
 import { Icon } from './icons';
@@ -186,7 +185,7 @@ function LiveSync({
       <Button
         variant="quiet"
         onClick={() => {
-          nav.open({ name: 'settings', focus: 'devices' });
+          nav.openSettings('devices');
         }}
         data-testid="live-sync-show"
       >
@@ -398,7 +397,13 @@ export function VaultShell({
         <div className={`flex min-w-0 flex-1 ${shown.detail ? '' : 'hidden'}`}>{detail}</div>
       </div>
       {settings ? (
-        <Settings controller={controller} session={session} nav={nav} focus={screen.focus} />
+        <Settings
+          controller={controller}
+          session={session}
+          nav={nav}
+          page={screen.page}
+          focus={screen.focus}
+        />
       ) : null}
     </>
   );
@@ -430,7 +435,7 @@ export function VaultShell({
                     variant="quiet"
                     data-testid="clock-refound"
                     onClick={() => {
-                      nav.open({ name: 'settings', focus: 'refound' });
+                      nav.openSettings('refound');
                     }}
                   >
                     {m.refound.title}
@@ -492,8 +497,7 @@ export function VaultShell({
               <Button
                 variant="quiet"
                 onClick={() => {
-                  if (screen.name === 'settings') focusBackup();
-                  else nav.open({ name: 'settings', focus: 'backup' });
+                  nav.openSettings('backup');
                 }}
               >
                 {m.vault.reminderBackup}

@@ -85,9 +85,6 @@ export function ImportItems({
 
   return (
     <section className="flex flex-col gap-4" data-section="import">
-      <h2 tabIndex={-1} className="font-semibold">
-        {m.import.title}
-      </h2>
       <p className="text-sm">{m.import.intro}</p>
       {!session.writable ? (
         <Notice>{m.import.readOnly}</Notice>

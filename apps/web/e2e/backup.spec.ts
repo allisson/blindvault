@@ -4,7 +4,7 @@ import { RecordType } from '@blindvault/crypto';
 import { type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9); an export derives twice.
 test.setTimeout(180_000);
@@ -43,7 +43,7 @@ test('exports a backup, asking for the local password again, then one under a ge
   await page.getByTestId('input-Password').fill(SECRET);
   await button(page, 'Save').click();
   await expect(page.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'backup');
   await expect(
     page.getByText(
       'A backup is an encrypted file with a full copy of this vault. Your Recovery Phrase always opens it. Keep copies away from this device, so you can restore if you lose it.',
@@ -140,7 +140,7 @@ test('a record that fails verification makes no backup, and the export names it 
   await page.getByTestId('item-title').fill('ACME');
   await button(page, 'Save').click();
   await expect(page.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'backup');
   // The export reads every record again from storage and verifies it (D181).
   expect(await corruptRecords(page, RecordType.item)).toBeGreaterThan(0);
   let downloaded = false;

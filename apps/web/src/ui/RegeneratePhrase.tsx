@@ -1,5 +1,5 @@
 import { type RecoveryView, type VaultSession } from '@blindvault/vault';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 import { phraseLabel } from '../app/backup-file';
 import { type ExportAuth, type Regeneration, type VaultController } from '../app/controller';
@@ -32,6 +32,13 @@ export function focusBackup(): void {
   field?.focus();
 }
 
+/** Where "Make a backup now" leads: Settings provides its Backup page (D252). */
+export const OpenBackup = createContext<() => void>(focusBackup);
+
+export function useOpenBackup(): () => void {
+  return useContext(OpenBackup);
+}
+
 /** What a regeneration that changed nothing says. */
 function regenerationError(m: Messages, outcome: Regeneration): string | undefined {
   const s = m.settings;
@@ -59,6 +66,7 @@ export function RegeneratePhrase({
   readonly controller: VaultController;
   readonly session: VaultSession;
 }) {
+  const openBackup = useOpenBackup();
   const { messages: m, language } = useLanguage();
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [password, setPassword] = useState('');
@@ -107,7 +115,7 @@ export function RegeneratePhrase({
               </p>
               <Notice>{m.settings.regenOtherDevices}</Notice>
               <p className="text-sm">{m.settings.regenOldBackups}</p>
-              <Button className="self-start" onClick={focusBackup}>
+              <Button className="self-start" onClick={openBackup}>
                 {m.settings.regenBackupNow}
               </Button>
             </div>

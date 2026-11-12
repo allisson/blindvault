@@ -144,7 +144,7 @@ const en = {
     leaving:
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the pairing ends.',
     leavingImmediate:
-      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock below.',
+      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
     answerPaste: 'The other device’s answer',
     connect: 'Connect',
     connecting: 'Connecting…',
@@ -333,7 +333,7 @@ const en = {
     leaving:
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the sync ends.',
     leavingImmediate:
-      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock below.',
+      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
     paste: {
       malformed: 'This is not a whole BlindVault sync text. Copy it again, whole.',
       version: 'This text comes from another version of BlindVault: update both devices.',
@@ -504,7 +504,7 @@ const en = {
       "This backup holds records dated ahead of this device's clock. It can be merged from {date}.",
     locked: 'The merge stopped before anything was saved. Open the file again.',
     phraseChanged:
-      'The Recovery Phrase was regenerated on another device: the new one, {id}, was created on {date}. New backups open only with it: check yours with Check Recovery Phrase below.',
+      'The Recovery Phrase was regenerated on another device: the new one, {id}, was created on {date}. New backups open only with it: check yours in Settings › Recovery Phrase.',
     phraseSuperseded:
       'The Recovery Phrase you wrote down for this device, {id}, created on {date}, was replaced by one regenerated on another device. Backups made with it open only with it, so keep it until you have a new backup. New backups open only with the new phrase.',
     backupNow: 'Make a backup now',
@@ -772,6 +772,33 @@ const en = {
   },
   settings: {
     title: 'Settings',
+    groups: {
+      preferences: 'Preferences',
+      security: 'Security',
+      devices: 'Devices',
+      data: 'Data',
+      danger: 'Danger zone',
+    },
+    pages: {
+      appearance: 'Appearance',
+      language: 'Language',
+      locking: 'Locking',
+      password: 'Local password',
+      passkey: 'Passkey unlock',
+      recovery: 'Recovery Phrase',
+      devices: 'Devices',
+      backup: 'Backup',
+      merge: 'Merge a backup',
+      import: 'Import',
+      storage: 'This device',
+      refound: 'Re-found the vault',
+      erase: 'Erase from this device',
+      about: 'About BlindVault',
+    },
+    hintMinutes: '{n} min',
+    hintOn: 'On',
+    hintOff: 'Off',
+    hintNever: 'Never',
     appearance: 'Appearance',
     theme: 'Theme',
     themes: { system: 'System', light: 'Light', dark: 'Dark' },
@@ -827,7 +854,7 @@ const en = {
     recovery: 'Recovery Phrase',
     recoveryCreated: 'The current Recovery Phrase was created on {date} ({id}).',
     recoveryNoBackup:
-      'No backup made on this device opens with the current Recovery Phrase yet: make one in Backup, above.',
+      'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings › Backup.',
     regenTitle: 'Regenerate the Recovery Phrase',
     regenIntro:
       'If you lost the Recovery Phrase, regenerate it while the vault is unlocked: a new phrase replaces it, and nothing in the vault changes.',
@@ -1193,7 +1220,7 @@ const ptBR: Messages = {
     leaving:
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, o pareamento termina.',
     leavingImmediate:
-      'Este cofre bloqueia assim que o BlindVault fica oculto, o que termina o pareamento: copie e cole sem sair do app, ou mude o bloqueio do app oculto abaixo.',
+      'Este cofre bloqueia assim que o BlindVault fica oculto, o que termina o pareamento: copie e cole sem sair do app, ou mude o bloqueio do app oculto em Configurações › Bloqueio.',
     answerPaste: 'Resposta do outro dispositivo',
     connect: 'Conectar',
     connecting: 'Conectando…',
@@ -1388,7 +1415,7 @@ const ptBR: Messages = {
     leaving:
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, a sincronização termina.',
     leavingImmediate:
-      'Este cofre bloqueia assim que o BlindVault fica oculto, o que encerra a sincronização: copie e cole sem sair do app, ou mude o bloqueio do app oculto abaixo.',
+      'Este cofre bloqueia assim que o BlindVault fica oculto, o que encerra a sincronização: copie e cole sem sair do app, ou mude o bloqueio do app oculto em Configurações › Bloqueio.',
     paste: {
       malformed:
         'Este não é um texto de sincronização do BlindVault inteiro. Copie-o de novo, inteiro.',
@@ -1562,7 +1589,7 @@ const ptBR: Messages = {
       'Este backup contém registros com data à frente do relógio deste dispositivo. Ele pode ser mesclado a partir de {date}.',
     locked: 'A mesclagem parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
     phraseChanged:
-      'A Frase de Recuperação foi regenerada em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Conferir a Frase de Recuperação, abaixo.',
+      'A Frase de Recuperação foi regenerada em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Configurações › Frase de Recuperação.',
     phraseSuperseded:
       'A Frase de Recuperação que você anotou para este dispositivo, {id}, criada em {date}, foi substituída por uma regenerada em outro dispositivo. Os backups feitos com ela só abrem com ela, então guarde-a até ter um novo backup. Os novos backups só abrem com a frase nova.',
     backupNow: 'Fazer um backup agora',
@@ -1828,6 +1855,33 @@ const ptBR: Messages = {
   },
   settings: {
     title: 'Configurações',
+    groups: {
+      preferences: 'Preferências',
+      security: 'Segurança',
+      devices: 'Dispositivos',
+      data: 'Dados',
+      danger: 'Zona de perigo',
+    },
+    pages: {
+      appearance: 'Aparência',
+      language: 'Idioma',
+      locking: 'Bloqueio',
+      password: 'Senha local',
+      passkey: 'Desbloqueio com passkey',
+      recovery: 'Frase de Recuperação',
+      devices: 'Dispositivos',
+      backup: 'Backup',
+      merge: 'Mesclar um backup',
+      import: 'Importar',
+      storage: 'Este dispositivo',
+      refound: 'Refundar o cofre',
+      erase: 'Apagar deste dispositivo',
+      about: 'Sobre o BlindVault',
+    },
+    hintMinutes: '{n} min',
+    hintOn: 'Ativado',
+    hintOff: 'Desativado',
+    hintNever: 'Nunca',
     appearance: 'Aparência',
     theme: 'Tema',
     themes: { system: 'Sistema', light: 'Claro', dark: 'Escuro' },
@@ -1883,7 +1937,7 @@ const ptBR: Messages = {
     recovery: 'Frase de Recuperação',
     recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
     recoveryNoBackup:
-      'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Backup, acima.',
+      'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Configurações › Backup.',
     regenTitle: 'Regenerar a Frase de Recuperação',
     regenIntro:
       'Se você perdeu a Frase de Recuperação, regenere-a com o cofre desbloqueado: uma frase nova substitui a atual, e nada no cofre muda.',

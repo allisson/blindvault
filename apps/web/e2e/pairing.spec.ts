@@ -2,7 +2,13 @@ import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
-import { createVault, openVault, startScreen } from './create';
+import {
+  createVault,
+  openSettingsPage,
+  openVault,
+  startScreen,
+  switchSettingsPage,
+} from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -54,7 +60,7 @@ async function invite(a: Page): Promise<string> {
   await button(a, 'Save').click();
   await expect(a.getByRole('heading', { name: TITLE })).toBeVisible();
 
-  await button(a, 'Settings').click();
+  await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
@@ -123,7 +129,7 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
   await expect(a.getByTestId('device-last-sync')).toContainText('Last synced with this device: ');
   await expect(a.getByTestId('device-last-sync')).not.toContainText('never');
   await expect(a.getByTestId('device-pending')).toHaveCount(0);
-  await button(b, 'Settings').click();
+  await openSettingsPage(b, 'devices');
   await expect(b.getByTestId('device')).toHaveCount(2);
   await expect(b.getByTestId('device-last-sync')).not.toContainText('never');
 
@@ -134,12 +140,13 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
 
   // Erasing B names its Device record, to retire from A, before and after (D205).
-  await button(b, 'Settings').click();
+  await openSettingsPage(b, 'devices');
   const own = b.getByTestId('device').filter({ hasText: '(this device)' });
   const nameB = ((await own.locator('span.font-medium').textContent()) ?? '')
     .replace(' (this device)', '')
     .trim();
   expect(nameB).not.toBe('');
+  await switchSettingsPage(b, 'erase');
   const named = `Afterwards, retire this device's Device record, "${nameB}", from another device: until then they keep offering it as a sync peer.`;
   await button(b, 'Erase this vault from this device…').click();
   await expect(b.getByTestId('erase-warning').getByText(named, { exact: true })).toBeVisible();
@@ -161,6 +168,7 @@ test('a clock gone back far on a paired device offers replacing its vault by pai
   // A writes 400 days ahead, then its clock goes back: B is another device to pair again from.
   const now = await a.evaluate(() => Date.now());
   await a.clock.setSystemTime(now + 400 * 24 * 60 * 60 * 1000);
+  await button(a, 'Back').click();
   await button(a, 'Back').click();
   await button(a, 'New item').click();
   await button(a, 'Login').click();
@@ -260,19 +268,23 @@ test('a hidden-app lock at 0 says it locks at once, in Settings, the export and 
 }) => {
   const a = await device(browser);
   await createVault(a, PASSWORD_A);
-  await button(a, 'Settings').click();
+  await openSettingsPage(a, 'locking');
   const immediate =
     'At 0 the vault locks as soon as the app is hidden, including during a file picker or passkey prompt on some systems.';
   const exportHidden =
     'The vault locks as soon as the app is hidden: if the browser hides it while it saves the file, the vault locks, and the export must be repeated.';
   await expect(a.getByText(immediate)).toHaveCount(0);
+  await switchSettingsPage(a, 'backup');
   await expect(a.getByText(exportHidden)).toHaveCount(0);
+  await switchSettingsPage(a, 'locking');
   await a.getByTestId('hiddenLockSeconds').fill('0');
   await expect(a.getByText(immediate)).toBeVisible();
   await button(a, 'Save').click();
   await expect(a.getByText('Saved.')).toBeVisible();
+  await switchSettingsPage(a, 'backup');
   await expect(a.getByText(exportHidden)).toBeVisible();
 
+  await switchSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
@@ -280,17 +292,20 @@ test('a hidden-app lock at 0 says it locks at once, in Settings, the export and 
   await expect(a.getByTestId('pairing-text')).not.toHaveValue('', { timeout: 30_000 });
   await expect(
     a.getByText(
-      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock below.',
+      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
     ),
   ).toBeVisible();
   await a.getByTestId('pairing-cancel').click();
 
+  await switchSettingsPage(a, 'locking');
   await a.getByTestId('hiddenLockSeconds').fill('30');
   await expect(a.getByText(immediate)).toHaveCount(0);
   await button(a, 'Save').click();
   await expect(a.getByText('Saved.')).toBeVisible();
+  await switchSettingsPage(a, 'backup');
   await expect(a.getByText(exportHidden)).toHaveCount(0);
-  // Cancel left the password step open.
+  await switchSettingsPage(a, 'devices');
+  await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
   await button(a, 'Start pairing').click();

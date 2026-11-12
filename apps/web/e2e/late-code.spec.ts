@@ -1,6 +1,6 @@
 import { type Request, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9); this test derives five times.
 test.setTimeout(180_000);
@@ -33,12 +33,14 @@ test('loads no script, worker or WebAssembly after the first unlock (D142)', asy
   });
 
   // The strength check and two derivations.
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'password');
   await page.getByTestId('current-password').fill(PASSWORD);
   await page.getByTestId('new-password').fill(NEXT);
   await page.getByTestId('confirm-password').fill(NEXT);
   await page.getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByText('Password changed.')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByTestId('settings-backup').click();
 
   // An export under an export password: its strength check and two more derivations.
   await page.getByTestId('backup-protect').check();

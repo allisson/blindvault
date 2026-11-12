@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -105,10 +105,11 @@ test('copies a TOTP code and a secret, then clears the clipboard after the timeo
   page,
 }) => {
   await create(page);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'locking');
   await page.getByTestId('clipboardClearSeconds').fill('10');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Saved.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
 
   await page.getByRole('button', { name: 'New item', exact: true }).click();

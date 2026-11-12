@@ -97,9 +97,15 @@ for (const [layout, width] of WIDTHS) {
     // Mobile has Settings in its bottom navigation, below the lists.
     if (layout === 'mobile') await page.getByRole('button', { name: 'Back', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
-    await expect(page.getByTestId('device-storage')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
     await noOverflow(page, 'Settings');
+    // The densest pages (D252).
+    for (const row of ['devices', 'backup', 'storage']) {
+      await page.getByTestId(`settings-${row}`).click();
+      await noOverflow(page, `Settings, ${row}`);
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+    }
   });
 }
 
@@ -200,9 +206,12 @@ test("goes one screen back on the browser's back, through one entry that carries
   // Settings on desktop goes back the same way.
   await resize(page, 1280);
   await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
+  await page.getByTestId('settings-storage').click();
   await expect(page.getByTestId('device-storage')).toBeVisible();
   await page.goBack();
-  await expect(page.getByTestId('device-storage')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeHidden();
   await expect(page.getByRole('button', { name: 'New item', exact: true })).toBeVisible();
 
   expect(new URL(page.url()).pathname).toBe('/');
@@ -341,8 +350,13 @@ test.describe('on a coarse pointer', () => {
       expect(await smallTargets(page), `${layout}: the editor and its generator`).toEqual([]);
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
-      await expect(page.getByTestId('device-storage')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
       expect(await smallTargets(page), `${layout}: Settings`).toEqual([]);
+      for (const row of ['devices', 'backup', 'storage']) {
+        await page.getByTestId(`settings-${row}`).click();
+        expect(await smallTargets(page), `${layout}: Settings, ${row}`).toEqual([]);
+        await page.getByRole('button', { name: 'Back', exact: true }).click();
+      }
       await page.getByRole('button', { name: 'Back', exact: true }).click();
     }
 

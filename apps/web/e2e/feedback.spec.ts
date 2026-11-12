@@ -50,7 +50,8 @@ test('the empty vault shows its first steps, each opening where it is done (D250
   await expect(steps.getByRole('img', { name: 'Done' })).toBeVisible();
 
   await steps.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Import', exact: true, level: 2 })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Import', exact: true, level: 1 })).toBeFocused();
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
 
   await steps.getByRole('button', { name: 'Add an item', exact: true }).click();

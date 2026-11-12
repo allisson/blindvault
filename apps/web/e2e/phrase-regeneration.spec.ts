@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { answerConfirmation, createVault } from './create';
+import { answerConfirmation, createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9); exports and the regeneration derive
 // again.
@@ -66,10 +66,14 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   await page.getByTestId('item-title').fill('ACME');
   await button(page, 'Save').click();
   await expect(page.getByRole('heading', { name: 'ACME', level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'recovery');
   const oldId = await currentId(page);
   expect(oldId).toMatch(/^[0-9a-f]{8}$/);
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-backup').click();
   await exportBackup(page);
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-recovery').click();
   await expect(page.getByTestId('recovery-no-backup')).toHaveCount(0);
   await expect(
     page.getByText(
@@ -118,7 +122,7 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   ).toBeVisible();
   // The backup made before opens only with the previous phrase.
   await expect(page.getByTestId('recovery-no-backup')).toHaveText(
-    'No backup made on this device opens with the current Recovery Phrase yet: make one in Backup, above.',
+    'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings › Backup.',
   );
 
   await check(page, words);
@@ -131,9 +135,12 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   await expect(page.getByTestId('backup-password')).toBeFocused();
   await exportBackup(page);
   await expect(page.getByText(`It opens with the Recovery Phrase ${newId}`)).toBeVisible();
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-recovery').click();
   await expect(page.getByTestId('recovery-no-backup')).toHaveCount(0);
 
   // The vault contents did not change.
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   await expect(page.getByText('ACME').first()).toBeVisible();
   const traces = [...old, ...words].flatMap((w, i, all) =>
@@ -147,10 +154,12 @@ test('pauses the inactivity lock while the new phrase is shown, and resumes it o
 }) => {
   await page.goto('/');
   await createVault(page, PASSWORD);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'locking');
   await page.getByTestId('autoLockMinutes').fill('1');
   await button(page, 'Save').first().click();
   await expect(page.getByText('Saved.')).toBeVisible();
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-recovery').click();
   const words = await newPhrase(page);
   await page.clock.install();
   // The inactivity timer restarted after the phrase screen opened runs on the fake clock.

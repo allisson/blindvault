@@ -5,7 +5,14 @@ import {
   type SyncPurpose,
   type VaultSession,
 } from '@blindvault/vault';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import {
   ACCENTS,
@@ -17,7 +24,7 @@ import {
 import { download, phraseLabel, recordIdPrefix } from '../app/backup-file';
 import { devicesOf, eraseAdvice, peerSyncState, rejectedPeersOf } from '../app/devices';
 import { folderNameOf } from '../app/folders';
-import { type Navigation, type SettingsFocus } from '../app/nav';
+import { type Navigation, type SettingsFocus, type SettingsPage } from '../app/nav';
 import {
   type BackupExport,
   type ExportAuth,
@@ -26,7 +33,7 @@ import {
   type VaultController,
 } from '../app/controller';
 import { useLanguage } from '../i18n/context';
-import { LANGUAGES, type Messages, format } from '../i18n/messages';
+import { LANGUAGES, type Language, type Messages, format } from '../i18n/messages';
 import { AboutBuild } from './About';
 import { Button, ConfirmDialog, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { EraseVault } from './EraseVault';
@@ -37,57 +44,184 @@ import { NewPassword } from './NewPassword';
 import { InviteDevice, ReadmitDevice } from './Pairing';
 import { SyncDevice } from './Sync';
 import { RefoundVault } from './RefoundVault';
-import { RegeneratePhrase, focusBackup } from './RegeneratePhrase';
+import { OpenBackup, RegeneratePhrase, focusBackup, useOpenBackup } from './RegeneratePhrase';
+import { Icon, type IconName } from './icons';
 import { DeviceStorage } from './StorageState';
 
+/** The index's groups, in order; the last has no title (D252). */
+const GROUPS: readonly (readonly [
+  keyof Messages['settings']['groups'] | undefined,
+  readonly SettingsPage[],
+])[] = [
+  ['preferences', ['appearance', 'language', 'locking']],
+  ['security', ['password', 'passkey', 'recovery']],
+  ['devices', ['devices']],
+  ['data', ['backup', 'merge', 'import', 'storage']],
+  ['danger', ['refound', 'erase']],
+  [undefined, ['about']],
+];
+
+const PAGE_ICON: Readonly<Record<SettingsPage, IconName>> = {
+  appearance: 'palette',
+  language: 'languages',
+  locking: 'timer',
+  password: 'key-round',
+  passkey: 'fingerprint',
+  recovery: 'shield-check',
+  devices: 'monitor-smartphone',
+  backup: 'upload',
+  merge: 'git-merge',
+  import: 'download',
+  storage: 'hard-drive',
+  refound: 'refresh-cw',
+  erase: 'trash-2',
+  about: 'info',
+};
+
+const LANGUAGE_NAME: Readonly<Record<Language, string>> = {
+  en: 'English',
+  'pt-BR': 'Português (Brasil)',
+};
+
+/**
+ * Settings (D252): an index of pages in groups, each row with its current value where one helps;
+ * a row opens its page over the index, and back returns to it.
+ */
 export function Settings({
   controller,
   session,
   nav,
+  page,
   focus,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
   readonly nav: Navigation;
+  readonly page?: SettingsPage | undefined;
   /**
    * Opened from the backup reminder (D188), "Vault ready" (D198) or the clock notice (D221): where
-   * the cursor goes.
+   * the cursor goes on `page`.
    */
   readonly focus?: SettingsFocus | undefined;
+}) {
+  const openBackup = useCallback(() => {
+    nav.openSettings('backup');
+  }, [nav]);
+  return (
+    <OpenBackup.Provider value={openBackup}>
+      {page ? (
+        <SettingsPageView
+          key={page}
+          controller={controller}
+          session={session}
+          nav={nav}
+          page={page}
+          focus={focus}
+        />
+      ) : (
+        <SettingsIndex session={session} nav={nav} />
+      )}
+    </OpenBackup.Provider>
+  );
+}
+
+function SettingsIndex({
+  session,
+  nav,
+}: {
+  readonly session: VaultSession;
+  readonly nav: Navigation;
+}) {
+  const { messages: m, language } = useLanguage();
+  const s = m.settings;
+  const last = session.lastBackupAt;
+  const hint: Partial<Record<SettingsPage, string | undefined>> = {
+    appearance: s.themes[currentAppearance().theme],
+    language: LANGUAGE_NAME[language],
+    locking: format(s.hintMinutes, { n: String(session.preferences.autoLockMinutes) }),
+    passkey: session.passkeyCredentialId === undefined ? s.hintOff : s.hintOn,
+    backup:
+      last === undefined
+        ? s.hintNever
+        : new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(last),
+    devices: String(devicesOf(session).listed.length),
+  };
+  return (
+    <div className="flex w-full max-w-md flex-col gap-6 p-4">
+      <h1 className="text-xl font-semibold">{s.title}</h1>
+      {GROUPS.map(([group, pages]) => (
+        <SettingsGroup key={group ?? 'other'} title={group ? s.groups[group] : undefined}>
+          {pages.map((page) => (
+            <li key={page}>
+              <button
+                type="button"
+                className={`${TARGET} flex w-full items-center gap-3 px-4 py-2 text-start hover:bg-subtle ${group === 'danger' ? 'text-danger' : ''}`}
+                onClick={() => {
+                  nav.open({ name: 'settings', page });
+                }}
+                data-testid={`settings-${page}`}
+              >
+                <Icon name={PAGE_ICON[page]} />
+                <span className="flex-1">{s.pages[page]}</span>
+                {hint[page] ? <span className="text-sm text-muted">{hint[page]}</span> : null}
+                <Icon name="chevron-right" className="text-muted" />
+              </button>
+            </li>
+          ))}
+        </SettingsGroup>
+      ))}
+    </div>
+  );
+}
+
+function SettingsGroup({
+  title,
+  children,
+}: {
+  readonly title: string | undefined;
+  readonly children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <section {...(title ? { 'aria-labelledby': id } : {})} className="flex flex-col gap-2">
+      {title ? (
+        <h2 id={id} className="px-1 text-xs font-bold tracking-wide text-muted uppercase">
+          {title}
+        </h2>
+      ) : null}
+      <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-raised">
+        {children}
+      </ul>
+    </section>
+  );
+}
+
+/** One page of Settings, under its heading. Opened without a focus, the heading takes the cursor. */
+function SettingsPageView({
+  controller,
+  session,
+  nav,
+  page,
+  focus,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+  readonly nav: Navigation;
+  readonly page: SettingsPage;
+  readonly focus: SettingsFocus | undefined;
 }) {
   const { messages: m, language, setLanguage } = useLanguage();
   useEffect(() => {
     if (focus === 'backup') focusBackup();
-    // The passkey section shows once support is known: it focuses itself.
-    else if (
-      focus === 'recovery' ||
-      focus === 'devices' ||
-      focus === 'refound' ||
-      focus === 'import'
-    )
-      focusSection(focus);
+    // The passkey page shows once support is known: it focuses itself.
     else if (focus === 'pair') focusField('invite-password');
     else if (focus === 'readmit') focusField('readmission-first');
+    else if (focus === 'recovery' || focus === 'refound' || focus === 'import') focusPage();
+    else if (focus !== 'passkey') focusHeading();
   }, [focus]);
-  return (
-    <div className="flex max-w-md flex-col gap-8 p-4">
-      <h1 className="text-xl font-semibold">{m.settings.title}</h1>
-      <DeviceStorage controller={controller} session={session} />
-      <BackupSettings controller={controller} session={session} />
-      <MergeBackup controller={controller} session={session} />
-      <ImportItems controller={controller} session={session} />
-      <RecoveryPhraseSettings controller={controller} session={session} />
-      <DeviceSettings
-        controller={controller}
-        session={session}
-        open={focus === 'pair' || focus === 'readmit' ? focus : undefined}
-      />
-      <ChangePassword controller={controller} />
-      <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
-      <LockSettings controller={controller} preferences={session.preferences} />
-      <RefoundVault controller={controller} session={session} nav={nav} />
-      <EraseSettings controller={controller} session={session} />
-      <AppearanceSettings />
+  const content: Record<SettingsPage, () => ReactNode> = {
+    appearance: () => <AppearanceSettings />,
+    language: () => (
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.settings.language}
         <select
@@ -98,14 +232,41 @@ export function Settings({
             if (next) setLanguage(next);
           }}
         >
-          <option value="en">English</option>
-          <option value="pt-BR">Português (Brasil)</option>
+          {LANGUAGES.map((l) => (
+            <option key={l} value={l}>
+              {LANGUAGE_NAME[l]}
+            </option>
+          ))}
         </select>
       </label>
-      <section className="flex flex-col gap-4">
-        <h2 className="font-semibold">{m.about.title}</h2>
-        <AboutBuild />
-      </section>
+    ),
+    locking: () => <LockSettings controller={controller} preferences={session.preferences} />,
+    password: () => <ChangePassword controller={controller} />,
+    passkey: () => (
+      <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
+    ),
+    recovery: () => <RecoveryPhraseSettings controller={controller} session={session} />,
+    devices: () => (
+      <DeviceSettings
+        controller={controller}
+        session={session}
+        open={focus === 'pair' || focus === 'readmit' ? focus : undefined}
+      />
+    ),
+    backup: () => <BackupSettings controller={controller} session={session} />,
+    merge: () => <MergeBackup controller={controller} session={session} />,
+    import: () => <ImportItems controller={controller} session={session} />,
+    storage: () => <DeviceStorage controller={controller} session={session} />,
+    refound: () => <RefoundVault controller={controller} session={session} nav={nav} />,
+    erase: () => <EraseSettings controller={controller} session={session} />,
+    about: () => <AboutBuild />,
+  };
+  return (
+    <div className="flex w-full max-w-md flex-col gap-6 p-4" data-settings-page={page}>
+      <h1 tabIndex={-1} className="text-xl font-semibold">
+        {m.settings.pages[page]}
+      </h1>
+      {content[page]()}
     </div>
   );
 }
@@ -120,7 +281,6 @@ function AppearanceSettings() {
   };
   return (
     <section className="flex flex-col gap-4" data-section="appearance">
-      <h2 className="font-semibold">{m.settings.appearance}</h2>
       <fieldset className="flex flex-col">
         <legend className="text-sm font-medium">{m.settings.theme}</legend>
         {THEMES.map((theme) => (
@@ -193,7 +353,6 @@ function ChangePassword({ controller }: { readonly controller: VaultController }
         });
       }}
     >
-      <h2 className="font-semibold">{m.settings.password}</h2>
       <Field
         label={m.settings.current}
         type="password"
@@ -273,7 +432,6 @@ function LockSettings({
           );
       }}
     >
-      <h2 className="font-semibold">{m.settings.locking}</h2>
       {field('autoLockMinutes', m.settings.autoLock, 1, 60)}
       {field('hiddenLockSeconds', m.settings.hiddenLock, 0, 900)}
       {values.hiddenLockSeconds === '0' ? (
@@ -309,16 +467,16 @@ function EraseSettings({
   readonly session: VaultSession;
 }) {
   const m = useLanguage().messages;
+  const openBackup = useOpenBackup();
   const [open, setOpen] = useState(false);
   return (
     <section className="flex flex-col gap-4" data-section="erase">
-      <h2 className="font-semibold">{m.erase.title}</h2>
       <p className="text-sm">{m.erase.intro}</p>
       {open ? (
         <EraseVault
           controller={controller}
           advice={eraseAdvice(devicesOf(session))}
-          onBackup={focusBackup}
+          onBackup={openBackup}
           onCancel={() => {
             setOpen(false);
           }}
@@ -338,11 +496,15 @@ function EraseSettings({
   );
 }
 
-/** Scrolls to a section and puts the cursor in its first field, or on its heading (D198). */
-function focusSection(name: SettingsFocus): void {
-  const section = document.querySelector(`[data-section="${name}"]`);
-  const target =
-    section?.querySelector<HTMLElement>('input, textarea') ?? section?.querySelector('h2');
+/** The open page's heading takes the cursor, as a new screen (D252). */
+function focusHeading(): void {
+  document.querySelector<HTMLElement>('[data-settings-page] h1')?.focus();
+}
+
+/** Puts the cursor in the open page's first field, or on its heading (D198, D252). */
+function focusPage(): void {
+  const page = document.querySelector('[data-settings-page]');
+  const target = page?.querySelector<HTMLElement>('input, textarea') ?? page?.querySelector('h1');
   target?.scrollIntoView({ block: 'center' });
   target?.focus();
 }
@@ -351,7 +513,7 @@ function focusSection(name: SettingsFocus): void {
 function focusField(testId: string): void {
   const target = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
   if (!target) {
-    focusSection('devices');
+    focusPage();
     return;
   }
   target.scrollIntoView({ block: 'center' });
@@ -381,7 +543,7 @@ function PasskeySettings({
     };
   }, [controller]);
   useEffect(() => {
-    if (focus && supported !== undefined) focusSection('passkey');
+    if (focus && supported !== undefined) focusPage();
   }, [focus, supported]);
   if (supported === undefined) return null;
   const on = session.passkeyCredentialId !== undefined;
@@ -393,9 +555,6 @@ function PasskeySettings({
   };
   return (
     <section className="flex flex-col gap-4" data-section="passkey">
-      <h2 tabIndex={-1} className="font-semibold">
-        {m.settings.passkey}
-      </h2>
       {!supported && !on ? (
         <p className="text-sm text-muted">{m.settings.passkeyUnsupported}</p>
       ) : null}
@@ -519,9 +678,6 @@ function RecoveryPhraseSettings({
   const last = session.lastBackupAt;
   return (
     <section className="flex flex-col gap-4" data-section="recovery">
-      <h2 tabIndex={-1} className="font-semibold">
-        {m.settings.recovery}
-      </h2>
       {envelope === 'none' ? <Notice>{m.settings.recoveryNone}</Notice> : null}
       {envelope === 'corrupt' ? <Notice>{m.settings.recoveryCorrupt}</Notice> : null}
       {envelope === 'held' && recovery ? (
@@ -693,9 +849,6 @@ function DeviceSettings({
   const state = peerSyncState(stage);
   return (
     <section className="flex flex-col gap-4" data-testid="devices" data-section="devices">
-      <h2 tabIndex={-1} className="font-semibold">
-        {m.settings.devices}
-      </h2>
       {devices.advice === 'readmit' ? (
         <Notice>
           <span data-testid="devices-readmit">{m.settings.devicesReadmit}</span>
@@ -1006,12 +1159,7 @@ function BackupSettings({
     setExportPassword(p);
   }, []);
   if (!session.recovery) {
-    return (
-      <section className="flex flex-col gap-4">
-        <h2 className="font-semibold">{m.settings.backup}</h2>
-        <Notice>{m.settings.backupNone}</Notice>
-      </section>
-    );
+    return <Notice>{m.settings.backupNone}</Notice>;
   }
   const last = session.lastBackupAt;
   const { phraseId, phraseCreatedAt } = session.recovery;
@@ -1043,7 +1191,6 @@ function BackupSettings({
         run({ kind: 'password', password });
       }}
     >
-      <h2 className="font-semibold">{m.settings.backup}</h2>
       <p className="text-sm">{m.settings.backupIntro}</p>
       <p className="text-sm" data-testid="last-backup">
         {last === undefined

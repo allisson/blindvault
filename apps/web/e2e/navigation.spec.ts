@@ -110,3 +110,52 @@ test('filters the list by type, with counts beside the types and the folder pane
   await pane.getByRole('button', { name: 'All items', exact: true }).click();
   await expect(list).toHaveText(['Garden plan', 'Tax return']);
 });
+
+test('Settings is an index of pages in groups; a page opens over it and Back returns, then leaves (D252)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto('/');
+  await createVault(page, PASSWORD);
+  await button(page, 'Settings').click();
+
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  for (const group of ['Preferences', 'Security', 'Devices', 'Data', 'Danger zone']) {
+    await expect(page.getByRole('heading', { name: group, level: 2 })).toBeVisible();
+  }
+  for (const row of [
+    'appearance',
+    'language',
+    'locking',
+    'password',
+    'passkey',
+    'recovery',
+    'devices',
+    'backup',
+    'merge',
+    'import',
+    'storage',
+    'refound',
+    'erase',
+    'about',
+  ]) {
+    await expect(page.getByTestId(`settings-${row}`)).toBeVisible();
+  }
+  // A row shows its current value where one helps: a fresh vault has no backup, and locks after
+  // the default 5 minutes (DEFAULT_PREFERENCES).
+  await expect(page.getByTestId('settings-backup')).toContainText('Never');
+  await expect(page.getByTestId('settings-locking')).toContainText('5 min');
+
+  await page.getByTestId('settings-locking').click();
+  await expect(page.getByRole('heading', { name: 'Locking', level: 1 })).toBeFocused();
+  await expect(page.getByTestId('autoLockMinutes')).toBeVisible();
+  await expect(page.getByTestId('settings-locking')).toHaveCount(0);
+
+  await button(page, 'Back').click();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(page.getByTestId('settings-locking')).toBeVisible();
+
+  await button(page, 'Back').click();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toHaveCount(0);
+  await expect(button(page, 'New item')).toBeVisible();
+});

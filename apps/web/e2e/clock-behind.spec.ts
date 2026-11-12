@@ -2,7 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { FUTURE_CLOCK_BOUND_MS } from '@blindvault/vault';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // The device clock goes back after the vault was written ahead (§9.2, D73, D149, D221): the vault is
 // read-only until the clock catches up, every screen that writes says why, and writing resumes on
@@ -73,7 +73,7 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   await expect(button(page, 'Edit')).toHaveCount(0);
 
   // Settings: no pairing, no re-admission and no new Recovery Phrase while read-only.
-  await button(page, 'Settings').click();
+  await openSettingsPage(page, 'devices');
   await expect(page.getByTestId('invite')).toContainText(
     'The device clock went back, so the vault is read-only: pairing comes back once writing does.',
   );
@@ -81,10 +81,13 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   await expect(page.getByTestId('readmit-device')).toContainText(
     'The device clock went back, so the vault is read-only: re-admission comes back once writing does.',
   );
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-recovery').click();
   await expect(page.getByTestId('regenerate')).toContainText(
     "This device's clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from",
   );
   await expect(page.getByTestId('regenerate-start')).toHaveCount(0);
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
 
   // A minute before writing resumes: within the bound, so only the date is shown.

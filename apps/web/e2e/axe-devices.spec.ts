@@ -45,11 +45,12 @@ async function device(
   return page;
 }
 
-/** Goes back to Settings from wherever the vault is (on mobile, through Back). */
+/** Goes back to Settings › Devices from wherever the vault is (on mobile, through Back). */
 async function settings(page: Page): Promise<void> {
   const open = page.getByRole('button', { name: 'Settings' }).first();
   while (!(await open.isVisible())) await button(page, 'Back').click();
   await open.click();
+  await page.getByTestId('settings-devices').click();
 }
 
 for (const [layout, width] of WIDTHS) {

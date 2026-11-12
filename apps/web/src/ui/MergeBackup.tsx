@@ -6,7 +6,7 @@ import { type BackupHeaderInfo, type MergeOutcome, type VaultController } from '
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Notice } from './components';
-import { focusBackup } from './RegeneratePhrase';
+import { useOpenBackup } from './RegeneratePhrase';
 import { ChooseFile, OpenBackup, fileError } from './RestoreVault';
 import { recordTypeName } from './Settings';
 
@@ -47,7 +47,6 @@ export function MergeBackup({
     }).format(at);
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-semibold">{m.merge.title}</h2>
       <p className="text-sm">{m.merge.intro}</p>
       {step.kind === 'idle' || step.kind === 'done' ? (
         <Button
@@ -137,6 +136,7 @@ export function MergeNotices({
   readonly date: (at: number) => string;
 }) {
   const m = useLanguage().messages;
+  const openBackup = useOpenBackup();
   const names = (devices: MergeResult['newDevices'], marked: boolean) =>
     devices
       .map((d) =>
@@ -161,7 +161,7 @@ export function MergeNotices({
               date: date(result.phraseSuperseded.phraseCreatedAt),
             })}
           </Notice>
-          <Button className="self-start" onClick={focusBackup}>
+          <Button className="self-start" onClick={openBackup}>
             {m.merge.backupNow}
           </Button>
         </div>

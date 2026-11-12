@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -10,7 +10,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/');
     await createVault(page, 'quartz-lantern-velvet-harbor-9214');
-    await page.getByRole('button', { name: 'Settings' }).first().click();
+    await openSettingsPage(page, 'appearance');
     const swatches = page.locator('fieldset span[data-accent]');
     await expect(swatches).toHaveCount(6);
     const colors = await swatches.evaluateAll((spans) =>

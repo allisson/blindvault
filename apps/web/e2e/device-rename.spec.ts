@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openSettingsPage } from './create';
 
 // Creation and unlock each derive Argon2id at about 1 s (D9).
 test.setTimeout(120_000);
@@ -12,7 +12,7 @@ test('renames this device from Settings, refusing an empty or too long name, and
 }) => {
   await page.goto('/');
   await createVault(page, PASSWORD);
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'devices');
 
   const device = page.getByTestId('devices').getByTestId('device');
   await device.getByTestId('device-rename').click();
@@ -33,7 +33,7 @@ test('renames this device from Settings, refusing an empty or too long name, and
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'devices');
   await expect(
     page.getByTestId('devices').getByTestId('device').locator('span.font-medium'),
   ).toHaveText('Work laptop (this device)');

@@ -176,3 +176,28 @@ describe('leaving an editor with unsaved changes (D234)', () => {
     expect(nav.current().name).toBe('vault');
   });
 });
+
+describe('Settings pages (D252)', () => {
+  it('opens a focus on its page over the index, and back leads to the index', () => {
+    const nav = new Navigation();
+    nav.select({ name: 'item', id: ID });
+    nav.openSettings('pair');
+    expect(nav.current()).toEqual({ name: 'settings', page: 'devices', focus: 'pair' });
+    nav.back();
+    expect(nav.current()).toEqual({ name: 'settings' });
+    nav.back();
+    expect(nav.current().name).toBe('item');
+  });
+
+  it('replaces the Settings screens already open', () => {
+    const nav = new Navigation();
+    nav.open({ name: 'settings' });
+    nav.open({ name: 'settings', page: 'appearance' });
+    nav.openSettings('backup');
+    expect(nav.current()).toEqual({ name: 'settings', page: 'backup', focus: 'backup' });
+    nav.back();
+    nav.back();
+    expect(nav.current().name).toBe('vault');
+    expect(nav.deeper()).toBe(false);
+  });
+});

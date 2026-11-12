@@ -97,6 +97,7 @@ for (const width of [390, 1280] as const) {
     await expect(page.getByTestId('backup-password')).toBeFocused();
     await expect(ready).toHaveCount(0);
     await button(page, 'Back').click();
+    await button(page, 'Back').click();
     await expect(ready).toBeVisible();
 
     // Pairing opens with its password step already shown, the cursor in it (D234).
@@ -108,6 +109,7 @@ for (const width of [390, 1280] as const) {
         { exact: true },
       ),
     ).toBeVisible();
+    await button(page, 'Back').click();
     await button(page, 'Back').click();
     await expect(ready).toBeVisible();
 
@@ -140,6 +142,7 @@ test('"Vault ready" marks the backup done once made, and still offers it (D234)'
     page.waitForEvent('download', { timeout: 60_000 }),
     button(page, 'Export').click(),
   ]);
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   await expect(backup).toHaveAttribute('data-done', 'true');
   await expect(backup).toContainText('Done');

@@ -90,6 +90,15 @@ for (const [layout, width] of WIDTHS) {
       await settings.click();
       await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
       await audit(page, 'Settings');
+      // The densest pages (D252).
+      await page.getByTestId('settings-devices').click();
+      await expect(page.getByRole('heading', { name: 'Devices', level: 1 })).toBeVisible();
+      await audit(page, 'Settings, Devices');
+      await button(page, 'Back').click();
+      await page.getByTestId('settings-backup').click();
+      await expect(page.getByRole('heading', { name: 'Backup', level: 1 })).toBeVisible();
+      await audit(page, 'Settings, Backup');
+      await button(page, 'Back').click();
 
       // Locked: unlock, and the forgotten password.
       await lock(page);

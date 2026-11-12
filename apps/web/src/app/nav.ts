@@ -15,9 +15,42 @@ export type ListScreen =
 export type SettingsFocus =
   'backup' | 'passkey' | 'recovery' | 'devices' | 'pair' | 'readmit' | 'refound' | 'import';
 
+/** A page of Settings, opened from its index (D252). */
+export type SettingsPage =
+  | 'appearance'
+  | 'language'
+  | 'locking'
+  | 'password'
+  | 'passkey'
+  | 'recovery'
+  | 'devices'
+  | 'backup'
+  | 'merge'
+  | 'import'
+  | 'storage'
+  | 'refound'
+  | 'erase'
+  | 'about';
+
+/** The page each focus is on. */
+export const FOCUS_PAGE: Readonly<Record<SettingsFocus, SettingsPage>> = {
+  backup: 'backup',
+  passkey: 'passkey',
+  recovery: 'recovery',
+  devices: 'devices',
+  pair: 'devices',
+  readmit: 'devices',
+  refound: 'refound',
+  import: 'import',
+};
+
 export type Screen =
   | ListScreen
-  | { readonly name: 'settings'; readonly focus?: SettingsFocus }
+  | {
+      readonly name: 'settings';
+      readonly page?: SettingsPage;
+      readonly focus?: SettingsFocus;
+    }
   | { readonly name: 'item'; readonly id: Uint8Array }
   | { readonly name: 'edit'; readonly id: Uint8Array }
   | { readonly name: 'history'; readonly id: Uint8Array }
@@ -107,6 +140,20 @@ export class Navigation {
 
   open(screen: Screen): void {
     this.#set([...this.#stack, screen]);
+  }
+
+  /**
+   * Settings over the screens below it: its index, then the page `focus` is on, so back from the
+   * page leads to the index (D252). Any Settings screen already open is replaced.
+   */
+  openSettings(focus?: SettingsFocus): void {
+    const below = this.#stack.filter((s) => s.name !== 'settings');
+    const index: Screen = { name: 'settings' };
+    this.#set(
+      focus
+        ? [...below, index, { name: 'settings', page: FOCUS_PAGE[focus], focus }]
+        : [...below, index],
+    );
   }
 
   /** The detail of the current list, replacing any other detail. */

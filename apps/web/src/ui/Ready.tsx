@@ -87,7 +87,7 @@ export function Ready({
                 <Button
                   variant="quiet"
                   onClick={() => {
-                    nav.open({ name: 'settings', focus: act.focus });
+                    nav.openSettings(act.focus);
                   }}
                 >
                   {act.label}

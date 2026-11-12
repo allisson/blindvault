@@ -84,3 +84,32 @@ export async function createVault(page: Page, password: string): Promise<string[
   await openVault(page);
   return words;
 }
+
+/** A page of Settings (D252): the index lists them as rows with a `settings-<page>` test id. */
+export type SettingsPageName =
+  | 'appearance'
+  | 'language'
+  | 'locking'
+  | 'password'
+  | 'passkey'
+  | 'recovery'
+  | 'devices'
+  | 'backup'
+  | 'merge'
+  | 'import'
+  | 'storage'
+  | 'refound'
+  | 'erase'
+  | 'about';
+
+/** Opens Settings from the vault, then one of its pages. */
+export async function openSettingsPage(page: Page, name: SettingsPageName): Promise<void> {
+  await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
+  await page.getByTestId(`settings-${name}`).click();
+}
+
+/** From a page of Settings, back to the index and on to another page. */
+export async function switchSettingsPage(page: Page, name: SettingsPageName): Promise<void> {
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByTestId(`settings-${name}`).click();
+}

@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { answerConfirmation, createVault } from './create';
+import { answerConfirmation, createVault, openSettingsPage } from './create';
 
 // Creation, the proof of the user and the new password each derive Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -35,8 +35,10 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await newLogin(page, 'Discarded');
   await button(page, 'More actions').click();
   await button(page, 'Move to trash').click();
-  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await openSettingsPage(page, 'recovery');
   const before = (await page.getByTestId('recovery-current').textContent()) ?? '';
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-refound').click();
 
   // The warnings, and the confirmation they need (D46, D72).
   const refound = page.getByTestId('refound');
@@ -102,17 +104,24 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
       timeout: 60_000,
     },
   );
-  await expect(page.getByTestId('devices').getByTestId('device')).toHaveCount(1);
-  await expect(page.getByTestId('devices').getByTestId('device')).toContainText('(this device)');
-  await expect(page.getByTestId('recovery-current')).not.toHaveText(before);
-  await expect(page.getByTestId('last-backup')).toHaveText(
-    'No backup has been made on this device yet.',
-  );
   // The new vault also shows the backup reminder, with its own Dismiss (D188).
   await expect(page.getByTestId('backup-reminder')).toBeVisible();
   await page.getByTestId('refounded').getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('refounded')).toHaveCount(0);
   expect(await page.evaluate(async () => (await indexedDB.databases()).length)).toBe(1);
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-devices').click();
+  await expect(page.getByTestId('devices').getByTestId('device')).toHaveCount(1);
+  await expect(page.getByTestId('devices').getByTestId('device')).toContainText('(this device)');
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-recovery').click();
+  await expect(page.getByTestId('recovery-current')).not.toHaveText(before);
+  await button(page, 'Back').click();
+  await page.getByTestId('settings-backup').click();
+  await expect(page.getByTestId('last-backup')).toHaveText(
+    'No backup has been made on this device yet.',
+  );
+  await button(page, 'Back').click();
   await button(page, 'Back').click();
   await expect(button(page, 'ACME')).toBeVisible();
   await expect(button(page, 'Discarded')).toHaveCount(0);

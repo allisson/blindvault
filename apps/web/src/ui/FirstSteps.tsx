@@ -21,7 +21,7 @@ export function FirstSteps({
   const m = useMessages();
   const id = useId();
   const settings = (focus: SettingsFocus) => () => {
-    nav.open({ name: 'settings', focus });
+    nav.openSettings(focus);
   };
   const steps = [
     ...(session.writable

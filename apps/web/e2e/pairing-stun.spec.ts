@@ -1,6 +1,6 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen } from './create';
+import { createVault, startScreen, openSettingsPage } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -64,7 +64,7 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
 }) => {
   const a = await device(browser);
   await createVault(a, PASSWORD_A);
-  await button(a, 'Settings').click();
+  await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   const hint = a.getByTestId('same-network-hint');
   await expect(hint).toContainText('(stun.l.google.com, stun.cloudflare.com)');
@@ -144,7 +144,7 @@ test('an unreadable stored list: the same network only, locked on, and the pairi
   const b = await device(browser);
 
   await createVault(a, PASSWORD_A);
-  await button(a, 'Settings').click();
+  await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   await a.getByTestId('pairing-same-network').check();
   await fillPassword(a.getByTestId('invite-password'), PASSWORD_A);
