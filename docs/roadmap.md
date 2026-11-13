@@ -480,10 +480,10 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Every invariant in `security-invariants.md` has an associated passing test
 - [ ] Reproducible build validated on the release candidate
 - [ ] Browser matrix tested and recorded
-- [ ] Recovery scenarios tested:
-    - [ ] Destroy A, continue with B
-    - [ ] Destroy A and B, restore `.bvault` with the recovery phrase
-    - [ ] Forgotten local password, recover with the phrase
+- [x] Recovery scenarios tested:
+    - [x] Destroy A, continue with B
+    - [x] Destroy A and B, restore `.bvault` with the recovery phrase
+    - [x] Forgotten local password, recover with the phrase
 
 ---
 
