@@ -1,6 +1,6 @@
 {
   "name": "@blindvault/web",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "description": "BlindVault PWA: UI, service worker, onboarding. No direct cryptography.",
   "type": "module",
