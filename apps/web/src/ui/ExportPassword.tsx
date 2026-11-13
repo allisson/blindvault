@@ -45,8 +45,11 @@ export function ExportPassword({
   return (
     <>
       <Field
+        // A generated passphrase appears shown; Hide still masks it.
+        key={generated?.value ?? ''}
         label={m.settings.exportPassword}
-        type={shown ? 'text' : 'password'}
+        type="password"
+        revealed={shown}
         value={password}
         onChange={(e) => {
           setPassword(e.target.value);
