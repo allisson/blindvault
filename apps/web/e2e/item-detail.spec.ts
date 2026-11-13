@@ -94,3 +94,24 @@ test('a shown seed phrase is a numbered grid of its words (D247)', async ({ page
   await expect(words.first()).toHaveText('1abandon');
   await expect(words.last()).toHaveText('12about');
 });
+
+test('on a phone, a shown seed phrase takes the whole row and breaks no word (D247)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto('/');
+  await createVault(page, PASSWORD);
+  await newItem(page, 'Crypto wallet', 'Cold wallet');
+  await page.getByTestId('input-Seed phrase').fill(PHRASE);
+  await button(page, 'Save').click();
+  const secret = page.getByTestId('secret-Seed phrase');
+  await secret.locator('..').getByRole('button', { name: 'Show', exact: true }).click();
+  const words = secret.getByRole('listitem');
+  await expect(words).toHaveCount(12);
+  // One line each: a word broken across lines doubles its height.
+  const first = await words.first().boundingBox();
+  for (const word of await words.all()) {
+    expect((await word.boundingBox())?.height).toBe(first?.height);
+  }
+  expect(first?.height).toBeLessThan(40);
+});

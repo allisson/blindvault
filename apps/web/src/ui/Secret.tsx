@@ -111,10 +111,11 @@ export function SecretView({
   const { copy, checked } = useCopy(clearSeconds);
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
+      {/* Shown words take the whole row, whole words each, with the buttons below (D247). */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <div
           data-testid={`secret-${label}`}
-          className="min-w-0 flex-1 font-mono text-value break-all whitespace-pre-wrap"
+          className={`min-w-0 flex-1 font-mono text-value whitespace-pre-wrap ${shown && words ? 'basis-full' : 'break-all'}`}
         >
           {!shown ? <Mask /> : words ? <Words value={value} /> : value}
         </div>

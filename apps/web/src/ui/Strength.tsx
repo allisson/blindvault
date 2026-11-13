@@ -58,7 +58,7 @@ export function useMeter(value: string, enabled: boolean) {
       {[1, 2, 3, 4].map((n) => (
         <span
           key={n}
-          className={`h-1.5 flex-1 rounded-full ${Math.max(strength.score, 1) >= n ? BAR[l] : 'bg-subtle'}`}
+          className={`h-1.5 flex-1 rounded-full ${Math.max(strength.score, 1) >= n ? BAR[l] : 'bg-line'}`}
         />
       ))}
     </div>
