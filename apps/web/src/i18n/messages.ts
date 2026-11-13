@@ -263,7 +263,7 @@ const en = {
     },
   },
   readmission: {
-    title: 'Re-admission',
+    title: 'Re-admit a device',
     intro:
       'Two devices of this vault get to know each other and merge everything they hold, both ways: a device restored from a backup becomes registered, and two devices that never synced meet. No key leaves either device.',
     start: 'Re-admit with another device of this vault…',
@@ -846,6 +846,7 @@ const en = {
   },
   settings: {
     title: 'Settings',
+    choose: 'Choose a page.',
     groups: {
       preferences: 'Preferences',
       security: 'Security',
@@ -1428,7 +1429,7 @@ const ptBR: Messages = {
     },
   },
   readmission: {
-    title: 'Readmissão',
+    title: 'Readmitir um dispositivo',
     intro:
       'Dois dispositivos deste cofre passam a se conhecer e mesclam tudo o que têm, nos dois sentidos: um dispositivo restaurado de um backup fica registrado, e dois dispositivos que nunca sincronizaram se encontram. Nenhuma chave sai de nenhum dos dois.',
     start: 'Readmitir com outro dispositivo deste cofre…',
@@ -2018,6 +2019,7 @@ const ptBR: Messages = {
   },
   settings: {
     title: 'Configurações',
+    choose: 'Escolha uma página.',
     groups: {
       preferences: 'Preferências',
       security: 'Segurança',

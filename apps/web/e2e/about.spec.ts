@@ -53,7 +53,7 @@ test('shows the version and the hash of the running build, before unlock and in 
   await expectAbout(page, hash);
 
   // Opening About before unlock hides the screen without losing what was typed.
-  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await page.getByRole('button', { name: 'About', exact: true }).click();
   await expect(page.getByTestId('unlock-password')).toBeHidden();

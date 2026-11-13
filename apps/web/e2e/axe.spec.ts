@@ -88,7 +88,7 @@ for (const [layout, width] of WIDTHS) {
       const settings = page.getByRole('button', { name: 'Settings' }).first();
       while (!(await settings.isVisible())) await button(page, 'Back').click();
       await settings.click();
-      await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
       await audit(page, 'Settings');
       // The densest pages (D252).
       await page.getByTestId('settings-devices').click();

@@ -26,6 +26,7 @@ import { type Messages, format } from '../i18n/messages';
 import { Button, CopyCheck, Field, Notice, TARGET, TextArea, useCheck } from './components';
 import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
+import { Icon } from './icons';
 import { QrCode, QrScanner } from './Qr';
 import { recordTypeName } from './Settings';
 import { AdvancedOptions, Wizard, type WizardStep, useStep } from './Wizard';
@@ -772,6 +773,9 @@ function blocked(m: Messages, session: VaultSession): string | undefined {
   return undefined;
 }
 
+/** Settings › Devices offers pairing and re-admission as two cards (D254). */
+const CARD = 'flex flex-col gap-3 rounded-card border border-line bg-raised p-4';
+
 /** A, in Settings › Devices: the password again, then the pairing (D202). */
 export function InviteDevice({
   controller,
@@ -823,8 +827,11 @@ export function InviteDevice({
   };
   const reason = blocked(m, session);
   return (
-    <div className="flex flex-col gap-3" data-testid="invite">
-      <h3 className="font-semibold">{p.title}</h3>
+    <div className={CARD} data-testid="invite">
+      <h3 className="flex items-center gap-2 font-semibold">
+        <Icon name="plus" />
+        {p.title}
+      </h3>
       {stage ? (
         <Stage
           controller={controller}
@@ -843,7 +850,6 @@ export function InviteDevice({
         <>
           <p className="text-sm">{p.intro}</p>
           <Button
-            variant="quiet"
             className="self-start"
             onClick={() => {
               setOpen(true);
@@ -1077,8 +1083,11 @@ export function ReadmitDevice({
   const reason = readmissionBlocked(m, session);
   const error = readmissionStartError(m, outcome);
   return (
-    <div className="flex flex-col gap-3" data-testid="readmit-device">
-      <h3 className="font-semibold">{r.title}</h3>
+    <div className={CARD} data-testid="readmit-device">
+      <h3 className="flex items-center gap-2 font-semibold">
+        <Icon name="monitor-smartphone" />
+        {r.title}
+      </h3>
       {stage ? (
         <Stage
           controller={controller}
@@ -1097,7 +1106,7 @@ export function ReadmitDevice({
         <>
           <p className="text-sm">{r.intro}</p>
           <Button
-            variant="quiet"
+            variant="secondary"
             className="self-start"
             onClick={() => {
               setOpen(true);

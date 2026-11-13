@@ -93,6 +93,7 @@ export function Settings({
   nav,
   page,
   focus,
+  framed = false,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
@@ -103,24 +104,63 @@ export function Settings({
    * the cursor goes on `page`.
    */
   readonly focus?: SettingsFocus | undefined;
+  /**
+   * Tablet and desktop: inside the vault frame, All items, Trash and the index on the left and the
+   * open page on the right (D254). A phone drills down from the index.
+   */
+  readonly framed?: boolean;
 }) {
+  const m = useLanguage().messages;
   const openBackup = useCallback(() => {
     nav.openSettings('backup');
   }, [nav]);
+  const view = page ? (
+    <SettingsPageView
+      key={page}
+      controller={controller}
+      session={session}
+      nav={nav}
+      page={page}
+      focus={focus}
+    />
+  ) : null;
+  if (!framed) {
+    return (
+      <OpenBackup.Provider value={openBackup}>
+        {view ?? <SettingsIndex session={session} nav={nav} />}
+      </OpenBackup.Provider>
+    );
+  }
   return (
     <OpenBackup.Provider value={openBackup}>
-      {page ? (
-        <SettingsPageView
-          key={page}
-          controller={controller}
-          session={session}
-          nav={nav}
-          page={page}
-          focus={focus}
-        />
-      ) : (
-        <SettingsIndex session={session} nav={nav} />
-      )}
+      <div className="grid min-h-0 flex-1 grid-cols-[16rem_1fr] grid-rows-[minmax(0,1fr)]">
+        <div className="flex flex-col gap-4 overflow-y-auto border-r border-line p-2">
+          <div className="flex flex-col">
+            {(
+              [
+                ['list', m.vault.allItems, 'vault'],
+                ['trash-2', m.vault.trash, 'trash'],
+              ] as const
+            ).map(([icon, label, list]) => (
+              <Button
+                key={list}
+                variant="quiet"
+                className="flex items-center gap-3 text-start"
+                onClick={() => {
+                  nav.showList({ name: list });
+                }}
+              >
+                <Icon name={icon} />
+                {label}
+              </Button>
+            ))}
+          </div>
+          <SettingsIndex session={session} nav={nav} framed current={page} />
+        </div>
+        <div className="flex min-w-0 justify-center overflow-y-auto">
+          {view ?? <p className="p-4 text-sm text-muted">{m.settings.choose}</p>}
+        </div>
+      </div>
     </OpenBackup.Provider>
   );
 }
@@ -128,9 +168,14 @@ export function Settings({
 function SettingsIndex({
   session,
   nav,
+  framed = false,
+  current,
 }: {
   readonly session: VaultSession;
   readonly nav: Navigation;
+  /** In the vault frame, beside the open page: its row is marked, and a row swaps the page. */
+  readonly framed?: boolean;
+  readonly current?: SettingsPage | undefined;
 }) {
   const { messages: m, language } = useLanguage();
   const s = m.settings;
@@ -146,25 +191,43 @@ function SettingsIndex({
         : new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(last),
     devices: String(devicesOf(session).listed.length),
   };
+  const Title = framed ? 'h2' : 'h1';
   return (
-    <div className="flex w-full max-w-md flex-col gap-6 p-4">
-      <h1 className="text-xl font-semibold">{s.title}</h1>
+    <div className={`flex w-full max-w-md flex-col p-4 ${framed ? 'gap-4 px-2' : 'gap-6'}`}>
+      <Title
+        className={
+          framed
+            ? 'px-2 text-xs font-bold tracking-wide text-muted uppercase'
+            : 'text-xl font-semibold'
+        }
+      >
+        {s.title}
+      </Title>
       {GROUPS.map(([group, pages]) => (
-        <SettingsGroup key={group ?? 'other'} title={group ? s.groups[group] : undefined}>
+        <SettingsGroup
+          key={group ?? 'other'}
+          title={group ? s.groups[group] : undefined}
+          framed={framed}
+        >
           {pages.map((page) => (
             <li key={page}>
               <button
                 type="button"
-                className={`${TARGET} flex w-full items-center gap-3 px-4 py-2 text-start hover:bg-subtle ${group === 'danger' ? 'text-danger' : ''}`}
+                aria-current={page === current ? 'page' : undefined}
+                className={`${TARGET} flex w-full items-center gap-3 text-start hover:bg-subtle aria-[current]:bg-subtle aria-[current]:font-medium ${framed ? 'rounded-control px-2' : 'px-4 py-2'} ${group === 'danger' ? 'text-danger' : ''}`}
                 onClick={() => {
-                  nav.open({ name: 'settings', page });
+                  // Beside a page, a row swaps it, so back still leads to the index (D252, D254).
+                  if (current) nav.replace({ name: 'settings', page });
+                  else nav.open({ name: 'settings', page });
                 }}
                 data-testid={`settings-${page}`}
               >
                 <Icon name={PAGE_ICON[page]} />
-                <span className="flex-1">{s.pages[page]}</span>
-                {hint[page] ? <span className="text-sm text-muted">{hint[page]}</span> : null}
-                <Icon name="chevron-right" className="text-muted" />
+                <span className="min-w-0 flex-1">{s.pages[page]}</span>
+                {hint[page] ? (
+                  <span className="min-w-0 truncate text-sm text-muted">{hint[page]}</span>
+                ) : null}
+                {framed ? null : <Icon name="chevron-right" className="text-muted" />}
               </button>
             </li>
           ))}
@@ -176,20 +239,29 @@ function SettingsIndex({
 
 function SettingsGroup({
   title,
+  framed,
   children,
 }: {
   readonly title: string | undefined;
+  readonly framed: boolean;
   readonly children: ReactNode;
 }) {
   const id = useId();
+  const Heading = framed ? 'h3' : 'h2';
   return (
     <section {...(title ? { 'aria-labelledby': id } : {})} className="flex flex-col gap-2">
       {title ? (
-        <h2 id={id} className="px-1 text-xs font-bold tracking-wide text-muted uppercase">
+        <Heading id={id} className="px-2 text-xs font-bold tracking-wide text-muted uppercase">
           {title}
-        </h2>
+        </Heading>
       ) : null}
-      <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-raised">
+      <ul
+        className={
+          framed
+            ? 'flex flex-col'
+            : 'divide-y divide-line overflow-hidden rounded-card border border-line bg-raised'
+        }
+      >
         {children}
       </ul>
     </section>
@@ -859,14 +931,14 @@ function DeviceSettings({
           <span data-testid="devices-only">{m.settings.devicesOnly}</span>
         </Notice>
       ) : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="divide-y divide-line rounded-card border border-line bg-raised">
         {devices.listed.map((d) => {
           const id = hex(d.deviceId);
           const name = d.device.displayName;
           return (
             <li
               key={id}
-              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
               data-testid="device"
             >
               <span className="flex flex-col">
@@ -1026,8 +1098,8 @@ function DeviceSettings({
           }}
         />
       ) : null}
-      <ReadmitDevice controller={controller} session={session} open={open === 'readmit'} />
       <InviteDevice controller={controller} session={session} open={open === 'pair'} />
+      <ReadmitDevice controller={controller} session={session} open={open === 'readmit'} />
     </section>
   );
 }

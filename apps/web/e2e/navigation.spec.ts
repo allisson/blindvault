@@ -131,7 +131,7 @@ test('Settings is an index of pages in groups; a page opens over it and Back ret
   await createVault(page, PASSWORD);
   await button(page, 'Settings').click();
 
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   for (const group of ['Preferences', 'Security', 'Devices', 'Data', 'Danger zone']) {
     await expect(page.getByRole('heading', { name: group, level: 2 })).toBeVisible();
   }
@@ -164,10 +164,10 @@ test('Settings is an index of pages in groups; a page opens over it and Back ret
   await expect(page.getByTestId('settings-locking')).toHaveCount(0);
 
   await button(page, 'Back').click();
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByTestId('settings-locking')).toBeVisible();
 
   await button(page, 'Back').click();
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toHaveCount(0);
   await expect(button(page, 'New item')).toBeVisible();
 });
