@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 7b — Essential UX (D244), before the Security Gate of Phase 8. Update this line when a gate passes.
+Phase 8 — Import and final review. Update this line when a gate passes.
 
 ## Repository layout
 
