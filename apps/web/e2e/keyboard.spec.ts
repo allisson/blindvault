@@ -116,7 +116,7 @@ for (const [layout, width] of WIDTHS) {
     const settings = page.getByRole('button', { name: 'Settings' }).first();
     while (!(await settings.isVisible())) await press(page, button(page, 'Back'));
     await press(page, settings);
-    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     // On a phone, Lock is in the "…" menu (D245).
     if (await button(page, 'More').isVisible()) await press(page, button(page, 'More'));
     await press(page, button(page, 'Lock'));

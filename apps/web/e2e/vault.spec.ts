@@ -53,7 +53,7 @@ test('creates, locks, refuses a wrong password and unlocks, keeping the URL and 
   const before = await page.evaluate(() => window.history.length);
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
   await unlock(page, 'not the password at all');
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
@@ -103,7 +103,7 @@ test('refuses a near miss and an unrelated password alike, changing nothing stor
   page,
 }) => {
   await create(page);
-  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
   const before = await storedLocalConfig(page);
   for (const attempt of [`${PASSWORD.slice(0, -1)}5`, 'meadow-copper-signal-ferry-5830']) {
@@ -139,7 +139,7 @@ test('changes the password only with the current one (D168)', async ({ page }) =
   await page.getByTestId('current-password').fill(PASSWORD);
   await change.click();
   await expect(page.getByText('Password changed.')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: 'Lock' }).click();
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await unlock(page, PASSWORD);
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
   await unlock(page, NEXT);

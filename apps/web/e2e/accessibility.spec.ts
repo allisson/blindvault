@@ -61,7 +61,7 @@ test('reflows at 320 px with no horizontal scroll: start, list, editor and Setti
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Settings' }).first().click();
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   expect(await fits()).toBe(true);
   // Longer labels in Brazilian Portuguese.
   await page.getByTestId('settings-language').click();

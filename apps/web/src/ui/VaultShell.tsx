@@ -382,7 +382,7 @@ export function VaultShell({
   };
   // Tablet and desktop: the panes fill the frame and each scrolls on its own. Mobile: one pane at
   // a time, scrolled with the notices between the header and the bottom navigation.
-  const fill = layout !== 'mobile' && !settings && !ready;
+  const fill = layout !== 'mobile' && (settings || !ready);
   const panes = {
     desktop: 'grid min-h-0 grid-cols-[16rem_20rem_1fr] grid-rows-[minmax(0,1fr)]',
     tablet: 'relative grid min-h-0 grid-cols-[18rem_1fr] grid-rows-[minmax(0,1fr)]',
@@ -449,6 +449,7 @@ export function VaultShell({
           nav={nav}
           page={screen.page}
           focus={screen.focus}
+          framed={layout !== 'mobile'}
         />
       ) : null}
     </>
