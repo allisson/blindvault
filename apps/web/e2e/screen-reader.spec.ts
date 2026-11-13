@@ -7,13 +7,15 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { WIDTHS } from './axe';
-import { answerConfirmation, openVault, readPhrase, startScreen } from './create';
+import { answerConfirmation, createVault, openVault, readPhrase, startScreen } from './create';
 import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9), and the unlock runs it again.
 test.setTimeout(180_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
+const TOTP =
+  'otpauth://totp/ACME:ana@acme.example?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME';
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
 test.beforeEach(async ({ page }) => {
@@ -193,6 +195,121 @@ for (const [layout, width] of WIDTHS) {
       - textbox "Local password" [invalid]
       - alert: Wrong password.
       - button "Forgot the password?"
+    `);
+  });
+
+  test(`the D254 controls read as they should to a screen reader, ${layout} (D246, D248, D250, D254)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await createVault(page, PASSWORD);
+    const main = page.getByRole('main');
+    const body = page.locator('body');
+    const settings = page.getByRole('button', { name: 'Settings' }).first();
+    const toList = async () => {
+      while (!(await settings.isVisible())) await button(page, 'Back').click();
+    };
+
+    // The Preview badge: a button that expands into the note.
+    await page.getByTestId('preview-badge').click();
+    await expect(body).toMatchAriaSnapshot(`
+      - banner:
+        - text: BlindVault
+        - button "Preview" [expanded]
+        - note: /^Preview build. vaults and backups made here may not open in a later version/
+    `);
+    await page.keyboard.press('Escape');
+
+    // The TOTP ring is left out: the code and the seconds left are read as text (D248).
+    await button(page, 'New item').click();
+    await button(page, 'Login').click();
+    await page.getByTestId('item-title').fill('Harbor');
+    await page.getByTestId('input-Password').fill('Tulip-Orbit-5528-Granite');
+    await page.getByTestId('add-field-type').selectOption('totp');
+    await button(page, 'Add').click();
+    await page.getByTestId('custom-label').fill('2FA');
+    await page.getByTestId('input-2FA').fill(TOTP);
+    await button(page, 'Save').click();
+    await expect(page.getByRole('heading', { name: 'Harbor', level: 1 })).toBeVisible();
+    await expect(main).toMatchAriaSnapshot(`
+      - region "Other fields":
+        - heading "Other fields" [level=2]
+        - term: 2FA
+        - definition:
+          - text: /^Current code \\d\\d\\d \\d\\d\\d Changes in \\d+ s$/
+          - 'button "Copy code: 2FA"'
+          - paragraph: ACME · ana@acme.example
+          - text: TOTP secret Hidden
+    `);
+
+    // The "…" menu: its actions follow its button, a disclosure (D245).
+    await button(page, 'More actions').click();
+    await expect(main).toMatchAriaSnapshot(`
+      - article "Harbor":
+        - heading "Harbor" [level=1]
+        - button "Edit"
+        - button "More actions"
+        - button "Duplicate"
+        - button "History"
+        - button "Move to trash"
+    `);
+    await page.keyboard.press('Escape');
+
+    // The rich row: the title names it, Copy names its item, and the toast is a status (D246, D250).
+    await toList();
+    await button(page, 'Copy password: Harbor').click();
+    await expect(body).toMatchAriaSnapshot(`
+      - main:
+        - region "Items":
+          - list:
+            - listitem:
+              - button "Harbor"
+              - 'button "Copy password: Harbor"'
+      - status:
+        - paragraph: /^Copied\\. .* not guaranteed\\.$/
+    `);
+
+    // A pill expands into its choices, the one in force pressed; on a phone, a bottom sheet.
+    await button(page, 'New item').click();
+    await button(page, 'Secure note').click();
+    await page.getByTestId('item-title').fill('Memo');
+    await button(page, 'Save').click();
+    await expect(page.getByRole('heading', { name: 'Memo', level: 1 })).toBeVisible();
+    await toList();
+    await page.getByTestId('type-pill').click();
+    await expect(main).toMatchAriaSnapshot(`
+      - region "Items":
+        - button "All types" [expanded]
+        - group "Filter by type":
+          - button "All types" [pressed]
+          - button "Login"
+          - button "Secure note"
+    `);
+    await page.keyboard.press('Escape');
+    if (layout === 'mobile') {
+      await page.getByTestId('folder-pill').click();
+      await expect(main).toMatchAriaSnapshot(`
+        - region "Items":
+          - button "All folders" [expanded]
+          - navigation "Folders":
+            - heading "Folders" [level=2]
+            - button "All items"
+      `);
+      await page.keyboard.press('Escape');
+    }
+
+    // Show password: a toggle named by what it does, pressed while the password shows (D254).
+    await lock(page);
+    await expect(main).toMatchAriaSnapshot(`
+      - textbox "Local password"
+      - button "Show password" [pressed=false]
+    `);
+    await button(page, 'Show password').click();
+    await expect(main).toMatchAriaSnapshot(`
+      - textbox "Local password"
+      - button "Hide password" [pressed]
     `);
   });
 }

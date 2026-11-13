@@ -6,6 +6,7 @@ import { type Locator, type Page, expect, test } from '@playwright/test';
 
 import { WIDTHS } from './axe';
 import { createVault } from './create';
+import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9), and the unlock runs it again.
 test.setTimeout(180_000);
@@ -126,69 +127,161 @@ for (const [layout, width] of WIDTHS) {
   });
 }
 
-test('the list moves with the arrows and J/K, the search clears with Esc, Ctrl/⌘+Enter saves and the slider sets the length (D251)', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/');
-  await createVault(page, PASSWORD);
+for (const [layout, width] of WIDTHS) {
+  test(`the Preview badge, the row's Copy, the pills, the "…" menu and Show password work from the keyboard, ${layout} (D245, D246, D254)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await createVault(page, PASSWORD);
+    const settings = page.getByRole('button', { name: 'Settings' }).first();
+    const toList = async () => {
+      while (!(await settings.isVisible())) await button(page, 'Back').click();
+    };
 
-  // Ctrl/⌘ + Enter saves from the notes, where Enter alone is a new line.
-  for (const title of ['Charlie', 'Alpha', 'Bravo']) {
+    // A popover opens with Enter and closes with Esc, handing the focus back to its button.
+    const badge = page.getByTestId('preview-badge');
+    await press(page, badge);
+    await expect(page.getByTestId('preview-banner')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('preview-banner')).toBeHidden();
+    await expect(badge).toBeFocused();
+
+    for (const [type, title] of [
+      ['Login', 'Harbor'],
+      ['Secure note', 'Memo'],
+    ] as const) {
+      await toList();
+      await button(page, 'New item').click();
+      await button(page, type).click();
+      await page.getByTestId('item-title').fill(title);
+      if (type === 'Login') await page.getByTestId('input-Password').fill('Tulip-Orbit-5528');
+      await button(page, 'Save').click();
+      await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    }
+
+    // The "…" menu: Tab reaches its actions, Esc closes it.
+    const more = button(page, 'More actions');
+    await press(page, more);
+    await tabTo(page, button(page, 'Move to trash'));
+    await page.keyboard.press('Escape');
+    await expect(button(page, 'Move to trash')).toBeHidden();
+    await expect(more).toBeFocused();
+
+    // The row's Copy, announced by the toast.
+    await toList();
+    await press(page, button(page, 'Copy password: Harbor'));
+    await expect(page.getByTestId('toast-region')).toContainText('Copied.');
+
+    // The type pill: Esc closes it; a choice applies and closes it.
+    const pill = page.getByTestId('type-pill');
+    const types = page.getByRole('group', { name: 'Filter by type' });
+    await press(page, pill);
+    await expect(types).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(types).toBeHidden();
+    await expect(pill).toBeFocused();
+    await press(page, pill);
+    await press(page, types.getByRole('button', { name: 'Secure note', exact: true }));
+    await expect(types).toBeHidden();
+    await expect(pill).toHaveText('Secure note');
+    await expect(button(page, 'Harbor')).toHaveCount(0);
+
+    // On a phone, the folders' bottom sheet.
+    if (layout === 'mobile') {
+      const folders = page.getByTestId('folder-pill');
+      await press(page, folders);
+      await expect(page.getByRole('navigation', { name: 'Folders' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('navigation', { name: 'Folders' })).toBeHidden();
+      await expect(folders).toBeFocused();
+    }
+
+    // Show password: Space shows it, and the button says so.
+    await lock(page);
+    const field = page.getByTestId('unlock-password');
+    await type(page, field, PASSWORD);
+    await press(page, button(page, 'Show password'), 'Space');
+    await expect(field).toHaveAttribute('type', 'text');
+    await expect(button(page, 'Hide password')).toHaveAttribute('aria-pressed', 'true');
+    await press(page, field);
+    await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  });
+}
+
+for (const [layout, width] of WIDTHS) {
+  test(`the list moves with the arrows and J/K, the search clears with Esc, Ctrl/⌘+Enter saves and the slider sets the length, ${layout} (D251)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await createVault(page, PASSWORD);
+    // On a phone, the list waits behind Back from an item.
+    const settings = page.getByRole('button', { name: 'Settings' }).first();
+    const toList = async () => {
+      while (!(await settings.isVisible())) await button(page, 'Back').click();
+    };
+
+    // Ctrl/⌘ + Enter saves from the notes, where Enter alone is a new line.
+    for (const title of ['Charlie', 'Alpha', 'Bravo']) {
+      await toList();
+      await button(page, 'New item').click();
+      await button(page, 'Login').click();
+      await page.getByTestId('item-title').fill(title);
+      await page.getByTestId('item-notes').fill('note');
+      await page.getByTestId('item-notes').press('ControlOrMeta+Enter');
+      await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    }
+    await expect(button(page, 'Save')).toHaveCount(0);
+    await toList();
+
+    const search = page.getByTestId('search');
+    const row = (name: string) => button(page, name);
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(search).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(row('Alpha')).toBeFocused();
+    await page.keyboard.press('j');
+    await expect(row('Bravo')).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(row('Charlie')).toBeFocused();
+    // Past the last row, the focus stays.
+    await page.keyboard.press('ArrowDown');
+    await expect(row('Charlie')).toBeFocused();
+    await page.keyboard.press('k');
+    await expect(row('Bravo')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Bravo', level: 1 })).toBeVisible();
+    await toList();
+    await row('Bravo').focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(row('Alpha')).toBeFocused();
+    // Above the first row is the search.
+    await page.keyboard.press('ArrowUp');
+    await expect(search).toBeFocused();
+
+    // Esc clears the search and keeps the focus in it.
+    await page.keyboard.type('zzz');
+    await expect(page.getByText('No items match.')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(search).toBeFocused();
+    await expect(row('Alpha')).toBeVisible();
+
+    // The slider and the field set the same length.
     await button(page, 'New item').click();
     await button(page, 'Login').click();
-    await page.getByTestId('item-title').fill(title);
-    await page.getByTestId('item-notes').fill('note');
-    await page.getByTestId('item-notes').press('ControlOrMeta+Enter');
-    await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
-  }
-  await expect(button(page, 'Save')).toHaveCount(0);
-
-  const search = page.getByTestId('search');
-  const row = (name: string) => button(page, name);
-  await page.keyboard.press('ControlOrMeta+k');
-  await expect(search).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(row('Alpha')).toBeFocused();
-  await page.keyboard.press('j');
-  await expect(row('Bravo')).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(row('Charlie')).toBeFocused();
-  // Past the last row, the focus stays.
-  await page.keyboard.press('ArrowDown');
-  await expect(row('Charlie')).toBeFocused();
-  await page.keyboard.press('k');
-  await expect(row('Bravo')).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Bravo', level: 1 })).toBeVisible();
-  await row('Bravo').focus();
-  await page.keyboard.press('ArrowUp');
-  await expect(row('Alpha')).toBeFocused();
-  // Above the first row is the search.
-  await page.keyboard.press('ArrowUp');
-  await expect(search).toBeFocused();
-
-  // Esc clears the search and keeps the focus in it.
-  await page.keyboard.type('zzz');
-  await expect(page.getByText('No items match.')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(search).toHaveValue('');
-  await expect(search).toBeFocused();
-  await expect(row('Alpha')).toBeVisible();
-
-  // The slider and the field set the same length.
-  await button(page, 'New item').click();
-  await button(page, 'Login').click();
-  await button(page, 'Generate').click();
-  const slider = page.getByTestId('generator-length-slider');
-  const field = page.getByRole('textbox', { name: 'Length (12–128)' });
-  await expect(field).toHaveValue('20');
-  await slider.focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(field).toHaveValue('21');
-  await page.keyboard.press('End');
-  await expect(field).toHaveValue('128');
-  await field.fill('40');
-  await expect(slider).toHaveValue('40');
-  await expect(page.getByTestId('generator-entropy')).toHaveText('262 bits of entropy');
-});
+    await button(page, 'Generate').click();
+    const slider = page.getByTestId('generator-length-slider');
+    const field = page.getByRole('textbox', { name: 'Length (12–128)' });
+    await expect(field).toHaveValue('20');
+    await slider.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(field).toHaveValue('21');
+    await page.keyboard.press('End');
+    await expect(field).toHaveValue('128');
+    await field.fill('40');
+    await expect(slider).toHaveValue('40');
+    await expect(page.getByTestId('generator-entropy')).toHaveText('262 bits of entropy');
+  });
+}
