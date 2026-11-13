@@ -1,3 +1,4 @@
+import { type CborMap, type CborValue, decodeCbor } from '@blindvault/crypto';
 import { type Page, expect, test } from '@playwright/test';
 
 import { formAlert } from './alerts';
@@ -117,6 +118,25 @@ test('refuses a near miss and an unrelated password alike, changing nothing stor
   expect(await storedLocalConfig(page)).toEqual(before);
   await unlock(page, PASSWORD);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+});
+
+test('stores in cleartext only the allowed Local Config fields (CRYPTO-INV-019)', async ({
+  page,
+}) => {
+  await create(page);
+  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByTestId('lock-state')).toHaveText('Locked');
+  const config = decodeCbor(Uint8Array.from(await storedLocalConfig(page))) as CborMap;
+  const keys = (value: CborValue | undefined) => [...(value as CborMap).keys()].sort();
+  expect(keys(config)).toEqual([
+    'encrypted',
+    'kek',
+    'localConfigFormatVersion',
+    'localConfigId',
+    'vaultId',
+  ]);
+  expect(keys(config.get('kek'))).toEqual(['memlimit', 'mkWrap', 'opslimit', 'salt']);
+  expect(keys(config.get('encrypted'))).toEqual(['c', 'n']);
 });
 
 test('keeps the vault after a reload, locked', async ({ page }) => {
