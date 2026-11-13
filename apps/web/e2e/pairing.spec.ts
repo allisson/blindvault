@@ -229,6 +229,7 @@ test('a record of A that fails verification stops the pairing on both, and B kee
     'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
   );
   // Retiring it first advises looking at it: only the confirmation may have been lost (D34).
+  await a.getByTestId('pairing-cancel').click();
   await a.getByTestId('device-retire').click();
   const confirm = a.getByRole('button', { name: /^Retire / });
   const nameB = ((await confirm.textContent()) ?? '').replace(/^Retire /, '');

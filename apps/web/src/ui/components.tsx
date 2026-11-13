@@ -701,6 +701,9 @@ export function StorageAlert({
  */
 export const VaultHeld = createContext<'yes' | 'none' | 'unknown'>('yes');
 
+/** Where a wizard's Cancel goes (D254): the header on a phone and on the start screens, if set. */
+export const WizardPlace = createContext<{ readonly header: HTMLElement | null }>({ header: null });
+
 /**
  * Before unlock only the Safari warning applies: it does not depend on the vault (D55, D196). With
  * no vault yet there is nothing to move, so it says to start in the installed app (D198).
@@ -734,6 +737,7 @@ export function Card({
     updates?.controller.subscribe ?? noUpdates,
     () => updates?.controller.holdsPhrase ?? false,
   );
+  const [header, setHeader] = useState<HTMLElement | null>(null);
   return (
     <div className="flex min-h-dvh flex-col bg-surface text-fg">
       <SharedOriginWarning />
@@ -749,6 +753,8 @@ export function Card({
             <PreviewBadge />
             <span className="flex-1" />
             {held === 'yes' ? <LockState unlocked={false} /> : null}
+            {/* A wizard's Cancel (D254). */}
+            <span ref={setHeader} className={about ? 'hidden' : 'contents'} />
           </header>
           <h1 className="text-xl font-semibold">{about ? m.about.title : title}</h1>
           {about ? (
@@ -766,7 +772,9 @@ export function Card({
             </>
           ) : null}
           {/* Hidden, not unmounted: a flow in progress keeps what was typed (D192). */}
-          <div className={about ? 'hidden' : 'contents'}>{children}</div>
+          <div className={about ? 'hidden' : 'contents'}>
+            <WizardPlace.Provider value={{ header }}>{children}</WizardPlace.Provider>
+          </div>
           <footer className="flex items-center justify-between">
             <p className="text-xs text-muted">v{__APP_VERSION__}</p>
             {about || holdsPhrase ? null : (

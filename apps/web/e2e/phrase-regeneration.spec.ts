@@ -126,11 +126,6 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
     'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings › Backup.',
   );
 
-  await check(page, words);
-  await expect(page.getByText('This phrase opens this vault and its backups.')).toBeVisible();
-  await check(page, old);
-  await expect(page.getByText("This is not this vault's current Recovery Phrase.")).toBeVisible();
-
   // "Make a backup now" leads to the export, which names the new phrase.
   await button(page, 'Make a backup now').click();
   await expect(page.getByTestId('backup-password')).toBeFocused();
@@ -139,6 +134,11 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   await button(page, 'Back').click();
   await page.getByTestId('settings-recovery').click();
   await expect(page.getByTestId('recovery-no-backup')).toHaveCount(0);
+
+  await check(page, words);
+  await expect(page.getByText('This phrase opens this vault and its backups.')).toBeVisible();
+  await check(page, old);
+  await expect(page.getByText("This is not this vault's current Recovery Phrase.")).toBeVisible();
 
   // The vault contents did not change.
   await button(page, 'Back').click();

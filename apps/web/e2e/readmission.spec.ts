@@ -108,6 +108,7 @@ async function restored(browser: Browser, logged: string[]) {
     mimeType: 'application/octet-stream',
     buffer: backup,
   });
+  await b.getByTestId('file-continue').click();
   await b.getByTestId('restore-phrase').fill(words.join(' '));
   await button(b, 'Open the backup').click();
   await fillPassword(b.getByTestId('new-password'), PASSWORD_B);
@@ -248,6 +249,7 @@ test('numbers said to differ stop the re-admission on both, and nothing is merge
 
   // Neither knows the other, and neither holds the other's item.
   await expect(a.getByTestId('device')).toHaveCount(1);
+  await b.getByTestId('pairing-cancel').click();
   await expect(b.getByTestId('devices-readmit')).toBeVisible();
   await button(a, 'Back').click();
   await button(a, 'Back').click();

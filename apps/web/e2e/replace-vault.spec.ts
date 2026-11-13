@@ -76,6 +76,7 @@ async function replaceWith(page: Page, file: Buffer, words: readonly string[]) {
     mimeType: 'application/octet-stream',
     buffer: file,
   });
+  await page.getByTestId('file-continue').click();
   await page.getByTestId('restore-phrase').fill(words.join(' '));
   await button(page, 'Open the backup').click();
   await page.getByTestId('new-password').fill(NEW_PASSWORD, { timeout: 30_000 });

@@ -5,7 +5,7 @@ import { useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Card, TextArea } from './components';
 import { NewPassword } from './NewPassword';
-import { Wizard } from './Wizard';
+import { Wizard, WizardActions } from './Wizard';
 
 // A forgotten local password reset with the Recovery Phrase (§14, D173, D184): the phrase, then
 // the new password. The vault stays locked until the reset commits, and the phrase is checked
@@ -64,9 +64,11 @@ export function ResetPassword({
               }}
               data-testid="reset-phrase"
             />
-            <Button type="submit" disabled={words.trim() === ''}>
-              {m.reset.next}
-            </Button>
+            <WizardActions>
+              <Button type="submit" disabled={words.trim() === ''}>
+                {m.reset.next}
+              </Button>
+            </WizardActions>
           </form>
         ) : (
           <form
@@ -90,9 +92,11 @@ export function ResetPassword({
               confirmLabel={m.restore.confirm}
               onChange={onChange}
             />
-            <Button type="submit" disabled={!password || working}>
-              {working ? m.reset.working : m.reset.submit}
-            </Button>
+            <WizardActions>
+              <Button type="submit" disabled={!password || working}>
+                {working ? m.reset.working : m.reset.submit}
+              </Button>
+            </WizardActions>
           </form>
         )}
       </Wizard>

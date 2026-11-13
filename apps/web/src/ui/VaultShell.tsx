@@ -17,6 +17,7 @@ import {
   SharedOriginWarning,
   TARGET,
   UpdateBanner,
+  WizardPlace,
 } from './components';
 import { useLayout } from './hooks';
 import { hex } from '../app/ids';
@@ -87,10 +88,13 @@ function Header({
   session,
   nav,
   mobile,
+  wizard,
 }: {
   readonly controller: VaultController;
   readonly session: VaultSession;
   readonly nav: Navigation;
+  /** Where a wizard's Cancel goes on a phone (D254). */
+  readonly wizard: (element: HTMLElement | null) => void;
   /**
    * Mobile drills down, has Settings in its bottom navigation instead, New item as the header's
    * action and Lock in the "…" menu (D245).
@@ -152,6 +156,7 @@ function Header({
       ) : null}
       {mobile ? (
         <>
+          <span ref={wizard} className="contents" />
           {adds ? (
             <Button
               className="px-3.5"
@@ -345,6 +350,7 @@ export function VaultShell({
 
   // The tablet drawer closes on any navigation, and when the layout is no longer tablet (D197).
   const tablet = layout === 'tablet';
+  const [wizardHeader, setWizardHeader] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setDrawer(false);
   }, [screen, layout]);
@@ -458,7 +464,13 @@ export function VaultShell({
   return (
     <ToastRegion>
       <div data-layout={layout} className="flex h-dvh flex-col overflow-hidden bg-surface text-fg">
-        <Header controller={controller} session={session} nav={nav} mobile={layout === 'mobile'} />
+        <Header
+          controller={controller}
+          session={session}
+          nav={nav}
+          mobile={layout === 'mobile'}
+          wizard={setWizardHeader}
+        />
         <LiveSync controller={controller} nav={nav} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
           <SharedOriginWarning />
@@ -550,7 +562,11 @@ export function VaultShell({
               </Button>
             </div>
           ) : null}
-          <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>{body}</main>
+          <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>
+            <WizardPlace.Provider value={{ header: layout === 'mobile' ? wizardHeader : null }}>
+              {body}
+            </WizardPlace.Provider>
+          </main>
         </div>
         {layout === 'mobile' && !isDetail(screen) && screen.name !== 'settings' ? (
           <footer className="grid grid-cols-3 gap-1 border-t border-line p-1">

@@ -66,7 +66,9 @@ async function setPassword(page: Page, value: string) {
 
 /** Settings › Merge a backup: the file, the Recovery Phrase, then the confirmation. */
 async function openForMerge(page: Page, file: Buffer, words: readonly string[]) {
-  // After a merge, Settings still shows it, with no Settings button of its own.
+  // After a merge, Settings still shows its result until Close (D254).
+  const close = page.getByTestId('wizard-close');
+  if (await close.isVisible()) await close.click();
   if (!(await page.getByTestId('merge-start').isVisible())) await openSettingsPage(page, 'merge');
   await page.getByTestId('merge-start').click();
   await page.getByTestId('restore-file').setInputFiles({
@@ -74,6 +76,7 @@ async function openForMerge(page: Page, file: Buffer, words: readonly string[]) 
     mimeType: 'application/octet-stream',
     buffer: file,
   });
+  await page.getByTestId('file-continue').click();
   await page.getByTestId('restore-phrase').fill(words.join(' '));
   await button(page, 'Open the backup').click();
 }
@@ -100,6 +103,7 @@ test('merges a backup made on another installation, keeping the losing edit in h
     mimeType: 'application/octet-stream',
     buffer: first,
   });
+  await b.getByTestId('file-continue').click();
   await b.getByTestId('restore-phrase').fill(words.join(' '));
   await button(b, 'Open the backup').click();
   await b.getByTestId('new-password').fill(B_PASSWORD);
@@ -112,13 +116,14 @@ test('merges a backup made on another installation, keeping the losing edit in h
   await setPassword(b, ON_B);
   const fromB = await exportBackup(b, B_PASSWORD);
 
-  await openForMerge(a, fromB, words);
+  await openSettingsPage(a, 'merge');
   await expect(
     a.getByText(
       'Brings the records of a backup of this vault into it, as a sync would: the newer copy of each record wins, and the older version of an item goes to its history. A merge cannot be undone.',
       { exact: true },
     ),
   ).toBeVisible();
+  await openForMerge(a, fromB, words);
   await expect(a.getByTestId('merge-confirm')).toContainText('verified.', { timeout: 30_000 });
   await expect(a.getByTestId('wizard-step')).toHaveText('Step 3 of 4 · Merge');
   await button(a, 'Merge').click();
@@ -185,6 +190,7 @@ test("refuses to merge a backup holding records dated ahead of this device's clo
     mimeType: 'application/octet-stream',
     buffer: first,
   });
+  await b.getByTestId('file-continue').click();
   await b.getByTestId('restore-phrase').fill(words.join(' '));
   await button(b, 'Open the backup').click();
   await b.getByTestId('new-password').fill(B_PASSWORD);
@@ -242,6 +248,7 @@ test('a merge of a backup opened by its export password recommends Check Recover
     mimeType: 'application/octet-stream',
     buffer: file,
   });
+  await a.getByTestId('file-continue').click();
   await a.getByRole('radio', { name: 'Export password' }).check();
   await a.getByTestId('restore-export-password').fill(passphrase);
   await button(a, 'Open the backup').click();
@@ -323,6 +330,7 @@ test.describe('devices a merge brings', () => {
       mimeType: 'application/octet-stream',
       buffer: before,
     });
+    await c.getByTestId('file-continue').click();
     await c.getByTestId('restore-phrase').fill(words.join(' '));
     await button(c, 'Open the backup').click();
     await c.getByTestId('new-password').fill(B_PASSWORD);

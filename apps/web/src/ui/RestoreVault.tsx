@@ -13,7 +13,7 @@ import { type Messages, format } from '../i18n/messages';
 import { Button, Card, Field, Notice, TARGET, TextArea } from './components';
 import { NewPassword } from './NewPassword';
 import { recordTypeName } from './Settings';
-import { Wizard } from './Wizard';
+import { FileDrop, Wizard, WizardActions } from './Wizard';
 
 // Restore from a backup (overview §10, backup-format.md §8): file → secret → local password. The
 // file is validated in full before the password step, and nothing is written before the commit
@@ -112,29 +112,37 @@ export function ChooseFile({
   readonly onFile: (check: BackupFileCheck) => void;
 }) {
   const { messages: m } = useLanguage();
+  const [file, setFile] = useState<File>();
   const [reading, setReading] = useState(false);
   return (
     <>
       <p className="text-sm">{m.restore.intro}</p>
-      <Field
+      <FileDrop
         label={m.restore.file}
-        type="file"
         accept=".bvault"
+        file={file}
         disabled={reading}
         error={error}
-        className="py-2 text-sm file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-control file:border file:border-control file:bg-raised file:px-4 file:text-sm file:font-medium file:text-fg enabled:hover:file:bg-subtle"
-        data-testid="restore-file"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = '';
-          if (!file) return;
-          setReading(true);
-          void file.arrayBuffer().then((buffer) => {
-            setReading(false);
-            onFile(controller.openBackupFile(new Uint8Array(buffer)));
-          });
-        }}
+        testId="restore-file"
+        onFile={setFile}
       />
+      <WizardActions>
+        <Button
+          disabled={!file || reading}
+          busy={reading}
+          data-testid="file-continue"
+          onClick={() => {
+            if (!file) return;
+            setReading(true);
+            void file.arrayBuffer().then((buffer) => {
+              setReading(false);
+              onFile(controller.openBackupFile(new Uint8Array(buffer)));
+            });
+          }}
+        >
+          {m.wizard.continue}
+        </Button>
+      </WizardActions>
     </>
   );
 }
@@ -232,9 +240,11 @@ export function OpenBackup({
           data-testid="restore-export-password"
         />
       )}
-      <Button type="submit" disabled={secret.trim() === '' || opening}>
-        {opening ? m.restore.opening : m.restore.open}
-      </Button>
+      <WizardActions>
+        <Button type="submit" disabled={secret.trim() === '' || opening}>
+          {opening ? m.restore.opening : m.restore.open}
+        </Button>
+      </WizardActions>
     </form>
   );
 }
@@ -296,15 +306,17 @@ function RestorePassword({
           {m.replace.understand}
         </label>
       ) : null}
-      <Button type="submit" disabled={!password || (replace && !understood) || working}>
-        {replace
-          ? working
-            ? m.replace.replacing
-            : m.replace.submit
-          : working
-            ? m.restore.restoring
-            : m.restore.submit}
-      </Button>
+      <WizardActions>
+        <Button type="submit" disabled={!password || (replace && !understood) || working}>
+          {replace
+            ? working
+              ? m.replace.replacing
+              : m.replace.submit
+            : working
+              ? m.restore.restoring
+              : m.restore.submit}
+        </Button>
+      </WizardActions>
     </form>
   );
 }

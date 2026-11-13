@@ -115,6 +115,11 @@ const en = {
     codes:
       'One device shows a code and the other scans or pastes it; the answer comes back the same way.',
     sas: 'The same six digits show there: answer on both devices.',
+    next: 'Next: {name}',
+    chooseFile: 'Choose a file',
+    drop: 'or drop it here · {types}',
+    continue: 'Continue',
+    close: 'Close',
   },
   pairing: {
     title: 'Pair a device',
@@ -1278,6 +1283,11 @@ const ptBR: Messages = {
     codes:
       'Um dispositivo mostra um código e o outro o escaneia ou cola; a resposta volta do mesmo jeito.',
     sas: 'Os mesmos seis dígitos aparecem lá: responda nos dois dispositivos.',
+    next: 'A seguir: {name}',
+    chooseFile: 'Escolher um arquivo',
+    drop: 'ou solte aqui · {types}',
+    continue: 'Continuar',
+    close: 'Fechar',
   },
   pairing: {
     title: 'Parear um dispositivo',

@@ -8,7 +8,7 @@ import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice } from './components';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
-import { Wizard } from './Wizard';
+import { Wizard, WizardActions } from './Wizard';
 
 // Recovery Phrase regeneration (§5.4, D185): warning → new phrase → confirmation → local password
 // or passkey → result. Nothing is written before the last step; the inactivity lock pauses while
@@ -151,10 +151,10 @@ export function RegeneratePhrase({
   const index = { warn: 1, phrase: 2, confirm: 3, auth: 4, done: 5 }[step.kind];
   return (
     <div className="flex flex-col gap-4" data-testid="regenerate">
-      <h3 className="font-semibold">{m.settings.regenTitle}</h3>
       <Wizard
         steps={steps}
         step={index}
+        title={m.settings.regenTitle}
         onCancel={step.kind === 'done' || working ? undefined : cancel}
       >
         {step.kind === 'warn' ? (
@@ -163,19 +163,20 @@ export function RegeneratePhrase({
               <span data-testid="regenerate-exposed">{m.settings.regenExposed}</span>
             </Notice>
             <p className="text-sm">{m.settings.regenBackups}</p>
-            <Button
-              className="self-start"
-              onClick={() => {
-                const words = controller.newRegenerationPhrase();
-                setStep(
-                  words
-                    ? { kind: 'phrase', words: words.split(' '), wrong: false }
-                    : { kind: 'idle' },
-                );
-              }}
-            >
-              {m.settings.regenContinue}
-            </Button>
+            <WizardActions>
+              <Button
+                onClick={() => {
+                  const words = controller.newRegenerationPhrase();
+                  setStep(
+                    words
+                      ? { kind: 'phrase', words: words.split(' '), wrong: false }
+                      : { kind: 'idle' },
+                  );
+                }}
+              >
+                {m.settings.regenContinue}
+              </Button>
+            </WizardActions>
           </>
         ) : null}
         {step.kind === 'phrase' ? (
@@ -222,9 +223,11 @@ export function RegeneratePhrase({
               error={error}
               data-testid="regenerate-password"
             />
-            <Button type="submit" disabled={working || password === ''}>
-              {working ? m.settings.regenWorking : m.settings.regenSubmit}
-            </Button>
+            <WizardActions>
+              <Button type="submit" disabled={working || password === ''}>
+                {working ? m.settings.regenWorking : m.settings.regenSubmit}
+              </Button>
+            </WizardActions>
             {controller.hasPasskey ? (
               <Button
                 variant="quiet"
@@ -252,10 +255,20 @@ export function RegeneratePhrase({
             <Button className="self-start" onClick={openBackup}>
               {m.settings.regenBackupNow}
             </Button>
+            {blockNotices}
+            <WizardActions>
+              <Button
+                onClick={() => {
+                  setStep({ kind: 'idle' });
+                }}
+                data-testid="wizard-close"
+              >
+                {m.wizard.close}
+              </Button>
+            </WizardActions>
           </div>
         ) : null}
       </Wizard>
-      {step.kind === 'done' ? blockNotices : null}
     </div>
   );
 }
