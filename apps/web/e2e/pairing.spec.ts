@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
@@ -52,9 +54,9 @@ async function device(browser: Browser, clock = false): Promise<Page> {
   return page;
 }
 
-/** A holds a vault with one item, and shows its pairing text; returns it. */
-async function invite(a: Page): Promise<string> {
-  await createVault(a, PASSWORD_A);
+/** A holds a vault with one item, and shows its pairing text; returns it and the phrase. */
+async function invite(a: Page): Promise<{ offer: string; words: string[] }> {
+  const words = await createVault(a, PASSWORD_A);
   await button(a, 'New item').click();
   await button(a, 'Login').click();
   await a.getByTestId('item-title').fill(TITLE);
@@ -75,7 +77,7 @@ async function invite(a: Page): Promise<string> {
   await expect(a.getByTestId('wizard-step')).toHaveText('Step 2 of 4 · Exchange the codes');
   // What the code or the text carries shows this device's network addresses (D208).
   await expect(a.getByText(CHANNEL)).toBeVisible();
-  return text.inputValue();
+  return { offer: await text.inputValue(), words };
 }
 
 /** B, with no vault, creates its password, takes A's text and shows its answer; returns it. */
@@ -99,7 +101,7 @@ async function join(b: Page, offer: string): Promise<string> {
 async function toSas(browser: Browser, clockA = false) {
   const a = await device(browser, clockA);
   const b = await device(browser);
-  const offer = await invite(a);
+  const { offer, words } = await invite(a);
   expect(offer).toMatch(/^[0-9A-Z $%*+\-./:]+$/);
   const answer = await join(b, offer);
   await a.getByTestId('pairing-paste').fill(answer);
@@ -112,7 +114,7 @@ async function toSas(browser: Browser, clockA = false) {
   expect(await sasB.textContent()).toBe(sas);
   await expect(a.getByTestId('wizard-step')).toHaveText('Step 3 of 4 · Compare the numbers');
   await expect(b.getByTestId('wizard-step')).toHaveText('Step 4 of 5 · Compare the numbers');
-  return { a, b };
+  return { a, b, words };
 }
 
 test('pairs two devices: the same number on both, then B holds the vault (§8.4, Gate C)', async ({
@@ -163,6 +165,64 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
   await button(b, 'Erase').click();
   await startScreen(b);
   await expect(b.getByTestId('erased').getByText(named, { exact: true })).toBeVisible();
+});
+
+/** Adds a Login item titled `title` and waits for its detail. */
+async function addItem(page: Page, title: string): Promise<void> {
+  await button(page, 'New item').click();
+  await button(page, 'Login').click();
+  await page.getByTestId('item-title').fill(title);
+  await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+}
+
+test('destroy A, continue with B; then destroy B and restore its backup with the Recovery Phrase (Security Gate)', async ({
+  browser,
+}) => {
+  const { a, b, words } = await toSas(browser);
+  await button(a, 'Yes, the same').click();
+  await button(b, 'Yes, the same').click();
+  await openVault(b);
+  await expect(a.getByTestId('pairing-done')).toContainText('is paired', { timeout: 60_000 });
+
+  // Destroy A: its browser context, storage included, is gone.
+  await a.context().close();
+
+  // B goes on alone: writes, locks, unlocks with its own password and makes a backup.
+  await addItem(b, 'Written on B');
+  await button(b, 'Lock').click();
+  await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
+  await button(b, 'Unlock').click();
+  await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await expect(b.getByRole('button', { name: new RegExp(TITLE) })).toBeVisible();
+  await expect(b.getByRole('button', { name: /Written on B/ })).toBeVisible();
+  await openSettingsPage(b, 'backup');
+  await b.getByTestId('backup-password').fill(PASSWORD_B);
+  const [download] = await Promise.all([
+    b.waitForEvent('download', { timeout: 60_000 }),
+    button(b, 'Export').click(),
+  ]);
+  const backup = await readFile(await download.path());
+
+  // Destroy B too: a new installation restores the backup with the Recovery Phrase.
+  await b.context().close();
+  const c = await device(browser);
+  await startScreen(c);
+  await button(c, 'Restore from a backup').click();
+  await c.getByTestId('restore-file').setInputFiles({
+    name: 'blindvault-backup.bvault',
+    mimeType: 'application/octet-stream',
+    buffer: backup,
+  });
+  await c.getByTestId('file-continue').click();
+  await c.getByTestId('restore-phrase').fill(words.join(' '));
+  await button(c, 'Open the backup').click();
+  await fillPassword(c.getByTestId('new-password'), PASSWORD_A);
+  await fillPassword(c.getByTestId('confirm-password'), PASSWORD_A);
+  await button(c, 'Restore').click();
+  await openVault(c);
+  await expect(c.getByRole('button', { name: new RegExp(TITLE) })).toBeVisible();
+  await expect(c.getByRole('button', { name: /Written on B/ })).toBeVisible();
 });
 
 test('a clock gone back far on a paired device offers replacing its vault by pairing again (D149, D153)', async ({
@@ -351,7 +411,7 @@ async function replacing(browser: Browser) {
   await expect(button(b, 'Start pairing')).toBeDisabled();
   await b.getByTestId('replace-understood').check();
 
-  const offer = await invite(a);
+  const { offer } = await invite(a);
   await button(b, 'Start pairing').click();
   await b.getByTestId('pairing-paste').fill(offer, { timeout: 30_000 });
   await button(b, 'Show my answer').click();
