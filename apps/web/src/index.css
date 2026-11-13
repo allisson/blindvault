@@ -59,6 +59,21 @@
   --radius-control: 0.375rem;
   --radius-card: 0.75rem;
 
+  /*
+   * Type (D254): screen titles 22 px semibold with slight negative tracking, section labels 11 px
+   * (uppercase where used), field values 15 px. Spacing stays on the 4 px scale (a unit test
+   * refuses a half step).
+   */
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.015em;
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1rem;
+  --text-label--letter-spacing: 0.06em;
+  --text-value: 0.9375rem;
+  --text-value--line-height: 1.375rem;
+
   /* Two elevations: flat (none) and raised, a light shadow in the light theme, a 1 px edge in the dark. */
   --shadow-raised: 0 1px 3px 0 var(--bv-shadow), 0 0 0 1px var(--bv-edge);
 

@@ -17,7 +17,7 @@ function Failure() {
       <span className="flex size-14 items-center justify-center rounded-full bg-subtle">
         <Icon name="lock" className="size-6!" />
       </span>
-      <h1 className="text-xl font-semibold">{m.crash.title}</h1>
+      <h1 className="text-title">{m.crash.title}</h1>
       <p className="max-w-sm text-sm text-muted">{m.crash.text}</p>
       <Button
         onClick={() => {

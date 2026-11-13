@@ -11,7 +11,7 @@ export function Framed() {
           className="flex w-full max-w-sm flex-col gap-4 rounded-card bg-raised p-6 shadow-raised"
         >
           <span className="text-sm font-semibold">{m.app.name}</span>
-          <h1 className="text-xl font-semibold">{m.framed.title}</h1>
+          <h1 className="text-title">{m.framed.title}</h1>
           <p>{m.framed.body}</p>
           <a
             href={`${location.origin}/`}

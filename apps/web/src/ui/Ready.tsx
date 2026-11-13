@@ -65,7 +65,7 @@ export function Ready({
       className="flex max-w-md flex-col gap-4 p-4"
       data-testid="ready"
     >
-      <h1 id="ready-title" className="text-xl font-semibold">
+      <h1 id="ready-title" className="text-title">
         {m.ready.title}
       </h1>
       <p className="text-sm">{m.ready.intro}</p>

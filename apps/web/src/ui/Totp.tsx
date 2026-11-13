@@ -124,7 +124,7 @@ export function TotpView({
         ) : null}
       </div>
       {account !== '' ? <p className="text-sm break-words text-muted">{account}</p> : null}
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted">{m.items.totpSecret}</span>
         <SecretView value={value.secret} label={name} clearSeconds={clearSeconds} />
       </div>

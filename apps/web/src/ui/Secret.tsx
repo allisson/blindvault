@@ -24,7 +24,7 @@ function Toggle({ shown, onToggle }: { readonly shown: boolean; readonly onToggl
   const m = useMessages();
   return (
     <Button variant="quiet" aria-pressed={shown} onClick={onToggle}>
-      <Icon name={shown ? 'eye-off' : 'eye'} className="me-1.5" />
+      <Icon name={shown ? 'eye-off' : 'eye'} className="me-2" />
       {shown ? m.items.hide : m.items.show}
     </Button>
   );
@@ -67,7 +67,7 @@ export function CopyButton({
 }) {
   return (
     <Button variant="quiet" aria-label={`${label}: ${name}`} onClick={onCopy}>
-      {checked ? <CopyCheck shown /> : <Icon name="copy" className="me-1.5" />}
+      {checked ? <CopyCheck shown /> : <Icon name="copy" className="me-2" />}
       {label}
     </Button>
   );
@@ -76,14 +76,14 @@ export function CopyButton({
 /** Shown seed-phrase words in a numbered grid (D247); the copy keeps the stored text. */
 function Words({ value }: { readonly value: string }) {
   return (
-    <ol className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+    <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {value
         .trim()
         .split(/\s+/)
         .map((word, i) => (
           // Words repeat; their place is their identity.
           <li key={i} className="rounded-control bg-subtle px-2 py-1">
-            <span className="me-1.5 text-xs text-muted">{i + 1}</span>
+            <span className="me-2 text-xs text-muted">{i + 1}</span>
             {word}{' '}
           </li>
         ))}
@@ -114,7 +114,7 @@ export function SecretView({
       <div className="flex items-center gap-2">
         <div
           data-testid={`secret-${label}`}
-          className="min-w-0 flex-1 font-mono text-sm break-all whitespace-pre-wrap"
+          className="min-w-0 flex-1 font-mono text-value break-all whitespace-pre-wrap"
         >
           {!shown ? <Mask /> : words ? <Words value={value} /> : value}
         </div>

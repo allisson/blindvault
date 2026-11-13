@@ -55,7 +55,7 @@ export function FirstSteps({
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink">
             <Icon name="check" label={m.ready.done} className="size-3.5!" />
           </span>
-          <span className="pt-0.5">{m.vault.stepCreated}</span>
+          <span className="leading-6">{m.vault.stepCreated}</span>
         </li>
         {steps.map((step, i) => (
           <li key={step.key} className="flex items-start gap-3 text-sm">
@@ -66,7 +66,7 @@ export function FirstSteps({
               {i + 2}
             </span>
             <div className="flex flex-col items-start gap-1">
-              <span className="pt-0.5">{step.text}</span>
+              <span className="leading-6">{step.text}</span>
               <Button variant="secondary" onClick={step.go}>
                 {step.action}
               </Button>

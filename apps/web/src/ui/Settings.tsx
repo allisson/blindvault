@@ -195,11 +195,7 @@ function SettingsIndex({
   return (
     <div className={`flex w-full max-w-md flex-col p-4 ${framed ? 'gap-4 px-2' : 'gap-6'}`}>
       <Title
-        className={
-          framed
-            ? 'px-2 text-xs font-bold tracking-wide text-muted uppercase'
-            : 'text-xl font-semibold'
-        }
+        className={framed ? 'px-2 text-label font-semibold text-muted uppercase' : 'text-title'}
       >
         {s.title}
       </Title>
@@ -251,7 +247,7 @@ function SettingsGroup({
   return (
     <section {...(title ? { 'aria-labelledby': id } : {})} className="flex flex-col gap-2">
       {title ? (
-        <Heading id={id} className="px-2 text-xs font-bold tracking-wide text-muted uppercase">
+        <Heading id={id} className="px-2 text-label font-semibold text-muted uppercase">
           {title}
         </Heading>
       ) : null}
@@ -335,7 +331,7 @@ function SettingsPageView({
   };
   return (
     <div className="flex w-full max-w-md flex-col gap-6 p-4" data-settings-page={page}>
-      <h1 tabIndex={-1} className="text-xl font-semibold">
+      <h1 tabIndex={-1} className="text-title">
         {m.settings.pages[page]}
       </h1>
       {content[page]()}
