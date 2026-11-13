@@ -38,6 +38,16 @@ const PATHS = {
       <path d="M6 14h2" />
     </>
   ),
+  dices: (
+    <>
+      <rect width="12" height="12" x="2" y="10" rx="2" ry="2" />
+      <path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6" />
+      <path d="M6 18h.01" />
+      <path d="M10 14h.01" />
+      <path d="M15 6h.01" />
+      <path d="M18 9h.01" />
+    </>
+  ),
   download: (
     <>
       <path d="M12 15V3" />
@@ -50,6 +60,13 @@ const PATHS = {
       <circle cx="12" cy="12" r="1" />
       <circle cx="19" cy="12" r="1" />
       <circle cx="5" cy="12" r="1" />
+    </>
+  ),
+  'external-link': (
+    <>
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
     </>
   ),
   eye: (

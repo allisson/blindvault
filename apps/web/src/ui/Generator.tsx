@@ -34,7 +34,13 @@ function entropy(s: GeneratorSettings): number | null {
  * The password generator of the item editor (overview §13.6). The generated value goes straight
  * into the field being edited; only the settings are kept.
  */
-export function Generator({ onUse }: { readonly onUse: (value: string) => void }) {
+export function Generator({
+  onUse,
+  onCancel,
+}: {
+  readonly onUse: (value: string) => void;
+  readonly onCancel: () => void;
+}) {
   const m = useMessages();
   const [settings, setSettings] = useState(loadGeneratorSettings);
   // Counts typed as text, so a value can be typed through an invalid one.
@@ -46,8 +52,8 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
   };
   const bits = entropy(settings);
   return (
-    <fieldset className="flex flex-col gap-3 rounded-control border border-line p-3">
-      <legend className="sr-only">{m.generator.title}</legend>
+    <fieldset className="flex flex-col gap-3">
+      <legend className="mb-3 text-lg font-semibold">{m.generator.title}</legend>
       <div className="flex gap-4 text-sm">
         {(['characters', 'words'] as const).map((mode) => (
           <label key={mode} className={`${TARGET} flex items-center gap-2`}>
@@ -129,18 +135,23 @@ export function Generator({ onUse }: { readonly onUse: (value: string) => void }
           ? m.generator.unavailable
           : format(m.generator.entropy, { bits: String(Math.floor(bits)) })}
       </p>
-      <Button
-        disabled={bits === null}
-        onClick={() => {
-          const generated =
-            settings.mode === 'words'
-              ? generatePassphrase(settings.words)
-              : generatePassword(settings.length, settings.sets);
-          onUse(generated.value);
-        }}
-      >
-        {m.generator.use}
-      </Button>
+      <div className="flex flex-wrap justify-end gap-2 max-sm:flex-col-reverse">
+        <Button variant="secondary" onClick={onCancel}>
+          {m.items.cancel}
+        </Button>
+        <Button
+          disabled={bits === null}
+          onClick={() => {
+            const generated =
+              settings.mode === 'words'
+                ? generatePassphrase(settings.words)
+                : generatePassword(settings.length, settings.sets);
+            onUse(generated.value);
+          }}
+        >
+          {m.generator.use}
+        </Button>
+      </div>
     </fieldset>
   );
 }

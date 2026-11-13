@@ -435,7 +435,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Capture every v0.7.1 screen and approve an HTML prototype of the layout and presentation changes (`docs/prototypes/phase-7b-layout.html`, D254)
 - [x] Notices: the Preview badge, the storage warning on one line with Details, the backup reminder at the top of the list, a neutral lock badge (D254)
 - [x] Lists: folders and types as pills opening a bottom sheet on a phone, the toast above the bottom navigation (D254)
-- [ ] Item detail and editor: the header bar, divided field rows, icon buttons on non-secret fields, the fixed Cancel and Save bar, the generator in a dialog or bottom sheet (D254)
+- [x] Item detail and editor: the header bar, divided field rows, icon buttons on non-secret fields, the fixed Cancel and Save bar, the generator in a dialog or bottom sheet (D254)
 - [ ] Show and Hide on every password field, masked again on submit, on a screen change and on lock (D254)
 - [ ] Settings inside the vault frame on tablet and desktop; Devices with the Pair and Re-admit cards (D254)
 - [ ] Wizards on a screen of their own: "Next:", Cancel's place, the fixed action on a phone, the file drop area with Continue (D254)

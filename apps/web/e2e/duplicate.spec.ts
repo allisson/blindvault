@@ -42,7 +42,6 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByRole('heading', { name: 'Harbor', level: 1 })).toBeVisible();
 
     // The history says old values stay, and keeps them masked.
-    await button(page, 'More actions').click();
     await button(page, 'History').click();
     await expect(page.getByRole('heading', { name: 'History of Harbor' })).toBeVisible();
     await expect(page.getByText(/Earlier values stay in this history/)).toBeVisible();
@@ -65,7 +64,6 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByText('Work', { exact: true }).last()).toBeVisible();
     await button(page, 'Show').click();
     await expect(page.getByTestId('secret-Password')).toHaveText(OLD);
-    await button(page, 'More actions').click();
     await button(page, 'History').click();
     await expect(page.getByText('No earlier versions.')).toBeVisible();
     await button(page, 'Back to the item').click();
