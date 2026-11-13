@@ -1,3 +1,4 @@
+import { INSTALLATION_GUARD } from '@blindvault/storage';
 import { type Page, expect, test } from '@playwright/test';
 
 import { createVault, startScreen, openSettingsPage } from './create';
@@ -126,4 +127,47 @@ test('a second app window that takes over an erased vault shows the start screen
   await second.getByRole('button', { name: 'Use here' }).click();
   await startScreen(second);
   expect(await databases(second)).toEqual([]);
+});
+
+test('erases nothing while another app window holds the installation guard (D97, D205)', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/');
+  await createVault(page, PASSWORD);
+  const second = await context.newPage();
+  await second.goto('/');
+  await expect(second.getByText('BlindVault is open in another window.')).toBeVisible();
+  // The second window holds the guard, as a replacement or re-founding in progress there would.
+  await second.evaluate(
+    (name) =>
+      new Promise<void>((granted) => {
+        void navigator.locks.request(
+          name,
+          () =>
+            new Promise<void>((release) => {
+              (window as unknown as { release: () => void }).release = release;
+              granted();
+            }),
+        );
+      }),
+    INSTALLATION_GUARD,
+  );
+
+  await openSettingsPage(page, 'erase');
+  await button(page, 'Erase this vault from this device…').click();
+  await confirmErase(page);
+  await expect(
+    page.getByText('BlindVault is busy in another window. Nothing was erased.'),
+  ).toBeVisible();
+  expect(await databases(page)).toHaveLength(1);
+  await expect(page.getByTestId('lock-state')).toHaveText('Locked');
+
+  await second.evaluate(() => {
+    (window as unknown as { release: () => void }).release();
+  });
+  await button(page, 'Erase this vault from this device…').click();
+  await confirmErase(page);
+  await startScreen(page);
+  expect(await databases(page)).toEqual([]);
 });
