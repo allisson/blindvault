@@ -16,6 +16,7 @@ import {
   deriveMasterSubkeys,
   derivePrfKek,
   encodeCbor,
+  exportTransferKey,
   generateDeviceIdentity,
   generateRecoveryPhrase,
   initCrypto,
@@ -31,6 +32,7 @@ import {
   type ReconnectionKeys,
   type SealedReconnection,
   SyncSession,
+  type Transport,
   exchange,
   liveSession,
   memoryDelivery,
@@ -156,6 +158,7 @@ async function sync(
   y: VaultSession,
   sent: (records: Uint8Array[]) => Uint8Array[] = (records) => records,
   link: MemoryPair = memoryPair(),
+  messages?: Uint8Array[],
 ): Promise<[SyncResult, SyncResult]> {
   const gx = x.openSync(y.deviceId);
   const gy = y.openSync(x.deviceId);
@@ -178,8 +181,8 @@ async function sync(
       ...both,
     }),
   ]);
-  const sx = new SyncSession(hx.channel);
-  const sy = new SyncSession(hy.channel);
+  const sx = new SyncSession(messages ? recording(hx.channel, messages) : hx.channel);
+  const sy = new SyncSession(messages ? recording(hy.channel, messages) : hy.channel);
   const run = (session: SyncSession, grant: typeof gx) =>
     exchange(session, {
       summary: grant.summary(),
@@ -192,6 +195,21 @@ async function sync(
   sx.close();
   sy.close();
   return results;
+}
+
+/** `channel`, keeping a copy of every message it sends, before the channel encrypts it. */
+function recording(channel: Transport, sent: Uint8Array[]): Transport {
+  return {
+    send: (message) => {
+      sent.push(message.slice());
+      return channel.send(message);
+    },
+    receive: () => channel.receive(),
+    close: () => {
+      channel.close();
+    },
+    closed: channel.closed,
+  };
 }
 
 /** The summary of every synchronized record, comparable across devices. */
@@ -1286,6 +1304,40 @@ describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, 
       }
     },
   );
+});
+
+describe('the Master Key over a sync (overview §17, CRYPTO-INV-002, Gate D)', () => {
+  it('no message of a sync, nor any frame on the link, carries the Master Key, either way', async () => {
+    const { x, y, words } = await peers();
+    const keyring = new Keyring();
+    const caller = new Keyring();
+    const file = await x.exportBackup({ kek: kek(caller, 1), method: 'password' });
+    caller.wipeAll();
+    const backup = restoreWithPhrase(keyring, parseBackup(file.bytes), words);
+    const masterKey = exportTransferKey(backup.masterKey);
+    keyring.wipeAll();
+
+    await x.createItem(login('From X'));
+    await y.createItem(login('From Y'));
+    const frames: Uint8Array[] = [];
+    const messages: Uint8Array[] = [];
+    const link = memoryPair({
+      intercept: (_direction, frame) => {
+        frames.push(frame.slice());
+        return [frame];
+      },
+    });
+    await sync(x, y, (records) => records, link, messages);
+    expect(titles(x)).toEqual(['From X', 'From Y', 'Shared']);
+    expect(titles(y)).toEqual(titles(x));
+
+    const holds = (bytes: Uint8Array) => Buffer.from(bytes).includes(Buffer.from(masterKey));
+    expect(messages.length).toBeGreaterThan(2);
+    expect(messages.some(holds)).toBe(false);
+    expect(frames.length).toBeGreaterThan(messages.length);
+    expect(frames.some(holds)).toBe(false);
+    masterKey.fill(0);
+  });
 });
 
 function retiredOf(session: VaultSession, id: Uint8Array): boolean | undefined {
