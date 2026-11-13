@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, startScreen } from './create';
 
 // A wizard on a screen of its own: "Next:", Cancel beside the main action or in the header, the
 // main action fixed at the bottom on a phone, and the file drop area with Continue (D254).
@@ -69,6 +69,7 @@ test('a file step holds the file until Continue, with Cancel in the header (D254
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
+  await startScreen(page);
   await button(page, 'Restore from a backup').click();
 
   await expect(page.getByTestId('wizard-next')).toHaveText('Next: Open the backup');
@@ -86,7 +87,7 @@ test('a file step holds the file until Continue, with Cancel in the header (D254
   await expect(page.getByText('not-a-backup.bvault')).toBeVisible();
   await expect(page.getByTestId('wizard-step')).toHaveText('Step 1 of 3 · Choose the backup');
   await proceed.click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByTestId('wizard').getByRole('alert')).toBeVisible();
 
   await page.locator('header').getByRole('button', { name: 'Cancel' }).click();
   await expect(button(page, 'Restore from a backup')).toBeVisible();

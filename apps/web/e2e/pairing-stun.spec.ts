@@ -120,7 +120,9 @@ test('a STUN list of its own: refused when invalid, saved, used by the pairing, 
   ]);
   await button(a, 'Cancel').click();
 
-  // Cancelled, the screen reads the list again: it stays, until the defaults are restored.
+  // Cancelled and opened again, the screen reads the list again: it stays, until the defaults are
+  // restored.
+  await button(a, 'Pair a device…').click();
   await expect(a.getByTestId('invite-password')).toBeVisible();
   await openAdvanced(a);
   await a.getByTestId('stun-open').click();
