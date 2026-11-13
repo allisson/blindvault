@@ -25,9 +25,10 @@ import { type Navigation } from '../app/nav';
 import { saveShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, roleName } from '../i18n/messages';
-import { Button, ConfirmDialog, Field, INPUT, Notice, TextArea } from './components';
+import { Button, ConfirmDialog, Field, INPUT, Modal, Notice, TextArea } from './components';
 import { writeError } from './errors';
 import { Generator } from './Generator';
+import { Icon } from './icons';
 import { SecretInput } from './Secret';
 import { rated, useMeter } from './Strength';
 import { useToast } from './Toast';
@@ -93,6 +94,20 @@ function FieldEditor({
         hint={hint}
         shown={shown}
         onShownChange={setShown}
+        action={
+          field.type === 'secret' ? (
+            <Button
+              variant="quiet"
+              aria-label={m.generator.generate}
+              title={m.generator.title}
+              onClick={() => {
+                setGenerating(true);
+              }}
+            >
+              <Icon name="dices" />
+            </Button>
+          ) : null
+        }
       />
     );
   } else if (field.type === 'long-text') {
@@ -146,27 +161,24 @@ function FieldEditor({
       ) : null}
       {input}
       {meter}
-      {field.type === 'secret' ? (
-        <div className="flex flex-col gap-2">
-          <Button
-            variant="quiet"
-            className="self-start"
-            aria-expanded={generating}
-            onClick={() => {
-              setGenerating(!generating);
+      {generating ? (
+        // A dialog, or a bottom sheet on a phone (D254).
+        <Modal
+          aria-label={m.generator.title}
+          onCancel={() => {
+            setGenerating(false);
+          }}
+        >
+          <Generator
+            onUse={(value) => {
+              set(value);
+              setGenerating(false);
             }}
-          >
-            {m.generator.generate}
-          </Button>
-          {generating ? (
-            <Generator
-              onUse={(value) => {
-                set(value);
-                setGenerating(false);
-              }}
-            />
-          ) : null}
-        </div>
+            onCancel={() => {
+              setGenerating(false);
+            }}
+          />
+        </Modal>
       ) : null}
     </div>
   );
@@ -272,8 +284,9 @@ export function ItemEditor({
       noValidate
       className="flex w-full max-w-2xl flex-col gap-4 p-4"
       onKeyDown={(e) => {
-        // Ctrl/⌘ + Enter saves from any field, the notes included; not under the dialog (D251).
-        if (!saveShortcut(e) || leaving || saving) return;
+        // Ctrl/⌘ + Enter saves from any field, the notes included; not from a dialog (D251).
+        const inDialog = e.target instanceof Element && e.target.closest('dialog') !== null;
+        if (!saveShortcut(e) || leaving || saving || inDialog) return;
         e.preventDefault();
         form.current?.requestSubmit();
       }}
@@ -424,7 +437,16 @@ export function ItemEditor({
           {failure}
         </p>
       ) : null}
-      <div className="flex gap-2">
+      {/* Fixed at the bottom of the pane, so Save never scrolls away (D254). */}
+      <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex justify-end gap-2 border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:*:flex-1">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            nav.back();
+          }}
+        >
+          {m.items.cancel}
+        </Button>
         <Button
           type="submit"
           disabled={saving}
@@ -432,14 +454,6 @@ export function ItemEditor({
           aria-keyshortcuts="Control+Enter Meta+Enter"
         >
           {saving ? m.items.saving : m.items.save}
-        </Button>
-        <Button
-          variant="quiet"
-          onClick={() => {
-            nav.back();
-          }}
-        >
-          {m.items.cancel}
         </Button>
       </div>
       {leaving ? (

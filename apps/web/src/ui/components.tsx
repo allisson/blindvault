@@ -111,10 +111,47 @@ export function CopyCheck({ shown }: { readonly shown: boolean }) {
 }
 
 /**
- * A destructive or security confirmation in the native modal dialog (D231, D233): the focus stays
- * inside, Escape cancels and the rest of the page is inert. Shown while mounted; its text is the
- * caller's, unchanged from the inline confirmation it replaces. On a phone the same dialog is a
- * bottom sheet, its buttons full width with the action first (D250).
+ * The native modal dialog (D231, D233): the focus stays inside, Escape calls `onCancel` and the rest
+ * of the page is inert. Shown while mounted. On a phone it is a bottom sheet (D250).
+ */
+export function Modal({
+  onCancel,
+  children,
+  ...props
+}: Omit<ComponentProps<'dialog'>, 'onCancel'> & { readonly onCancel: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const sheet = useLayout() === 'mobile';
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => {
+      dialog?.close();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      data-sheet={sheet || undefined}
+      className={`bg-raised text-fg shadow-raised backdrop:bg-scrim motion-safe:animate-enter ${
+        sheet
+          ? 'mx-0 mt-auto mb-0 w-full max-w-none rounded-t-card p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]'
+          : 'm-auto w-[calc(100%-2rem)] max-w-md rounded-card p-6'
+      }`}
+      onCancel={(e) => {
+        // Escape: the caller unmounts the dialog.
+        e.preventDefault();
+        onCancel();
+      }}
+      {...props}
+    >
+      {children}
+    </dialog>
+  );
+}
+
+/**
+ * A destructive or security confirmation in a `Modal`; its text is the caller's, unchanged from the
+ * inline confirmation it replaces. On a phone its buttons are full width with the action first.
  */
 export function ConfirmDialog({
   confirm,
@@ -133,28 +170,12 @@ export function ConfirmDialog({
   readonly busy?: boolean;
   readonly tone?: 'danger' | 'primary';
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const sheet = useLayout() === 'mobile';
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog && !dialog.open) dialog.showModal();
-    return () => {
-      dialog?.close();
-    };
-  }, []);
   return (
-    <dialog
-      ref={ref}
+    <Modal
       aria-label={confirm}
-      data-sheet={sheet || undefined}
-      className={`bg-raised text-fg shadow-raised backdrop:bg-scrim motion-safe:animate-enter ${
-        sheet
-          ? 'mx-0 mt-auto mb-0 w-full max-w-none rounded-t-card p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]'
-          : 'm-auto w-[calc(100%-2rem)] max-w-md rounded-card p-6'
-      }`}
-      onCancel={(e) => {
-        // Escape: the caller unmounts the dialog, unless the work already started.
-        e.preventDefault();
+      onCancel={() => {
+        // Not once the work started.
         if (!busy) onCancel();
       }}
       {...props}
@@ -181,7 +202,7 @@ export function ConfirmDialog({
           </div>
         )}
       </div>
-    </dialog>
+    </Modal>
   );
 }
 

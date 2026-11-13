@@ -20,6 +20,7 @@ test('names the generator, describes a field by its error, and reads a mask and 
   // The generator is a named group.
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Password generator' })).toBeVisible();
+  await page.keyboard.press('Escape');
 
   // A refused value: the field's error is its description.
   await page.getByTestId('item-title').fill('ACME');
@@ -57,6 +58,7 @@ test('reflows at 320 px with no horizontal scroll: start, list, editor and Setti
   await page.getByRole('button', { name: 'Login', exact: true }).click();
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
   expect(await fits()).toBe(true);
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();

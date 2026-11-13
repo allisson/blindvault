@@ -109,7 +109,6 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByTestId('discard-confirm')).toBeVisible();
     await press(page, button(page, 'Discard the changes'));
     await expect(page.getByRole('heading', { name: 'Harbor', level: 1 })).toBeVisible();
-    await press(page, button(page, 'More actions'));
     await press(page, button(page, 'History'));
     await expect(page.getByRole('heading', { name: 'History' }).first()).toBeVisible();
 

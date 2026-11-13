@@ -353,6 +353,7 @@ test.describe('on a coarse pointer', () => {
       await page.getByRole('button', { name: 'Generate', exact: true }).click();
       await expect(page.getByTestId('generator-entropy')).toBeVisible();
       expect(await smallTargets(page), `${layout}: the editor and its generator`).toEqual([]);
+      await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
       await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();

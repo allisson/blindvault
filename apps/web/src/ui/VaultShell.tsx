@@ -44,6 +44,8 @@ function DetailPane({
   readonly onChange: () => void;
 }) {
   const m = useMessages();
+  // On a phone the whole screen scrolls, so the editor's bar sticks to it (D254).
+  const scrolls = useLayout() !== 'mobile';
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   if (!isDetail(screen)) {
     return (
@@ -59,7 +61,10 @@ function DetailPane({
       ? `new-${String(nav.opening(screen))}`
       : `${screen.name}-${hex(screen.id)}`;
   return (
-    <section aria-label={m.vault.detail} className="flex flex-1 justify-center overflow-y-auto">
+    <section
+      aria-label={m.vault.detail}
+      className={`flex min-w-0 flex-1 justify-center ${scrolls ? 'overflow-y-auto' : ''}`}
+    >
       {screen.name === 'item' ? (
         <ItemDetail key={key} session={session} id={screen.id} nav={nav} onChange={onChange} />
       ) : screen.name === 'history' ? (

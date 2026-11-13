@@ -66,6 +66,7 @@ for (const [layout, width] of WIDTHS) {
       await button(page, 'Login').click();
       await button(page, 'Generate').click();
       await audit(page, 'the item editor and the generator');
+      await page.keyboard.press('Escape');
       await button(page, 'Save').click();
       await expect(page.getByText('Enter a title.')).toBeVisible();
       await audit(page, 'the item editor with an error');
@@ -79,7 +80,6 @@ for (const [layout, width] of WIDTHS) {
       await button(page, 'Cancel').click();
       await audit(page, 'the discard confirmation');
       await button(page, 'Discard the changes').click();
-      await button(page, 'More actions').click();
       await button(page, 'History').click();
       await audit(page, 'an item history');
 

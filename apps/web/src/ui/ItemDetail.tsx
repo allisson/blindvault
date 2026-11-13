@@ -11,11 +11,11 @@ import { type Navigation } from '../app/nav';
 import { host } from '../app/row';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format, roleName } from '../i18n/messages';
-import { Button, Notice, Overflow } from './components';
+import { Button, Notice, Overflow, TARGET } from './components';
 import { writeError } from './errors';
 import { Icon, type IconName } from './icons';
 import { Avatar, TEMPLATE_ICON, known } from './ItemRow';
-import { SecretView } from './Secret';
+import { SecretView, useCopy } from './Secret';
 import { WeakBadge, rated } from './Strength';
 import { useToast } from './Toast';
 import { TotpView } from './Totp';
@@ -40,6 +40,9 @@ function openable(value: string): boolean {
   }
 }
 
+/** An icon button of a field that is not secret: named by its action and the field (D254). */
+const ICON_BUTTON = `${TARGET} inline-flex min-w-10 shrink-0 items-center justify-center rounded-control text-fg hover:bg-subtle`;
+
 export function FieldValue({
   field,
   name,
@@ -50,6 +53,7 @@ export function FieldValue({
   readonly clearSeconds: number;
 }) {
   const m = useLanguage().messages;
+  const { copy, checked } = useCopy(clearSeconds);
   const { value } = field;
   if (typeof value !== 'string') {
     return <TotpView value={value} name={name} clearSeconds={clearSeconds} />;
@@ -66,25 +70,39 @@ export function FieldValue({
           )}
         </div>
       );
-    case 'url':
+    default:
       return (
-        <span className="flex items-center gap-2 break-all">
-          {value}
-          {openable(value) ? (
+        <span className="flex items-center gap-1">
+          <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{value}</span>
+          {field.type === 'url' && openable(value) ? (
             <a
               href={value}
               target="_blank"
               rel="noopener noreferrer"
               referrerPolicy="no-referrer"
-              className="text-sm font-medium underline"
+              aria-label={`${m.items.open}: ${name}`}
+              title={m.items.open}
+              className={ICON_BUTTON}
             >
-              {m.items.open}
+              <Icon name="external-link" />
             </a>
           ) : null}
+          <button
+            type="button"
+            aria-label={`${m.items.copy}: ${name}`}
+            title={m.items.copy}
+            className={ICON_BUTTON}
+            onClick={() => {
+              copy(value);
+            }}
+          >
+            <Icon
+              name={checked ? 'check' : 'copy'}
+              className={checked ? 'text-success motion-safe:animate-pop' : ''}
+            />
+          </button>
         </span>
       );
-    default:
-      return <span className="break-words whitespace-pre-wrap">{value}</span>;
   }
 }
 
@@ -251,7 +269,6 @@ export function ItemDetail({
               </Button>
             ) : (
               <Button
-                variant="secondary"
                 disabled={working}
                 onClick={() => {
                   nav.open({ name: 'edit', id });
@@ -322,6 +339,19 @@ export function ItemDetail({
         <Section title={m.items.notes}>
           <p className="px-4 pt-1 pb-3 break-words whitespace-pre-wrap">{item.notes}</p>
         </Section>
+      ) : null}
+      {!view.inTrash ? (
+        // Beside the menu's entry (D254).
+        <Button
+          variant="quiet"
+          className="self-start text-muted"
+          onClick={() => {
+            nav.open({ name: 'history', id });
+          }}
+        >
+          <Icon name="history" className="me-1.5" />
+          {m.items.history}
+        </Button>
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-danger">

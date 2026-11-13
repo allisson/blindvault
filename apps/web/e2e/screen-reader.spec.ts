@@ -132,8 +132,8 @@ for (const [layout, width] of WIDTHS) {
         - button "Show"
         - button "Generate"
         - alert: Fix the fields marked above.
-        - button "Save"
         - button "Cancel"
+        - button "Save"
     `);
 
     // An item: the secret is read as "Hidden", and a copy is announced with its clipboard note.

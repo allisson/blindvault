@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 
 import { clipboard } from '../app/clipboard';
 import { useMessages } from '../i18n/context';
@@ -151,6 +151,7 @@ export function SecretInput({
   hint,
   shown: shownOutside,
   onShownChange,
+  action,
 }: {
   readonly label: string;
   readonly value: string;
@@ -159,6 +160,8 @@ export function SecretInput({
   readonly hint?: string | undefined;
   readonly shown?: boolean;
   readonly onShownChange?: (shown: boolean) => void;
+  /** A button after Show, as the generator's (D254). */
+  readonly action?: ReactNode;
 }) {
   const m = useMessages();
   const id = useId();
@@ -211,6 +214,7 @@ export function SecretInput({
             setShown(!shown);
           }}
         />
+        {action}
       </div>
       <Message
         id={`${id}-message`}

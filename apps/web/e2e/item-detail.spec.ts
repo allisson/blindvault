@@ -3,8 +3,8 @@ import { type Page, expect, test } from '@playwright/test';
 import { createVault } from './create';
 
 // The item detail (D247): a header with the avatar and chips, fields in titled cards, icon and text
-// on a secret's buttons, Duplicate, History and Move to trash under "More actions", and a shown
-// seed phrase as a numbered grid.
+// on a secret's buttons and icon buttons on the others (D254), Duplicate, History and Move to trash
+// under "More actions", and a shown seed phrase as a numbered grid.
 
 test.setTimeout(120_000);
 
@@ -57,16 +57,27 @@ test('the detail shows chips, titled cards and the actions menu (D247)', async (
   // A secret's buttons carry an icon beside their visible text.
   await expect(button(page, 'Show').locator('svg')).toHaveCount(1);
   await expect(button(page, 'Copy: Password').locator('svg')).toHaveCount(1);
+  // Other fields: Copy and Open are icon buttons, named and with a tooltip (D254).
+  const copyUser = button(page, 'Copy: Username');
+  await expect(copyUser).toHaveAttribute('title', 'Copy');
+  await expect(copyUser).toHaveText('');
+  await expect(page.getByRole('link', { name: 'Open: Website', exact: true })).toHaveAttribute(
+    'href',
+    'https://bank.example/login',
+  );
 
   // Edit is visible; the rest waits under More actions.
   await expect(button(page, 'Edit')).toBeVisible();
   await expect(button(page, 'Duplicate')).toHaveCount(0);
   await button(page, 'More actions').click();
+  const menu = page.locator(':popover-open');
   for (const name of ['Duplicate', 'History', 'Move to trash']) {
-    await expect(button(page, name)).toBeVisible();
+    await expect(menu.getByRole('button', { name, exact: true })).toBeVisible();
   }
   await page.keyboard.press('Escape');
-  await expect(button(page, 'History')).toHaveCount(0);
+  await expect(button(page, 'Duplicate')).toHaveCount(0);
+  // History is also a link at the detail's foot (D254).
+  await expect(button(page, 'History')).toBeVisible();
 });
 
 test('a shown seed phrase is a numbered grid of its words (D247)', async ({ page }) => {
