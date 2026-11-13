@@ -74,7 +74,7 @@ export function Button({
 /** Work in progress, beside the text that names it. Nothing turns under reduced motion. */
 export function Spinner() {
   return (
-    <Icon name="loader-circle" className="me-1.5 motion-safe:animate-spin motion-reduce:hidden" />
+    <Icon name="loader-circle" className="me-2 motion-safe:animate-spin motion-reduce:hidden" />
   );
 }
 
@@ -105,7 +105,7 @@ export function useCheck(): readonly [boolean, () => void] {
 export function CopyCheck({ shown }: { readonly shown: boolean }) {
   return shown ? (
     <span data-testid="copy-check">
-      <Icon name="check" className="me-1.5 text-success motion-safe:animate-pop" />
+      <Icon name="check" className="me-2 text-success motion-safe:animate-pop" />
     </span>
   ) : null;
 }
@@ -321,7 +321,7 @@ export function Pill({
         popoverTarget={id}
         aria-expanded={open}
         data-on={on || undefined}
-        className={`${TARGET} inline-flex min-w-0 items-center gap-1.5 rounded-full border border-line bg-raised px-3 text-sm hover:bg-subtle data-on:border-accent data-on:bg-accent-soft data-on:text-accent-text`}
+        className={`${TARGET} inline-flex min-w-0 items-center gap-2 rounded-full border border-line bg-raised px-3 text-sm hover:bg-subtle data-on:border-accent data-on:bg-accent-soft data-on:text-accent-text`}
         {...props}
       >
         {icon ? <Icon name={icon} className="shrink-0" /> : null}
@@ -373,7 +373,7 @@ export function Badge({
   const look = tone === 'warning' ? 'bg-warning-soft text-warning-text' : 'bg-subtle text-fg';
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-xs font-medium ${look} ${className}`}
+      className={`rounded-full px-2 py-1 text-xs font-medium ${look} ${className}`}
       {...props}
     />
   );
@@ -578,7 +578,7 @@ export function PreviewBadge() {
         type="button"
         popoverTarget={id}
         aria-expanded={open}
-        className="shrink-0 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning-text hover:underline pointer-coarse:min-h-11 pointer-coarse:px-3"
+        className="shrink-0 rounded-full bg-warning-soft px-2 py-1 text-xs font-semibold text-warning-text hover:underline pointer-coarse:min-h-11 pointer-coarse:px-3"
         data-testid="preview-badge"
       >
         {m.preview.badge}
@@ -676,7 +676,9 @@ export function StorageAlert({
       data-warning={warning}
       className="flex items-start gap-2 border-b border-line"
     >
-      <Icon name="triangle-alert" className="mt-0.5" />
+      <span className="flex h-5 shrink-0 items-center">
+        <Icon name="triangle-alert" />
+      </span>
       <p id={id} className={`min-w-0 flex-1 ${open ? '' : 'truncate'}`}>
         {text}
       </p>
@@ -756,7 +758,7 @@ export function Card({
             {/* A wizard's Cancel (D254). */}
             <span ref={setHeader} className={about ? 'hidden' : 'contents'} />
           </header>
-          <h1 className="text-xl font-semibold">{about ? m.about.title : title}</h1>
+          <h1 className="text-title">{about ? m.about.title : title}</h1>
           {about ? (
             <>
               <AboutBuild />

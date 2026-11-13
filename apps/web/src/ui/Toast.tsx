@@ -48,7 +48,7 @@ export function ToastRegion({ children }: { readonly children: ReactNode }) {
           <p
             key={toast.n}
             data-testid="toast"
-            className="flex max-w-md items-center gap-2 rounded-card bg-fg px-4 py-2.5 text-sm text-surface shadow-raised motion-safe:animate-enter"
+            className="flex max-w-md items-center gap-2 rounded-card bg-fg px-4 py-3 text-sm text-surface shadow-raised motion-safe:animate-enter"
           >
             {toast.done ? <Icon name="check" className="shrink-0" /> : null}
             {toast.text}

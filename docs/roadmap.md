@@ -439,7 +439,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Show and Hide on every password field, masked again on submit, on a screen change and on lock (D254)
 - [x] Settings inside the vault frame on tablet and desktop; Devices with the Pair and Re-admit cards (D254)
 - [x] Wizards on a screen of their own: "Next:", Cancel's place, the fixed action on a phone, the file drop area with Continue (D254)
-- [ ] Type scale and spacing within D231 (D254)
+- [x] Type scale and spacing within D231 (D254)
 - [ ] Release v0.7.2 for another hands-on test
 
 ### Essential UX Gate

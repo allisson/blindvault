@@ -148,7 +148,7 @@ export function ItemList({
                 nav.select({ name: 'new' });
               }}
             >
-              <Icon name="plus" className="me-1.5" />
+              <Icon name="plus" className="me-2" />
               {m.items.new}
             </Button>
           ) : null}
@@ -208,12 +208,12 @@ export function ItemList({
                 on={filter !== undefined}
               >
                 {/* The counts are seen only: the list read next announces its length (D245). */}
-                <div role="group" aria-label={m.vault.filterType} className="flex flex-col gap-0.5">
+                <div role="group" aria-label={m.vault.filterType} className="flex flex-col gap-1">
                   {/* A sheet is titled, as the folders' (D254). */}
                   {layout === 'mobile' ? (
                     <h2
                       aria-hidden="true"
-                      className="px-2 py-1 text-xs font-semibold uppercase text-muted"
+                      className="px-2 py-1 text-label font-semibold text-muted uppercase"
                     >
                       {m.vault.filterType}
                     </h2>

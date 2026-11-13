@@ -117,7 +117,7 @@ function Chip({
   readonly text: string;
 }) {
   return (
-    <li className="inline-flex max-w-full items-center gap-1 rounded-full bg-subtle px-2.5 py-0.5 text-xs">
+    <li className="inline-flex max-w-full items-center gap-1 rounded-full bg-subtle px-3 py-1 text-xs">
       <Icon name={icon} {...(label === undefined ? {} : { label })} className="size-3.5!" />
       <span className="truncate">{text}</span>
     </li>
@@ -132,7 +132,7 @@ function Section({ title, children }: { readonly title: string; readonly childre
       aria-labelledby={id}
       className="rounded-card border border-line bg-raised shadow-raised"
     >
-      <h2 id={id} className="px-4 pt-3 text-xs font-bold tracking-wide text-muted uppercase">
+      <h2 id={id} className="px-4 pt-3 text-label font-semibold text-muted uppercase">
         {title}
       </h2>
       {children}
@@ -215,14 +215,14 @@ export function ItemDetail({
         const name = fieldName(m, item ?? { templateId: '' }, field);
         return (
           // Fields have no ID; their order is fixed while the item is shown.
-          <div key={i} className="flex flex-col gap-0.5 px-4 py-3">
+          <div key={i} className="flex flex-col gap-1 px-4 py-3">
             <dt className="flex items-center gap-2 text-xs font-medium text-muted">
               {name}
               {rated(field) && typeof field.value === 'string' ? (
                 <WeakBadge value={field.value} />
               ) : null}
             </dt>
-            <dd>
+            <dd className="text-value">
               <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
             </dd>
           </div>
@@ -239,9 +239,9 @@ export function ItemDetail({
       <header className="flex flex-wrap items-start gap-3">
         {item ? <Avatar title={item.title} templateId={item.templateId} large /> : null}
         <div className="flex min-w-0 flex-1 basis-48 flex-col gap-2">
-          <h1 className="text-xl font-semibold break-words">{item?.title ?? m.items.newerTitle}</h1>
+          <h1 className="text-title break-words">{item?.title ?? m.items.newerTitle}</h1>
           {item ? (
-            <ul className="flex flex-wrap gap-1.5">
+            <ul className="flex flex-wrap gap-2">
               {template ? (
                 <Chip icon={TEMPLATE_ICON[template]} text={m.templates[template]} />
               ) : null}
@@ -274,7 +274,7 @@ export function ItemDetail({
                   nav.open({ name: 'edit', id });
                 }}
               >
-                <Icon name="pencil" className="me-1.5" />
+                <Icon name="pencil" className="me-2" />
                 {m.items.edit}
               </Button>
             )}
@@ -288,7 +288,7 @@ export function ItemDetail({
                     disabled={working}
                     onClick={duplicate}
                   >
-                    <Icon name="copy-plus" className="me-1.5" />
+                    <Icon name="copy-plus" className="me-2" />
                     {m.items.duplicate}
                   </Button>
                 ) : null}
@@ -299,7 +299,7 @@ export function ItemDetail({
                     nav.open({ name: 'history', id });
                   }}
                 >
-                  <Icon name="history" className="me-1.5" />
+                  <Icon name="history" className="me-2" />
                   {m.items.history}
                 </Button>
                 {trashable ? (
@@ -311,7 +311,7 @@ export function ItemDetail({
                       act(() => session.trashItem(id), m.items.trashed);
                     }}
                   >
-                    <Icon name="trash-2" className="me-1.5" />
+                    <Icon name="trash-2" className="me-2" />
                     {m.items.moveToTrash}
                   </Button>
                 ) : null}
@@ -349,7 +349,7 @@ export function ItemDetail({
             nav.open({ name: 'history', id });
           }}
         >
-          <Icon name="history" className="me-1.5" />
+          <Icon name="history" className="me-2" />
           {m.items.history}
         </Button>
       ) : null}

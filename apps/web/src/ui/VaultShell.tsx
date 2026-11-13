@@ -112,7 +112,7 @@ function Header({
     'aria-keyshortcuts': 'Control+Shift+L Meta+Shift+L',
     children: (
       <>
-        <Icon name="lock" className="me-1.5" />
+        <Icon name="lock" className="me-2" />
         {m.app.lock}
       </>
     ),
@@ -150,7 +150,7 @@ function Header({
             nav.open({ name: 'settings' });
           }}
         >
-          <Icon name="settings" className="me-1.5" />
+          <Icon name="settings" className="me-2" />
           {m.app.settings}
         </Button>
       ) : null}
@@ -159,7 +159,7 @@ function Header({
           <span ref={wizard} className="contents" />
           {adds ? (
             <Button
-              className="px-3.5"
+              className="px-4"
               aria-label={m.items.new}
               title={`${m.items.new} (N)`}
               aria-keyshortcuts="N"
@@ -170,7 +170,7 @@ function Header({
               <Icon name="plus" />
             </Button>
           ) : null}
-          <Overflow label={m.app.more} className="px-3.5">
+          <Overflow label={m.app.more} className="px-4">
             <Button variant="quiet" className="text-left" {...lock} />
           </Overflow>
         </>
@@ -307,7 +307,7 @@ export function VaultShell({
   const backupReminder = reminder ? (
     <div
       role="note"
-      className="grid grid-cols-[1fr_auto] items-start gap-2 rounded-card bg-info-soft px-3 py-2.5 text-sm text-info-text"
+      className="grid grid-cols-[1fr_auto] items-start gap-2 rounded-card bg-info-soft px-3 py-3 text-sm text-info-text"
       data-testid="backup-reminder"
     >
       <p>{reminderText(m, language, reminder)}</p>
@@ -329,7 +329,7 @@ export function VaultShell({
           nav.openSettings('backup');
         }}
       >
-        <Icon name="upload" className="me-1.5" />
+        <Icon name="upload" className="me-2" />
         {m.vault.reminderBackup}
       </button>
     </div>
@@ -601,7 +601,7 @@ export function VaultShell({
               <Button
                 key={icon}
                 variant="quiet"
-                className="flex flex-col items-center justify-center gap-0.5 px-1 text-xs aria-[current]:text-accent-text"
+                className="flex flex-col items-center justify-center gap-1 px-1 text-xs aria-[current]:text-accent-text"
                 aria-current={current ? 'page' : undefined}
                 onClick={go}
               >

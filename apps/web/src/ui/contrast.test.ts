@@ -160,6 +160,25 @@ describe('components name no palette color (D231)', () => {
   });
 });
 
+describe('spacing stays on the 4 px scale (D254)', () => {
+  // A half step (2, 6, 10 or 14 px) in padding, margin or gap; sizes are not spacing.
+  const HALF =
+    /(?<![\w-])-?(?:p|px|py|pt|pb|ps|pe|m|mx|my|mt|mb|ms|me|gap|gap-x|gap-y|space-x|space-y)-\d+\.5(?![\w.])/;
+
+  const sources = import.meta.glob<string>('../**/*.tsx', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  });
+
+  it('uses no half step', () => {
+    const found = Object.entries(sources).flatMap(([file, text]) =>
+      text.split('\n').flatMap((line, i) => (HALF.test(line) ? [`${file}:${String(i + 1)}`] : [])),
+    );
+    expect(found).toEqual([]);
+  });
+});
+
 describe('motion runs only for users who have not asked for reduced motion (D231)', () => {
   // A class that animates or transitions, with its variants: each must start with `motion-safe:`.
   const MOTION =

@@ -23,7 +23,7 @@ function VersionFields({
         const name = fieldName(m, item, field);
         return (
           // Fields have no ID; a version never changes.
-          <div key={i} className="flex flex-col gap-0.5">
+          <div key={i} className="flex flex-col gap-1">
             <dt className="text-xs font-medium text-muted">{name}</dt>
             <dd>
               <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
@@ -32,7 +32,7 @@ function VersionFields({
         );
       })}
       {item.notes !== undefined ? (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-1">
           <dt className="text-xs font-medium text-muted">{m.items.notes}</dt>
           <dd className="break-words whitespace-pre-wrap">{item.notes}</dd>
         </div>
@@ -67,7 +67,7 @@ export function ItemHistory({
 
   return (
     <article className="flex w-full max-w-2xl flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold break-words">
+      <h1 className="text-title break-words">
         {format(m.items.historyTitle, { title: view.item?.title ?? m.items.newerTitle })}
       </h1>
       <Notice>{m.items.historyNote}</Notice>
@@ -78,7 +78,7 @@ export function ItemHistory({
             key={hex(v.versionId)}
             className="flex flex-col gap-3 rounded-control border border-line p-3"
           >
-            <header className="flex flex-col gap-0.5">
+            <header className="flex flex-col gap-1">
               <h2 className="font-semibold break-words">{v.item?.title ?? m.items.newerTitle}</h2>
               <p className="text-sm text-muted">{when.format(v.hlc.physicalMs)}</p>
             </header>

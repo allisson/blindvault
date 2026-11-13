@@ -193,7 +193,7 @@ function TemplatePicker({ onPick }: { readonly onPick: (draft: Draft) => void })
   const m = useMessages();
   return (
     <div className="flex w-full max-w-2xl flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold">{m.items.chooseTemplate}</h1>
+      <h1 className="text-title">{m.items.chooseTemplate}</h1>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {TEMPLATES.map((t) => (
           <li key={t.id}>
@@ -324,9 +324,7 @@ export function ItemEditor({
         );
       }}
     >
-      <h1 className="text-xl font-semibold">
-        {m.templates[draft.templateId as keyof Messages['templates']]}
-      </h1>
+      <h1 className="text-title">{m.templates[draft.templateId as keyof Messages['templates']]}</h1>
       <Field
         label={m.items.title}
         value={draft.title}

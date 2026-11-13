@@ -172,7 +172,7 @@ export function FolderPane({
   const rows = folderRows(tree);
   return (
     <nav aria-label={m.vault.folders} className="flex flex-col gap-1 p-3">
-      <h2 className="px-2 text-xs font-semibold uppercase text-muted">{m.vault.folders}</h2>
+      <h2 className="px-2 text-label font-semibold text-muted uppercase">{m.vault.folders}</h2>
       <ListEntry nav={nav} list={{ name: 'vault' }} icon="list" count={treeItems(tree).length}>
         {m.vault.allItems}
       </ListEntry>
