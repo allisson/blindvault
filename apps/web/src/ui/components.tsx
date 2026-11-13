@@ -383,29 +383,68 @@ export function Field({
   label,
   hint,
   error,
+  type,
+  revealed = false,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & {
   readonly label: string;
   readonly hint?: ReactNode;
   readonly error?: string | undefined;
+  /** A password field shown when it appears, as a generated passphrase to write down (D155). */
+  readonly revealed?: boolean;
 }) {
+  const m = useMessages();
   const id = useId();
+  const ref = useRef<HTMLInputElement>(null);
+  const [shown, setShown] = useState(revealed);
+  const password = type === 'password';
+  // Masked again on submit, a failed one included; a new screen or a lock unmounts it (D254).
+  useEffect(() => {
+    const form = ref.current?.form;
+    if (!password || !form) return;
+    const hide = () => {
+      setShown(false);
+    };
+    form.addEventListener('submit', hide);
+    return () => {
+      form.removeEventListener('submit', hide);
+    };
+  }, [password]);
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      {/* Off by default: the form history keeps typed values on disk in cleartext (D174), and a
-          spellchecker can send them to a remote service (D176). */}
-      <input
-        id={id}
-        className={INPUT}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error || hint ? `${id}-message` : undefined}
-        autoComplete="off"
-        spellCheck={false}
-        {...props}
-      />
+      <div className="relative flex">
+        {/* Off by default: the form history keeps typed values on disk in cleartext (D174), and a
+            spellchecker can send them to a remote service (D176). */}
+        <input
+          ref={ref}
+          id={id}
+          type={password && shown ? 'text' : type}
+          className={`${INPUT} min-w-0 flex-1 ${password ? 'pe-11' : ''}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error || hint ? `${id}-message` : undefined}
+          autoComplete="off"
+          spellCheck={false}
+          {...props}
+        />
+        {password ? (
+          <button
+            type="button"
+            aria-pressed={shown}
+            aria-label={shown ? m.items.hidePassword : m.items.showPassword}
+            title={shown ? m.items.hidePassword : m.items.showPassword}
+            disabled={props.disabled}
+            className={`${TARGET} absolute inset-y-0 end-0 inline-flex min-w-10 items-center justify-center rounded-control text-muted hover:text-fg disabled:opacity-50`}
+            onClick={() => {
+              setShown(!shown);
+            }}
+          >
+            <Icon name={shown ? 'eye-off' : 'eye'} />
+          </button>
+        ) : null}
+      </div>
       <Message id={`${id}-message`} error={error} hint={hint} />
     </div>
   );
