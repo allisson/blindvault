@@ -12,7 +12,16 @@ import { lock } from './lock';
 test.setTimeout(240_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
+const TOTP =
+  'otpauth://totp/ACME:ana@acme.example?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME';
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
+
+test.beforeEach(async ({ page }) => {
+  // The clipboard write succeeds the same way in every browser (see totp.spec.ts).
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.clipboard, 'writeText', { value: () => Promise.resolve() });
+  });
+});
 
 for (const [layout, width] of WIDTHS) {
   for (const theme of THEMES) {
@@ -31,6 +40,10 @@ for (const [layout, width] of WIDTHS) {
       if (await advice.isVisible()) await audit(page, 'the install advice');
       await startScreen(page);
       await audit(page, 'the start');
+      await page.getByTestId('preview-badge').click();
+      await expect(page.getByTestId('preview-banner')).toBeVisible();
+      await audit(page, 'the Preview note');
+      await page.keyboard.press('Escape');
       await button(page, 'About').click();
       await expect(page.getByRole('heading', { name: 'About BlindVault' })).toBeVisible();
       await audit(page, 'About');
@@ -53,7 +66,8 @@ for (const [layout, width] of WIDTHS) {
       await audit(page, 'the local password');
       await page.getByTestId('new-password').fill(PASSWORD);
       await page.getByTestId('confirm-password').fill(PASSWORD);
-      await audit(page, 'the local password, filled');
+      await button(page, 'Show password').first().click();
+      await audit(page, 'the local password, filled and shown');
       await button(page, 'Create vault').click();
       await expect(page.getByTestId('ready')).toBeVisible({ timeout: 60_000 });
       await audit(page, 'Vault ready');
@@ -72,9 +86,22 @@ for (const [layout, width] of WIDTHS) {
       await audit(page, 'the item editor with an error');
       await page.getByTestId('item-title').fill('Harbor');
       await page.getByTestId('input-Password').fill('Tulip-Orbit-5528-Granite');
+      await page.getByTestId('add-field-type').selectOption('totp');
+      await button(page, 'Add').click();
+      await page.getByTestId('custom-label').fill('2FA');
+      await page.getByTestId('input-2FA').fill(TOTP);
       await button(page, 'Save').click();
       await expect(page.getByRole('heading', { name: 'Harbor', level: 1 })).toBeVisible();
-      await audit(page, 'an item');
+      await expect(page.getByTestId('totp-ring')).toBeVisible();
+      await audit(page, 'an item, with its TOTP ring and the save toast');
+      // The "…" menu (D245), then a copy's toast (D250).
+      await button(page, 'More actions').click();
+      await expect(button(page, 'Move to trash')).toBeVisible();
+      await audit(page, 'the actions menu');
+      await page.keyboard.press('Escape');
+      await button(page, 'Copy: Password').click();
+      await expect(page.getByTestId('toast')).toContainText('Copied.');
+      await audit(page, 'the copy toast');
       await button(page, 'Edit').click();
       await page.getByTestId('input-Password').fill('Tulip-Orbit-5528-Basalt');
       await button(page, 'Cancel').click();
@@ -83,10 +110,32 @@ for (const [layout, width] of WIDTHS) {
       await button(page, 'History').click();
       await audit(page, 'an item history');
 
-      // Settings, with About in it (D192).
-      // On mobile, Settings waits on the list screen, behind Back from the history and the item.
+      // The list (D246) and its type filter, a popover or a bottom sheet on a phone (D254), which
+      // shows with a second type. On mobile, the list and Settings wait behind Back.
       const settings = page.getByRole('button', { name: 'Settings' }).first();
-      while (!(await settings.isVisible())) await button(page, 'Back').click();
+      const toList = async () => {
+        while (!(await settings.isVisible())) await button(page, 'Back').click();
+      };
+      await toList();
+      await button(page, 'New item').click();
+      await button(page, 'Secure note').click();
+      await page.getByTestId('item-title').fill('Memo');
+      await button(page, 'Save').click();
+      await expect(page.getByRole('heading', { name: 'Memo', level: 1 })).toBeVisible();
+      await toList();
+      await audit(page, 'the item list');
+      await page.getByTestId('type-pill').click();
+      await expect(page.getByRole('group', { name: 'Filter by type' })).toBeVisible();
+      await audit(page, 'the type filter');
+      await page.keyboard.press('Escape');
+      if (layout === 'mobile') {
+        await page.getByTestId('folder-pill').click();
+        await expect(page.getByRole('navigation', { name: 'Folders' })).toBeVisible();
+        await audit(page, 'the folder sheet');
+        await page.keyboard.press('Escape');
+      }
+
+      // Settings, with About in it (D192).
       await settings.click();
       await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
       await audit(page, 'Settings');

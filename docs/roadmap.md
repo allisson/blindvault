@@ -444,7 +444,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Essential UX Gate
 
-- [ ] axe, `keyboard.spec.ts` and `screen-reader.spec.ts` cover every new screen and control (rich row, "…" menu, toast, bottom sheet, TOTP ring, new shortcuts) at the three widths, in both themes and the three browsers
+- [x] axe, `keyboard.spec.ts` and `screen-reader.spec.ts` cover every new screen and control (rich row, "…" menu, toast, bottom sheet, TOTP ring, new shortcuts) at the three widths, in both themes and the three browsers
 - [ ] Under `prefers-reduced-motion`, the TOTP ring and the toast run no animation (`motion.spec.ts`)
 - [ ] CRYPTO-INV-024: a negative test puts every field type in an item and finds no `secret`, `totp` or `seed-phrase` value in the row's DOM
 - [ ] Copying from the row clears the clipboard as copying from the detail does (D54, D151)
