@@ -451,6 +451,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] The error boundary locks the vault and clears plaintext state before its failure screen
 - [x] Audit of every new screen in a real browser at the three widths and in both themes, as in D239 (D256)
 - [x] The owner approves v0.7.2 after a hands-on test
+- [x] Release v0.7.3 with the audit's fixes, before Phase 8 (D256)
 
 ---
 
