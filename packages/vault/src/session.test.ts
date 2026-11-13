@@ -5801,6 +5801,33 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     expect(titles(x.session)).toContain('Good');
   });
 
+  it.each([
+    ['a Vault Key', RecordType.vaultKey],
+    ['a Recovery Envelope', RecordType.recoveryEnvelope],
+    ['a Device', RecordType.device],
+    ['an Item Version', RecordType.itemVersion],
+  ])(
+    'rejects and reports %s record sent deleted, merging the rest (CRYPTO-INV-016, D42, D56)',
+    async (_, type) => {
+      const { x, y } = await peers();
+      const edited = must(y.session.items().find((i) => i.item?.title === 'From X')).id;
+      await y.session.updateItem(edited, login('Edited on Y'));
+      const records = await y.grant.records(y.grant.summary());
+      const target = must(records.find((r) => decodeEnvelope(r).header.recordType === type));
+      const forged = decodeCbor(target) as CborMap;
+      forged.set('del', true);
+      const result = await x.grant.merge([
+        ...records.filter((r) => r !== target),
+        encodeCbor(forged),
+      ]);
+      expect(result.rejected.map((r) => r.reason)).toEqual(['verification-failed']);
+      expect(titles(x.session)).toEqual(['Edited on Y']);
+      const kept = (await x.store.records()).filter((r) => r.recordType === type);
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.some((r) => decodeEnvelope(r.envelope).header.deleted)).toBe(false);
+    },
+  );
+
   /** `envelope` in a record format version or a record type this app does not know (D68, D81). */
   function unknown(envelope: Uint8Array, key: 'v' | 't'): Uint8Array {
     const map = decodeCbor(envelope) as CborMap;
