@@ -12,7 +12,7 @@ import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Field, INPUT, Notice } from './components';
 import { writeError } from './errors';
-import { Wizard } from './Wizard';
+import { FileDrop, Wizard, WizardActions } from './Wizard';
 
 // Import (overview §15, D123, D125): source → file → passphrase for a `.blindpass` → preview →
 // one commit into a new landing folder. Nothing is written before the confirmation, and a lock
@@ -37,8 +37,6 @@ type Step =
     };
 
 const SOURCES = Object.keys(IMPORT_SOURCES) as ImportSource[];
-const FILE_INPUT =
-  'py-2 text-sm file:mr-3 file:min-h-10 file:cursor-pointer file:rounded-control file:border file:border-control file:bg-raised file:px-4 file:text-sm file:font-medium file:text-fg enabled:hover:file:bg-subtle';
 
 export function ImportItems({
   controller,
@@ -54,10 +52,12 @@ export function ImportItems({
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [withPassphrase, setWithPassphrase] = useState(false);
+  const [file, setFile] = useState<File>();
   const name = IMPORT_SOURCES[source].name;
 
   const cancel = () => {
     setError(undefined);
+    setFile(undefined);
     setPassphrase('');
     setWithPassphrase(false);
     setStep({ kind: 'idle' });
@@ -130,27 +130,40 @@ export function ImportItems({
                 </select>
               </label>
               <Notice>{m.import.plaintext}</Notice>
-              <Field
+              <FileDrop
                 label={m.import.file}
-                type="file"
                 accept={IMPORT_SOURCES[source].accept}
+                file={file}
                 disabled={busy}
                 error={error}
-                className={FILE_INPUT}
-                data-testid="import-file"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!file) return;
+                testId="import-file"
+                onFile={(chosen) => {
                   // Refused before reading it into memory (D130).
-                  if (file.size > MAX_IMPORT_SIZE) {
+                  if (chosen.size > MAX_IMPORT_SIZE) {
+                    setFile(undefined);
                     setError(m.import.tooLarge);
                     return;
                   }
-                  setBusy(true);
-                  void file.arrayBuffer().then((buffer) => read(new Uint8Array(buffer), file.name));
+                  setError(undefined);
+                  setFile(chosen);
                 }}
               />
+              <WizardActions>
+                <Button
+                  disabled={!file || busy}
+                  busy={busy}
+                  data-testid="file-continue"
+                  onClick={() => {
+                    if (!file) return;
+                    setBusy(true);
+                    void file
+                      .arrayBuffer()
+                      .then((buffer) => read(new Uint8Array(buffer), file.name));
+                  }}
+                >
+                  {m.wizard.continue}
+                </Button>
+              </WizardActions>
             </>
           ) : null}
           {step.kind === 'passphrase' ? (
@@ -173,9 +186,11 @@ export function ImportItems({
                   setPassphrase(e.target.value);
                 }}
               />
-              <Button type="submit" className="self-start" busy={busy} disabled={passphrase === ''}>
-                {busy ? m.import.opening : m.import.open}
-              </Button>
+              <WizardActions>
+                <Button type="submit" busy={busy} disabled={passphrase === ''}>
+                  {busy ? m.import.opening : m.import.open}
+                </Button>
+              </WizardActions>
             </form>
           ) : null}
           {step.kind === 'preview' ? (
@@ -197,36 +212,37 @@ export function ImportItems({
                 </p>
               ) : null}
               {step.mapped.items.length > 0 ? (
-                <Button
-                  className="self-start"
-                  busy={busy}
-                  data-testid="import-confirm"
-                  onClick={() => {
-                    setBusy(true);
-                    session.importItems(step.folder, step.mapped.items).then(
-                      () => {
-                        setBusy(false);
-                        setError(undefined);
-                        const { fileName, folder } = step;
-                        setStep({
-                          kind: 'done',
-                          count: step.mapped.items.length,
-                          fileName,
-                          folder,
-                        });
-                      },
-                      (e: unknown) => {
-                        setBusy(false);
-                        if (e instanceof VaultLockedError) return;
-                        setError(
-                          e instanceof HlcReadOnlyError ? m.import.readOnly : writeError(e, m),
-                        );
-                      },
-                    );
-                  }}
-                >
-                  {busy ? m.import.importing : m.import.submit}
-                </Button>
+                <WizardActions>
+                  <Button
+                    busy={busy}
+                    data-testid="import-confirm"
+                    onClick={() => {
+                      setBusy(true);
+                      session.importItems(step.folder, step.mapped.items).then(
+                        () => {
+                          setBusy(false);
+                          setError(undefined);
+                          const { fileName, folder } = step;
+                          setStep({
+                            kind: 'done',
+                            count: step.mapped.items.length,
+                            fileName,
+                            folder,
+                          });
+                        },
+                        (e: unknown) => {
+                          setBusy(false);
+                          if (e instanceof VaultLockedError) return;
+                          setError(
+                            e instanceof HlcReadOnlyError ? m.import.readOnly : writeError(e, m),
+                          );
+                        },
+                      );
+                    }}
+                  >
+                    {busy ? m.import.importing : m.import.submit}
+                  </Button>
+                </WizardActions>
               ) : (
                 <p className="text-sm">{m.import.nothing}</p>
               )}
@@ -238,19 +254,30 @@ export function ImportItems({
                 {format(m.import.done, { count: String(step.count), folder: step.folder })}
               </p>
               <Notice>{format(m.import.deleteFile, { file: step.fileName })}</Notice>
+              <WizardActions>
+                <Button
+                  onClick={() => {
+                    setStep({ kind: 'idle' });
+                  }}
+                  data-testid="wizard-close"
+                >
+                  {m.wizard.close}
+                </Button>
+              </WizardActions>
             </div>
           ) : null}
         </Wizard>
       )}
       {!session.writable ? (
         <Notice>{m.import.readOnly}</Notice>
-      ) : step.kind === 'idle' || step.kind === 'done' ? (
+      ) : step.kind === 'idle' ? (
         <Button
           variant="quiet"
           className="self-start"
           data-testid="import-start"
           onClick={() => {
             setError(undefined);
+            setFile(undefined);
             setWithPassphrase(false);
             setStep({ kind: 'file' });
           }}

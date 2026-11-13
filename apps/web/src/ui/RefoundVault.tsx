@@ -12,7 +12,7 @@ import { type Messages, format } from '../i18n/messages';
 import { Button, Field, Notice, TARGET } from './components';
 import { NewPassword } from './NewPassword';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
-import { Wizard } from './Wizard';
+import { Wizard, WizardActions } from './Wizard';
 
 // Re-founding (§14, D28, D46, D47, D72, D116, D187): warnings and their confirmation → local
 // password or passkey → new phrase → confirmation → new local password → commit. Nothing is written
@@ -190,15 +190,16 @@ export function RefoundVault({
                   {format(r.understandRejected, { names: rejected })}
                 </label>
               ) : null}
-              <Button
-                className="self-start"
-                disabled={!understood || (rejected !== undefined && !understoodRejected)}
-                onClick={() => {
-                  setStep({ kind: 'auth' });
-                }}
-              >
-                {r.continue}
-              </Button>
+              <WizardActions>
+                <Button
+                  disabled={!understood || (rejected !== undefined && !understoodRejected)}
+                  onClick={() => {
+                    setStep({ kind: 'auth' });
+                  }}
+                >
+                  {r.continue}
+                </Button>
+              </WizardActions>
             </div>
           ) : null}
           {step.kind === 'auth' ? (
@@ -222,9 +223,11 @@ export function RefoundVault({
                 error={error}
                 data-testid="refound-password"
               />
-              <Button type="submit" disabled={working || current === ''}>
-                {r.authSubmit}
-              </Button>
+              <WizardActions>
+                <Button type="submit" disabled={working || current === ''}>
+                  {r.authSubmit}
+                </Button>
+              </WizardActions>
               {controller.hasPasskey ? (
                 <Button
                   variant="quiet"
@@ -280,9 +283,11 @@ export function RefoundVault({
             >
               <p className="text-sm">{r.passwordIntro}</p>
               <NewPassword label={r.password} confirmLabel={r.confirmPassword} onChange={onNext} />
-              <Button type="submit" disabled={working || !next}>
-                {working ? r.working : r.submit}
-              </Button>
+              <WizardActions>
+                <Button type="submit" disabled={working || !next}>
+                  {working ? r.working : r.submit}
+                </Button>
+              </WizardActions>
               {error ? (
                 <p role="alert" className="text-sm text-danger">
                   {error}

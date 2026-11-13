@@ -1,5 +1,5 @@
 import { type SyncPurpose, type VaultSession } from '@blindvault/vault';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { type SyncPeer, type SyncStart, type VaultController } from '../app/controller';
 import { recordIdPrefix } from '../app/backup-file';
@@ -10,7 +10,7 @@ import { Button, Notice } from './components';
 import { MergeNotices } from './MergeBackup';
 import { NetworkOptions, PasteText, PayloadText, Rejected } from './Pairing';
 import { recordTypeName } from './Settings';
-import { Wizard, type WizardStep, useStep } from './Wizard';
+import { Wizard, WizardActions, type WizardStep, useStep } from './Wizard';
 
 // The sync screens (§9.1, D216): the user picks the peer in Settings › Devices on both devices, then
 // chooses on each whether it shows its code first or reads the other's. Each code is shown as a QR
@@ -86,6 +86,7 @@ function Stage({
   session,
   stage,
   name,
+  title,
   steps,
   leaving,
   onClose,
@@ -94,6 +95,7 @@ function Stage({
   readonly session: VaultSession;
   readonly stage: SyncStage;
   readonly name: string;
+  readonly title: string;
   readonly steps: readonly WizardStep[];
   readonly leaving: string;
   readonly onClose: () => void;
@@ -108,6 +110,8 @@ function Stage({
     <Wizard
       steps={steps}
       step={step}
+      title={title}
+      screen={!(stage.kind === 'synced' && stage.live)}
       onCancel={final ? undefined : close}
       cancelTestId="sync-cancel"
     >
@@ -205,18 +209,20 @@ function StageBody({
           <Rejected rejected={stage.result.rejected} testId="sync-rejected" />
           {stage.live ? (
             // Closing the panel keeps a live session open; ending it is its own action (D225, D234).
-            <div className="flex flex-wrap gap-2">
+            <WizardActions>
               <Button onClick={onClose} data-testid="sync-close">
                 {s.keepLive}
               </Button>
               <Button variant="quiet" onClick={close} data-testid="sync-end">
                 {s.endLive}
               </Button>
-            </div>
+            </WizardActions>
           ) : (
-            <Button className="self-start" onClick={close} data-testid="sync-close">
-              {s.close}
-            </Button>
+            <WizardActions>
+              <Button onClick={close} data-testid="sync-close">
+                {s.close}
+              </Button>
+            </WizardActions>
           )}
         </>
       );
@@ -236,15 +242,16 @@ function StageBody({
                 : '',
             })}
           </p>
-          <Button
-            className="self-start"
-            onClick={() => {
-              controller.cancelSync();
-            }}
-            data-testid="sync-again"
-          >
-            {s.again}
-          </Button>
+          <WizardActions>
+            <Button
+              onClick={() => {
+                controller.cancelSync();
+              }}
+              data-testid="sync-again"
+            >
+              {s.again}
+            </Button>
+          </WizardActions>
         </>
       );
   }
@@ -297,29 +304,22 @@ export function SyncDevice({
     name,
     format(purpose === 'retirement' ? s.notifyHow : s.how, { name }),
   );
-  // The panel opens below the device list: bring it into view where the user clicked (D234).
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    heading.current?.scrollIntoView({ block: 'nearest' });
-    heading.current?.focus();
-  }, []);
+  const title = format(purpose === 'retirement' ? s.notifyTitle : s.title, { name });
   return (
     <div className="flex flex-col gap-3" data-testid="sync">
-      <h3 ref={heading} tabIndex={-1} className="font-semibold">
-        {format(purpose === 'retirement' ? s.notifyTitle : s.title, { name })}
-      </h3>
       {mine ? (
         <Stage
           controller={controller}
           session={session}
           stage={mine}
           name={name}
+          title={title}
           steps={steps}
           leaving={leavingText(m, session)}
           onClose={onClose}
         />
       ) : (
-        <Wizard steps={steps} step={1} onCancel={onClose}>
+        <Wizard steps={steps} step={1} title={title} onCancel={onClose}>
           <p className="text-sm">{format(s.chooseRole, { name })}</p>
           <NetworkOptions checked={sameNetwork} onChange={setSameNetwork} />
           {error ? (
@@ -327,7 +327,7 @@ export function SyncDevice({
               {error}
             </p>
           ) : null}
-          <div className="flex flex-wrap gap-2">
+          <WizardActions>
             <Button
               onClick={() => {
                 start('initiator');
@@ -345,7 +345,7 @@ export function SyncDevice({
             >
               {format(s.read, { name })}
             </Button>
-          </div>
+          </WizardActions>
         </Wizard>
       )}
     </div>

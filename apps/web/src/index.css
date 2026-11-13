@@ -289,3 +289,15 @@ body {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
+
+/*
+ * A wizard in Settings opens on a screen of its own, never below its page's other content: only the
+ * page's title, the wizard and what holds it show (D254).
+ */
+[data-settings-page]:has([data-wizard]) {
+  max-width: 35rem;
+}
+[data-settings-page]:has([data-wizard])
+  :not(h1, [data-wizard], [data-wizard] *, :has([data-wizard])) {
+  display: none;
+}

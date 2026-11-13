@@ -4,6 +4,7 @@ import { wordMatches } from '../app/phrase-check';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { Button, Field } from './components';
+import { WizardActions } from './Wizard';
 
 // The Recovery Phrase shown once, then confirmed at three positions drawn at random (§5.4, D179):
 // at creation and at regeneration (D185). The words live only in the caller's state.
@@ -43,7 +44,9 @@ export function PhraseWords({
       </ol>
       <p className="text-sm">{m.create.phraseOnce}</p>
       <p className="text-sm text-warning">{m.create.phraseNoPhoto}</p>
-      <Button onClick={onWritten}>{m.create.phraseWritten}</Button>
+      <WizardActions>
+        <Button onClick={onWritten}>{m.create.phraseWritten}</Button>
+      </WizardActions>
     </>
   );
 }
@@ -88,9 +91,11 @@ export function ConfirmWords({
             data-testid={`confirm-word-${String(p)}`}
           />
         ))}
-        <Button type="submit" disabled={typed.some((t) => t.trim() === '')}>
-          {m.create.confirmSubmit}
-        </Button>
+        <WizardActions>
+          <Button type="submit" disabled={typed.some((t) => t.trim() === '')}>
+            {m.create.confirmSubmit}
+          </Button>
+        </WizardActions>
       </form>
     </>
   );

@@ -80,6 +80,7 @@ function file(name: string, buffer: Buffer) {
 
 async function chooseFile(page: Page, buffer: Buffer, name = 'blindvault-backup.bvault') {
   await page.getByTestId('restore-file').setInputFiles(file(name, buffer));
+  await page.getByTestId('file-continue').click();
 }
 
 async function openWithPhrase(page: Page, phrase: string) {

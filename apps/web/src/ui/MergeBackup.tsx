@@ -9,7 +9,7 @@ import { Button, Notice } from './components';
 import { useOpenBackup } from './RegeneratePhrase';
 import { ChooseFile, OpenBackup, fileError } from './RestoreVault';
 import { recordTypeName } from './Settings';
-import { Wizard } from './Wizard';
+import { Wizard, WizardActions } from './Wizard';
 
 // Backup merge (overview §10, sync-protocol.md §1, D182): file → secret → confirmation → result.
 // The file is validated in full before the confirmation, and a merge writes nothing until then. One
@@ -88,34 +88,48 @@ export function MergeBackup({
               <p className="text-sm">
                 {format(m.merge.confirm, { date: date(step.exportedAt, true) })}
               </p>
-              <Button
-                busy={merging}
-                onClick={() => {
-                  setMerging(true);
-                  void controller.mergeBackup().then((outcome) => {
-                    setMerging(false);
-                    if (outcome.kind === 'ok') {
-                      setStep({ kind: 'done', result: outcome.result });
-                    } else {
-                      back(mergeError(m, outcome, (at) => date(at, true)));
-                    }
-                  });
-                }}
-              >
-                {merging ? m.merge.merging : m.merge.submit}
-              </Button>
+              <WizardActions>
+                <Button
+                  busy={merging}
+                  onClick={() => {
+                    setMerging(true);
+                    void controller.mergeBackup().then((outcome) => {
+                      setMerging(false);
+                      if (outcome.kind === 'ok') {
+                        setStep({ kind: 'done', result: outcome.result });
+                      } else {
+                        back(mergeError(m, outcome, (at) => date(at, true)));
+                      }
+                    });
+                  }}
+                >
+                  {merging ? m.merge.merging : m.merge.submit}
+                </Button>
+              </WizardActions>
             </div>
           ) : null}
           {step.kind === 'done' ? (
-            <MergeNotices
-              result={step.result}
-              recovery={session.recovery}
-              date={(at) => date(at, false)}
-            />
+            <>
+              <MergeNotices
+                result={step.result}
+                recovery={session.recovery}
+                date={(at) => date(at, false)}
+              />
+              <WizardActions>
+                <Button
+                  onClick={() => {
+                    setStep({ kind: 'idle' });
+                  }}
+                  data-testid="wizard-close"
+                >
+                  {m.wizard.close}
+                </Button>
+              </WizardActions>
+            </>
           ) : null}
         </Wizard>
       )}
-      {step.kind === 'idle' || step.kind === 'done' ? (
+      {step.kind === 'idle' ? (
         <Button
           variant="quiet"
           className="self-start"

@@ -7,7 +7,7 @@ import { useMessages } from '../i18n/context';
 import { Button, Card } from './components';
 import { NewPassword } from './NewPassword';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
-import { Wizard } from './Wizard';
+import { Wizard, WizardActions } from './Wizard';
 
 // Create vault → Recovery Phrase → confirmation → local password (§13.3, D179). Nothing is written
 // before the password step; the words live only in this component's state until confirmed. One step
@@ -128,9 +128,11 @@ function SetPassword({
           onChange={onChange}
           autoFocus
         />
-        <Button type="submit" disabled={!password || working}>
-          {working ? m.create.working : m.create.submit}
-        </Button>
+        <WizardActions>
+          <Button type="submit" disabled={!password || working}>
+            {working ? m.create.working : m.create.submit}
+          </Button>
+        </WizardActions>
       </form>
     </>
   );

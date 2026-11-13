@@ -44,10 +44,12 @@ async function preview(page: Page) {
   await page.getByTestId('import-source').selectOption('bitwarden');
   await expect(page.getByText('holds every secret in plaintext')).toBeVisible();
   await page.getByTestId('import-file').setInputFiles(exportFile(true));
+  await page.getByTestId('file-continue').click();
   await expect(
     page.getByText('This Bitwarden export is encrypted. Export it again unencrypted'),
   ).toBeVisible();
   await page.getByTestId('import-file').setInputFiles(exportFile(false));
+  await page.getByTestId('file-continue').click();
   const shown = page.getByTestId('import-preview');
   await expect(shown).toContainText('2 items to import into a new folder, Imported from Bitwarden');
   await expect(shown).toContainText('0 entries skipped');

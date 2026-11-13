@@ -212,6 +212,7 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
     mimeType: 'application/octet-stream',
     buffer: backup,
   });
+  await page.getByTestId('file-continue').click();
   await page.getByTestId('restore-phrase').fill(words.join(' '));
   await page.getByRole('button', { name: 'Open the backup', exact: true }).click();
   await page.getByTestId('new-password').fill(PASSWORD, { timeout: 30_000 });

@@ -78,6 +78,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
     mimeType: 'application/octet-stream',
     buffer: backup,
   });
+  await page.getByTestId('file-continue').click();
   await page.getByTestId('restore-phrase').fill(words.join(' '));
   await button(page, 'Open the backup').click();
   await page.getByTestId('new-password').fill(NEW_PASSWORD);
@@ -92,6 +93,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(page.getByTestId('ready')).toHaveCount(0);
   // The re-admission opens at the choice of who shows first (D234).
   await expect(page.getByTestId('readmission-first')).toBeFocused();
+  await button(page, 'Cancel').click();
 
   // Settings keeps it while unregistered: the old device is listed, this one is not.
   await expect(devices.getByTestId('devices-readmit')).toBeVisible();

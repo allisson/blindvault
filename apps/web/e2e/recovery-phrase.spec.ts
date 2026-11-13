@@ -80,8 +80,8 @@ test('shows the phrase once, asks for three of its words, and shows it again on 
   // Cancel (D253, D254).
   await expect(page.getByRole('main').getByRole('button')).toHaveText([
     'Preview',
-    'I wrote them down',
     'Cancel',
+    'I wrote them down',
   ]);
   await expect(page.getByRole('link')).toHaveCount(0);
 

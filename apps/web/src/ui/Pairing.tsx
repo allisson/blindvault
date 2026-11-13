@@ -29,7 +29,7 @@ import { NewPassword } from './NewPassword';
 import { Icon } from './icons';
 import { QrCode, QrScanner } from './Qr';
 import { recordTypeName } from './Settings';
-import { AdvancedOptions, Wizard, type WizardStep, useStep } from './Wizard';
+import { AdvancedOptions, Wizard, WizardActions, type WizardStep, useStep } from './Wizard';
 
 // The pairing screens (§8.4, D202, D203): A invites from Settings › Devices, B joins from the pair
 // start. Each payload is shown as a QR code and as text; the other device scans it or pastes it
@@ -416,9 +416,11 @@ export function PasteText<C extends string>({
         error={check === undefined ? undefined : errorOf(check)}
         data-testid="pairing-paste"
       />
-      <Button type="submit" className="self-start" disabled={text.trim() === '' || working}>
-        {submit}
-      </Button>
+      <WizardActions>
+        <Button type="submit" disabled={text.trim() === '' || working}>
+          {submit}
+        </Button>
+      </WizardActions>
     </form>
   );
 }
@@ -519,35 +521,38 @@ function Stage({
   session,
   stage,
   flow,
+  title,
   leaving,
   onAgain,
+  onEnd,
 }: {
   readonly controller: VaultController;
   /** The vault this device holds, when it holds one unlocked. */
   readonly session?: VaultSession;
   readonly stage: PairingStage;
   readonly flow: PairingFlow;
+  readonly title?: string;
   /** What hiding the app does to the pairing (D93, D105). */
   readonly leaving: string;
   readonly onAgain: () => void;
+  /** Cancel after a failure, back where the flow started (D254). */
+  readonly onEnd?: () => void;
 }) {
   const m = useMessages();
   const step = useStep(stageStep(flow, stage));
-  // Nothing to cancel once the vault is on its way, done or failed.
-  const final =
-    stage.kind === 'transfer' ||
-    stage.kind === 'done' ||
-    stage.kind === 'readmitted' ||
-    stage.kind === 'failed';
+  // Nothing to cancel once the vault is on its way or done; a failure leaves its screen by Cancel.
+  const final = stage.kind === 'transfer' || stage.kind === 'done' || stage.kind === 'readmitted';
   return (
     <Wizard
       steps={flowSteps(m, flow)}
       step={step}
+      title={title}
       onCancel={
         final
           ? undefined
           : () => {
               controller.cancelPairing();
+              if (stage.kind === 'failed') onEnd?.();
             }
       }
       cancelTestId="pairing-cancel"
@@ -639,7 +644,7 @@ function StageBody({
           {stage.confirmed ? (
             <p role="status">{p.waiting}</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <WizardActions>
               <Button
                 onClick={() => {
                   controller.confirmSas();
@@ -657,7 +662,7 @@ function StageBody({
               >
                 {p.differ}
               </Button>
-            </div>
+            </WizardActions>
           )}
         </>
       );
@@ -674,14 +679,15 @@ function StageBody({
             {format(p.done, { name: stage.name })}
           </p>
           {stage.readmit ? <Notice>{format(p.readmit, { name: stage.name })}</Notice> : null}
-          <Button
-            className="self-start"
-            onClick={() => {
-              controller.cancelPairing();
-            }}
-          >
-            {p.close}
-          </Button>
+          <WizardActions>
+            <Button
+              onClick={() => {
+                controller.cancelPairing();
+              }}
+            >
+              {p.close}
+            </Button>
+          </WizardActions>
         </>
       );
     case 'readmitted':
@@ -701,15 +707,16 @@ function StageBody({
             date={(at) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(at)}
           />
           <Rejected rejected={stage.result.rejected} />
-          <Button
-            className="self-start"
-            onClick={() => {
-              controller.cancelPairing();
-            }}
-            data-testid="readmission-close"
-          >
-            {p.close}
-          </Button>
+          <WizardActions>
+            <Button
+              onClick={() => {
+                controller.cancelPairing();
+              }}
+              data-testid="readmission-close"
+            >
+              {p.close}
+            </Button>
+          </WizardActions>
         </>
       );
     case 'failed':
@@ -723,9 +730,11 @@ function StageBody({
           >
             {failure(m, stage, flow)}
           </p>
-          <Button className="self-start" onClick={onAgain} data-testid="pairing-again">
-            {p.again}
-          </Button>
+          <WizardActions>
+            <Button onClick={onAgain} data-testid="pairing-again">
+              {p.again}
+            </Button>
+          </WizardActions>
         </>
       );
   }
@@ -791,6 +800,8 @@ export function InviteDevice({
   const p = m.pairing;
   const stage = usePairing(controller, 'invite');
   const [open, setOpen] = useState(startOpen);
+  // Once started, the pairing's end returns to the card; Start again opens the first step (D254).
+  if (stage && open) setOpen(false);
   const [password, setPassword] = useState('');
   const [sameNetwork, setSameNetwork] = useState(false);
   const [working, setWorking] = useState(false);
@@ -838,6 +849,7 @@ export function InviteDevice({
           session={session}
           stage={stage}
           flow="invite"
+          title={p.title}
           leaving={leaving}
           onAgain={() => {
             controller.cancelPairing();
@@ -863,6 +875,7 @@ export function InviteDevice({
         <Wizard
           steps={flowSteps(m, 'invite')}
           step={1}
+          title={p.title}
           onCancel={
             working
               ? undefined
@@ -907,9 +920,11 @@ export function InviteDevice({
               data-testid="invite-password"
             />
             <NetworkOptions checked={sameNetwork} onChange={setSameNetwork} />
-            <Button type="submit" className="self-start" disabled={password === '' || working}>
-              {working ? p.preparing : p.begin}
-            </Button>
+            <WizardActions>
+              <Button type="submit" disabled={password === '' || working}>
+                {working ? p.preparing : p.begin}
+              </Button>
+            </WizardActions>
           </form>
         </Wizard>
       )}
@@ -958,6 +973,7 @@ export function JoinVault({
           // A new session takes a new identity and a new local password (§11).
           controller.cancelPairing();
         }}
+        onEnd={onCancel}
       />
     );
   }
@@ -1005,9 +1021,11 @@ export function JoinVault({
             {m.replace.understand}
           </label>
         ) : null}
-        <Button type="submit" className="self-start" disabled={!ready}>
-          {j.submit}
-        </Button>
+        <WizardActions>
+          <Button type="submit" disabled={!ready}>
+            {j.submit}
+          </Button>
+        </WizardActions>
       </form>
     </Wizard>
   );
@@ -1060,6 +1078,8 @@ export function ReadmitDevice({
   const r = m.readmission;
   const stage = usePairing(controller, 'readmit');
   const [open, setOpen] = useState(startOpen);
+  // Once started, the re-admission's end returns to the card; Start again opens the first step.
+  if (stage && open) setOpen(false);
   const [sameNetwork, setSameNetwork] = useState(false);
   const [working, setWorking] = useState(false);
   const [outcome, setOutcome] = useState<ReadmissionStart>();
@@ -1094,6 +1114,7 @@ export function ReadmitDevice({
           session={session}
           stage={stage}
           flow="readmit"
+          title={r.title}
           leaving={leavingText(m, session)}
           onAgain={() => {
             controller.cancelPairing();
@@ -1120,6 +1141,7 @@ export function ReadmitDevice({
         <Wizard
           steps={flowSteps(m, 'readmit')}
           step={1}
+          title={r.title}
           onCancel={
             working
               ? undefined
@@ -1136,7 +1158,7 @@ export function ReadmitDevice({
               {error}
             </p>
           ) : null}
-          <div className="flex flex-wrap gap-2">
+          <WizardActions>
             <Button
               disabled={working}
               onClick={() => {
@@ -1156,7 +1178,7 @@ export function ReadmitDevice({
             >
               {r.paste}
             </Button>
-          </div>
+          </WizardActions>
         </Wizard>
       )}
     </div>
