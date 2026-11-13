@@ -477,7 +477,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Security Gate → v1.0
 
 - [ ] Cryptographic and protocol review complete, findings resolved
-- [ ] Every invariant in `security-invariants.md` has an associated passing test
+- [x] Every invariant in `security-invariants.md` has an associated passing test
 - [ ] Reproducible build validated on the release candidate
 - [ ] Browser matrix tested and recorded
 - [ ] Recovery scenarios tested:
