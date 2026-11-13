@@ -9,6 +9,8 @@ import { createVault } from './create';
 test.setTimeout(120_000);
 
 const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
+const TOTP =
+  'otpauth://totp/ACME:ana@acme.example?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME';
 
 test.beforeEach(async ({ page }) => {
   // The clipboard write succeeds the same way in every browser (see totp.spec.ts).
@@ -66,5 +68,33 @@ test('nothing animates under prefers-reduced-motion, and the check still shows (
   await page.getByTestId('item-title').fill('ACME 2');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByTestId('discard-confirm')).toBeVisible();
+  expect(await animations(page)).toBe(0);
+});
+
+test('under prefers-reduced-motion, the TOTP ring steps and the toast shows with no animation (D236, D248, D250)', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await createVault(page, PASSWORD);
+  await page.getByRole('button', { name: 'New item', exact: true }).click();
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await page.getByTestId('item-title').fill('ACME');
+  await page.getByTestId('add-field-type').selectOption('totp');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByTestId('custom-label').fill('2FA');
+  await page.getByTestId('input-2FA').fill(TOTP);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'ACME' })).toBeVisible();
+
+  // The ring steps once a second: counted right after a step.
+  const ring = page.getByTestId('totp-ring');
+  const before = await ring.getAttribute('data-seconds');
+  await expect(ring).not.toHaveAttribute('data-seconds', before ?? '');
+  expect(await animations(page)).toBe(0);
+
+  // The toast a copy shows.
+  await page.getByRole('button', { name: 'Copy code: 2FA', exact: true }).click();
+  await expect(page.getByTestId('toast')).toContainText('Copied.');
   expect(await animations(page)).toBe(0);
 });
