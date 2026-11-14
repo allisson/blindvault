@@ -1,7 +1,8 @@
 # Browser matrix (Security Gate)
 
-The browsers and capabilities of overview §18, with what proves each one works in BlindVault itself.
-The Security Gate box "Browser matrix tested and recorded" closes once no cell reads **to check**.
+The browsers and capabilities of overview §16, with what proves each one works in BlindVault itself.
+The Security Gate box "Browser matrix tested and recorded" closed without a manual run (D257): a
+cell no source covers reads **not checked**.
 
 ## Sources
 
@@ -10,7 +11,7 @@ The Security Gate box "Browser matrix tested and recorded" closes once no cell r
   and authenticator are fakes.
 - **app vX:** the app itself, by hand on a real device, at that version (D212).
 - **spike:** a Phase 0 throwaway page on the real browser, not the app (`docs/spikes/`).
-- **to check:** still to run by hand on the device (below).
+- **not checked:** no run of the current app on that browser (D257); how to check one is below.
 
 ## Automated run
 
@@ -32,14 +33,14 @@ offline use in WebKit (1, `pwa.spec.ts`).
 
 | Capability | Chromium desktop | Firefox desktop | Safari macOS | Safari iOS | Chromium Android |
 | --- | --- | --- | --- | --- | --- |
-| IndexedDB | auto; app v0.3.0 | auto | auto (WebKit); to check | app v0.3.0; to check | app v0.3.0; to check |
-| Persistent storage | spike; to check | to check | spike; to check | spike; to check | spike; to check |
-| DataChannel | auto; app v0.3.0 | auto | auto (WebKit); to check | app v0.3.0; to check | app v0.3.0; to check |
-| WebAuthn | auto (virtual); to check | spike; to check | spike; to check | spike; to check | spike; to check |
-| WebAuthn PRF | auto (virtual); spike; to check | spike; to check | spike; to check | spike; to check | spike; to check |
-| PWA installation | auto (manifest); to check | to check | spike (Dock); to check | app v0.3.0; to check | spike; to check |
-| Camera | auto (fake); app v0.3.0 | auto (fake) | auto (WebKit, fake); to check | app v0.3.0; to check | app v0.3.0; to check |
-| QR scanning | auto (fake); app v0.3.0 | auto (fake) | auto (WebKit, fake); to check | app v0.3.0; to check | app v0.3.0; to check |
+| IndexedDB | auto; app v0.3.0 | auto | auto (WebKit); not checked | app v0.3.0; not checked | app v0.3.0; not checked |
+| Persistent storage | spike; not checked | not checked | spike; not checked | spike; not checked | spike; not checked |
+| DataChannel | auto; app v0.3.0 | auto | auto (WebKit); not checked | app v0.3.0; not checked | app v0.3.0; not checked |
+| WebAuthn | auto (virtual); not checked | spike; not checked | spike; not checked | spike; not checked | spike; not checked |
+| WebAuthn PRF | auto (virtual); spike; not checked | spike; not checked | spike; not checked | spike; not checked | spike; not checked |
+| PWA installation | auto (manifest); not checked | not checked | spike (Dock); not checked | app v0.3.0; not checked | spike; not checked |
+| Camera | auto (fake); app v0.3.0 | auto (fake) | auto (WebKit, fake); not checked | app v0.3.0; not checked | app v0.3.0; not checked |
+| QR scanning | auto (fake); app v0.3.0 | auto (fake) | auto (WebKit, fake); not checked | app v0.3.0; not checked | app v0.3.0; not checked |
 
 What each source covers:
 
@@ -56,11 +57,11 @@ What each source covers:
   Android. `storage.md`: `persist()` refused to tabs and granted to installed apps on the Mac (Safari
   Dock app), the iPhone and the A54. `pairing.md`: DataChannel, camera and QR on every phone pair.
 
-## To check by hand
+## Checking a cell by hand
 
-On the release candidate, in each context: Chromium desktop, Firefox desktop, Safari macOS (tab and
-Dock app), Safari iOS (installed app), Chrome Android (tab and installed app). Record the browser
-version and the result in the matrix.
+Not run before 1.0 (D257). To check a cell later, on a release, in each context: Chromium desktop,
+Firefox desktop, Safari macOS (tab and Dock app), Safari iOS (installed app), Chrome Android (tab
+and installed app). Record the browser version and the result in the matrix.
 
 1. **Install** the app where the browser offers it, and open it.
 2. **Create a vault**, lock, unlock: IndexedDB.

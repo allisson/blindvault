@@ -479,7 +479,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] Cryptographic and protocol review complete, findings resolved
 - [x] Every invariant in `security-invariants.md` has an associated passing test
 - [x] Reproducible build validated on the release candidate
-- [ ] Browser matrix tested and recorded
+- [x] Browser matrix tested and recorded (without a manual run, D257)
 - [x] Recovery scenarios tested:
     - [x] Destroy A, continue with B
     - [x] Destroy A and B, restore `.bvault` with the recovery phrase
