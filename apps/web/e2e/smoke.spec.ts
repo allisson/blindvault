@@ -8,5 +8,5 @@ test('renders the first screen, with no lock state before a vault exists, and it
   await startScreen(page);
   await expect(page.getByRole('button', { name: 'Restore from a backup' })).toBeVisible();
   await expect(page.getByTestId('lock-state')).toHaveCount(0);
-  await expect(page.getByText(/^v\d+\.\d+\.\d+$/)).toBeVisible();
+  await expect(page.getByText(/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)).toBeVisible();
 });
