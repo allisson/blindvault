@@ -113,3 +113,7 @@ It also has these limits:
   of records, when each change was made and by which device, and the approximate size of each
   record, but no content. A backup shows the date and identifier of its Recovery Phrase, whether it
   has an export password, and its approximate size.
+- **Browsers not checked by hand.** The current app was not run by hand on each supported browser
+  (D257). Automated tests cover Chromium, Firefox and WebKit, and real phones ran an earlier
+  version, but persistent storage, passkeys outside Chrome, Safari on macOS and installing the app
+  were not checked on this version. If one of them fails for you, report it.
