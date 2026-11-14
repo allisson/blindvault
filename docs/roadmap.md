@@ -478,7 +478,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 - [ ] Cryptographic and protocol review complete, findings resolved
 - [x] Every invariant in `security-invariants.md` has an associated passing test
-- [ ] Reproducible build validated on the release candidate
+- [x] Reproducible build validated on the release candidate
 - [ ] Browser matrix tested and recorded
 - [x] Recovery scenarios tested:
     - [x] Destroy A, continue with B

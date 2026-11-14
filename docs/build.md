@@ -92,3 +92,13 @@ Then compare the manifest hash with the one the About screen shows and with your
 
 To publish a release: set the version in `apps/web/package.json` and the root `package.json`,
 write `docs/releases/v<version>.md`, merge, then tag the merge commit and push the tag.
+
+## Validation on the release candidate
+
+`v1.0.0-rc.1` (`d016b23`, release workflow run 43597999522), for the Security Gate on 2026-11-14:
+
+- Both attestations verified with `gh attestation verify`.
+- The manifest hash was `5eaab9b2b5402426a77b34bcbbed35b4b9350ce9d649fe9d9d7369d5b772ea03` in the
+  release, in a rebuild of the tag on macOS 26.6.2 (arm64), and at `https://blindvault.allisson.dev`.
+- `sw.js` was `18cbc9bfe950c747e35e269c56770ef069db4b44bb6f7d1efaabadcf0da6fd60` in the release
+  and in the rebuild.
