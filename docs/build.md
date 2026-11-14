@@ -57,7 +57,10 @@ informational only (overview §11): this check, done outside the app, is the one
 The `reproducible` job in `.github/workflows/ci.yml` builds the same commit twice, from checkouts at
 two different paths, the second under another time zone, locale, umask and `SOURCE_DATE_EPOCH`. It
 fails unless both `asset-manifest.txt` files are identical, and writes the manifest hash to the job
-summary. The reference build is CI's (Ubuntu); a build on another OS is not yet known to match.
+summary. The reference build is CI's (Ubuntu). A build on macOS 26.6.2 (arm64, Node 26.13.0,
+pnpm 10.33.0) matched it on `4448675`: both manifest hashes were
+`ae883efe15b86bbc15c8fc72dc8d4274add345656bccae2803a85546f43484b7`. Other systems are not yet known
+to match.
 
 ## Releases
 
