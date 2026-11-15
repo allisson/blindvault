@@ -118,8 +118,8 @@ finding has one.
 
 ## Findings
 
-R-01 to R-11 come from a pre-review of `27d3fdd` by Claude (Fable 5.2), asked by the owner. It is not
-the external review this gate item requires.
+R-01 to R-11 and the notes N-01 to N-14 come from a pre-review of `27d3fdd` by Claude (Fable 5.2),
+asked by the owner. It is not the external review this gate item requires.
 
 | ID | Severity | Where | Summary | Resolution |
 | --- | --- | --- | --- | --- |
@@ -134,3 +134,17 @@ the external review this gate item requires.
 | R-09 | low | overview §5.6, §6, `threat-model.md` A1 | D121 promised that no Local Config moves between devices of a vault; a whole one opens on another device that unlocks with the same password or a synced passkey | Accepted: D265, a cloned installation as in D87 |
 | R-10 | low | `packages/crypto/src/blindpass.ts:67-71`, `apps/web/src/app/controller.ts:796`, `:815` | An authentic `.blindpass` plaintext that is not UTF-8, an Argon2id worker failure and a password with a control character escaped the import, the restore and the export unhandled | Fixed: the first is `not-this-format`; the restore and the export name the others, and a new password with a control character is not acceptable (#218) |
 | R-11 | low | `packages/crypto/src/local-config.ts:85-87`, `cbor.ts:91`, `packages/vault/src/session.ts:1502-1512`, `:1685`, `packages/sync/src/transport.ts:96` | Avoidable copies of keys and plaintext were left unwiped or outlived a lock | Fixed: the private key is removed before the copy, the canonical re-encoding is wiped, the export's keyring is wiped by a lock, a lock drops the Local Config state but the preferences and HLC, and a local close wipes unread frames (#218) |
+| N-01 | note | `docs/crypto-spec.md` §14, `packages/crypto/src/cbor.test.ts:77` | The spec allowed floats in their shortest form; the decoder refuses an integral one | Spec aligned: D266 |
+| N-02 | note | `docs/crypto-spec.md` §6, `apps/web/src/app/strength.ts:57`, `:101` | The spec normalized the password before the strength check; zxcvbn reads it as typed | Spec aligned: D266 |
+| N-03 | note | `docs/pairing-protocol.md` §6.4 | A `master-key` behind A's `confirmed` waited unread instead of aborting; CRYPTO-INV-011 held | Spec aligned: D266 |
+| N-04 | note | `docs/pairing-protocol.md` §6.3 | A man in the middle can drop the pairing instead of showing different digits on both devices | Spec aligned: D266 |
+| N-05 | note | `docs/backup-format.md` §6 | A restore pulls the whole stream before parsing, not envelope by envelope | Spec aligned: D266 |
+| N-06 | note | overview D200, `docs/architecture.md` | The role of each CipherState was cited as Noise §5.2; it is in §5 | Spec aligned: D266 |
+| N-07 | note | `apps/web/src/ui/ExportPassword.tsx:24-42` | The export password's 10¹⁴ bar is checked by the UI only | Accepted: D266 |
+| N-08 | note | `apps/web/src/ui/RestoreVault.tsx:137-139`, `apps/web/src/app/controller.ts:753` | A `.bvault` has no size cap and is read whole into memory | Accepted: D266 |
+| N-09 | note | `packages/vault/src/session.ts:1689-1712` | An export does not check that its records restore | Accepted: D266 |
+| N-10 | note | `packages/crypto/src/noise/cipher-state.ts:34-38` | A CipherState without a key passed plaintext through; only the transport's wipe flag stood in the way | Fixed: the transport refuses a CipherState without a key (D266) |
+| N-11 | note | `packages/vault/src/session.ts` (`#epoch()`) | A holder of the Master Key can push every device to Vault Key epoch 2³² − 1 | Recorded for the rotation design: D266, `crypto-spec.md` §11 |
+| N-12 | note | `docs/threat-model.md` | Missing: the unauthenticated STUN list, storage copies after a password change, an old reconnection offer | Documented: D266 |
+| N-13 | note | `packages/crypto/src/noise.test.ts:237-239`, `:513-519`, backup vectors | Tests that pass without the check they name, the nonce carry and edited backup headers not covered | Fixed: tests and vectors added (D266) |
+| N-14 | note | `packages/sync/src/payload.ts:116-124`, `transfer.ts:59-65`, `apps/web/src/app/controller.ts` (`start()`), `handshake-state.ts:45` | Small items: 0 in a payload list, `known-device` after the Master Key, the first of two vault databases, a token's name | Accepted: D266 |

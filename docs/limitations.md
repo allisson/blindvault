@@ -70,7 +70,8 @@ vault.
 
 A backup can also open with an export password. Whoever opens it that way holds the Master Key for
 good, so a weak or exposed export password is as serious as an exposed phrase. Changing your
-password later does not change the backups you already made.
+password later does not change the backups you already made, nor a copy of a device's storage
+taken before the change, which still opens with the old password or passkey.
 
 ## The app you run must be trusted
 

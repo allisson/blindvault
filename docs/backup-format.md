@@ -146,8 +146,8 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
 - The payload ends exactly after `eN`: fewer envelopes than `recordCount`, a length out of range, a
   length that runs past the payload, or any byte after `eN` is rejected.
 - The length prefixes are inside the stream and reveal nothing outside it.
-- A restore reads envelopes one by one as chunks are pulled, never decoding the payload as one CBOR
-  value.
+- A restore pulls the whole stream, through the final chunk, before it parses anything, then reads
+  the envelopes one by one, never decoding the payload as one CBOR value (D266).
 
 ## 7. Versions and unknown content
 

@@ -191,8 +191,9 @@ Every value the attacker controls is fixed before the value it must match is kno
 
 Without the commitment, the device that sends last in each session could try nonces or handshake
 values offline until both SAS match; with it, M has **one guess in 10⁶ per pairing**. A failed
-attempt shows different digits on the two devices, the user rejects them, and both sides abort;
-every new attempt needs the user to start a pairing again.
+attempt shows different digits on the two devices, the user rejects them, and both sides abort.
+M may also compute its SAS and never reveal its nonce: one device then shows digits and the other a
+dropped connection, and the pairing ends all the same (D266). Every new attempt needs the user to start a pairing again.
 
 The commitment is part of every pairing, QR included (D199): one protocol with no mode flag, so
 no attacker can strip the commitment by claiming the other mode.
@@ -206,8 +207,9 @@ Each device shows the SAS and asks the user whether it matches the other device.
 - **Does not match** or cancelled: it sends `abort` (`sas-mismatch` or `cancelled`) and ends the
   session.
 - A message that section 8 or 9 allows only after both confirmations, received earlier, aborts
-  (`protocol-error`): B rejects a `master-key` that arrives before its own confirmation, and no
-  `key-confirmation` is accepted before both.
+  (`protocol-error`): B rejects a `master-key` that arrives before any `confirmed`, and no
+  `key-confirmation` is accepted before both. A `master-key` that follows A's `confirmed` stays
+  unread until B's own confirmation, so B acts on nothing secret before both (D266).
 
 Nothing secret is sent before both confirmations (CRYPTO-INV-011).
 
