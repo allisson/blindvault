@@ -712,6 +712,16 @@
         "expectedStep": 9,
         "case": "item content longer than itemCap",
         "itemContentLength": 1048511
+      },
+      {
+        "expectedStep": 8,
+        "case": "unpadded content longer than recordCap",
+        "contentLength": 1048577
+      },
+      {
+        "expectedStep": 9,
+        "case": "item content longer than itemCap through a trashOperationId other than 16 bytes",
+        "itemContentLength": 1048511
       }
     ]
   }

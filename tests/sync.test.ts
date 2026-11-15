@@ -1104,11 +1104,13 @@ describe('a child received before its parent (overview §9.3, D14, Gate D)', () 
 });
 
 describe('identical vaults, one-way and bidirectional changes (sync-protocol.md §7 to §9, Gate D)', () => {
-  /** `sync(from, to)`, counting the records `from` sends. */
+  /** `sync(from, to)`, counting the records `from` sends but Device records, which always go (D261). */
   async function counted(from: VaultSession, to: VaultSession) {
     let sent = -1;
     const results = await sync(from, to, (records) => {
-      sent = records.length;
+      sent = records.filter(
+        (r) => decodeEnvelope(r).header.recordType !== (RecordType.device as number),
+      ).length;
       return records;
     });
     return { sent, results };
@@ -1429,9 +1431,14 @@ describe('a retired peer (overview §10, D31, D41, D45, CRYPTO-INV-015, Gate D)'
       const retirement = x.devices().find((d) => same(d.deviceId, tablet))?.hlc;
       const writer = { tablet, x: x.deviceId, y: y.deviceId }[claimed];
       const forged = forge(T0 + DAY, writer, false);
+      // In place of the sender's own copy, which every sync sends (D261).
+      const replaced = (records: Uint8Array[]) => [
+        ...records.filter((r) => !same(decodeEnvelope(r).header.recordId, tablet)),
+        forged,
+      ];
       // Sent to X by Y, then to Y by X, each holding the retirement.
-      const [, toX] = await sync(y, x, (records) => [...records, forged]);
-      const [, toY] = await sync(x, y, (records) => [...records, forged]);
+      const [, toX] = await sync(y, x, replaced);
+      const [, toY] = await sync(x, y, replaced);
       // Each keeps its copy: nothing replaced, no device announced.
       for (const result of [toX, toY]) {
         expect(result).toMatchObject({ added: 0, replaced: 0, newDevices: [], retiredDevices: [] });

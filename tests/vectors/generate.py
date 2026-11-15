@@ -370,7 +370,13 @@ def verify(data: bytes, vault_id: bytes, vault_keys: dict, k_vkwrap: bytes, k_ve
                 raise Reject(8, "empty content in a live record")
         else:
             try:
-                content = strict_decode(bindings.sodium_unpad(pt, PAD_BLOCK))
+                unpadded = bindings.sodium_unpad(pt, PAD_BLOCK)
+            except Exception:
+                raise Reject(8, "padding or content encoding")
+            if len(unpadded) > RECORD_CAP:
+                raise Reject(8, "content above the record cap")
+            try:
+                content = strict_decode(unpadded)
             except Exception:
                 raise Reject(8, "padding or content encoding")
             if not isinstance(content, dict):
@@ -383,7 +389,8 @@ def verify(data: bytes, vault_id: bytes, vault_keys: dict, k_vkwrap: bytes, k_ve
                     raise Reject(8, "metadata")
     if t in (RT_ITEM, RT_ITEM_VERSION) and content is not None:
         item = content if t == RT_ITEM else content.get("item", {})
-        if len(cbor({k: x for k, x in item.items() if k != "trashOperationId"})) > ITEM_CAP:
+        counted = {k: x for k, x in item.items() if not (k == "trashOperationId" and is_id(x))}
+        if len(cbor(counted)) > ITEM_CAP:
             raise Reject(9, "item cap")
     if t == RT_VAULT_KEY and env["id"] != blake2b(layout(label("bv.v1.recordid.vault-key"), u32(e)), 16):
         raise Reject(10, "Vault Key recordId")
@@ -2889,6 +2896,25 @@ def main() -> None:
     add(8, "content holding undefined", cbor(item(plaintext=pad(raw_content(b"\xf7")))))
     add(8, "content NaN with a non-canonical payload", cbor(item(plaintext=pad(raw_content(b"\xf9\x7e\x01")))))
 
+    # D260, checked here and listed by length below, since a vector would be over 1 MiB: content
+    # above the record cap that padding lets through step 5, and a trashOperationId other than
+    # 16 bytes, which counts toward the item cap.
+    def notes_of(length: int) -> dict:
+        n = RECORD_CAP - (len(cbor({**content, "notes": "x" * RECORD_CAP})) - length)
+        sized = {**content, "notes": "x" * n}
+        assert len(cbor(sized)) == length
+        return sized
+    by_length_checks = (
+        (8, notes_of(RECORD_CAP + 1)),
+        (9, {**content, "trashOperationId": bytes(ITEM_CAP - len(cbor(content)))}),
+    )
+    for step, sized in by_length_checks:
+        try:
+            verify(cbor(item(plaintext=pad(cbor(sized)))), VAULT_ID, {KEY_EPOCH: VAULT_KEY}, k_vkwrap, k_version)
+            raise AssertionError(f"accepted a step {step} case")
+        except Reject as r:
+            assert r.step == step, f"rejected at step {r.step}, expected {step} ({r})"
+
     # every valid record passes the reference verifier; every negative vector fails at its step
     held = {KEY_EPOCH: VAULT_KEY}
     for name in ("item", "purgedTombstone", "vaultKeyRecord", "recoveryEnvelope", "itemVersion",
@@ -2909,6 +2935,9 @@ def main() -> None:
             {"expectedStep": 1, "case": "envelope longer than maxEnvelopeLength", "envelopeLength": MAX_ENVELOPE + 1},
             {"expectedStep": 5, "case": "ct.c longer than maxCiphertextLength", "ctLength": MAX_CT + 1},
             {"expectedStep": 9, "case": "item content longer than itemCap", "itemContentLength": ITEM_CAP + 1},
+            {"expectedStep": 8, "case": "unpadded content longer than recordCap", "contentLength": RECORD_CAP + 1},
+            {"expectedStep": 9, "case": "item content longer than itemCap through a trashOperationId other than 16 bytes",
+             "itemContentLength": ITEM_CAP + 1},
         ],
     }
 

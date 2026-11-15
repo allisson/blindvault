@@ -32,6 +32,7 @@ import {
   SALT_LENGTH,
   type Sealed,
   type SymmetricKey,
+  TAG_LENGTH,
   checkKdfParams,
   checkReadmissionMac,
   checkRecoveryEnvelope,
@@ -125,6 +126,14 @@ import { type TreeNode, buildTree, displayedParents, isWithin } from './tree';
 export const HISTORY_LIMIT = 20;
 /** A tombstone's content is purged 30 days after the physical time of its HLC (D7, D27). */
 export const PURGE_DELAY_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * A purged tombstone's purge date as an HLC: no honest device purges before it, so one beyond the
+ * future-clock bound is rejected as a record beyond it is (D262).
+ */
+function purgeHlc(header: RecordHeader): Hlc {
+  return { ...header.hlc, physicalMs: header.hlc.physicalMs + PURGE_DELAY_MS };
+}
 /** While unlocked, the automatic purge and the history cut run this often (D94). */
 export const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -1795,7 +1804,11 @@ export class VaultSession {
     try {
       const [corrupt] = incoming.state.corrupt;
       if (corrupt) throw new MergeRejectedError('corrupt-record', copyKey(corrupt));
-      const beyond = incoming.held.filter((h) => this.#clock.beyondBound(h));
+      const purged = [
+        ...[...incoming.state.items.values()].filter((i) => i.content === null),
+        ...[...incoming.state.folders.values()].filter((f) => f.folder === null),
+      ].map((r) => purgeHlc(r.header));
+      const beyond = [...incoming.held, ...purged].filter((h) => this.#clock.beyondBound(h));
       if (beyond.length > 0) {
         const latest = Math.max(...beyond.map((h) => h.physicalMs));
         throw new MergeRejectedError('future-clock', undefined, latest - FUTURE_CLOCK_BOUND_MS);
@@ -1996,8 +2009,8 @@ export class VaultSession {
       if (local) {
         const before = { header: local.header, retired: local.device.value.retired };
         const after = { header: device.header, retired: device.device.value.retired };
-        if (sameVersion(local.header, device.header) || !incomingDeviceWins(before, after))
-          continue;
+        // No `sameVersion` shortcut: a retired copy wins under the same header too (D261).
+        if (!incomingDeviceWins(before, after)) continue;
       }
       take(device.header, device.device.content, local !== undefined);
       if (key !== own && !heldNone) {
@@ -2628,7 +2641,10 @@ export class VaultSession {
       }
       identities.add(key);
       const recordKey = headerKey(e.header);
-      if (this.#clock.beyondBound(e.header.hlc)) {
+      // Empty `ct`: a purged tombstone, judged by its purge date (D262). One that is not fails
+      // verification anyway.
+      const purged = e.header.deleted && e.ct.c.length === TAG_LENGTH;
+      if (this.#clock.beyondBound(purged ? purgeHlc(e.header) : e.header.hlc)) {
         rejected.push({ reason: 'future-clock', record: recordKey });
         continue;
       }

@@ -99,13 +99,18 @@ describe('what each side sends (sync-protocol.md §8)', () => {
     expect(send(entry(RecordType.item, 1, T0, { deleted: true, keyEpoch: 2 }))).toBe(false);
   });
 
-  it.each([RecordType.device, RecordType.vaultKey, RecordType.recoveryEnvelope])(
-    'sends a record of type %i whose entry differs from the peer’s in any field, older too (D31, D42, D44)',
+  it('sends every Device record, an identical entry included, since a summary does not carry `retired` (D31, D261)', () => {
+    const mine = entry(RecordType.device, 1, T0);
+    expect(selectRecords([mine], [entry(RecordType.device, 1, T0)])).toEqual([mine]);
+    expect(selectRecords([mine], [entry(RecordType.device, 1, T0 + 1)])).toEqual([mine]);
+  });
+
+  it.each([RecordType.vaultKey, RecordType.recoveryEnvelope])(
+    'sends a record of type %i whose entry differs from the peer’s in any field, older too (D42, D44)',
     (type) => {
       const mine = entry(type, 1, T0);
       const send = (other: SummaryEntry) => selectRecords([mine], [other]).length === 1;
       expect(send(entry(type, 1, T0))).toBe(false);
-      // A retired record reaches a peer holding a forged newer non-retired copy (D31).
       expect(send(entry(type, 1, T0 + 1))).toBe(true);
       expect(send(entry(type, 1, T0, { hlc: { ...mine.hlc, counter: 1 } }))).toBe(true);
       expect(send(entry(type, 1, T0, { hlc: { ...mine.hlc, deviceId: DEVICE_B } }))).toBe(true);

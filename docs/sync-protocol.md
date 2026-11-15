@@ -28,8 +28,9 @@ whole merge and writes nothing (§10, D61, D64, D182).
 3. Every record passes verification on receipt (`crypto-spec.md` §9.5) under the local vault's
    keys, and the domain checks of `record-content.md`, as at unlock (D59, D64): `corrupt-record`,
    naming the record.
-4. No record's `hlc` is beyond the future-clock bound of this device's clock (D76): `future-clock`.
-   The merge can be retried once the clock reaches the greatest `physicalMs` held minus the bound.
+4. No record's `hlc`, nor a purged tombstone's purge date (section 1.3), is beyond the future-clock
+   bound of this device's clock (D76, D262): `future-clock`. The merge can be retried once the clock
+   reaches the greatest of these times minus the bound.
 5. No record breaks the immutability of section 1.3 (D42, D44): `immutable-record`, naming it.
 
 `packages/backup` has already run the file checks of `backup-format.md` §8 steps 1 to 8. A record
@@ -53,13 +54,17 @@ cannot be trusted (D182).
   - a losing tombstone with content does the same: its content can be an edit kept nowhere else
     (D56);
   - a losing purged tombstone adds no version.
+
+  A received purged tombstone is judged by the future-clock bound at its purge date, `hlc` plus
+  30 days, rather than at its `hlc`: no honest device purges before that date, so one whose purge
+  date is beyond the bound is handled as a record beyond it (D262).
   A winning tombstone with content whose purge date has passed (D7, D27) is purged on arrival: it is
   stored with empty content under its unchanged header.
 - **Item Version.** Added when not held; an Item Version whose `versionId` is held stays as held.
 - **Folder.** Last-write-wins; the losing copy is dropped, since folders have no history.
   A winning tombstone with content past its purge date is purged on arrival, as for an item.
-- **Device.** A retired copy always beats a non-retired one, whatever the HLCs (D31). Between two
-  retired or two non-retired copies, last-write-wins.
+- **Device.** A retired copy always beats a non-retired one, whatever the HLCs and under the same
+  header too (D31, D261). Between two retired or two non-retired copies, last-write-wins.
 - **Vault Key.** A received Vault Key record whose epoch is held must have the held copy's `hlc` and
   unwrap to the same Vault Key, compared with `sodium_memcmp`; it then changes nothing. Any other
   version is an immutability violation (D42). A record of an epoch not held is added.
@@ -368,15 +373,16 @@ on a `summary` outside `summary-begin` and `summary-end`. An unknown `recordForm
 
 ## 8. What each side sends
 
-Once a device has the peer's whole summary, it sends each record it holds for which:
+Once a device has the peer's whole summary, it sends every Device record it holds (D261), and each
+other record it holds for which:
 
 - the peer's summary has no entry of the same identity; or
 - for an **Item**, the peer's entry has another `hlc` or `recordFormatVersion`, older or newer
   (D223); or
 - for an **Item Version** or **Folder**, its copy wins last-write-wins against the peer's entry: a
   greater `hlc`, or an equal `hlc` and a higher `recordFormatVersion` (section 1.2); or
-- for a **Device**, **Vault Key** or **Recovery Envelope** record, the peer's entry differs from
-  its own in any field.
+- for a **Vault Key** or **Recovery Envelope** record, the peer's entry differs from its own in any
+  field.
 
 The Item rule sends a losing copy too, so both devices apply section 1.3 to the same two copies:
 each keeps the same winner and stores the same loser as an Item Version with the same `versionId`,
@@ -389,15 +395,15 @@ to. A device that purged an item is therefore sent the versions of it that the p
 at every sync until the peer runs its own purge, whose date is the same (`hlc` plus 30 days, D7).
 Section 1.4 drops them once the transfer is merged, writing nothing (D137).
 
-The last rule exists because a summary does not carry the `retired` flag: a retired Device record
-must reach a peer that holds a newer non-retired copy, forged or not, and a Vault Key record or
-envelope that differs must reach the peer so that it detects the immutability violation (D31, D42,
-D44). These records are few.
+Device records always go because a summary does not carry the `retired` flag: a retired Device
+record must reach a peer that holds a non-retired copy, forged or not, newer or under the same
+header (D31, D261). The last rule exists because a Vault Key record or envelope that differs must
+reach the peer so that it detects the immutability violation (D42, D44). These records are few.
 
 A tombstone is sent as any Item or Folder is, and storage never deletes one (D224). A record whose
-summaries are identical is never sent. This keeps the residual risk of §9.2: two
-copies of one record with identical summaries, such as a purged and an unpurged copy of one
-tombstone, do not converge.
+summaries are identical is never sent, a Device record excepted. This keeps the residual risk of
+§9.2: two copies of one record with identical summaries, such as a purged and an unpurged copy of
+one tombstone, do not converge.
 
 Before sending, the device reads each record it sends again from storage and verifies it as an
 export does (D181); a record that fails ends the session (`verification-failed`) and is named to
