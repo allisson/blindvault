@@ -36,6 +36,9 @@ function Root({ controller, monitor }: RootProps) {
     [controller],
   );
   const status = useSyncExternalStore(controller.subscribe, controller.getStatus);
+  const drops = useSyncExternalStore(controller.subscribe, () => controller.drops);
+  // "Continue in this tab" outlives the new Start of each lock, not a reload (D198, D263).
+  const inTab = useState(false);
   // The system's back goes one screen back, through one history entry that carries nothing (D197).
   useEffect(() => new BackButton(nav, browserHistory()).start(), [nav]);
 
@@ -43,8 +46,15 @@ function Root({ controller, monitor }: RootProps) {
     if (supported()) void controller.start();
   }, [controller]);
 
-  // Both locks run while unlocked, with the vault's preferences (D54, D151).
-  const preferences = status.kind === 'unlocked' ? status.session.preferences : undefined;
+  // Both locks run while unlocked, with the vault's preferences (D54, D151), and with the defaults
+  // while a creation or a restore holds a phrase or a backup before its commit (D104, D263).
+  const pendingCommit = useSyncExternalStore(controller.subscribe, () => controller.pendingCommit);
+  const preferences =
+    status.kind === 'unlocked'
+      ? status.session.preferences
+      : pendingCommit
+        ? DEFAULT_PREFERENCES
+        : undefined;
   useEffect(() => {
     if (!preferences) {
       timers.stop();
@@ -99,7 +109,7 @@ function Root({ controller, monitor }: RootProps) {
     };
   }, [joining, controller]);
 
-  // The inactivity lock pauses while a regeneration's Recovery Phrase is shown (D104, D185).
+  // The inactivity lock pauses while a Recovery Phrase is shown (D104, D185, D187).
   const showingPhrase = useSyncExternalStore(controller.subscribe, () => controller.showingPhrase);
   useEffect(() => {
     if (showingPhrase) timers.pause();
@@ -110,11 +120,14 @@ function Root({ controller, monitor }: RootProps) {
   const updates = useSyncExternalStore(monitor.subscribe, monitor.getState);
   if (updates.warning) return <ChangedWorker monitor={monitor} />;
 
-  if (!supported()) return <Start controller={controller} status={{ kind: 'unsupported' }} />;
+  if (!supported()) {
+    return <Start controller={controller} status={{ kind: 'unsupported' }} inTab={inTab} />;
+  }
   if (status.kind === 'unlocked') {
     return <VaultShell controller={controller} session={status.session} nav={nav} />;
   }
-  return <Start controller={controller} status={status} />;
+  // A new Start after a lock drops a creation's words or a restore's backup (D263).
+  return <Start key={drops} controller={controller} status={status} inTab={inTab} />;
 }
 
 export function App({ controller, monitor }: RootProps) {

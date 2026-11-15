@@ -106,4 +106,48 @@ describe('lock timers (overview §7, D54, D151)', () => {
     vi.advanceTimersByTime(5 * 60_000);
     expect(lock).toHaveBeenCalledTimes(2);
   });
+
+  // The wall clock moves while no timer runs: a frozen page or a suspended device (D263).
+  it('locks at the next activity once the inactivity time passed by the wall clock', () => {
+    const { lock, t } = timers();
+    t.start(PREFS, false);
+    vi.setSystemTime(Date.now() + 4 * 60_000);
+    t.activity();
+    expect(lock).not.toHaveBeenCalled();
+    vi.setSystemTime(Date.now() + 5 * 60_000);
+    t.activity();
+    expect(lock).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(3_600_000);
+    expect(lock).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks when visible again once the hidden time passed by the wall clock', () => {
+    const { lock, t } = timers();
+    t.start({ ...PREFS, autoLockMinutes: 60 }, false);
+    t.visibility(true);
+    vi.setSystemTime(Date.now() + 59_000);
+    t.visibility(false);
+    expect(lock).not.toHaveBeenCalled();
+    t.visibility(true);
+    vi.setSystemTime(Date.now() + 60_000);
+    t.visibility(false);
+    expect(lock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps no deadline while paused, and none after stop', () => {
+    const { lock, t } = timers();
+    t.start(PREFS, false);
+    t.pause();
+    vi.setSystemTime(Date.now() + 60 * 60_000);
+    t.activity();
+    expect(lock).not.toHaveBeenCalled();
+    t.stop();
+    t.start(PREFS, false);
+    t.visibility(true);
+    t.stop();
+    vi.setSystemTime(Date.now() + 60 * 60_000);
+    t.activity();
+    t.visibility(false);
+    expect(lock).not.toHaveBeenCalled();
+  });
 });

@@ -124,5 +124,7 @@ the external review this gate item requires.
 | ID | Severity | Where | Summary | Resolution |
 | --- | --- | --- | --- | --- |
 | R-01 | medium | `packages/crypto/src/record.ts:300-304`, `packages/vault/src/session.ts:2073-2090` | An Item with a `trashOperationId` of about 1 MiB passed verification, then failed every later merge holding it once it lost a conflict | Fixed: D260 |
+| R-02 | medium | `apps/web/src/App.tsx:47-56` | No lock ran during a creation or a restore: the phrase on screen, or an opened backup that a new local password turns into a vault, stayed without limit | Fixed: D263 |
+| R-03 | medium | `apps/web/src/app/lock-timers.ts:29-53` | Both locks counted only by `setTimeout`, which a frozen page or a suspended device does not run | Fixed: D263; the timers on real devices are not measured |
 | R-04 | low | `packages/vault/src/session.ts:1999-2000`, `packages/sync/src/exchange.ts:57-64` | A retired device forging its record, not retired, under the header of its retirement kept a peer from ever learning of the retirement | Fixed: D261 |
 | R-05 | low | `packages/vault/src/session.ts:1861-1879`, `:1949-1952` | A purged tombstone with a current HLC removed an item's content and history at once, skipping the trash | Fixed: D262; the variants that look honest are accepted under A5 in `threat-model.md` |

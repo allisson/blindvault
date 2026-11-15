@@ -237,8 +237,11 @@ test('a clock gone back far on a paired device offers replacing its vault by pai
   // A writes 400 days ahead, then its clock goes back: B is another device to pair again from.
   const now = await a.evaluate(() => Date.now());
   await a.clock.setSystemTime(now + 400 * 24 * 60 * 60 * 1000);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  // The jump passes the inactivity deadline by the wall clock: the next activity locks (D263).
+  await a.evaluate(() => window.dispatchEvent(new Event('pointerdown')));
+  await fillPassword(a.getByTestId('unlock-password'), PASSWORD_A);
+  await button(a, 'Unlock').click();
+  await expect(a.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
   await button(a, 'New item').click();
   await button(a, 'Login').click();
   await a.getByTestId('item-title').fill('Ahead');
