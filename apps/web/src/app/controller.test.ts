@@ -6,6 +6,7 @@ import {
   type RecordEnvelope,
   RecordType,
   deriveRecoveryKeys,
+  encodeCbor,
   parseRecoveryPhrase,
 } from '@blindvault/crypto';
 import {
@@ -14,7 +15,7 @@ import {
   acquireVaultLock,
   databaseName,
 } from '@blindvault/storage';
-import { FUTURE_CLOCK_BOUND_MS, parseLocalConfig } from '@blindvault/vault';
+import { FUTURE_CLOCK_BOUND_MS, localConfigToCbor, parseLocalConfig } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -1788,6 +1789,22 @@ describe('vault controller', () => {
     const lock = await acquireVaultLock(vaultId);
     expect(lock).not.toBeNull();
     await lock?.release();
+  });
+
+  it('reports a Local Config naming another vault as corrupt, so an erase cannot miss it (R-08)', async () => {
+    const factory = new IDBFactory();
+    const first = await created(factory);
+    const vaultId = session(first).vaultId;
+    await first.close();
+    const db = await VaultDatabase.open(vaultId, factory);
+    await db.updateLocalConfig((bytes) => {
+      const config = parseLocalConfig(bytes);
+      return encodeCbor(localConfigToCbor({ ...config, vaultId: new Uint8Array(16).fill(7) }));
+    });
+    db.close();
+    const c = controller(factory);
+    await c.start();
+    expect(c.status.kind).toBe('corrupt');
   });
 });
 

@@ -554,6 +554,13 @@ export class VaultController {
       db.close();
       return;
     }
+    // The vault is named by its database: a Local Config naming another would point the Web Lock
+    // and an erase at a database that is not this one (R-08).
+    if (databaseName(config.vaultId) !== name) {
+      db.close();
+      this.#set({ kind: 'corrupt' });
+      return;
+    }
     this.#db = db;
     this.#vaultId = config.vaultId;
     await this.#acquire(false);
