@@ -93,13 +93,18 @@ describe('strict CBOR decoding', () => {
     expect(decodeCbor(fromHex('1b0020000000000000'))).toBe(2n ** 53n);
   });
 
-  it('decodes and encodes an array of a million items, which a spread would overflow (R-07)', () => {
-    const bytes = new Uint8Array(5 + 1_000_000);
-    bytes.set([0x9a, 0x00, 0x0f, 0x42, 0x40]);
-    const value = decodeCbor(bytes);
-    expect(value).toHaveLength(1_000_000);
-    expect(encodeCbor(value)).toEqual(bytes);
-  });
+  // Under coverage on a CI runner this takes longer than Vitest's default 5 s.
+  it(
+    'decodes and encodes an array of a million items, which a spread would overflow (R-07)',
+    { timeout: 30_000 },
+    () => {
+      const bytes = new Uint8Array(5 + 1_000_000);
+      bytes.set([0x9a, 0x00, 0x0f, 0x42, 0x40]);
+      const value = decodeCbor(bytes);
+      expect(value).toHaveLength(1_000_000);
+      expect(encodeCbor(value)).toEqual(bytes);
+    },
+  );
 
   it('survives deep nesting without a stack overflow escaping', () => {
     const bytes = new Uint8Array(200_000).fill(0x81);
