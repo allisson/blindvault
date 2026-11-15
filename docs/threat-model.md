@@ -32,10 +32,10 @@ encrypted backups and synchronized records (§3).
 | Guesses the local password offline | Partially protected | Argon2id calibrated to about 1 s, 64 MiB floor; zxcvbn score 4 required (D9, D71) | `crypto-spec.md` §6 |
 | Reads the local password saved by the browser | Partially protected | Depends on how the browser protects saved passwords; the UI warns against saving it wherever a local password is set (D175) | overview §5.3 |
 | Tampers with a record header (LWW, deletion, replay) | Protected | Whole header bound through AAD (D21) | `crypto-spec.md` §8, §9.5 |
-| Tampers with Local Config | Protected | Encrypted part under a Master Key subkey; local wraps bound to `localConfigId` (D58, D121) | `crypto-spec.md` §12 |
+| Tampers with Local Config | Protected | Encrypted part under a Master Key subkey; local wraps bound to `localConfigId`, so no part moves to another device of the vault (D58, D121) | `crypto-spec.md` §12 |
 | Tampers with Argon2id parameters to exhaust memory | Protected | Accepted range checked before deriving | `crypto-spec.md` §6 |
 | Rolls the storage back to an earlier copy | Limited, accepted | Undetectable; peers restore newer records at the next sync (D77) | overview §3 |
-| Clones the storage into a second running installation | Limited, accepted | Undetectable; documented: replace the clone by pairing (D87, D153) | overview §3 |
+| Clones the storage into a second running installation, or copies another device's whole Local Config into this one, opened with the same local password or a synced passkey | Limited, accepted | Undetectable; documented: replace the clone by pairing (D87, D153, D265) | overview §3 |
 | Reads metadata | Accepted | Header, counts, HLCs (editing times and `deviceId`), size buckets, cleartext Local Config fields (§3, D92, D96, D121) | overview §3 |
 | Unlocks with a synced passkey's platform account | Partially protected | Shown at setup when the credential is backup-eligible (D84) | overview §5.5 |
 | Holds the device while unlocked | Out of scope | OS and device security; auto-lock and hidden-app lock (D88, D54, D151), kept by the wall clock and running before a creation or a restore commits (D263); changing the local password or setting up a passkey needs the current password (D168, D172); exporting a backup, which yields the Master Key, needs the local password or the passkey again (D181) | overview §5.5, §7, §10 |
