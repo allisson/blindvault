@@ -273,14 +273,14 @@ ct = seal(recordKey,   AAD_record, sodium_pad(CBOR(content), 256))
 - **Purged tombstone (D27).** `del = true` and `ct = seal(recordKey, AAD_record, "")`: empty
   plaintext, no padding, so `ct.c` is exactly 16 bytes.
 
-### 9.4 Size caps (D129, D139, D143, D144)
+### 9.4 Size caps (D129, D139, D143, D144, D260)
 
 - **Record cap:** `len(CBOR(content))` ≤ 1 MiB = 1,048,576 before padding. `sodium_pad` always adds
   1 to 256 bytes, so the largest valid `ct.c` is 1,048,576 + 256 + 16 = **1,048,848 bytes**. A
   received `ct.c` longer than that is rejected before any decryption.
 - **Item Version content:** `{"item": <item content map>, "itemId": bstr 16}`. A version of a
   trashed state carries `trashOperationId` inside the item map.
-- **Item cap:** the item content, encoded without `trashOperationId`, MUST NOT exceed
+- **Item cap:** the item content, encoded without a 16-byte `trashOperationId`, MUST NOT exceed
   **1,048,510 bytes** = 1 MiB − 66, where 66 is the largest overhead an Item Version of a trashed
   state adds:
 
@@ -298,7 +298,7 @@ ct = seal(recordKey,   AAD_record, sodium_pad(CBOR(content), 256))
   The cap check counts the item map exactly as encoded, so a header that grows by less adds no slack
   anyone relies on. Changing these key names changes the cap and is a record format change (D32).
 
-### 9.5 Verification on receipt (§9.2, D57, D64, D66, D92, D129, D144)
+### 9.5 Verification on receipt (§9.2, D57, D64, D66, D92, D129, D144, D260)
 
 A received or restored record passes these checks, in this order, before it takes part in merge or
 is persisted; any failure rejects it (CRYPTO-INV-018). The negative vectors name the step each one
@@ -320,12 +320,14 @@ fails (`expectedStep`).
    with the record key. Vault Key record: open `ct` with `K_vaultKeyWrap`. Recovery Envelope: `mk`
    is opened only with the phrase (§5.4).
 8. **Plaintext:** empty plaintext is valid only with `del = true` (a purged tombstone). Otherwise
-   `sodium_unpad` MUST succeed and the result MUST decode as a strict CBOR map. Recovery Envelope
-   metadata MUST hold `keyslotPublicKey` (bstr 32), `phraseId` (bstr 16) and `phraseCreatedAt`
-   (uint), since D44 compares them.
-9. **Item cap:** for an Item or Item Version, the item content without `trashOperationId` is at
-   most 1,048,510 bytes. An Item Version whose `item` is not a map fails here, since its cap cannot
-   be counted.
+   `sodium_unpad` MUST succeed, the result MUST be at most 1,048,576 bytes (the record cap, which
+   a ciphertext within step 5 can exceed by up to 255 bytes) and MUST decode as a strict CBOR map.
+   Recovery Envelope metadata MUST hold `keyslotPublicKey` (bstr 32), `phraseId` (bstr 16) and
+   `phraseCreatedAt` (uint), since D44 compares them.
+9. **Item cap:** for an Item or Item Version, the item content without its `trashOperationId` is at
+   most 1,048,510 bytes. Only a 16-byte `trashOperationId` is left out of the count: any other
+   counts, since the cap's overhead allows for no other. An Item Version whose `item` is not a map
+   fails here, since its cap cannot be counted.
 10. **Derived `recordId`:** recompute it (`versionId`, Vault Key, Recovery Envelope, `deviceId`) and
     compare. An Item Version without a 16-byte `itemId`, or a Device record without a 32-byte
     `publicKey`, fails here, since its `recordId` cannot be derived.

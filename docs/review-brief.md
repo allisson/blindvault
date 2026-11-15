@@ -118,5 +118,9 @@ finding has one.
 
 ## Findings
 
+R-01 to R-11 come from a pre-review of `27d3fdd` by Claude (Fable 5.2), asked by the owner. It is not
+the external review this gate item requires.
+
 | ID | Severity | Where | Summary | Resolution |
 | --- | --- | --- | --- | --- |
+| R-01 | medium | `packages/crypto/src/record.ts:300-304`, `packages/vault/src/session.ts:2073-2090` | An Item with a `trashOperationId` of about 1 MiB passed verification, then failed every later merge holding it once it lost a conflict | Fixed: D260 |

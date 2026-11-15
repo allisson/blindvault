@@ -273,6 +273,17 @@ describe('item cap (D139, D144)', () => {
     ).toBeUndefined();
   });
 
+  it('step 9: a trashOperationId other than 16 bytes counts toward the cap (D260)', () => {
+    const poisoned = new Map(itemOfLength(ITEM_CAP)).set('trashOperationId', new Uint8Array(17));
+    const bytes = sealUnchecked(header({ deleted: true }), pad(encodeCbor(poisoned)));
+    expect(rejectedAt(() => verifyRecord(new Keyring(), bytes, keys))).toBe(9);
+  });
+
+  it('step 8: content above the record cap that padding lets past step 5 (D260)', () => {
+    const bytes = sealUnchecked(header(), pad(encodeCbor(itemOfLength(RECORD_CAP + 1))));
+    expect(rejectedAt(() => verifyRecord(new Keyring(), bytes, keys))).toBe(8);
+  });
+
   it('step 9: a received item one byte above the cap', () => {
     const bytes = sealUnchecked(header(), pad(encodeCbor(itemOfLength(ITEM_CAP + 1))));
     expect(rejectedAt(() => verifyRecord(new Keyring(), bytes, keys))).toBe(9);

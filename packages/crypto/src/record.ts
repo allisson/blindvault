@@ -284,9 +284,17 @@ export interface VerifiedRecord {
 }
 
 function decodeContent(plaintext: Uint8Array): CborMap {
+  let unpadded: Uint8Array;
+  try {
+    unpadded = unpad(plaintext);
+  } catch {
+    reject(8, 'padding or content encoding');
+  }
+  // Padding adds up to 256 bytes, so step 5 alone lets content pass the record cap (D260).
+  if (unpadded.length > RECORD_CAP) reject(8, 'content above the record cap');
   let content: CborValue;
   try {
-    content = decodeCbor(unpad(plaintext));
+    content = decodeCbor(unpadded);
   } catch {
     reject(8, 'padding or content encoding');
   }
@@ -296,10 +304,13 @@ function decodeContent(plaintext: Uint8Array): CborMap {
   return content;
 }
 
-/** The encoded length of an item map without `trashOperationId`, which the item cap counts. */
+/**
+ * The encoded length of an item map without its `trashOperationId`, which the item cap counts.
+ * Only a 16-byte one is left out: the cap's overhead allows for no other (D260).
+ */
 export function itemContentLength(item: CborMap): number {
   const counted = new Map(item);
-  counted.delete('trashOperationId');
+  if (isBytes(counted.get('trashOperationId'), ID_LENGTH)) counted.delete('trashOperationId');
   return encodeCbor(counted).length;
 }
 
