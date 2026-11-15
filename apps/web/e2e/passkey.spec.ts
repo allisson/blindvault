@@ -48,7 +48,7 @@ async function setUp(page: Page, password = PASSWORD) {
   await openSettingsPage(page, 'passkey');
   await expect(page.getByText(/needs only its screen lock, fingerprint or face/)).toBeVisible();
   await page.getByTestId('passkey-password').fill(password);
-  await page.getByRole('button', { name: 'Set up passkey', exact: true }).click();
+  await page.getByRole('button', { name: 'Set up unlock passkey', exact: true }).click();
 }
 
 async function lock(page: Page) {
@@ -60,19 +60,19 @@ test('sets up a device-bound passkey and unlocks with it (§5.5, D75)', async ({
   const { cdp, authenticatorId } = await authenticator(page, false);
   await create(page);
   await setUp(page);
-  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Unlock passkey set up.')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('passkey-synced')).toHaveCount(0);
-  await expect(page.getByText('Passkey unlock is set up on this device.')).toBeVisible();
+  await expect(page.getByText('An unlock passkey is set up on this device.')).toBeVisible();
   expect(await credentials(cdp, authenticatorId)).toHaveLength(1);
 
   await lock(page);
-  await page.getByRole('button', { name: 'Unlock with passkey', exact: true }).click();
+  await page.getByRole('button', { name: 'Use the unlock passkey', exact: true }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
 
   // Still offered after a reload, and the password keeps working.
   await page.reload();
   await expect(
-    page.getByRole('button', { name: 'Unlock with passkey', exact: true }),
+    page.getByRole('button', { name: 'Use the unlock passkey', exact: true }),
   ).toBeVisible();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
@@ -80,24 +80,24 @@ test('sets up a device-bound passkey and unlocks with it (§5.5, D75)', async ({
 
   // Removed: no longer offered.
   await openSettingsPage(page, 'passkey');
-  await page.getByRole('button', { name: 'Remove passkey', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove unlock passkey', exact: true }).click();
   await expect(
-    page.getByText('Passkey removed. Your passkey manager was asked to delete it.', {
+    page.getByText('Unlock passkey removed. Your passkey manager was asked to delete it.', {
       exact: true,
     }),
   ).toBeVisible();
   await expect.poll(() => credentials(cdp, authenticatorId)).toHaveLength(0);
   await lock(page);
-  await expect(page.getByRole('button', { name: 'Unlock with passkey', exact: true })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('button', { name: 'Use the unlock passkey', exact: true }),
+  ).toHaveCount(0);
 });
 
 test('states that a synced passkey depends on its platform account (D84)', async ({ page }) => {
   await authenticator(page, true);
   await create(page);
   await setUp(page);
-  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Unlock passkey set up.')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('passkey-synced')).toContainText(
     'the vault now also depends on the security of that account',
   );
@@ -108,26 +108,26 @@ test('refuses setup with a wrong local password (D172)', async ({ page }) => {
   await create(page);
   await setUp(page, 'not the password at all');
   await expect(page.getByText('The current password is wrong.')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('Passkey unlock is set up on this device.')).toHaveCount(0);
+  await expect(page.getByText('An unlock passkey is set up on this device.')).toHaveCount(0);
   // The credential that wraps nothing is signalled as unknown, and Chromium removes it (D120).
   await expect.poll(() => credentials(cdp, authenticatorId)).toHaveLength(0);
   await lock(page);
-  await expect(page.getByRole('button', { name: 'Unlock with passkey', exact: true })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole('button', { name: 'Use the unlock passkey', exact: true }),
+  ).toHaveCount(0);
 });
 
 test('gets no assertion when the authenticator cannot verify the user (D75)', async ({ page }) => {
   const { cdp, authenticatorId } = await authenticator(page, false);
   await create(page);
   await setUp(page);
-  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Unlock passkey set up.')).toBeVisible({ timeout: 30_000 });
   await lock(page);
   // The app asks for user verification; a compliant browser then refuses the ceremony itself.
   await cdp.send('WebAuthn.setUserVerified', { authenticatorId, isUserVerified: false });
-  await page.getByRole('button', { name: 'Unlock with passkey', exact: true }).click();
+  await page.getByRole('button', { name: 'Use the unlock passkey', exact: true }).click();
   await expect(
-    page.getByText('The passkey prompt was closed. Try again, or use the password.'),
+    page.getByText('The unlock passkey prompt was closed. Try again, or use the password.'),
   ).toBeVisible({
     timeout: 30_000,
   });
@@ -138,7 +138,7 @@ test('rejects an assertion without user verification (D75, CRYPTO-INV-021)', asy
   await authenticator(page, false);
   await create(page);
   await setUp(page);
-  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Unlock passkey set up.')).toBeVisible({ timeout: 30_000 });
   await lock(page);
   // Chromium's virtual authenticator always verifies when it can and refuses when it cannot, so a
   // client that does not honor `userVerification: "required"` is simulated: the real assertion
@@ -154,14 +154,14 @@ test('rejects an assertion without user verification (D75, CRYPTO-INV-021)', asy
       return credential;
     };
   });
-  await page.getByRole('button', { name: 'Unlock with passkey', exact: true }).click();
+  await page.getByRole('button', { name: 'Use the unlock passkey', exact: true }).click();
   await expect(page.getByText(/did not verify you with a PIN, fingerprint or face/)).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
   // The same passkey unlocks once its assertion reports user verification again.
   await page.reload();
-  await page.getByRole('button', { name: 'Unlock with passkey', exact: true }).click();
+  await page.getByRole('button', { name: 'Use the unlock passkey', exact: true }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
 });
 
@@ -174,8 +174,8 @@ async function noSignal(page: Page) {
 
 async function setUpAgain(page: Page) {
   await page.getByTestId('passkey-password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Set up passkey', exact: true }).click();
-  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Set up unlock passkey', exact: true }).click();
+  await expect(page.getByText('Unlock passkey set up.')).toBeVisible({ timeout: 30_000 });
 }
 
 test('with no way to ask the manager, removing, replacing or erasing says to delete the passkey by hand (D75, D153, D205)', async ({
@@ -186,11 +186,11 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
   await page.goto('/');
   const words = await createVault(page, PASSWORD);
   await setUp(page);
-  await expect(page.getByText('Passkey set up.')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: 'Remove passkey', exact: true }).click();
+  await expect(page.getByText('Unlock passkey set up.')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Remove unlock passkey', exact: true }).click();
   await expect(
     page.getByText(
-      'Passkey removed. It no longer unlocks anything: delete the "BlindVault" passkey in your passkey manager.',
+      'Unlock passkey removed. It no longer unlocks anything: delete the "BlindVault" passkey in your passkey manager.',
       { exact: true },
     ),
   ).toBeVisible();
@@ -224,7 +224,7 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
     page
       .getByTestId('leftover-passkey')
       .getByText(
-        'The passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+        'The unlock passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
         { exact: true },
       ),
   ).toBeVisible();
@@ -243,7 +243,7 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
     page
       .getByTestId('leftover-passkey')
       .getByText(
-        'The passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+        'The unlock passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
         { exact: true },
       ),
   ).toBeVisible({ timeout: 30_000 });

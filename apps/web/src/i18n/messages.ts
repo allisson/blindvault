@@ -129,10 +129,10 @@ const en = {
     auth: 'Pairing hands this vault’s Master Key to the other device for good: enter the local password again.',
     password: 'Local password',
     begin: 'Start pairing',
-    passkey: 'Use the passkey',
+    passkey: 'Use the unlock passkey',
     wrong: 'That password does not unlock this vault.',
-    passkeyCancelled: 'The passkey prompt was closed. Nothing was started.',
-    passkeyFailed: 'The passkey did not unlock this vault. Use the password.',
+    passkeyCancelled: 'The unlock passkey prompt was closed. Nothing was started.',
+    passkeyFailed: 'The unlock passkey did not open this vault. Use the password.',
     unavailable: 'This browser cannot pair: it offers no WebRTC.',
     readOnly:
       'The device clock went back, so the vault is read-only: pairing comes back once writing does.',
@@ -431,8 +431,8 @@ const en = {
   ready: {
     title: 'Vault ready',
     intro: 'Your vault is on this device. Before you start:',
-    passkey: 'Unlock with a passkey instead of typing the local password.',
-    passkeyAction: 'Set up a passkey',
+    passkey: 'Set up an unlock passkey to open the vault without typing the local password.',
+    passkeyAction: 'Set up an unlock passkey',
     checkPhrase:
       'This vault was restored with an export password: check that your Recovery Phrase still opens it.',
     checkPhraseAction: 'Check Recovery Phrase',
@@ -525,7 +525,7 @@ const en = {
     submit: 'Replace',
     replacing: 'Replacing the vault…',
     leftoverPasskey:
-      'The passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+      'The unlock passkey of the replaced vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
   },
   erase: {
     choose: 'Erase this vault from this device…',
@@ -549,7 +549,7 @@ const en = {
     failed: 'The vault could not be erased. It is still on this device, locked.',
     done: 'The vault was erased from this device.',
     leftoverPasskey:
-      'The passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
+      'The unlock passkey of the erased vault no longer unlocks anything: delete the "BlindVault" passkey you no longer use in your passkey manager.',
   },
   merge: {
     steps: { file: 'Choose the backup', secret: 'Open the backup', confirm: 'Merge', done: 'Done' },
@@ -669,11 +669,11 @@ const en = {
     submit: 'Unlock',
     working: 'Unlocking…',
     wrong: 'Wrong password.',
-    passkey: 'Unlock with passkey',
-    passkeyCancelled: 'The passkey prompt was closed. Try again, or use the password.',
+    passkey: 'Use the unlock passkey',
+    passkeyCancelled: 'The unlock passkey prompt was closed. Try again, or use the password.',
     passkeyRejected: 'This passkey does not unlock this vault. Use the password.',
     passkeyNoVerification:
-      'The authenticator did not verify you with a PIN, fingerprint or face, so the passkey cannot unlock. Use the password.',
+      'The authenticator did not verify you with a PIN, fingerprint or face, so the unlock passkey cannot open the vault. Use the password.',
     passkeyUnavailable:
       'The authenticator did not give what BlindVault needs to unlock. Use the password.',
   },
@@ -866,7 +866,7 @@ const en = {
       language: 'Language',
       locking: 'Locking',
       password: 'Local password',
-      passkey: 'Passkey unlock',
+      passkey: 'Unlock passkey',
       recovery: 'Recovery Phrase',
       devices: 'Devices',
       backup: 'Backup',
@@ -911,28 +911,29 @@ const en = {
     saved: 'Saved.',
     outOfRange: 'A value is outside its range.',
     language: 'Language',
-    passkey: 'Passkey unlock',
+    passkey: 'Unlock passkey',
     passkeyIntro:
-      'Unlock on this device with a passkey instead of typing the local password. The password keeps working.',
+      'An unlock passkey opens the vault on this device without typing the local password. The password keeps working.',
     passkeyLostDevice:
-      "With a passkey, whoever holds this device needs only its screen lock, fingerprint or face, or the security key's PIN, not the local password. Use a strong device PIN.",
+      "With an unlock passkey, whoever holds this device needs only its screen lock, fingerprint or face, or the security key's PIN, not the local password. Use a strong device PIN.",
     passkeyPassword: 'Local password',
-    passkeySetUp: 'Set up passkey',
-    passkeySettingUp: 'Setting up the passkey…',
-    passkeyOn: 'Passkey unlock is set up on this device.',
-    passkeyDone: 'Passkey set up.',
+    passkeySetUp: 'Set up unlock passkey',
+    passkeySettingUp: 'Setting up the unlock passkey…',
+    passkeyOn: 'An unlock passkey is set up on this device.',
+    passkeyDone: 'Unlock passkey set up.',
     passkeySynced:
-      "This passkey is synced by a platform account, such as iCloud Keychain or Google Password Manager. Whoever controls that account and gets a copy of this device's storage can unlock the vault without this device: the vault now also depends on the security of that account.",
-    passkeyRemove: 'Remove passkey',
-    passkeyRemoved: 'Passkey removed. Your passkey manager was asked to delete it.',
+      "This unlock passkey is synced by a platform account, such as iCloud Keychain or Google Password Manager. Whoever controls that account and gets a copy of this device's storage can unlock the vault without this device: the vault now also depends on the security of that account.",
+    passkeyRemove: 'Remove unlock passkey',
+    passkeyRemoved: 'Unlock passkey removed. Your passkey manager was asked to delete it.',
     passkeyRemovedByHand:
-      'Passkey removed. It no longer unlocks anything: delete the "BlindVault" passkey in your passkey manager.',
-    passkeyCancelled: 'The passkey prompt was closed, or the vault locked. Nothing was set up.',
+      'Unlock passkey removed. It no longer unlocks anything: delete the "BlindVault" passkey in your passkey manager.',
+    passkeyCancelled:
+      'The unlock passkey prompt was closed, or the vault locked. Nothing was set up.',
     passkeyNoVerification:
-      'The authenticator did not verify you, so nothing was set up. Use a passkey that asks for a PIN, fingerprint or face.',
+      'The authenticator did not verify you, so nothing was set up. Use an authenticator that asks for a PIN, fingerprint or face.',
     passkeyUnavailable:
       'This passkey cannot unlock BlindVault: its authenticator lacks the PRF extension. Nothing was set up.',
-    passkeyUnsupported: 'This browser does not support passkey unlock.',
+    passkeyUnsupported: 'This browser does not support unlock passkeys.',
     recovery: 'Recovery Phrase',
     recoveryCreated: 'The current Recovery Phrase was created on {date} ({id}).',
     recoveryNoBackup:
@@ -959,10 +960,11 @@ const en = {
     regenAuth: 'Local password',
     regenSubmit: 'Regenerate',
     regenWorking: 'Regenerating…',
-    regenPasskey: 'Regenerate with the passkey instead',
+    regenPasskey: 'Regenerate with the unlock passkey instead',
     regenWrong: 'Wrong password. The Recovery Phrase did not change.',
-    regenPasskeyCancelled: 'The passkey prompt was closed. The Recovery Phrase did not change.',
-    regenPasskeyFailed: 'The passkey did not unlock the vault. Use the password.',
+    regenPasskeyCancelled:
+      'The unlock passkey prompt was closed. The Recovery Phrase did not change.',
+    regenPasskeyFailed: 'The unlock passkey did not open the vault. Use the password.',
     regenDone: 'The Recovery Phrase was regenerated: {id}, created on {date}.',
     regenOtherDevices:
       'The new phrase is not on your other devices yet: they receive it when they sync with this one, and until then their backups open only with the previous phrase.',
@@ -1023,13 +1025,13 @@ const en = {
       "A backup holds the vault's Master Key, so exporting asks for your local password again.",
     backupExport: 'Export',
     backupExporting: 'Exporting…',
-    backupPasskey: 'Export with the passkey instead',
+    backupPasskey: 'Export with the unlock passkey instead',
     backupDone:
       'Backup exported as {name}. It opens with the Recovery Phrase {id}, created on {date}. Keep it somewhere other than this device.',
     backupWrong: 'Wrong password. No backup was made.',
     backupCorrupt:
       'A record failed verification, so no backup was made: {type} {id}. Nothing on this device was changed.',
-    backupPasskeyCancelled: 'The passkey prompt was closed. No backup was made.',
+    backupPasskeyCancelled: 'The unlock passkey prompt was closed. No backup was made.',
     backupPasskeyRejected: 'This passkey does not unlock this vault. Use the password.',
     backupPasskeyNoVerification:
       'The authenticator did not verify you with a PIN, fingerprint or face. Use the password.',
@@ -1112,13 +1114,14 @@ const en = {
       'I understand that changes not on this device, the trash and the history are lost, and that the other devices and the old backups stay with the old vault.',
     understandRejected: 'I understand that the records from {names} are lost.',
     continue: 'Continue',
-    authIntro: 'Confirm it is you with the local password of this vault, or with its passkey.',
+    authIntro:
+      'Confirm it is you with the local password of this vault, or with its unlock passkey.',
     auth: 'Local password',
     authSubmit: 'Confirm',
-    authPasskey: 'Use the passkey',
+    authPasskey: 'Use the unlock passkey',
     wrong: 'Wrong password.',
-    passkeyCancelled: 'The passkey prompt was closed.',
-    passkeyFailed: 'The passkey did not unlock the vault. Use the password.',
+    passkeyCancelled: 'The unlock passkey prompt was closed.',
+    passkeyFailed: 'The unlock passkey did not open the vault. Use the password.',
     phraseTitle: 'The Recovery Phrase of the new vault',
     passwordIntro: 'Choose the local password of the new vault on this device.',
     password: 'New local password',
@@ -1126,7 +1129,7 @@ const en = {
     submit: 'Re-found',
     working: 'Re-founding the vault…',
     busy: 'BlindVault is busy in another window. Try again once it is done.',
-    done: 'The vault was re-founded. Make a backup of the new vault now, replace your other devices’ vault by pairing them with this one, and destroy the backups of the old vault. A passkey can be set up again in Settings.',
+    done: 'The vault was re-founded. Make a backup of the new vault now, replace your other devices’ vault by pairing them with this one, and destroy the backups of the old vault. An unlock passkey can be set up again in Settings.',
   },
   templates: {
     login: 'Login',
@@ -1301,10 +1304,10 @@ const ptBR: Messages = {
     auth: 'Parear entrega a Chave Mestra deste cofre ao outro dispositivo para sempre: digite a senha local de novo.',
     password: 'Senha local',
     begin: 'Começar o pareamento',
-    passkey: 'Usar a passkey',
+    passkey: 'Usar a passkey de desbloqueio',
     wrong: 'Essa senha não desbloqueia este cofre.',
-    passkeyCancelled: 'O pedido de passkey foi fechado. Nada foi iniciado.',
-    passkeyFailed: 'A passkey não desbloqueou este cofre. Use a senha.',
+    passkeyCancelled: 'O pedido da passkey de desbloqueio foi fechado. Nada foi iniciado.',
+    passkeyFailed: 'A passkey de desbloqueio não abriu este cofre. Use a senha.',
     unavailable: 'Este navegador não consegue parear: ele não oferece WebRTC.',
     readOnly:
       'O relógio do dispositivo voltou, então o cofre está somente leitura: o pareamento volta quando a escrita voltar.',
@@ -1612,8 +1615,8 @@ const ptBR: Messages = {
   ready: {
     title: 'Cofre pronto',
     intro: 'Seu cofre está neste dispositivo. Antes de começar:',
-    passkey: 'Desbloqueie com uma passkey em vez de digitar a senha local.',
-    passkeyAction: 'Configurar uma passkey',
+    passkey: 'Configure uma passkey de desbloqueio para abrir o cofre sem digitar a senha local.',
+    passkeyAction: 'Configurar uma passkey de desbloqueio',
     checkPhrase:
       'Este cofre foi restaurado com uma senha de exportação: confira se a sua Frase de Recuperação ainda o abre.',
     checkPhraseAction: 'Conferir a Frase de Recuperação',
@@ -1703,7 +1706,7 @@ const ptBR: Messages = {
     submit: 'Substituir',
     replacing: 'Substituindo o cofre…',
     leftoverPasskey:
-      'A passkey do cofre substituído não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
+      'A passkey de desbloqueio do cofre substituído não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
   },
   erase: {
     choose: 'Apagar este cofre deste dispositivo…',
@@ -1727,7 +1730,7 @@ const ptBR: Messages = {
     failed: 'Não foi possível apagar o cofre. Ele continua neste dispositivo, bloqueado.',
     done: 'O cofre foi apagado deste dispositivo.',
     leftoverPasskey:
-      'A passkey do cofre apagado não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
+      'A passkey de desbloqueio do cofre apagado não desbloqueia mais nada: apague no seu gerenciador de passkeys a passkey "BlindVault" que você não usa mais.',
   },
   merge: {
     steps: {
@@ -1852,11 +1855,12 @@ const ptBR: Messages = {
     submit: 'Desbloquear',
     working: 'Desbloqueando…',
     wrong: 'Senha incorreta.',
-    passkey: 'Desbloquear com passkey',
-    passkeyCancelled: 'O pedido de passkey foi fechado. Tente de novo ou use a senha.',
+    passkey: 'Usar a passkey de desbloqueio',
+    passkeyCancelled:
+      'O pedido da passkey de desbloqueio foi fechado. Tente de novo ou use a senha.',
     passkeyRejected: 'Esta passkey não desbloqueia este cofre. Use a senha.',
     passkeyNoVerification:
-      'O autenticador não verificou você com PIN, digital ou rosto, então a passkey não desbloqueia. Use a senha.',
+      'O autenticador não verificou você com PIN, digital ou rosto, então a passkey de desbloqueio não abre o cofre. Use a senha.',
     passkeyUnavailable:
       'O autenticador não forneceu o que o BlindVault precisa para desbloquear. Use a senha.',
   },
@@ -2048,7 +2052,7 @@ const ptBR: Messages = {
       language: 'Idioma',
       locking: 'Bloqueio',
       password: 'Senha local',
-      passkey: 'Desbloqueio com passkey',
+      passkey: 'Passkey de desbloqueio',
       recovery: 'Frase de Recuperação',
       devices: 'Dispositivos',
       backup: 'Backup',
@@ -2093,28 +2097,30 @@ const ptBR: Messages = {
     saved: 'Salvo.',
     outOfRange: 'Um valor está fora do intervalo.',
     language: 'Idioma',
-    passkey: 'Desbloqueio com passkey',
+    passkey: 'Passkey de desbloqueio',
     passkeyIntro:
-      'Desbloqueie neste dispositivo com uma passkey em vez de digitar a senha local. A senha continua funcionando.',
+      'Uma passkey de desbloqueio abre o cofre neste dispositivo sem digitar a senha local. A senha continua funcionando.',
     passkeyLostDevice:
-      'Com uma passkey, quem estiver com este dispositivo precisa apenas do bloqueio de tela, da digital ou do rosto, ou do PIN da chave de segurança, não da senha local. Use um PIN forte no dispositivo.',
+      'Com uma passkey de desbloqueio, quem estiver com este dispositivo precisa apenas do bloqueio de tela, da digital ou do rosto, ou do PIN da chave de segurança, não da senha local. Use um PIN forte no dispositivo.',
     passkeyPassword: 'Senha local',
-    passkeySetUp: 'Configurar passkey',
-    passkeySettingUp: 'Configurando a passkey…',
-    passkeyOn: 'O desbloqueio com passkey está configurado neste dispositivo.',
-    passkeyDone: 'Passkey configurada.',
+    passkeySetUp: 'Configurar passkey de desbloqueio',
+    passkeySettingUp: 'Configurando a passkey de desbloqueio…',
+    passkeyOn: 'Uma passkey de desbloqueio está configurada neste dispositivo.',
+    passkeyDone: 'Passkey de desbloqueio configurada.',
     passkeySynced:
-      'Esta passkey é sincronizada por uma conta de plataforma, como o Porta-chaves do iCloud ou o Gerenciador de Senhas do Google. Quem controlar essa conta e obtiver uma cópia do armazenamento deste dispositivo pode desbloquear o cofre sem este dispositivo: o cofre agora também depende da segurança dessa conta.',
-    passkeyRemove: 'Remover passkey',
-    passkeyRemoved: 'Passkey removida. O seu gerenciador de passkeys foi solicitado a apagá-la.',
+      'Esta passkey de desbloqueio é sincronizada por uma conta de plataforma, como o Porta-chaves do iCloud ou o Gerenciador de Senhas do Google. Quem controlar essa conta e obtiver uma cópia do armazenamento deste dispositivo pode desbloquear o cofre sem este dispositivo: o cofre agora também depende da segurança dessa conta.',
+    passkeyRemove: 'Remover passkey de desbloqueio',
+    passkeyRemoved:
+      'Passkey de desbloqueio removida. O seu gerenciador de passkeys foi solicitado a apagá-la.',
     passkeyRemovedByHand:
-      'Passkey removida. Ela não desbloqueia mais nada: apague a passkey "BlindVault" no seu gerenciador de passkeys.',
-    passkeyCancelled: 'O pedido de passkey foi fechado, ou o cofre bloqueou. Nada foi configurado.',
+      'Passkey de desbloqueio removida. Ela não desbloqueia mais nada: apague a passkey "BlindVault" no seu gerenciador de passkeys.',
+    passkeyCancelled:
+      'O pedido da passkey de desbloqueio foi fechado, ou o cofre bloqueou. Nada foi configurado.',
     passkeyNoVerification:
-      'O autenticador não verificou você, então nada foi configurado. Use uma passkey que peça PIN, digital ou rosto.',
+      'O autenticador não verificou você, então nada foi configurado. Use um autenticador que peça PIN, digital ou rosto.',
     passkeyUnavailable:
       'Esta passkey não desbloqueia o BlindVault: o autenticador dela não tem a extensão PRF. Nada foi configurado.',
-    passkeyUnsupported: 'Este navegador não oferece desbloqueio com passkey.',
+    passkeyUnsupported: 'Este navegador não oferece passkey de desbloqueio.',
     recovery: 'Frase de Recuperação',
     recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
     recoveryNoBackup:
@@ -2141,10 +2147,11 @@ const ptBR: Messages = {
     regenAuth: 'Senha local',
     regenSubmit: 'Regenerar',
     regenWorking: 'Regenerando…',
-    regenPasskey: 'Regenerar com a passkey',
+    regenPasskey: 'Regenerar com a passkey de desbloqueio',
     regenWrong: 'Senha incorreta. A Frase de Recuperação não mudou.',
-    regenPasskeyCancelled: 'O pedido de passkey foi fechado. A Frase de Recuperação não mudou.',
-    regenPasskeyFailed: 'A passkey não desbloqueou o cofre. Use a senha.',
+    regenPasskeyCancelled:
+      'O pedido da passkey de desbloqueio foi fechado. A Frase de Recuperação não mudou.',
+    regenPasskeyFailed: 'A passkey de desbloqueio não abriu o cofre. Use a senha.',
     regenDone: 'A Frase de Recuperação foi regenerada: {id}, criada em {date}.',
     regenOtherDevices:
       'A nova frase ainda não está nos seus outros dispositivos: eles a recebem quando sincronizarem com este, e até lá os backups deles só abrem com a frase anterior.',
@@ -2205,13 +2212,14 @@ const ptBR: Messages = {
       'Um backup contém a Chave Mestra do cofre, então exportar pede a sua senha local de novo.',
     backupExport: 'Exportar',
     backupExporting: 'Exportando…',
-    backupPasskey: 'Exportar com a passkey',
+    backupPasskey: 'Exportar com a passkey de desbloqueio',
     backupDone:
       'Backup exportado como {name}. Ele abre com a Frase de Recuperação {id}, criada em {date}. Guarde-o em outro lugar além deste dispositivo.',
     backupWrong: 'Senha incorreta. Nenhum backup foi feito.',
     backupCorrupt:
       'Um registro falhou na verificação, então nenhum backup foi feito: {type} {id}. Nada foi alterado neste dispositivo.',
-    backupPasskeyCancelled: 'O pedido de passkey foi fechado. Nenhum backup foi feito.',
+    backupPasskeyCancelled:
+      'O pedido da passkey de desbloqueio foi fechado. Nenhum backup foi feito.',
     backupPasskeyRejected: 'Esta passkey não desbloqueia este cofre. Use a senha.',
     backupPasskeyNoVerification:
       'O autenticador não verificou você com PIN, digital ou rosto. Use a senha.',
@@ -2295,13 +2303,14 @@ const ptBR: Messages = {
       'Entendo que as alterações que não estão neste dispositivo, a lixeira e o histórico se perdem, e que os outros dispositivos e os backups antigos ficam com o cofre antigo.',
     understandRejected: 'Entendo que os registros de {names} se perdem.',
     continue: 'Continuar',
-    authIntro: 'Confirme que é você com a senha local deste cofre, ou com a passkey dele.',
+    authIntro:
+      'Confirme que é você com a senha local deste cofre, ou com a passkey de desbloqueio dele.',
     auth: 'Senha local',
     authSubmit: 'Confirmar',
-    authPasskey: 'Usar a passkey',
+    authPasskey: 'Usar a passkey de desbloqueio',
     wrong: 'Senha incorreta.',
-    passkeyCancelled: 'O pedido de passkey foi fechado.',
-    passkeyFailed: 'A passkey não desbloqueou o cofre. Use a senha.',
+    passkeyCancelled: 'O pedido da passkey de desbloqueio foi fechado.',
+    passkeyFailed: 'A passkey de desbloqueio não abriu o cofre. Use a senha.',
     phraseTitle: 'A Frase de Recuperação do cofre novo',
     passwordIntro: 'Escolha a senha local do cofre novo neste dispositivo.',
     password: 'Nova senha local',
@@ -2309,7 +2318,7 @@ const ptBR: Messages = {
     submit: 'Refundar',
     working: 'Refundando o cofre…',
     busy: 'O BlindVault está ocupado em outra janela. Tente de novo quando ela terminar.',
-    done: 'O cofre foi refundado. Faça agora um backup do cofre novo, substitua por pareamento com este o cofre dos outros dispositivos e destrua os backups do cofre antigo. Uma passkey pode ser configurada de novo em Configurações.',
+    done: 'O cofre foi refundado. Faça agora um backup do cofre novo, substitua por pareamento com este o cofre dos outros dispositivos e destrua os backups do cofre antigo. Uma passkey de desbloqueio pode ser configurada de novo em Configurações.',
   },
   templates: {
     login: 'Login',
