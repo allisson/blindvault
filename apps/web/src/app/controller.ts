@@ -1398,6 +1398,13 @@ export class VaultController {
     if (status.kind === 'joining') this.#set(this.#joined());
     if (status.kind === 'creating' || status.kind === 'restoring') this.#set({ kind: 'no-vault' });
     if (status.kind === 'replacing' || status.kind === 'resetting') this.#set({ kind: 'locked' });
+    // A lock outside a session still drops a phrase or a backup: the screens learn of it (D263).
+    if (this.#status === status) this.#set({ ...status });
+  }
+
+  /** How many locks so far: the start screens begin again after each, showing nothing held (D263). */
+  get locks(): number {
+    return this.#epoch;
   }
 
   /** Locks, releases the vault's Web Lock and closes the database (the app window is closing). */
@@ -1677,11 +1684,22 @@ export class VaultController {
   }
 
   /**
-   * Whether a regeneration's phrase is being shown or confirmed: the inactivity lock pauses until it
-   * is committed, cancelled or locked away (D104).
+   * Whether a Recovery Phrase is being shown or confirmed (creation, regeneration, re-founding): the
+   * inactivity lock pauses until it is committed, cancelled or locked away (D104).
    */
   get showingPhrase(): boolean {
-    return this.#status.kind === 'unlocked' && this.#phrase !== undefined;
+    return this.#phrase !== undefined;
+  }
+
+  /**
+   * Whether a creation's phrase or a restore's backup is held outside an unlocked vault: both locks
+   * then run with the default preferences until the commit (D104, D263).
+   */
+  get pendingCommit(): boolean {
+    return (
+      this.#status.kind !== 'unlocked' &&
+      (this.#phrase !== undefined || this.#restore !== undefined)
+    );
   }
 
   /**

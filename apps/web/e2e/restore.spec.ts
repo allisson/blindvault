@@ -148,6 +148,27 @@ test('restores a backup by the Recovery Phrase after the browser lost its storag
   expect(logged).toEqual([]);
 });
 
+test('the inactivity lock drops an opened backup before the local password, writing nothing (D263)', async ({
+  page,
+}) => {
+  const words = await vaultWithItem(page);
+  const backup = await exportBackup(page);
+  await loseStorage(page);
+  await button(page, 'Restore from a backup').click();
+  await chooseFile(page, backup);
+  await openWithPhrase(page, words.join(' '));
+  await expect(page.getByTestId('restore-opened')).toContainText('verified.');
+  // Fake time from now on; the activity restarts the inactivity timer under it.
+  await page.clock.install();
+  await page.evaluate(() => window.dispatchEvent(new Event('pointerdown')));
+  await page.clock.runFor(5 * 60_000 - 1_000);
+  await expect(page.getByTestId('restore-opened')).toBeVisible();
+  await page.clock.runFor(1_000);
+  await expect(page.getByTestId('restore-opened')).toHaveCount(0);
+  await expect(button(page, 'Restore from a backup')).toBeVisible();
+  expect(await databases(page)).toBe(0);
+});
+
 test('restores a backup by its export password, then recommends Check Recovery Phrase (D43)', async ({
   page,
 }) => {

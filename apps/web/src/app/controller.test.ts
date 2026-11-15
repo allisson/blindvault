@@ -398,6 +398,35 @@ describe('Recovery Phrase regeneration (§5.4, D104, D185)', () => {
     expect(c.newRegenerationPhrase()).toBeUndefined();
     expect(c.showingPhrase).toBe(false);
   });
+
+  it("holds a creation's phrase as shown and pending until the commit (D104, D263)", async () => {
+    const c = controller();
+    await c.start();
+    expect(c.pendingCommit).toBe(false);
+    c.newRecoveryPhrase();
+    expect(c.showingPhrase).toBe(true);
+    expect(c.pendingCommit).toBe(true);
+    c.cancelCreation();
+    expect(c.pendingCommit).toBe(false);
+    // A lock with no vault drops the phrase, and says so.
+    c.newRecoveryPhrase();
+    const notified = vi.fn();
+    c.subscribe(notified);
+    const locks = c.locks;
+    c.lock();
+    expect(notified).toHaveBeenCalled();
+    expect(c.locks).toBe(locks + 1);
+    expect(c.pendingCommit).toBe(false);
+    expect(c.status.kind).toBe('no-vault');
+    c.newRecoveryPhrase();
+    await c.create(PASSWORD, 'Test device');
+    expect(c.showingPhrase).toBe(false);
+    expect(c.pendingCommit).toBe(false);
+    // While unlocked the vault's own preferences apply.
+    c.newRegenerationPhrase();
+    expect(c.showingPhrase).toBe(true);
+    expect(c.pendingCommit).toBe(false);
+  });
 });
 
 describe('backup export (§10, D36, D64, D181)', () => {
@@ -533,8 +562,11 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const source = await backup();
     const factory = new IDBFactory();
     const c = await empty(factory);
+    expect(c.pendingCommit).toBe(false);
     const opened = c.openBackupFile(source.bytes);
     if (opened.kind !== 'ok') throw new Error(opened.kind);
+    // Held until the commit: the locks run with the default preferences (D263).
+    expect(c.pendingCommit).toBe(true);
     // Unverified until a keyslot opens (D95): shown to choose one.
     expect(opened.header.hasExportPassword).toBe(false);
     expect(typeof opened.header.phraseCreatedAt).toBe('number');
@@ -545,6 +577,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     // Nothing is written before the local password (D33).
     expect(await factory.databases()).toEqual([]);
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
+    expect(c.pendingCommit).toBe(false);
     expect(session(c).vaultId).toEqual(source.vaultId);
     expect(
       session(c)
