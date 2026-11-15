@@ -9,7 +9,7 @@ import { createDh } from './noise/dh';
 import { hmac } from './noise/hmac-blake2b';
 import { bindNoise } from './noise/index';
 import { initCrypto, lib } from './sodium';
-import { toHex } from './test-helpers';
+import { fromHex, toHex } from './test-helpers';
 
 beforeAll(initCrypto);
 
@@ -111,6 +111,28 @@ describe('cipher state', () => {
     }).toThrow('Nonce overflow');
   });
 
+  it('carries the nonce across bytes, which the vectors never reach (N-13)', () => {
+    const k = bytes(32, 9);
+    for (const [start, next] of [
+      [[0xff, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0]],
+      [[0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]],
+    ]) {
+      const state = keyed();
+      cipherState.setNonce(state, Uint8Array.from(start ?? []));
+      const out = new Uint8Array(17);
+      cipherState.encryptWithAd(state, out, new Uint8Array(0), Uint8Array.of(1));
+      cipherState.encryptWithAd(state, out, new Uint8Array(0), Uint8Array.of(1));
+      const expected = lib().crypto_aead_chacha20poly1305_ietf_encrypt(
+        Uint8Array.of(1),
+        new Uint8Array(0),
+        null,
+        Uint8Array.from([0, 0, 0, 0, ...(next ?? [])]),
+        k,
+      );
+      expect(toHex(out)).toBe(toHex(expected));
+    }
+  });
+
   it('has no key after initializeKey(null)', () => {
     const state = new Uint8Array(cipherState.STATELEN);
     cipherState.initializeKey(state, null);
@@ -135,6 +157,28 @@ describe('dh', () => {
     dh.dh(ba, sb, pa);
     expect(toHex(ab)).toBe(toHex(ba));
     expect(toHex(pa)).toBe(toHex(lib().crypto_scalarmult_base(sa)));
+  });
+
+  // The X25519 public keys of order 1, 2, 4 or 8, and p − 1, p, p + 1: a handshake would fail on
+  // them at the next tag anyway, so this is the test that the DH itself refuses them (N-13).
+  it.each([
+    '0000000000000000000000000000000000000000000000000000000000000000',
+    '0100000000000000000000000000000000000000000000000000000000000000',
+    'e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800',
+    '5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157',
+    'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+    'edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+    'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+  ])('refuses the low-order public key %s', (hex) => {
+    const dh = createDh();
+    const pk = new Uint8Array(32);
+    const sk = new Uint8Array(32);
+    dh.generateKeypair(pk, sk);
+    const out = new Uint8Array(32);
+    expect(() => {
+      dh.dh(out, sk, fromHex(hex));
+    }).toThrow();
+    expect(out.every((b) => b === 0)).toBe(true);
   });
 });
 

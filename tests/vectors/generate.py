@@ -1415,6 +1415,13 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     changed_date = bv_header(strict_decode(small_h[14:]) | {"phraseCreatedAt": phrase_created_at + 1})
     assert len(changed_date) == len(small_h)
     slot_byte = small_h.index(recovery_slot["c"]) + 10
+    sealed_header = strict_decode(small_h[14:])
+
+    def header_edit(**over) -> bytes:
+        """The header of `bothKeyslots` edited after sealing, its stream left as it was (N-13)."""
+        rec, pw = sealed_header["keyslots"]
+        slots = [rec] if over.get("drop") else [rec, {**pw, **{k: x for k, x in over.items() if k != "drop"}}]
+        return bv_header(sealed_header | {"keyslots": slots}) + small_b
 
     def edit(base: str, *, keep=None, append=b"", flip=None) -> dict:
         """A rejected file given as an edit of a valid one, so large files are not repeated."""
@@ -1444,6 +1451,9 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     reject_stream = [
         ("corrupt", "phraseCreatedAt changed after sealing", changed_date + small_b),
         ("corrupt", "one byte of the recovery keyslot changed", edit("bothKeyslots", flip=slot_byte)),
+        ("corrupt", "password keyslot removed after sealing", header_edit(drop=True)),
+        ("corrupt", "password keyslot ops changed within the range after sealing", header_edit(ops=BV_EXPORT_OPS + 1)),
+        ("corrupt", "password keyslot mem changed within the range after sealing", header_edit(mem=2 * BV_EXPORT_MEM)),
         ("corrupt", "no chunk after the header", edit("bothKeyslots", keep=len(small_h))),
         ("corrupt", "16 bytes after the header", edit("bothKeyslots", keep=len(small_h) + 16)),
         ("corrupt", "final chunk missing its last byte", edit("bothKeyslots", keep=len(small) - 1)),
