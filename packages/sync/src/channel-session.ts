@@ -70,7 +70,7 @@ export class ChannelSession<M, R extends string, E extends SessionError<R>> {
   });
 
   constructor(
-    private readonly channel: Transport,
+    protected readonly channel: Transport,
     private readonly protocol: SessionProtocol<M, R, E>,
     options: ChannelSessionOptions = {},
   ) {

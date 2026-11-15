@@ -141,6 +141,7 @@ export {
 export {
   type ClosedBy,
   MAX_MESSAGE_LENGTH,
+  MAX_UNREAD_BYTES,
   MessageTooLongError,
   type Transport,
   TransportClosedError,

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { memoryPair } from './memory';
-import { MAX_MESSAGE_LENGTH, MessageTooLongError, TransportClosedError } from './transport';
+import {
+  MAX_MESSAGE_LENGTH,
+  MAX_UNREAD_BYTES,
+  MessageTooLongError,
+  TransportClosedError,
+} from './transport';
 
 const bytes = (...values: number[]) => Uint8Array.from(values);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
@@ -68,6 +73,26 @@ describe('memory transport', () => {
     expect(await closedBy(b.receive())).toBe('error');
     expect(await b.closed).toBe('error');
     expect(await a.closed).toBe('remote');
+  });
+
+  it('closes with an error once the unread bytes pass the cap, until authenticated (D264)', async () => {
+    const fits = Math.floor(MAX_UNREAD_BYTES / MAX_MESSAGE_LENGTH);
+    const { a, b } = memoryPair();
+    for (let i = 0; i < fits; i++) await a.send(new Uint8Array(MAX_MESSAGE_LENGTH));
+    await a.send(bytes(1));
+    expect(await Promise.race([b.closed, tick().then(() => 'open')])).toBe('open');
+    await a.send(new Uint8Array(MAX_MESSAGE_LENGTH));
+    expect(await b.closed).toBe('error');
+    expect(await a.closed).toBe('remote');
+
+    // Read as it comes, a flood stays under the cap; authenticated, there is none.
+    const link = memoryPair();
+    link.b.authenticated();
+    for (let i = 0; i < fits + 8; i++) await link.a.send(new Uint8Array(MAX_MESSAGE_LENGTH));
+    await tick();
+    for (let i = 0; i < fits + 8; i++) await link.b.receive();
+    await link.a.send(bytes(2));
+    expect(await link.b.receive()).toEqual(bytes(2));
   });
 
   describe('intercept, for adversarial tests', () => {

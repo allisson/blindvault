@@ -5,6 +5,7 @@ import { toFrames } from './frames';
 import { memoryPair } from './memory';
 import { encodeMessage } from './messages';
 import { IDLE_TIMEOUT_MS, PairingError, PairingSession, SESSION_TIMEOUT_MS } from './session';
+import { MAX_MESSAGE_LENGTH, MAX_UNREAD_BYTES } from './transport';
 
 const hex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (b) => parseInt(b, 16));
 const flush = async () => {
@@ -234,6 +235,20 @@ describe('pairing session (pairing-protocol.md §10, §11)', () => {
       await flush();
       expect(a.error).toBeNull();
     });
+  });
+
+  it('lets the link hold the vault unread once both confirmed, and no more than the cap before (D264)', async () => {
+    for (const confirmed of [false, true]) {
+      const link = memoryPair();
+      const b = new PairingSession(link.b);
+      if (confirmed) b.bothConfirmed();
+      for (let i = 0; i <= MAX_UNREAD_BYTES / MAX_MESSAGE_LENGTH; i++) {
+        await link.a.send(new Uint8Array(MAX_MESSAGE_LENGTH));
+      }
+      await flush();
+      const state = await Promise.race([link.b.closed, flush().then(() => 'open')]);
+      expect(state).toBe(confirmed ? 'open' : 'error');
+    }
   });
 
   it('joins a message of several frames before decoding it', async () => {

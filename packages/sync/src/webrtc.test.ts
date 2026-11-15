@@ -1,6 +1,11 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import { MAX_MESSAGE_LENGTH, MessageTooLongError, TransportClosedError } from './transport';
+import {
+  MAX_MESSAGE_LENGTH,
+  MAX_UNREAD_BYTES,
+  MessageTooLongError,
+  TransportClosedError,
+} from './transport';
 import {
   type DataChannelEvent,
   type DataChannelLike,
@@ -121,6 +126,26 @@ describe('DataChannel transport', () => {
     expect(await transport.receive()).toEqual(bytes(1));
     expect(await closedBy(transport.receive())).toBe('error');
     expect(channel.closeCalls).toBe(1);
+  });
+
+  it('closes with an error once the unread bytes pass the cap, until authenticated (D264)', () => {
+    const fits = Math.floor(MAX_UNREAD_BYTES / MAX_MESSAGE_LENGTH);
+    const flood = (channel: FakeChannel, n: number) => {
+      for (let i = 0; i < n; i++) {
+        channel.emit('message', { data: new ArrayBuffer(MAX_MESSAGE_LENGTH) });
+      }
+    };
+    const open = new FakeChannel();
+    dataChannelTransport(open);
+    flood(open, fits);
+    expect(open.closeCalls).toBe(0);
+    flood(open, 1);
+    expect(open.closeCalls).toBe(1);
+
+    const trusted = new FakeChannel();
+    dataChannelTransport(trusted).authenticated();
+    flood(trusted, fits + 8);
+    expect(trusted.closeCalls).toBe(0);
   });
 
   it('closes with an error on receiving text or any other non-binary data', async () => {

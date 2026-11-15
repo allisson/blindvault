@@ -11,6 +11,7 @@ import { MAX_CHANNEL_MESSAGE_LENGTH, noiseChannel } from './channel';
 import { type MemoryPairOptions, memoryPair } from './memory';
 import {
   type ClosedBy,
+  MAX_UNREAD_BYTES,
   MessageTooLongError,
   type Transport,
   TransportClosedError,
@@ -114,6 +115,41 @@ describe('Noise channel', () => {
     },
   );
 
+  it('closes with an error once the unread plaintext passes the cap, until authenticated (D264)', async () => {
+    const fits = Math.floor(MAX_UNREAD_BYTES / MAX_CHANNEL_MESSAGE_LENGTH);
+    const flood = async (a: Transport, n: number) => {
+      for (let i = 0; i < n; i++) await a.send(new Uint8Array(MAX_CHANNEL_MESSAGE_LENGTH));
+      await tick();
+    };
+    const open = channels();
+    await flood(open.a, fits);
+    await open.a.send(bytes(1));
+    await tick();
+    await flood(open.a, 1);
+    expect(await open.b.closed).toBe('error');
+    expect(open.keys.b.wiped).toBe(true);
+
+    const trusted = channels();
+    trusted.b.authenticated();
+    await flood(trusted.a, fits + 8);
+    await trusted.a.send(bytes(2));
+    for (let i = 0; i < fits + 8; i++) await trusted.b.receive();
+    expect(await trusted.b.receive()).toEqual(bytes(2));
+  });
+
+  it('lifts the cap of the link under it too (D264)', () => {
+    const link = memoryPair();
+    let lifted = false;
+    const under: Transport = {
+      ...link.b,
+      authenticated: () => {
+        lifted = true;
+      },
+    };
+    noiseChannel(under, ciphers().b).authenticated();
+    expect(lifted).toBe(true);
+  });
+
   it('reads what arrived before a remote close, then reports it and wipes its keys', async () => {
     const { a, b, keys } = channels();
     await a.send(bytes(1));
@@ -172,6 +208,7 @@ describe('Noise channel', () => {
         closed: new Promise<ClosedBy>((resolve) => {
           onClosed = resolve;
         }),
+        authenticated: () => undefined,
       };
       return { transport, settle: () => settle };
     }

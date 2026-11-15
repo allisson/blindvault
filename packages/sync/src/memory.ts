@@ -52,7 +52,7 @@ export function memoryPair(options: MemoryPairOptions = {}): MemoryPair {
 
   const receiveInto = (side: Side, message: Uint8Array) => {
     if (message.length > MAX_MESSAGE_LENGTH) shut(side, 'error');
-    else side.inbox.push(message);
+    else if (!side.inbox.push(message)) shut(side, 'error');
   };
   const receiver = (side: Side): Side => (side === a ? b : a);
 
@@ -73,6 +73,9 @@ export function memoryPair(options: MemoryPairOptions = {}): MemoryPair {
       shut(side, 'local');
     },
     closed: side.inbox.closed,
+    authenticated() {
+      side.inbox.unbound();
+    },
   });
 
   return {

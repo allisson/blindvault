@@ -268,7 +268,9 @@ every project through the references in the root `tsconfig.json`.
 - **Transport (Phase 4, `packages/sync`).** `src/transport.ts` defines `Transport`: ordered binary
   messages of at most 65,535 bytes (`MAX_MESSAGE_LENGTH`, one Noise transport message), refused on
   sending and closing the transport on receipt; `send` resolves once taken, `receive` returns the
-  next message, and `close` is idempotent. After a remote close or an error the messages that
+  next message, and `close` is idempotent. Until `authenticated()` (both SAS confirmations, or the
+  sync handshake) a transport holds at most `MAX_UNREAD_BYTES` unread and closes with an error past
+  it (D264). After a remote close or an error the messages that
   arrived stay readable, so an `abort` sent just before a close is read; a local close discards
   them. `src/memory.ts` (`memoryPair`) connects two transports in memory, with an `intercept` hook
   that tampers with, drops, duplicates, reorders or injects messages for the Gate C tests, and

@@ -60,6 +60,7 @@ encrypted backups and synchronized records (§3).
 | Sends corrupted, oversized or foreign records | Protected | Verification on receipt before merge (D57, D64, D66, D129, D144, D260) | `crypto-spec.md` §9.5 |
 | Sends records from the future to win LWW | Protected | 24-hour future-clock bound (D76), applied to a purged tombstone at its purge date (D262) | `sync-protocol.md` |
 | Resurrects deleted data from a stale device | Protected | Persistent tombstones (D27) | `sync-protocol.md` |
+| Floods the link before the SAS or the sync handshake | Protected | At most 2,098,388 bytes unread until the peer is authenticated, then the link closes (D264) | `pairing-protocol.md` §4 |
 
 ### A4. Holder of a `.bvault` file
 
@@ -81,6 +82,7 @@ encrypted backups and synchronized records (§3).
 | Destroys items or their history with records that look honest | Accepted | A purged tombstone before its date is rejected (D262); a tombstone dated 30 days back, or 20 newer Item Versions, still remove an item or its history on every device; earlier backups keep them | `sync-protocol.md` §1.3 |
 | Silently replaces the Recovery Envelope | Limited | Envelope immutable per `phraseId`; replacement announced (D43, D44) | `crypto-spec.md` §11 |
 | Makes the vault unreadable through LWW | Protected | Vault Key record immutable per epoch; never deleted (D42) | `sync-protocol.md` |
+| Exhausts a tab's memory once authenticated | Accepted | No cap after both SAS confirmations or the sync handshake, since a vault may wait unread; the tab drops, nothing persists or leaks (D264) | `pairing-protocol.md` §4 |
 
 ### A6. Malicious host or bundle
 
