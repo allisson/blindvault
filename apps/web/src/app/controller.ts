@@ -398,6 +398,7 @@ export class VaultController {
   #passkey: { readonly credentialId: Uint8Array; readonly prfInput: Uint8Array } | undefined;
   /** Bumped by every lock: an operation started before it is aborted (D104). */
   #epoch = 0;
+  #drops = 0;
   /**
    * The Recovery Phrase shown for the vault being created, or for a regeneration while unlocked, as
    * its entropy only (§5.4, D179, D185). At creation its keyring becomes the new session's; a lock,
@@ -1377,6 +1378,7 @@ export class VaultController {
 
   /** Locks: wipes the session's keys and state and aborts what is in progress (overview §7). */
   lock(): void {
+    if (this.pendingCommit) this.#drops += 1;
     this.#epoch += 1;
     this.#phrase?.keyring.wipeAll();
     this.#phrase = undefined;
@@ -1402,9 +1404,12 @@ export class VaultController {
     if (this.#status === status) this.#set({ ...status });
   }
 
-  /** How many locks so far: the start screens begin again after each, showing nothing held (D263). */
-  get locks(): number {
-    return this.#epoch;
+  /**
+   * How many locks dropped a phrase or a backup held before its commit: the start screens begin
+   * again after each, showing nothing held. Other locks keep their step, as joining does (D203, D263).
+   */
+  get drops(): number {
+    return this.#drops;
   }
 
   /** Locks, releases the vault's Web Lock and closes the database (the app window is closing). */

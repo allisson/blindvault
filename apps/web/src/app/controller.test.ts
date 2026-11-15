@@ -412,12 +412,15 @@ describe('Recovery Phrase regeneration (§5.4, D104, D185)', () => {
     c.newRecoveryPhrase();
     const notified = vi.fn();
     c.subscribe(notified);
-    const locks = c.locks;
+    const drops = c.drops;
     c.lock();
     expect(notified).toHaveBeenCalled();
-    expect(c.locks).toBe(locks + 1);
+    expect(c.drops).toBe(drops + 1);
     expect(c.pendingCommit).toBe(false);
     expect(c.status.kind).toBe('no-vault');
+    // Nothing held: the screens keep their step, as joining does (D203).
+    c.lock();
+    expect(c.drops).toBe(drops + 1);
     c.newRecoveryPhrase();
     await c.create(PASSWORD, 'Test device');
     expect(c.showingPhrase).toBe(false);

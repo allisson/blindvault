@@ -36,7 +36,7 @@ function Root({ controller, monitor }: RootProps) {
     [controller],
   );
   const status = useSyncExternalStore(controller.subscribe, controller.getStatus);
-  const locks = useSyncExternalStore(controller.subscribe, () => controller.locks);
+  const drops = useSyncExternalStore(controller.subscribe, () => controller.drops);
   // "Continue in this tab" outlives the new Start of each lock, not a reload (D198, D263).
   const inTab = useState(false);
   // The system's back goes one screen back, through one history entry that carries nothing (D197).
@@ -126,8 +126,8 @@ function Root({ controller, monitor }: RootProps) {
   if (status.kind === 'unlocked') {
     return <VaultShell controller={controller} session={status.session} nav={nav} />;
   }
-  // A new Start after each lock: a creation's words or a restore's step go with it (D263).
-  return <Start key={locks} controller={controller} status={status} inTab={inTab} />;
+  // A new Start after a lock drops a creation's words or a restore's backup (D263).
+  return <Start key={drops} controller={controller} status={status} inTab={inTab} />;
 }
 
 export function App({ controller, monitor }: RootProps) {
