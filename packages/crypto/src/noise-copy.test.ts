@@ -114,8 +114,14 @@ describe('cipher state', () => {
   it('carries the nonce across bytes, which the vectors never reach (N-13)', () => {
     const k = bytes(32, 9);
     for (const [start, next] of [
-      [[0xff, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0]],
-      [[0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]],
+      [
+        [0xff, 0, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0],
+      ],
+      [
+        [0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0],
+      ],
     ]) {
       const state = keyed();
       cipherState.setNonce(state, Uint8Array.from(start ?? []));
