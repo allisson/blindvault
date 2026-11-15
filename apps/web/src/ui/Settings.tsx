@@ -1126,6 +1126,8 @@ export function exportError(m: Messages, outcome: BackupExport): string | undefi
       return s.backupPasskeyNoVerification;
     case 'unavailable':
       return s.backupPasskeyUnavailable;
+    case 'kdf-failed':
+      return s.backupKdfFailed;
     case 'corrupt-record':
       return format(s.backupCorrupt, {
         type: recordTypeName(m, outcome.recordType),

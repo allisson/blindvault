@@ -340,7 +340,8 @@ export function kept(opening: BackupOpening): boolean {
   return (
     opening.kind === 'wrong-secret' ||
     opening.kind === 'invalid-phrase' ||
-    opening.kind === 'no-password-keyslot'
+    opening.kind === 'no-password-keyslot' ||
+    opening.kind === 'kdf-failed'
   );
 }
 
@@ -358,6 +359,8 @@ export function openingError(
       return method === 'phrase' ? r.wrongPhrase : r.wrongPassword;
     case 'no-password-keyslot':
       return r.noPasswordKeyslot;
+    case 'kdf-failed':
+      return r.kdfFailed;
     case 'invalid-phrase':
       if (opening.reason === 'word-count') return m.settings.recoveryWordCount;
       if (opening.reason === 'checksum') return m.settings.recoveryChecksum;

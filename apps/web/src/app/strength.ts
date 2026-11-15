@@ -22,6 +22,9 @@ export const EXPORT_ENTROPY_BITS = Math.log2(EXPORT_GUESSES);
 
 export const REQUIRED_SCORE = 4;
 
+/** A control character, which `normalizePassword` refuses: no strength makes it a password (R-10). */
+const CONTROL = /\p{Cc}/u;
+
 type Estimator = (password: string) => Strength;
 
 const estimators = new Map<Language, Promise<Estimator>>();
@@ -58,7 +61,7 @@ async function load(language: Language): Promise<Estimator> {
     const score = result.score;
     return {
       score,
-      acceptable: score >= REQUIRED_SCORE,
+      acceptable: score >= REQUIRED_SCORE && !CONTROL.test(password),
       warning: result.feedback.warning ?? '',
       guesses: result.guesses,
     };
@@ -100,7 +103,7 @@ export async function exportStrength(
   }
   const strength = (await estimator(language))(password);
   return {
-    acceptable: strength.guesses >= EXPORT_GUESSES,
+    acceptable: strength.guesses >= EXPORT_GUESSES && !CONTROL.test(password),
     warning: strength.warning,
     generated: false,
   };

@@ -1518,6 +1518,9 @@ export class VaultSession {
     this.#grants.clear();
     this.#watchers.clear();
     this.#state = emptyState();
+    // Sync history, devices seen and the last phrase go too; preferences and HLC are not secret.
+    const { preferences, hlc } = this.#localState;
+    this.#localState = { preferences, hlc };
   }
 
   #unlocked(): void {
@@ -1692,6 +1695,8 @@ export class VaultSession {
     const { kek, method, exportPassword } = options;
     return this.#run(async () => {
       const scratch = new Keyring();
+      // Held, so a lock during the export password's Argon2id wipes the Master Key (R-11).
+      this.#grants.add(scratch);
       // The worker terminates itself once it answers; one never asked is terminated here.
       let derived = false;
       try {
@@ -1722,6 +1727,7 @@ export class VaultSession {
         return { writes: [], deletes: [], result: { bytes, exportedAt }, lastBackupAt: exportedAt };
       } finally {
         scratch.wipeAll();
+        this.#grants.delete(scratch);
         if (exportPassword) {
           exportPassword.password.fill(0);
           if (!derived) exportPassword.port.terminate();

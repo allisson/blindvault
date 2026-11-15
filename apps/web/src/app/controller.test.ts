@@ -6,6 +6,7 @@ import {
   type RecordEnvelope,
   RecordType,
   deriveRecoveryKeys,
+  encodeCbor,
   parseRecoveryPhrase,
 } from '@blindvault/crypto';
 import {
@@ -14,7 +15,7 @@ import {
   acquireVaultLock,
   databaseName,
 } from '@blindvault/storage';
-import { FUTURE_CLOCK_BOUND_MS, parseLocalConfig } from '@blindvault/vault';
+import { FUTURE_CLOCK_BOUND_MS, localConfigToCbor, parseLocalConfig } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +34,9 @@ function must<T>(value: T | undefined): T {
  * A stand-in for the Argon2id worker: the key is the password's bytes padded to 32, so another
  * password gives another key. Argon2id itself is tested in `packages/crypto`.
  */
+/** Set by a test: the worker refuses, as when it cannot allocate the memory asked for. */
+let kdfFails = false;
+
 function fakeKdf(log: KdfRequest['op'][] = []): () => KdfPort {
   return () => {
     const port: KdfPort = {
@@ -40,6 +44,11 @@ function fakeKdf(log: KdfRequest['op'][] = []): () => KdfPort {
       onerror: null,
       postMessage(message) {
         log.push(message.op);
+        if (kdfFails) {
+          message.password.fill(0);
+          queueMicrotask(() => port.onmessage?.({ data: { ok: false } }));
+          return;
+        }
         const key = new Uint8Array(32);
         key.set(message.password.subarray(0, 32));
         message.password.fill(0);
@@ -58,6 +67,7 @@ function fakeKdf(log: KdfRequest['op'][] = []): () => KdfPort {
 const controllers: VaultController[] = [];
 
 afterEach(async () => {
+  kdfFails = false;
   for (const c of controllers.splice(0)) await c.close();
 });
 
@@ -477,6 +487,18 @@ describe('backup export (§10, D36, D64, D181)', () => {
     expect(session(c).lastBackupAt).toBeUndefined();
   });
 
+  it('names a local password it cannot read, and a key it cannot derive here (R-10)', async () => {
+    const { c } = await exporting();
+    expect(await c.exportBackup({ kind: 'password', password: 'tab\there' })).toEqual({
+      kind: 'wrong-password',
+    });
+    kdfFails = true;
+    expect(await c.exportBackup({ kind: 'password', password: PASSWORD })).toEqual({
+      kind: 'kdf-failed',
+    });
+    expect(session(c).lastBackupAt).toBeUndefined();
+  });
+
   it('makes nothing once locked, before or during the export (D105)', async () => {
     const { c } = await exporting();
     const pending = c.exportBackup({ kind: 'password', password: PASSWORD }, EXPORT_PASSWORD);
@@ -615,6 +637,24 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     expect(c.afterRestore).toBe('check-phrase');
     c.dismissAfterRestore();
     expect(c.afterRestore).toBeUndefined();
+  });
+
+  it('keeps the file when the export password cannot be read or derived here (R-10)', async () => {
+    const source = await backup(EXPORT_PASSWORD);
+    const c = await empty();
+    c.openBackupFile(source.bytes);
+    // A control character is no export password: it could not have made one.
+    expect(await c.openBackup({ kind: 'password', password: 'tab\there' })).toEqual({
+      kind: 'wrong-secret',
+    });
+    kdfFails = true;
+    expect(await c.openBackup({ kind: 'password', password: EXPORT_PASSWORD })).toEqual({
+      kind: 'kdf-failed',
+    });
+    kdfFails = false;
+    expect(await c.openBackup({ kind: 'phrase', words: source.words })).toMatchObject({
+      kind: 'ok',
+    });
   });
 
   /** Restores `bytes` by the phrase into a new installation. */
@@ -1788,6 +1828,22 @@ describe('vault controller', () => {
     const lock = await acquireVaultLock(vaultId);
     expect(lock).not.toBeNull();
     await lock?.release();
+  });
+
+  it('reports a Local Config naming another vault as corrupt, so an erase cannot miss it (R-08)', async () => {
+    const factory = new IDBFactory();
+    const first = await created(factory);
+    const vaultId = session(first).vaultId;
+    await first.close();
+    const db = await VaultDatabase.open(vaultId, factory);
+    await db.updateLocalConfig((bytes) => {
+      const config = parseLocalConfig(bytes);
+      return encodeCbor(localConfigToCbor({ ...config, vaultId: new Uint8Array(16).fill(7) }));
+    });
+    db.close();
+    const c = controller(factory);
+    await c.start();
+    expect(c.status.kind).toBe('corrupt');
   });
 });
 

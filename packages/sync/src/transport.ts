@@ -125,7 +125,8 @@ export class Inbox {
     if (this.closedBy) return false;
     this.closedBy = by;
     if (by === 'local') {
-      this.messages.length = 0;
+      // Wiped, not only dropped: a channel's inbox holds plaintext (R-11).
+      for (const message of this.messages.splice(0)) message.fill(0);
       this.unread = 0;
     }
     for (const next of this.waiting.splice(0)) next.reject(new TransportClosedError(by));

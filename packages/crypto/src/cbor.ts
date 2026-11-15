@@ -90,6 +90,10 @@ export function decodeCbor(bytes: Uint8Array): CborValue {
     throw new EncodingError('invalid CBOR');
   }
   check(value);
-  if (!equal(encodeCbor(value), bytes)) throw new EncodingError('CBOR is not canonical');
+  const again = encodeCbor(value);
+  const canonical = equal(again, bytes);
+  // The re-encoding may hold a key, as a backup's meta holds the Master Key (R-11).
+  again.fill(0);
+  if (!canonical) throw new EncodingError('CBOR is not canonical');
   return value;
 }
