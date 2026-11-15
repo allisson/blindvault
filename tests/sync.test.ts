@@ -209,6 +209,9 @@ function recording(channel: Transport, sent: Uint8Array[]): Transport {
       channel.close();
     },
     closed: channel.closed,
+    authenticated: () => {
+      channel.authenticated();
+    },
   };
 }
 

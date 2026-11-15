@@ -15,7 +15,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { HandshakeError, type HandshakeFailure } from './handshake';
 import { type MemoryPairOptions, memoryPair } from './memory';
 import { type SessionPayload, type SyncHandshake, syncHandshake } from './sync-handshake';
-import { TransportClosedError } from './transport';
+import { MAX_CHANNEL_MESSAGE_LENGTH } from './channel';
+import { MAX_UNREAD_BYTES, TransportClosedError } from './transport';
 
 beforeAll(initCrypto);
 
@@ -105,6 +106,17 @@ describe('sync handshake (sync-protocol.md §5, CRYPTO-INV-008, D217)', () => {
     expect(await r.channel.receive()).toEqual(Uint8Array.of(2));
     i.channel.close();
     expect(await r.channel.closed).toBe('remote');
+  });
+
+  it('opens a channel that may hold the vault unread: both devices are authenticated (D264)', async () => {
+    const { initiator, responder } = await run();
+    const i = value(initiator);
+    const r = value(responder);
+    const n = Math.ceil(MAX_UNREAD_BYTES / MAX_CHANNEL_MESSAGE_LENGTH) + 1;
+    for (let k = 0; k < n; k++) await i.channel.send(new Uint8Array(MAX_CHANNEL_MESSAGE_LENGTH));
+    await i.channel.send(Uint8Array.of(9));
+    for (let k = 0; k < n; k++) await r.channel.receive();
+    expect(await r.channel.receive()).toEqual(Uint8Array.of(9));
   });
 
   it('sends two empty handshake messages of 48 bytes, then only channel messages', async () => {

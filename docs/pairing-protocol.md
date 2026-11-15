@@ -130,6 +130,11 @@ rebuilt offer before creating its answer.
 I creates one DataChannel, reliable and ordered, before its offer. DTLS is transport only and is
 never the trust mechanism (§8.2): nothing is trusted until the SAS is confirmed on both devices.
 
+Until both confirmations, each side holds at most 2,098,388 bytes received and not yet read, two of
+the longest messages of section 10.1, on the DataChannel and in the Noise channel above it; past
+that it closes the link, and the pairing ends as `closed`. After both confirmations there is no
+cap, since the vault may wait unread while the receiver works (D264).
+
 ## 5. Handshake
 
 - Protocol name: `Noise_XX_25519_ChaChaPoly_BLAKE2b`, from the copied implementation of D157 in

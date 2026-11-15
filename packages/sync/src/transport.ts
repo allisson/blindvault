@@ -10,6 +10,13 @@
  */
 export const MAX_MESSAGE_LENGTH = 65_535;
 
+/**
+ * The most bytes a transport holds unread until the peer is authenticated: two of the longest
+ * protocol messages (`frames.ts`). Before the SAS or the sync handshake, the protocol goes one
+ * message at a time, so only a peer flooding the link goes past it (D264).
+ */
+export const MAX_UNREAD_BYTES = 2 * 1_049_194;
+
 /** Who closed a transport: this side, the peer, or a failure of the link. */
 export type ClosedBy = 'local' | 'remote' | 'error';
 
@@ -49,6 +56,11 @@ export interface Transport {
   close(): void;
   /** Resolves with the cause once the transport is closed. */
   readonly closed: Promise<ClosedBy>;
+  /**
+   * The peer is authenticated (both SAS confirmations, or the sync handshake): lifts the cap of
+   * `MAX_UNREAD_BYTES`, since a vault in transit may wait unread while this side works (D264).
+   */
+  authenticated(): void;
 }
 
 /** Received messages and pending `receive()` calls, shared by the transports. */
@@ -59,6 +71,8 @@ export class Inbox {
     reject: (error: Error) => void;
   }[] = [];
   private closedBy: ClosedBy | null = null;
+  private unread = 0;
+  private bounded = true;
   // Assigned by the promise executor, which runs at once.
   private onClosed!: (by: ClosedBy) => void;
   readonly closed = new Promise<ClosedBy>((resolve) => {
@@ -69,17 +83,34 @@ export class Inbox {
     return this.closedBy;
   }
 
-  /** Queues a message, or hands it to the oldest pending `receive()`. Ignored once closed. */
-  push(message: Uint8Array): void {
-    if (this.closedBy) return;
+  /**
+   * Queues a message, or hands it to the oldest pending `receive()`. Ignored once closed. Returns
+   * false when the unread bytes pass `MAX_UNREAD_BYTES` before `unbound()`: the owner closes the
+   * transport with an error.
+   */
+  push(message: Uint8Array): boolean {
+    if (this.closedBy) return true;
     const next = this.waiting.shift();
-    if (next) next.resolve(message);
-    else this.messages.push(message);
+    if (next) {
+      next.resolve(message);
+      return true;
+    }
+    this.messages.push(message);
+    this.unread += message.length;
+    return !this.bounded || this.unread <= MAX_UNREAD_BYTES;
+  }
+
+  /** Lifts the cap on unread bytes (D264). */
+  unbound(): void {
+    this.bounded = false;
   }
 
   receive(): Promise<Uint8Array> {
     const message = this.messages.shift();
-    if (message) return Promise.resolve(message);
+    if (message) {
+      this.unread -= message.length;
+      return Promise.resolve(message);
+    }
     if (this.closedBy) return Promise.reject(new TransportClosedError(this.closedBy));
     return new Promise((resolve, reject) => {
       this.waiting.push({ resolve, reject });
@@ -93,7 +124,10 @@ export class Inbox {
   close(by: ClosedBy): boolean {
     if (this.closedBy) return false;
     this.closedBy = by;
-    if (by === 'local') this.messages.length = 0;
+    if (by === 'local') {
+      this.messages.length = 0;
+      this.unread = 0;
+    }
     for (const next of this.waiting.splice(0)) next.reject(new TransportClosedError(by));
     this.onClosed(by);
     return true;

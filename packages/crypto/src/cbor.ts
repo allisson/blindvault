@@ -45,7 +45,9 @@ function check(root: unknown): asserts root is CborValue {
       continue;
     }
     if (Array.isArray(value)) {
-      pending.push(...(value as unknown[]));
+      // One at a time: a spread passes each element as an argument, and a long array overflows the
+      // stack with a RangeError instead of an EncodingError (review R-07).
+      for (const item of value as unknown[]) pending.push(item);
     } else if (value instanceof Map) {
       for (const [k, v] of value as Map<unknown, unknown>) pending.push(k, v);
     } else if (value instanceof Tag) {

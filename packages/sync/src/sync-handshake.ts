@@ -85,10 +85,10 @@ export async function syncHandshake(
     const result = noise.result;
     /* v8 ignore next */
     if (!result) throw new HandshakeError('invalid');
-    return {
-      handshakeHash: result.handshakeHash,
-      channel: noiseChannel(transport, result.transport),
-    };
+    const channel = noiseChannel(transport, result.transport);
+    // Noise_KK authenticated both registered devices: the cap on unread bytes goes (D264).
+    channel.authenticated();
+    return { handshakeHash: result.handshakeHash, channel };
   } catch (error) {
     handshake?.destroy();
     transport.close();

@@ -49,7 +49,10 @@ export function noiseChannel(transport: Transport, cipher: NoiseTransport): Tran
         finish('error');
         return;
       }
-      inbox.push(plaintext);
+      if (!inbox.push(plaintext)) {
+        finish('error');
+        return;
+      }
     }
   })();
 
@@ -64,5 +67,9 @@ export function noiseChannel(transport: Transport, cipher: NoiseTransport): Tran
       finish('local');
     },
     closed: inbox.closed,
+    authenticated: () => {
+      inbox.unbound();
+      transport.authenticated();
+    },
   };
 }

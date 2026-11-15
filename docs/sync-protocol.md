@@ -299,7 +299,8 @@ Then `Noise_KK_25519_ChaChaPoly_BLAKE2b`, with I as initiator:
 
 A completed handshake proves that the peer holds the private key of its registered identity, bound
 to this session (CRYPTO-INV-008). A handshake that fails ends the session (`protocol-error`), with
-nothing else sent. Every later message travels in the Noise channel, framed as in
+nothing else sent. Until it completes, the link holds at most 2,098,388 bytes unread, as in
+`pairing-protocol.md` §4; after it there is no cap (D264). Every later message travels in the Noise channel, framed as in
 `pairing-protocol.md` §10.1 (CRYPTO-INV-009).
 
 **Implementation (D217).** `packages/crypto` runs the handshake with `startNoiseKK` and computes

@@ -48,11 +48,13 @@ export class PairingSession extends ChannelSession<Message, AbortReason, Pairing
   }
 
   /**
-   * Both devices confirmed the SAS: the session no longer expires, and from now on a wait of
-   * `IDLE_TIMEOUT_MS` without a frame aborts (`expired`, §11).
+   * Both devices confirmed the SAS: the session no longer expires, from now on a wait of
+   * `IDLE_TIMEOUT_MS` without a frame aborts (`expired`, §11), and the link may hold the vault
+   * unread (D264).
    */
   bothConfirmed(): void {
     clearTimeout(this.expiry);
     this.idle = true;
+    this.channel.authenticated();
   }
 }

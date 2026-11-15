@@ -57,7 +57,7 @@ export function dataChannelTransport(channel: DataChannelLike): Transport {
         shut('error');
         return;
       }
-      inbox.push(new Uint8Array(event.data));
+      if (!inbox.push(new Uint8Array(event.data))) shut('error');
     },
     close() {
       shut('remote');
@@ -102,5 +102,8 @@ export function dataChannelTransport(channel: DataChannelLike): Transport {
       shut('local');
     },
     closed: inbox.closed,
+    authenticated() {
+      inbox.unbound();
+    },
   };
 }
