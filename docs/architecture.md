@@ -931,7 +931,7 @@ and `sodium_free`; a local `assert` instead of `nanoassert`, and `required` wher
 null key fail with a TypeError; arrays copied with spread instead of `clone`; no `keygen`,
 `seedKeygen` or `generateSeedKeypair`; `bindNoise(dh)` takes the DH so the vectors fix the ephemeral
 keys. **One logic fix:** `split` assigns the CipherStates by role, `c1` always the initiator's
-sending key (Noise §5.2); the original assigned them by who wrote and who read the last message,
+sending key (Noise §5); the original assigned them by who wrote and who read the last message,
 which swaps them in even-length patterns such as KK. Its own tests only checked that both sides
 agree, and the Phase 0 check reached only the handshake messages and hash; the cacophony and snow
 KK transport messages fail without the fix. `src/noise-copy.test.ts` checks what the vectors do not

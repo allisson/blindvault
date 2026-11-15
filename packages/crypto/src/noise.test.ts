@@ -12,6 +12,7 @@ import {
   type NoiseHandshake,
   type NoisePattern,
   type NoiseResult,
+  NoiseTransport,
   openNoiseK,
   sealNoiseK,
   startNoise,
@@ -645,5 +646,17 @@ describe('Noise_KK with registered identities (sync-protocol.md §5, CRYPTO-INV-
         startNoiseKK({ initiator: true, prologue, identity: a, peerPublicKey: new Uint8Array(31) }),
       ).toThrow(EncodingError);
     });
+  });
+});
+
+describe('a transport over a CipherState without a key (N-10)', () => {
+  it('refuses to encrypt or decrypt, where the copied code would pass plaintext through', () => {
+    const noise = bindNoise();
+    const empty = () => new Uint8Array(noise.cipherState.STATELEN);
+    const sending = new NoiseTransport(noise, { tx: empty(), rx: empty() });
+    expect(() => sending.encrypt(Uint8Array.of(1, 2, 3))).toThrow(KeyWipedError);
+    expect(sending.wiped).toBe(true);
+    const receiving = new NoiseTransport(noise, { tx: empty(), rx: empty() });
+    expect(() => receiving.decrypt(new Uint8Array(17))).toThrow(KeyWipedError);
   });
 });

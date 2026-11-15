@@ -70,7 +70,8 @@ vault.
 
 A backup can also open with an export password. Whoever opens it that way holds the Master Key for
 good, so a weak or exposed export password is as serious as an exposed phrase. Changing your
-password later does not change the backups you already made.
+password later does not change the backups you already made, nor a copy of a device's storage
+taken before the change, which still opens with the old password or passkey.
 
 ## The app you run must be trusted
 
@@ -107,7 +108,9 @@ It also has these limits:
   the vault for whoever controls that account and gets a copy of the device's storage.
 - **A cloned installation.** Copying a browser profile or a virtual machine and running both copies
   gives two installations one device identity, whose changes may never agree. Erase the copy and
-  pair it again. Restoring an older copy of a device's storage cannot be detected either; your other
+  pair it again. Someone who can write to a device's storage can do the same by copying there the
+  whole local state of another device of the vault, if both unlock with the same password or a
+  synced passkey. Restoring an older copy of a device's storage cannot be detected either; your other
   devices bring the newer data back at the next sync.
 - **Visible metadata.** Someone who reads the storage of a locked device sees the number and kinds
   of records, when each change was made and by which device, and the approximate size of each

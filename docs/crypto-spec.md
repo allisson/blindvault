@@ -137,8 +137,8 @@ authenticator data does not have the UV flag set is rejected before any derivati
 
 ## 6. Passwords and Argon2id (D9, D71, D134)
 
-- **Normalization**, for the local password and the export password, before the strength check and
-  before Argon2id, following the RFC 8265 OpaqueString profile in this exact subset:
+- **Normalization**, for the local password and the export password, before Argon2id. The strength
+  check reads the password as typed, and a password that step 3 rejects is not acceptable (D266), following the RFC 8265 OpaqueString profile in this exact subset:
   1. Map every character of Unicode general category `Zs` (space separators, such as U+00A0) to
      U+0020.
   2. Normalize to NFC.
@@ -366,7 +366,9 @@ phrase already opened the file.
 
 **Constraint on a future Vault Key rotation.** `mk` is bound to the envelope's AAD, which holds `e`.
 Moving the envelope to a new epoch therefore rewrites `mk`, which needs the phrase. A rotation
-design (after v1, D11) MUST account for this, as format migration already does (§5.7).
+design (after v1, D11) MUST account for this, as format migration already does (§5.7). It MUST
+also bound the epoch a record may claim: a device seals at the greatest Vault Key epoch it has
+received, so a holder of the Master Key can push every device to epoch 2³² − 1 (D266).
 
 ## 12. Local Config wraps (§6, D58, D67, D121)
 
@@ -443,7 +445,8 @@ the reconnection payload in `sync-protocol.md`, using the layout encoding.
 - **Content** may hold any value core deterministic encoding allows, so unknown content from a newer
   app survives a round trip (D52, D59, D98): unsigned and negative integers, byte and text strings,
   arrays, maps, `true`, `false`, `null`, and floats in their shortest form (NaN only as
-  `0xf97e00`). Tags, `undefined` and other simple values are rejected. Text MUST be valid UTF-8.
+  `0xf97e00`) whose value is not an integer: deterministic encoding writes an integral value as an
+  integer, so the re-encode check refuses it as a float (`0xf93c00`, D266). Tags, `undefined` and other simple values are rejected. Text MUST be valid UTF-8.
 
 ## 15. Test vectors
 

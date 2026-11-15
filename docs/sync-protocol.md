@@ -281,7 +281,8 @@ section 12 ends the session. This is safe without any help from the delivery:
 - R's answer of another session is `malformed`, because its `sessionId` differs (section 4.3);
 - an old offer from I opens, but the session it leads to fails at DTLS, whose fingerprint is I's
   old certificate, or at `Noise_KK`, whose prologue binds that old payload, before any message
-  (section 5, D17).
+  (section 5, D17). The browser may still send ICE and STUN checks to the old addresses before
+  that (D266).
 
 ## 5. Connection and handshake
 
