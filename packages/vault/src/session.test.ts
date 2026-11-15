@@ -39,6 +39,7 @@ import {
   randomId,
   recoveryEnvelopeRecordId,
   sealLocalConfigPart,
+  sealPurgedTombstone,
   sealRecord,
   sealRecoveryEnvelope,
   sameKey,
@@ -262,6 +263,23 @@ function plant(
     ),
   });
   return header;
+}
+
+/** A purged tombstone of an Item, as a peer would hold it (D27). */
+function plantPurged(store: MemoryStore, keys: Keys, recordId: Uint8Array, hlc: Hlc): void {
+  const header: RecordHeader = {
+    recordFormatVersion: RECORD_FORMAT_VERSION,
+    recordType: RecordType.item,
+    recordId,
+    keyEpoch: 1,
+    hlc,
+    deleted: true,
+  };
+  store.put({
+    recordType: RecordType.item,
+    recordId,
+    envelope: sealPurgedTombstone(header, keys.vaultId, keys.vaultKey),
+  });
 }
 
 function utf8(text: string): Uint8Array {
@@ -2065,6 +2083,22 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     const own = await a.session.mergeBackup(await rawBackup(a.store));
     expect(own.retiredDevices).toEqual([]);
     expect(a.session.retired).toBe(true);
+  });
+
+  it('rejects a purged tombstone whose purge date is beyond the future-clock bound (D262)', async () => {
+    const { a, b, id } = await twoDevices();
+    const keys = keysOf(a.store);
+    // Purged at once: its purge date is 30 days ahead of every honest clock.
+    const now = must(a.session.item(id)).hlc.physicalMs + 1;
+    plantPurged(a.store, keys, id, hlcAt(now));
+    await expect(b.session.mergeBackup(await rawBackup(a.store))).rejects.toMatchObject({
+      reason: 'future-clock',
+      retryAt: now + PURGE_DELAY_MS - FUTURE_CLOCK_BOUND_MS,
+    });
+    expect(b.session.item(id)?.item?.title).toBe('Original');
+    // Due by now, as an honest device purges it.
+    plantPurged(a.store, keys, id, hlcAt(now - PURGE_DELAY_MS));
+    await expect(b.session.mergeBackup(await rawBackup(a.store))).resolves.toBeDefined();
   });
 
   it('lets a retired Device record beat a non-retired copy under the same header (D261)', async () => {
@@ -5212,9 +5246,13 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
       false,
       itemToCbor(login('Ahead'), false),
     );
+    const purgedId = randomId();
+    plantPurged(x.store, keys, purgedId, hlcAt(T0 + 5));
     const records = await x.store.records();
     const items = records.filter((r) => r.recordType === RecordType.item);
-    const target = must(items.find((r) => idKey(r.recordId) !== idKey(aheadId)));
+    const target = must(
+      items.find((r) => ![aheadId, purgedId].some((id) => idKey(r.recordId) === idKey(id))),
+    );
     const flipped = target.envelope.slice();
     flipped[flipped.length - 1] = must(flipped[flipped.length - 1]) ^ 1;
     const sent = records.map((r) => (r === target ? flipped : r.envelope));
@@ -5226,6 +5264,8 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
     ).toEqual(
       [
         ['future-clock', RecordType.item, idKey(aheadId)],
+        // Purged as soon as trashed: its purge date is beyond the bound (D262).
+        ['future-clock', RecordType.item, idKey(purgedId)],
         ['verification-failed', RecordType.item, idKey(target.recordId)],
       ].sort(),
     );

@@ -28,8 +28,9 @@ whole merge and writes nothing (§10, D61, D64, D182).
 3. Every record passes verification on receipt (`crypto-spec.md` §9.5) under the local vault's
    keys, and the domain checks of `record-content.md`, as at unlock (D59, D64): `corrupt-record`,
    naming the record.
-4. No record's `hlc` is beyond the future-clock bound of this device's clock (D76): `future-clock`.
-   The merge can be retried once the clock reaches the greatest `physicalMs` held minus the bound.
+4. No record's `hlc`, nor a purged tombstone's purge date (section 1.3), is beyond the future-clock
+   bound of this device's clock (D76, D262): `future-clock`. The merge can be retried once the clock
+   reaches the greatest of these times minus the bound.
 5. No record breaks the immutability of section 1.3 (D42, D44): `immutable-record`, naming it.
 
 `packages/backup` has already run the file checks of `backup-format.md` §8 steps 1 to 8. A record
@@ -53,6 +54,10 @@ cannot be trusted (D182).
   - a losing tombstone with content does the same: its content can be an edit kept nowhere else
     (D56);
   - a losing purged tombstone adds no version.
+
+  A received purged tombstone is judged by the future-clock bound at its purge date, `hlc` plus
+  30 days, rather than at its `hlc`: no honest device purges before that date, so one whose purge
+  date is beyond the bound is handled as a record beyond it (D262).
   A winning tombstone with content whose purge date has passed (D7, D27) is purged on arrival: it is
   stored with empty content under its unchanged header.
 - **Item Version.** Added when not held; an Item Version whose `versionId` is held stays as held.

@@ -57,8 +57,8 @@ encrypted backups and synchronized records (§3).
 | Searches offline for matching SAS values, replacing copy/paste payloads | Protected | The initiator's commitment and nonces revealed after the handshake: one guess in 10⁶ per pairing (D199) | `pairing-protocol.md` §6 |
 | Receives the Master Key before confirmation | Protected | No key before SAS confirmation on both devices (CRYPTO-INV-011) | `pairing-protocol.md` |
 | Replays an old authentication | Protected | `Noise_KK` bound to the session (CRYPTO-INV-008, 009) | `sync-protocol.md` |
-| Sends corrupted, oversized or foreign records | Protected | Verification on receipt before merge (D57, D64, D66, D129, D144) | `crypto-spec.md` §9.5 |
-| Sends records from the future to win LWW | Protected | 24-hour future-clock bound (D76) | `sync-protocol.md` |
+| Sends corrupted, oversized or foreign records | Protected | Verification on receipt before merge (D57, D64, D66, D129, D144, D260) | `crypto-spec.md` §9.5 |
+| Sends records from the future to win LWW | Protected | 24-hour future-clock bound (D76), applied to a purged tombstone at its purge date (D262) | `sync-protocol.md` |
 | Resurrects deleted data from a stale device | Protected | Persistent tombstones (D27) | `sync-protocol.md` |
 
 ### A4. Holder of a `.bvault` file
@@ -77,6 +77,8 @@ encrypted backups and synchronized records (§3).
 | --- | --- | --- | --- |
 | Keeps reading replicated data | Accepted | No revocation in v1 (§20); response is re-founding (D28) | overview §14 |
 | Returns under a new identity or forges a retirement | Limited | New-device and retirement notices (D47, D48); re-founding | overview §8.4 |
+| Forges its own record back to not retired | Protected | A retired copy wins under the same header too; every Device record is sent (D31, D261) | `sync-protocol.md` §1.3, §8 |
+| Destroys items or their history with records that look honest | Accepted | A purged tombstone before its date is rejected (D262); a tombstone dated 30 days back, or 20 newer Item Versions, still remove an item or its history on every device; earlier backups keep them | `sync-protocol.md` §1.3 |
 | Silently replaces the Recovery Envelope | Limited | Envelope immutable per `phraseId`; replacement announced (D43, D44) | `crypto-spec.md` §11 |
 | Makes the vault unreadable through LWW | Protected | Vault Key record immutable per epoch; never deleted (D42) | `sync-protocol.md` |
 
