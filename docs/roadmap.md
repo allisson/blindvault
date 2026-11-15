@@ -489,9 +489,13 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ## After v1
 
-Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), attachments (up to 10 MB, chunked secretstream), storage quotas, device revocation via `keyEpoch`, master key rotation, cloud storage plugins, and sharing between people. Details in the overview, section 20 "Out of scope for v1".
+Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), device revocation via `keyEpoch`, master key rotation, cloud storage plugins, and sharing between people. Details in the overview, section 20 "Out of scope for v1".
 
-Browser extension, stored passkeys and the Android app (D267 to D272), in this order:
+Attachments first (D273):
+
+- [ ] `docs/attachments.md`, then attachments: `attachment` field type, blobs of up to 10 MB under `secretstream`, blob phase after the record sync, collection when no record cites a blob, `.bvault` format version carrying the blobs, download only
+
+Then the browser extension, stored passkeys and the Android app (D267 to D272), in this order:
 
 - [ ] Spike: WebAuthn interception from the MAIN world (Chrome, Firefox), offscreen document lifetime and auto-lock, WebAuthn PRF from an extension origin, libsodium WASM under the MV3 CSP, the `apps/web` bundle and BiometricPrompt in an Android WebView; results recorded as decisions
 - [ ] `docs/extension.md`, then the extension (Chromium, Firefox) with password autofill and the version lock (D267, D270)

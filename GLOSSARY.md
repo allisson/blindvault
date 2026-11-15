@@ -54,6 +54,11 @@ A WebAuthn credential for a website or app, stored as a field of an item and use
 _pt-BR_: passkey
 _Avoid_: FIDO credential, WebAuthn key, discoverable credential (in UI copy)
 
+**Attachment**:
+A file kept with an item, stored apart from the item's fields and held by every device; replacing the file adds a new attachment.
+_pt-BR_: anexo
+_Avoid_: file field, blob, document (in UI copy)
+
 **Template**:
 A field layout an item is created from, such as Login or Card.
 _pt-BR_: modelo
