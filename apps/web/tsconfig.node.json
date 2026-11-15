@@ -12,6 +12,7 @@
     "vitest.config.ts",
     "playwright.config.ts",
     "playwright.self-hosting.config.ts",
+    "playwright.screenshots.config.ts",
     "e2e",
     "build"
   ]

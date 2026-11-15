@@ -8,8 +8,9 @@ export const PAIRING_URL = `http://127.0.0.1:${String(PAIRING_PORT)}`;
 
 export default defineConfig({
   testDir: './e2e',
-  // Needs a server with the headers of deploy/ (playwright.self-hosting.config.ts).
-  testIgnore: 'self-hosting.spec.ts',
+  // The first needs a server with the headers of deploy/ (playwright.self-hosting.config.ts); the
+  // second only takes the README's screenshots (playwright.screenshots.config.ts).
+  testIgnore: ['self-hosting.spec.ts', 'readme-screenshots.spec.ts'],
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
