@@ -37,6 +37,8 @@ function Root({ controller, monitor }: RootProps) {
   );
   const status = useSyncExternalStore(controller.subscribe, controller.getStatus);
   const locks = useSyncExternalStore(controller.subscribe, () => controller.locks);
+  // "Continue in this tab" outlives the new Start of each lock, not a reload (D198, D263).
+  const inTab = useState(false);
   // The system's back goes one screen back, through one history entry that carries nothing (D197).
   useEffect(() => new BackButton(nav, browserHistory()).start(), [nav]);
 
@@ -118,12 +120,14 @@ function Root({ controller, monitor }: RootProps) {
   const updates = useSyncExternalStore(monitor.subscribe, monitor.getState);
   if (updates.warning) return <ChangedWorker monitor={monitor} />;
 
-  if (!supported()) return <Start controller={controller} status={{ kind: 'unsupported' }} />;
+  if (!supported()) {
+    return <Start controller={controller} status={{ kind: 'unsupported' }} inTab={inTab} />;
+  }
   if (status.kind === 'unlocked') {
     return <VaultShell controller={controller} session={status.session} nav={nav} />;
   }
   // A new Start after each lock: a creation's words or a restore's step go with it (D263).
-  return <Start key={locks} controller={controller} status={status} />;
+  return <Start key={locks} controller={controller} status={status} inTab={inTab} />;
 }
 
 export function App({ controller, monitor }: RootProps) {

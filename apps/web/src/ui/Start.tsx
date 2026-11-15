@@ -10,13 +10,18 @@ import { JoinVault } from './Pairing';
 import { ResetPassword } from './ResetPassword';
 import { RestoreVault } from './RestoreVault';
 
+/** "Continue in this tab" chosen on a Safari tab, held above Start (D198, D263). */
+type InTab = readonly [boolean, (value: boolean) => void];
+
 /** Every screen before unlock, by controller status. */
 export function Start({
   controller,
   status,
+  inTab,
 }: {
   readonly controller: VaultController;
   readonly status: Status;
+  readonly inTab: InTab;
 }) {
   const m = useMessages();
   switch (status.kind) {
@@ -76,7 +81,7 @@ export function Start({
       }
       return (
         <VaultHeld.Provider value="none">
-          <NoVault controller={controller} status={status.kind} />
+          <NoVault controller={controller} status={status.kind} inTab={inTab} />
         </VaultHeld.Provider>
       );
     case 'locked':
@@ -290,14 +295,15 @@ function Unlock({
 function NoVault({
   controller,
   status,
+  inTab: [inTab, setInTab],
 }: {
   readonly controller: VaultController;
   readonly status: 'no-vault' | 'creating' | 'restoring' | 'joining';
+  readonly inTab: InTab;
 }) {
   const m = useMessages();
   const [choice, setChoice] = useState<'create' | 'pair' | 'restore' | undefined>();
   // Not stored: a reload shows the advice again (D198).
-  const [inTab, setInTab] = useState(false);
   const shown =
     status === 'creating'
       ? 'create'
