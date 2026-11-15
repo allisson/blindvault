@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { memoryPair } from './memory';
 import {
+  Inbox,
   MAX_MESSAGE_LENGTH,
   MAX_UNREAD_BYTES,
   MessageTooLongError,
@@ -182,6 +183,14 @@ describe('memory transport', () => {
       await tick();
       b.close();
       expect(await closedBy(b.receive())).toBe('local');
+    });
+
+    it('wipes what it discards: a channel queues plaintext (R-11)', () => {
+      const inbox = new Inbox();
+      const unread = bytes(1, 2);
+      inbox.push(unread);
+      inbox.close('local');
+      expect(unread).toEqual(bytes(0, 0));
     });
 
     it('is idempotent, and keeps the first cause', async () => {

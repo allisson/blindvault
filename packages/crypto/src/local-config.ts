@@ -83,9 +83,9 @@ export function openLocalConfigPart(
     }
     // Decoded byte strings are views of the plaintext: the keyring takes a copy of its own.
     const identity = loadDeviceIdentity(keyring, publicKey, privateKey.slice());
-    const content = detach(value) as CborMap;
-    content.delete(IDENTITY);
-    return { content, identity };
+    // Removed before the copy, so no copy of the private key outlives the wiped plaintext (R-11).
+    value.delete(IDENTITY);
+    return { content: detach(value) as CborMap, identity };
   } finally {
     lib().memzero(plaintext);
     if (unpadded) lib().memzero(unpadded);
