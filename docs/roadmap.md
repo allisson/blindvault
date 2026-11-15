@@ -495,10 +495,10 @@ Attachments first (D273):
 
 - [ ] `docs/attachments.md`, then attachments: `attachment` field type, blobs of up to 10 MB under `secretstream`, blob phase after the record sync, collection when no record cites a blob, `.bvault` format version carrying the blobs, download only
 
-Then the browser extension, stored passkeys and the Android app (D267 to D272), in this order:
+Then the browser extension, stored passkeys and the Android app (D267 to D272, D274), in this order:
 
 - [ ] Spike: WebAuthn interception from the MAIN world (Chrome, Firefox), offscreen document lifetime and auto-lock, WebAuthn PRF from an extension origin, libsodium WASM under the MV3 CSP, the `apps/web` bundle and BiometricPrompt in an Android WebView; results recorded as decisions
 - [ ] `docs/extension.md`, then the extension (Chromium, Firefox) with password autofill and the version lock (D267, D270)
 - [ ] Stored passkeys in the extension: `passkey` field type, ES256 and EdDSA, flags, history notice (D268)
-- [ ] `docs/android.md`, then the Android app: WebView shell, Keystore KEK, pairing and sync, reproducible APK off the Play Store (D269, D270, D271)
+- [ ] `docs/android.md`, then the Android app: WebView shell, Keystore KEK, pairing and sync, reproducible APK off the Play Store, `io.github.allisson.blindvault` registered for Google's developer verification (D269, D270, D271, D274)
 - [ ] Passkeys and autofill on Android: credential provider, autofill service, `assetlinks.json` binding (D269)

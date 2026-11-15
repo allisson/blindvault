@@ -123,6 +123,41 @@ encrypted backups and synchronized records (§3).
 | Sync conflict | Protected (items), limited (folders) | HLC, LWW, item history; folders without history (D14) |
 | Device clock wrong | Limited | Future-clock bound, read-only rules (D73, D74, D76, D149) |
 
+## After v1 (planned)
+
+Threats of the attachments, the browser extension, stored passkeys and the Android app, whose
+direction is fixed (overview §20) and whose specifications are not written yet. Every entry is
+planned; the specifications in `docs/attachments.md`, `docs/extension.md` and `docs/android.md`
+will refine them.
+
+### A9. Malicious website (extension and Android autofill)
+
+| Threat | Status | Mitigation | Specified in |
+| --- | --- | --- | --- |
+| Claims another origin to get a passkey assertion | Planned | The origin and frame come only from the browser's `MessageSender`, never from the page (D267) | overview D267 |
+| Asks for a passkey of another site through its `rpId` | Planned | The `rpId` must equal the origin's host or be a registrable suffix of it, checked against a shipped Public Suffix List (D267) | overview D267 |
+| Signs in with a stored passkey without the user knowing | Planned | A confirming click in the app's UI on every use (UP) (D268) | overview D268 |
+| Gets a password filled into a look-alike or embedded page | Planned | Fill only on a user gesture, only when the item's URL host equals the frame's origin, never into a cross-origin iframe (D267) | overview D267 |
+
+### A10. Other app on the Android device
+
+| Threat | Status | Mitigation | Specified in |
+| --- | --- | --- | --- |
+| Asks the credential provider for another app's or site's passkey or password | Planned | A native app's package is bound to the `rpId` or the item's domain through the site's `assetlinks.json`; a browser's origin is trusted only from a shipped allowlist of privileged browsers (D269) | overview D269 |
+| Learns that the user has the app of a site | Planned, accepted | Fetching `assetlinks.json` tells the site that its app is used; it carries no vault data (D269) | overview D269 |
+
+### Other planned entries
+
+| Attacker | Threat | Status | Mitigation | Specified in |
+| --- | --- | --- | --- | --- |
+| A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK requires a BiometricPrompt on every use, is invalidated when the enrolled biometrics change, and is bound to `localConfigId`; setting it up needs the local password (D271) | overview D271 |
+| A1 | Reads a removed stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268) | overview D268 |
+| A3 | Sends a substituted or oversized attachment blob | Planned | Each received blob checked against the hash in its item's `attachment` field; blobs above 10 MB rejected (D273) | overview D273 |
+| A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust; the version lock opens no vault until the user confirms the new version and manifest hash (D270) | overview D270 |
+| A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; reproducible APK with published SHA-256 and rebuild instructions (D270) | overview D270 |
+| A6 | Blocks new Android installs by terminating the Play Console account that registers the package | Planned, accepted | The account is a root of trust for installs, not for integrity; installed apps keep working, ADB and the advanced flow still install (D274) | overview D274 |
+| A7 | Runs a hostile attachment in the app's origin | Planned | Attachments are only downloaded, never previewed (D273) | overview D273 |
+
 ## Out of scope (documented to users)
 
 A compromised operating system, malware reading browser memory, malicious extensions, an attacker
