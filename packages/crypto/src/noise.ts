@@ -165,7 +165,7 @@ export class NoiseTransport {
   }
 
   encrypt(plaintext: Uint8Array): Uint8Array {
-    if (this.#wiped) throw new KeyWipedError();
+    this.#keyed(this.#tx);
     if (plaintext.length > NOISE_MAX_PLAINTEXT_LENGTH) {
       throw new EncodingError('a Noise transport message is at most 65,535 bytes');
     }
@@ -180,7 +180,7 @@ export class NoiseTransport {
   }
 
   decrypt(ciphertext: Uint8Array): Uint8Array {
-    if (this.#wiped) throw new KeyWipedError();
+    this.#keyed(this.#rx);
     try {
       if (ciphertext.length < NOISE_TAG_LENGTH || ciphertext.length > NOISE_MAX_MESSAGE_LENGTH) {
         throw new DecryptionError();
@@ -191,6 +191,18 @@ export class NoiseTransport {
     } catch {
       this.wipe();
       throw new DecryptionError();
+    }
+  }
+
+  /**
+   * A CipherState without a key would pass plaintext through, as the copied code does during a
+   * handshake: here it is refused like a wiped one (N-10).
+   */
+  #keyed(state: Uint8Array): void {
+    if (this.#wiped) throw new KeyWipedError();
+    if (!this.#noise.cipherState.hasKey(state)) {
+      this.wipe();
+      throw new KeyWipedError();
     }
   }
 
