@@ -26,7 +26,7 @@ const SLOW = 60_000;
 const b64 = (bytes: Uint8Array) => lib().to_base64(bytes, lib().base64_variants.ORIGINAL);
 
 /** A file sealed under `key`, and a port whose worker answers `key` at BlindPass's parameters. */
-function sealed(plaintext: string, fields: Record<string, unknown> = {}) {
+function sealed(plaintext: string | Uint8Array, fields: Record<string, unknown> = {}) {
   const key = lib().randombytes_buf(32);
   const nonce = lib().randombytes_buf(24);
   const file = {
@@ -34,7 +34,13 @@ function sealed(plaintext: string, fields: Record<string, unknown> = {}) {
     type: 'blindpass-export-encrypted',
     kekSalt: b64(new Uint8Array(16)),
     nonce: b64(nonce),
-    ciphertext: b64(lib().crypto_secretbox_easy(lib().from_string(plaintext), nonce, key)),
+    ciphertext: b64(
+      lib().crypto_secretbox_easy(
+        typeof plaintext === 'string' ? lib().from_string(plaintext) : plaintext,
+        nonce,
+        key,
+      ),
+    ),
     ...fields,
   };
   const port = inProcessPort(() => ({ ok: true, key, params: BLINDPASS_KDF_PARAMS }));
@@ -131,6 +137,16 @@ describe('.blindpass decryption (D126)', () => {
     const { file } = sealed('{}');
     await rejected({ ...file, version: 2 }, 'unsupported-version');
     await rejected({ ...file, version: '1' }, 'unsupported-version');
+  });
+
+  it('refuses an authentic plaintext that is not UTF-8 as not this format (R-10)', async () => {
+    const { file, key, port } = sealed(Uint8Array.of(0x7b, 0xff, 0xfe, 0x7d));
+    const error: unknown = await openBlindPassExport(port, JSON.stringify(file), 'x').catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(BlindPassRejectedError);
+    expect((error as BlindPassRejectedError).reason).toBe('not-this-format');
+    expect(key.every((b) => b === 0)).toBe(true);
   });
 
   it('opens a file whose ciphertext is only the MAC: an empty plaintext', async () => {

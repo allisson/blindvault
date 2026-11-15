@@ -471,6 +471,8 @@ const en = {
     wrongPhrase: 'The backup did not open with this Recovery Phrase.',
     wrongPassword: 'The backup did not open with this export password.',
     noPasswordKeyslot: 'This backup has no export password: use its Recovery Phrase.',
+    kdfFailed:
+      "This device could not derive the export password's key, perhaps for lack of memory. Use the Recovery Phrase.",
     corrupt: 'This backup is damaged or incomplete. It cannot be restored.',
     corruptRecord:
       'This backup holds a record that does not verify: {type} {id}. It cannot be restored.',
@@ -1033,6 +1035,8 @@ const en = {
       'The authenticator did not verify you with a PIN, fingerprint or face. Use the password.',
     backupPasskeyUnavailable:
       'The authenticator did not give what BlindVault needs. Use the password.',
+    backupKdfFailed:
+      'This device could not derive a key, perhaps for lack of memory. Close other tabs and apps, then try again.',
     backupHidden:
       'The vault locks as soon as the app is hidden: if the browser hides it while it saves the file, the vault locks, and the export must be repeated.',
     devices: 'Devices',
@@ -1644,6 +1648,8 @@ const ptBR: Messages = {
     wrongPhrase: 'O backup não abriu com esta Frase de Recuperação.',
     wrongPassword: 'O backup não abriu com esta senha de exportação.',
     noPasswordKeyslot: 'Este backup não tem senha de exportação: use a Frase de Recuperação.',
+    kdfFailed:
+      'Este dispositivo não conseguiu derivar a chave da senha de exportação, talvez por falta de memória. Use a Frase de Recuperação.',
     corrupt: 'Este backup está danificado ou incompleto. Ele não pode ser restaurado.',
     corruptRecord:
       'Este backup contém um registro que não verifica: {type} {id}. Ele não pode ser restaurado.',
@@ -2211,6 +2217,8 @@ const ptBR: Messages = {
       'O autenticador não verificou você com PIN, digital ou rosto. Use a senha.',
     backupPasskeyUnavailable:
       'O autenticador não forneceu o que o BlindVault precisa. Use a senha.',
+    backupKdfFailed:
+      'Este dispositivo não conseguiu derivar uma chave, talvez por falta de memória. Feche outras abas e apps e tente de novo.',
     backupHidden:
       'O cofre bloqueia assim que o app fica oculto: se o navegador o ocultar enquanto salva o arquivo, o cofre bloqueia e a exportação precisa ser repetida.',
     devices: 'Dispositivos',

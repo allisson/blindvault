@@ -5,7 +5,9 @@
 import {
   type KdfPort,
   KdfParamsRejectedError,
+  KdfWorkerError,
   Keyring,
+  PasswordRejectedError,
   PhraseRejectedError,
   type RecoveryCheckResult,
   RecordType,
@@ -193,7 +195,9 @@ export type BackupExport =
         | 'cancelled'
         | 'rejected'
         | 'no-user-verification'
-        | 'unavailable';
+        | 'unavailable'
+        /** The Argon2id worker failed, as when it cannot allocate the memory asked for (R-10). */
+        | 'kdf-failed';
     }
   /** A record that fails verification, named by its type and the start of its `recordId`. */
   | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
@@ -245,7 +249,9 @@ export type BackupOpening =
         | 'locked'
         | 'no-file'
         /** Opened for a merge, but a backup of another vault (D13). */
-        | 'different-vault';
+        | 'different-vault'
+        /** The export password's Argon2id failed here: the Recovery Phrase still opens it (R-10). */
+        | 'kdf-failed';
     }
   /** Named when the record decodes (D64). */
   | {
@@ -374,7 +380,8 @@ function ceremonyFailure(error: unknown): 'cancelled' | 'unavailable' {
 
 /** What a failure to open the Master Key wrap again tells the user (D181, D185). */
 function reauthFailure(error: unknown, auth: ExportAuth): ReauthFailure | undefined {
-  if (error instanceof UnlockRejectedError) {
+  // The local password holds no control character (R-10).
+  if (error instanceof UnlockRejectedError || error instanceof PasswordRejectedError) {
     return auth.kind === 'password' ? 'wrong-password' : 'rejected';
   }
   if (error instanceof VaultLockedError) return 'locked';
@@ -820,6 +827,9 @@ export class VaultController {
         const { reason, position } = error;
         return { kind: 'invalid-phrase', reason, ...(position !== undefined ? { position } : {}) };
       }
+      // No export password holds a control character (R-10).
+      if (error instanceof PasswordRejectedError) return { kind: 'wrong-secret' };
+      if (error instanceof KdfWorkerError) return { kind: 'kdf-failed' };
       if (!(error instanceof BackupRejectedError)) throw error;
       const { reason, record } = error;
       if (reason === 'wrong-secret' || reason === 'no-password-keyslot') return { kind: reason };
@@ -1621,6 +1631,7 @@ export class VaultController {
     } catch (error) {
       const failure = reauthFailure(error, auth);
       if (failure) return { kind: failure };
+      if (error instanceof KdfWorkerError) return { kind: 'kdf-failed' };
       if (error instanceof ExportRejectedError) {
         const { record } = error;
         if (!record) return { kind: 'no-envelope' };

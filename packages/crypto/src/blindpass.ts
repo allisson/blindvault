@@ -66,6 +66,9 @@ export async function openBlindPassExport(
   }
   try {
     return lib().to_string(plaintext);
+  } catch {
+    // Authentic but not UTF-8: its author wrote no BlindPass export (R-10).
+    throw new BlindPassRejectedError('not-this-format');
   } finally {
     lib().memzero(plaintext);
   }

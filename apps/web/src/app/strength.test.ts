@@ -47,3 +47,11 @@ describe('export password strength (D134, D155)', () => {
     expect(edited).toMatchObject({ acceptable: false, generated: false });
   });
 });
+
+describe('a password the KDF input refuses (R-10)', () => {
+  it('is not acceptable, locally or for export, however strong', async () => {
+    const strong = 'correct horse battery staple orbit lantern\tquiet';
+    expect((await estimator('en'))(strong).acceptable).toBe(false);
+    expect((await exportStrength('en', strong)).acceptable).toBe(false);
+  });
+});
