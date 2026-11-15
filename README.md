@@ -1,7 +1,128 @@
-# blindvault
+# BlindVault
 
-A local-first, end-to-end encrypted personal vault that runs in the browser. Official build: https://blindvault.allisson.dev. To serve it yourself, see [docs/self-hosting.md](docs/self-hosting.md).
-BlindVault is not yet at v1.0 and has had no independent security review. Before you use it, read [docs/limitations.md](docs/limitations.md): what it cannot protect, and when a vault is lost for good.
+A local-first, end-to-end encrypted personal vault that runs in the browser. There is no account
+and no server that stores your data: the vault lives on your devices and in the encrypted backups
+you make, and your devices sync with each other directly.
+
+**Official build: https://blindvault.allisson.dev**. To serve it yourself, see
+[docs/self-hosting.md](docs/self-hosting.md).
+
+> [!WARNING]
+> BlindVault is not yet at v1.0 and has had no independent security review. Until 1.0, treat every
+> vault as throwaway. Before you use it, read [docs/limitations.md](docs/limitations.md): what it
+> cannot protect, and when a vault is lost for good.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/vault-desktop-dark.png">
+  <img alt="The vault on a desktop: folders, the items of the Work folder, and a login with its password masked and its current TOTP code" src="docs/screenshots/vault-desktop-light.png">
+</picture>
+
+## Features
+
+**Your data stays yours**
+
+- No account, no data server, no telemetry. Network use is limited to the app's own files and,
+  for device connections, STUN servers you choose, or none in "Same network only" mode.
+- Installs as a PWA and works offline.
+- Every record is encrypted before it is stored or synced (libsodium, XChaCha20-Poly1305). The
+  local password goes through Argon2id calibrated to about one second.
+- Unlock with the local password or an unlock passkey (WebAuthn PRF). Auto-lock, and a lock when
+  the app stays hidden.
+
+**Sync without a server**
+
+- Devices pair over WebRTC, through a QR code or copied text, and each side confirms the same
+  six-digit number before any key is sent (Noise protocol).
+- Paired devices sync peer to peer. Each one holds a complete encrypted copy of the vault.
+- Retire a lost device, and see when each device last synced.
+
+**Recovery you control**
+
+- A 24-word Recovery Phrase, confirmed at creation, opens your backups and resets a forgotten local
+  password.
+- Encrypted `.bvault` backups, opened with the Recovery Phrase or an optional export password, with
+  a reminder after 30 days. Restore one on a new device, or merge one into a vault.
+- If a key may be compromised, re-found the vault: the same items under entirely new keys.
+
+**A vault, not only a password manager**
+
+- Seven templates: Login, Secure note, Payment card, Identity, Developer credential, Crypto wallet
+  and Document.
+- Ten field types, including TOTP with live codes, seed phrases, dates and long text. Add any field
+  to any item.
+- Nested folders, tags, search, item history and a trash kept for 30 days.
+- Password generator: random characters or BIP39 words, with the entropy shown in bits.
+- Secrets stay masked until you reveal them. A copied secret is cleared from the clipboard after
+  30 seconds, when the browser allows it.
+- Import from Bitwarden, 1Password, LastPass, Dashlane, Proton Pass, KeePassXC, Apple Passwords,
+  Chrome and BlindPass.
+
+**Made for every screen**
+
+- Mobile, tablet and desktop layouts, chosen by window width.
+- Light and dark themes, six accent colors, English and Brazilian Portuguese.
+- WCAG 2.2 AA, checked with axe-core on every screen in both themes.
+
+**Verifiable**
+
+- Reproducible builds: rebuild from source and compare with the published hashes
+  ([docs/build.md](docs/build.md)).
+- Updates are applied only after you confirm them.
+- Few dependencies, pinned exactly, with no install scripts.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/pairing-dark.png">
+        <img alt="Pairing a second device: both devices show the same six-digit number to compare" src="docs/screenshots/pairing-light.png">
+      </picture>
+      <p align="center">Pairing: both devices compare the same number</p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/generator-dark.png">
+        <img alt="The password generator over a new login, showing 131 bits of entropy" src="docs/screenshots/generator-light.png">
+      </picture>
+      <p align="center">The password generator</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/list-mobile-dark.png">
+        <img alt="The mobile layout: the items of the Work folder" src="docs/screenshots/list-mobile-light.png" width="300">
+      </picture>
+      <p align="center">Mobile: a folder</p>
+    </td>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/item-mobile-dark.png">
+        <img alt="The mobile layout: a login with its TOTP code" src="docs/screenshots/item-mobile-light.png" width="300">
+      </picture>
+      <p align="center">Mobile: an item</p>
+    </td>
+  </tr>
+</table>
+
+The screenshots follow your system theme. They show made-up data, and
+`pnpm --filter @blindvault/web screenshots` takes them again.
+
+## Development
+
+Node `26.13.0` (`.nvmrc`) and pnpm `10.33.0`, through corepack:
+
+```sh
+corepack enable pnpm
+pnpm install --frozen-lockfile
+pnpm --filter @blindvault/web dev    # dev server
+pnpm run ci                          # lint, typecheck, format and tests, as CI runs them
+pnpm test:e2e                        # Playwright on Chromium, Firefox and WebKit
+```
+
+[AGENTS.md](AGENTS.md) lists every command and the repository layout.
 
 ## Design and review
 
@@ -20,7 +141,13 @@ which prevails over every other document:
 - [docs/security-invariants.md](docs/security-invariants.md): each invariant and the tests that
   cover it.
 - [docs/build.md](docs/build.md): the reproducible build and the asset manifest.
+- [docs/roadmap.md](docs/roadmap.md): what comes next, including attachments, a browser extension
+  and an Android app.
 - [GLOSSARY.md](GLOSSARY.md): the domain terms.
 
 Send design findings and questions as GitHub issues. Report a vulnerability privately, as
 [SECURITY.md](SECURITY.md) explains.
+
+## License
+
+[MIT](LICENSE).
