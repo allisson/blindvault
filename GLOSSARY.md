@@ -49,6 +49,11 @@ The shared secret of a TOTP field, from which its one-time codes are computed.
 _pt-BR_: segredo TOTP
 _Avoid_: seed, TOTP seed, TOTP key
 
+**Passkey**:
+A WebAuthn credential for a website or app, stored as a field of an item and used to sign in there; unrelated to the unlock passkey.
+_pt-BR_: passkey
+_Avoid_: FIDO credential, WebAuthn key, discoverable credential (in UI copy)
+
 **Template**:
 A field layout an item is created from, such as Login or Card.
 _pt-BR_: modelo
@@ -173,6 +178,15 @@ _Avoid_: local settings, device state, profile
 A device-local key, derived from a WebAuthn PRF credential, that unlocks the vault on that device as an alternative to the local password.
 _Avoid_: biometric-derived wrapping key, biometric wrapping material
 
+**Unlock passkey**:
+The WebAuthn PRF credential, held by an authenticator or a platform account, from which a device derives its PRF KEK.
+_pt-BR_: passkey de desbloqueio
+_Avoid_: passkey (alone, in this sense), biometric unlock
+
+**Keystore KEK**:
+A device-local key, held by the Android Keystore behind biometric confirmation, that unlocks the vault on that device as an alternative to the local password.
+_Avoid_: biometric key, fingerprint unlock key
+
 **Recovery Phrase**:
 The 24-word phrase that represents the vault's recovery secret.
 _pt-BR_: Frase de Recuperação
@@ -205,7 +219,7 @@ _Avoid_: rekey, Master Key rotation, new vault + import
 ## Locking
 
 **Unlock**:
-Opening the vault on one device with the local password, a WebAuthn credential or the Recovery Phrase, so its keys are held in memory.
+Opening the vault on one device with the local password, an unlock passkey or the Recovery Phrase, so its keys are held in memory.
 _pt-BR_: desbloquear
 _Avoid_: log in, sign in, open (as the security action)
 

@@ -489,4 +489,12 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ## After v1
 
-Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), attachments (up to 10 MB, chunked secretstream), storage quotas, device revocation via `keyEpoch`, master key rotation, cloud storage plugins, sharing between people, and a browser extension. Details in the overview, section 20 "Out of scope for v1".
+Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), attachments (up to 10 MB, chunked secretstream), storage quotas, device revocation via `keyEpoch`, master key rotation, cloud storage plugins, and sharing between people. Details in the overview, section 20 "Out of scope for v1".
+
+Browser extension, stored passkeys and the Android app (D267 to D272), in this order:
+
+- [ ] Spike: WebAuthn interception from the MAIN world (Chrome, Firefox), offscreen document lifetime and auto-lock, WebAuthn PRF from an extension origin, libsodium WASM under the MV3 CSP, the `apps/web` bundle and BiometricPrompt in an Android WebView; results recorded as decisions
+- [ ] `docs/extension.md`, then the extension (Chromium, Firefox) with password autofill and the version lock (D267, D270)
+- [ ] Stored passkeys in the extension: `passkey` field type, ES256 and EdDSA, flags, history notice (D268)
+- [ ] `docs/android.md`, then the Android app: WebView shell, Keystore KEK, pairing and sync, reproducible APK off the Play Store (D269, D270, D271)
+- [ ] Passkeys and autofill on Android: credential provider, autofill service, `assetlinks.json` binding (D269)
