@@ -75,7 +75,7 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   // The proof of the user: a wrong password goes no further (D187).
   await expect(
     refound.getByText(
-      'Confirm it is you with the local password of this vault, or with its passkey.',
+      'Confirm it is you with the local password of this vault, or with its unlock passkey.',
       { exact: true },
     ),
   ).toBeVisible();

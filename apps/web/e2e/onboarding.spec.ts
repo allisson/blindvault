@@ -197,7 +197,7 @@ test('recommends passkey unlock first where the browser has it (§13.3, D198)', 
   const ready = page.getByTestId('ready');
   await expect(ready.getByRole('listitem').first()).toHaveAttribute('data-testid', 'ready-passkey');
   // Its action opens Settings with the cursor in the passkey setup, which asks for the password.
-  await button(page, 'Set up a passkey').click();
+  await button(page, 'Set up an unlock passkey').click();
   await expect(page.getByTestId('passkey-password')).toBeFocused();
 });
 
