@@ -108,6 +108,8 @@ describe('startup cleanup (D89, D96, D97, D154)', () => {
     const report = await run();
     expect(report.deleted).toEqual([]);
     expect(report.skipped).toEqual([databaseName(old)]);
+    // Only the replacement is a vault to open, whatever the order of the names.
+    expect(report.vaults).toEqual([databaseName(current)]);
     expect(await stored(current)).toEqual(config(old));
     await held?.release();
     // The next startup finishes the replacement.

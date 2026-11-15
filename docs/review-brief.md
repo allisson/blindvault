@@ -119,7 +119,8 @@ finding has one.
 ## Findings
 
 R-01 to R-11 and the notes N-01 to N-14 come from a pre-review of `27d3fdd` by Claude (Fable 5.2),
-asked by the owner. It is not the external review this gate item requires.
+asked by the owner. It is not the external review this gate item requires. V-01 was found while
+checking those resolutions.
 
 | ID | Severity | Where | Summary | Resolution |
 | --- | --- | --- | --- | --- |
@@ -148,3 +149,4 @@ asked by the owner. It is not the external review this gate item requires.
 | N-12 | note | `docs/threat-model.md` | Missing: the unauthenticated STUN list, storage copies after a password change, an old reconnection offer | Documented: D266 |
 | N-13 | note | `packages/crypto/src/noise.test.ts:237-239`, `:513-519`, backup vectors | Tests that pass without the check they name, the nonce carry and edited backup headers not covered | Fixed: tests and vectors added (D266) |
 | N-14 | note | `packages/sync/src/payload.ts:116-124`, `transfer.ts:59-65`, `apps/web/src/app/controller.ts` (`start()`), `handshake-state.ts:45` | Small items: 0 in a payload list, `known-device` after the Master Key, the first of two vault databases, a token's name | Accepted: D266 |
+| V-01 | low | `packages/storage/src/cleanup.ts:105`, `apps/web/src/app/controller.ts` (`start()`) | With a replaced database skipped because another app window held it (D154), startup could open the replaced vault, which the next startup deletes with what was written to it | Fixed: the cleanup lists only the replacement as a vault |

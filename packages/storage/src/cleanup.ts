@@ -15,7 +15,7 @@ export interface LocalConfigReader {
 }
 
 export interface CleanupReport {
-  /** Names of the vault databases left, each with a committed Local Config. */
+  /** Names of the vault databases left, each with a committed Local Config, but not a skipped one. */
   readonly vaults: readonly string[];
   /** Names of the databases deleted. */
   readonly deleted: readonly string[];
@@ -101,5 +101,7 @@ export async function cleanupDatabases(
     for (const { db } of committed.values()) db.close();
   }
 
-  return { vaults: [...committed.keys()], deleted, skipped };
+  // A replaced vault held elsewhere is not one to open: its replacement is the vault (D96).
+  const vaults = [...committed.keys()].filter((name) => !skipped.includes(name));
+  return { vaults, deleted, skipped };
 }
