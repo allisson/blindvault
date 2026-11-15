@@ -27,12 +27,8 @@ export class SyncRefusal extends Error {
   }
 }
 
-/** The types sent whenever the peer's entry differs in any field, older or not (§8, D31, D42, D44). */
-const COMPARED_WHOLE = new Set<number>([
-  RecordType.device,
-  RecordType.vaultKey,
-  RecordType.recoveryEnvelope,
-]);
+/** The types sent whenever the peer's entry differs in any field, older or not (§8, D42, D44). */
+const COMPARED_WHOLE = new Set<number>([RecordType.vaultKey, RecordType.recoveryEnvelope]);
 
 function hex(bytes: Uint8Array): string {
   let text = '';
@@ -64,10 +60,10 @@ function sameEntry(a: SummaryEntry, b: SummaryEntry): boolean {
 }
 
 /**
- * §8: the entries of `mine` whose record goes to the peer: one the peer does not hold; an Item whose
- * `hlc` or `recordFormatVersion` differs from the peer's entry (D223); an Item Version or Folder that
- * wins last-write-wins against the peer's entry (§1.2); a Device, Vault Key or Recovery Envelope
- * record whose entry differs from the peer's in any field.
+ * §8: the entries of `mine` whose record goes to the peer: every Device record (D261); one the peer
+ * does not hold; an Item whose `hlc` or `recordFormatVersion` differs from the peer's entry (D223);
+ * an Item Version or Folder that wins last-write-wins against the peer's entry (§1.2); a Vault Key or
+ * Recovery Envelope record whose entry differs from the peer's in any field.
  */
 export function selectRecords(
   mine: readonly SummaryEntry[],
@@ -75,6 +71,8 @@ export function selectRecords(
 ): SummaryEntry[] {
   const peer = new Map(theirs.map((e) => [identity(e), e]));
   return mine.filter((e) => {
+    // A summary does not carry `retired`: a forged copy under the retirement's header looks equal.
+    if (e.recordType === RecordType.device) return true;
     const other = peer.get(identity(e));
     if (!other) return true;
     if (COMPARED_WHOLE.has(e.recordType)) return !sameEntry(e, other);

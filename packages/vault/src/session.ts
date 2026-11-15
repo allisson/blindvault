@@ -1996,8 +1996,8 @@ export class VaultSession {
       if (local) {
         const before = { header: local.header, retired: local.device.value.retired };
         const after = { header: device.header, retired: device.device.value.retired };
-        if (sameVersion(local.header, device.header) || !incomingDeviceWins(before, after))
-          continue;
+        // No `sameVersion` shortcut: a retired copy wins under the same header too (D261).
+        if (!incomingDeviceWins(before, after)) continue;
       }
       take(device.header, device.device.content, local !== undefined);
       if (key !== own && !heldNone) {

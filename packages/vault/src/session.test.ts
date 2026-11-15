@@ -2067,6 +2067,24 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     expect(a.session.retired).toBe(true);
   });
 
+  it('lets a retired Device record beat a non-retired copy under the same header (D261)', async () => {
+    const { a, b } = await twoDevices();
+    const keys = keysOf(a.store);
+    const gone = generateDeviceIdentity(new Keyring());
+    const device = (retired: boolean) =>
+      deviceToCbor({ publicKey: gone.publicKey, displayName: 'Laptop', retired, registeredAt: T0 });
+    const retiredAt = hlcAt(T0 + 11);
+    // The retired device forges itself back, live, under the header of its retirement.
+    plant(a.store, keys, RecordType.device, gone.deviceId, retiredAt, false, device(false));
+    await b.session.mergeBackup(await rawBackup(a.store));
+    plant(a.store, keys, RecordType.device, gone.deviceId, retiredAt, false, device(true));
+    const result = await b.session.mergeBackup(await rawBackup(a.store));
+    expect(result.retiredDevices.map((d) => idKey(d.deviceId))).toEqual([idKey(gone.deviceId)]);
+    expect(
+      b.session.devices().find((d) => idKey(d.deviceId) === idKey(gone.deviceId))?.device.retired,
+    ).toBe(true);
+  });
+
   it('records every device as seen without a notice when none was held before (D48, D53)', async () => {
     const source = await create();
     const keyring = new Keyring();
