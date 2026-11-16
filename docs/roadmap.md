@@ -23,7 +23,9 @@ Phase 5 Synchronization ──► Gate D
 Phase 6 Deployment on Cloudflare Pages ──► Deploy Gate
 Phase 7 User experience ──► UX Gate
 Phase 7b Essential UX ──► Essential UX Gate
-Phase 8 Import and final review ──► Security Gate ──► v1.0
+Phase 8 Import and final review ──► Security Gate
+Phase 9 Attachments ──► Attachments Gate
+Phase 10 Extension and Android ──► Release Gate ──► v1.0
 ```
 
 ---
@@ -457,7 +459,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ## Phase 8 — Import and final review
 
-**Goal:** Import from BlindPass and other password managers, and security validation before v1.0.
+**Goal:** Import from BlindPass and other password managers, and security validation of the PWA (D275).
 
 ### Tasks
 
@@ -474,7 +476,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] User documentation: limitations (memory zeroization, revocation, TOFU, old backups and old phrase, permanent loss), in `docs/limitations.md`
 - [x] Measure LAN-only on real devices when both sides send only mDNS names (copy/paste pairing with no camera, reconnection), and revise D161 with the result (moved from Phase 4, D212, then from Phase 5; not measured, D259)
 
-### Security Gate → v1.0
+### Security Gate
 
 - [ ] Cryptographic and protocol review complete, findings resolved
 - [x] Every invariant in `security-invariants.md` has an associated passing test
@@ -487,18 +489,44 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ---
 
-## After v1
+## Phase 9 — Attachments
 
-Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), device revocation via `keyEpoch`, master key rotation, cloud storage plugins, and sharing between people. Details in the overview, section 20 "Out of scope for v1".
+**Goal:** Attachments in items, synced and backed up, before the extension and the Android app start from the final formats (D273, D275).
 
-Attachments first (D273):
+### Tasks
 
 - [ ] `docs/attachments.md`, then attachments: `attachment` field type, blobs of up to 10 MB under `secretstream`, blob phase after the record sync, collection when no record cites a blob, `.bvault` format version carrying the blobs, download only
 
-Then the browser extension, stored passkeys and the Android app (D267 to D272, D274), in this order:
+### Attachments Gate
+
+- [ ] A blob that does not match the hash in its field is refused, on sync and on restore
+- [ ] Two devices end a sync holding the same blobs, and a blob no record cites is removed
+- [ ] A `.bvault` with blobs restores them, and a `.bvault` of the previous format version still restores
+- [ ] `security-invariants.md` and `threat-model.md` updated for attachments
+
+---
+
+## Phase 10 — Extension and Android
+
+**Goal:** The browser extension, stored passkeys and the Android app, in this order, and the review that releases v1.0 (D267 to D272, D274, D275).
+
+### Tasks
 
 - [ ] Spike: WebAuthn interception from the MAIN world (Chrome, Firefox), offscreen document lifetime and auto-lock, WebAuthn PRF from an extension origin, libsodium WASM under the MV3 CSP, the `apps/web` bundle and BiometricPrompt in an Android WebView; results recorded as decisions
 - [ ] `docs/extension.md`, then the extension (Chromium, Firefox) with password autofill and the version lock (D267, D270)
 - [ ] Stored passkeys in the extension: `passkey` field type, ES256 and EdDSA, flags, history notice (D268)
 - [ ] `docs/android.md`, then the Android app: WebView shell, Keystore KEK, pairing and sync, reproducible APK off the Play Store, `io.github.allisson.blindvault` registered for Google's developer verification (D269, D270, D271, D274)
 - [ ] Passkeys and autofill on Android: credential provider, autofill service, `assetlinks.json` binding (D269)
+
+### Release Gate → v1.0
+
+- [ ] Cryptographic and protocol review of attachments, the extension, stored passkeys and the Android app complete, findings resolved
+- [ ] Every invariant in `security-invariants.md` has an associated passing test, the new ones included
+- [ ] Reproducible build validated on the release candidate for the PWA, the extension and the APK
+- [ ] `threat-model.md`: the planned entries of attachments, the extension and Android reviewed against what was implemented
+
+---
+
+## After v1
+
+Optional signaling relay for automatic sync (D12: mailbox interface, Nostr adapter first, then ntfy; off by default, no official instance), device revocation via `keyEpoch`, master key rotation, cloud storage plugins, and sharing between people. Details in the overview, section 20 "Planned and out-of-scope work".

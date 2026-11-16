@@ -141,8 +141,8 @@ which prevails over every other document:
 - [docs/security-invariants.md](docs/security-invariants.md): each invariant and the tests that
   cover it.
 - [docs/build.md](docs/build.md): the reproducible build and the asset manifest.
-- [docs/roadmap.md](docs/roadmap.md): what comes next, including attachments, a browser extension
-  and an Android app.
+- [docs/roadmap.md](docs/roadmap.md): what comes next. Attachments, a browser extension and an
+  Android app come before v1.0.
 - [GLOSSARY.md](GLOSSARY.md): the domain terms.
 
 Send design findings and questions as GitHub issues. Report a vulnerability privately, as
