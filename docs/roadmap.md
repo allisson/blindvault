@@ -478,7 +478,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Security Gate
 
-- [ ] Cryptographic and protocol review complete, findings resolved
+- [x] Cryptographic and protocol review: moved to the Release Gate, one external review of the whole app (D276)
 - [x] Every invariant in `security-invariants.md` has an associated passing test
 - [x] Reproducible build validated on the release candidate
 - [x] Browser matrix tested and recorded (without a manual run, D257)
@@ -520,7 +520,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Release Gate → v1.0
 
-- [ ] Cryptographic and protocol review of attachments, the extension, stored passkeys and the Android app complete, findings resolved
+- [ ] External cryptographic and protocol review of the whole app (the PWA, attachments, the extension, stored passkeys and the Android app) complete, findings resolved (D276)
 - [ ] Every invariant in `security-invariants.md` has an associated passing test, the new ones included
 - [ ] Reproducible build validated on the release candidate for the PWA, the extension and the APK
 - [ ] `threat-model.md`: the planned entries of attachments, the extension and Android reviewed against what was implemented
