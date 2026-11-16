@@ -1,7 +1,8 @@
 # Cryptographic and protocol review — brief
 
-For the external reviewer of the Security Gate item "Cryptographic and protocol review complete,
-findings resolved" (`roadmap.md`, Phase 8). It says what to review, where the specification and the
+For the external reviewer of the Release Gate item "External cryptographic and protocol review of
+the whole app" (`roadmap.md`, Phase 10, D276). It covers the PWA; each later part is added before
+the review. It says what to review, where the specification and the
 code of each part live, what the project already checks, and how to report a finding. It introduces
 no decision: `overview.md` prevails.
 
