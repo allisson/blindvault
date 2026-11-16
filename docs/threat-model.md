@@ -123,11 +123,11 @@ encrypted backups and synchronized records (§3).
 | Sync conflict | Protected (items), limited (folders) | HLC, LWW, item history; folders without history (D14) |
 | Device clock wrong | Limited | Future-clock bound, read-only rules (D73, D74, D76, D149) |
 
-## After v1 (planned)
+## Before v1.0 (planned)
 
-Threats of the attachments, the browser extension, stored passkeys and the Android app, whose
-direction is fixed (overview §20) and whose specifications are not written yet. Every entry is
-planned; the specifications in `docs/attachments.md`, `docs/extension.md` and `docs/android.md`
+Threats of the attachments, the browser extension, stored passkeys and the Android app, which come
+before v1.0 (D275). Their direction is fixed (overview §20) and their specifications are not
+written yet. Every entry is planned; the specifications in `docs/attachments.md`, `docs/extension.md` and `docs/android.md`
 will refine them.
 
 ### A9. Malicious website (extension and Android autofill)
