@@ -120,6 +120,9 @@ It also has these limits:
   (D257). Automated tests cover Chromium, Firefox and WebKit, and real phones ran an earlier
   version, but persistent storage, passkeys outside Chrome, Safari on macOS and installing the app
   were not checked on this version. If one of them fails for you, report it.
+- **A large vault on a first sync.** The device that receives a first sync, or a re-admission,
+  holds every record it receives in memory until the transfer ends, so a very large vault can run a
+  phone out of memory. Attachments are not part of it: they come afterwards, one at a time.
 - **Same network only, without a camera.** With "Same network only (no STUN server)", reconnecting
   two paired devices, and pairing by copy and paste, were not checked on real devices (D259). If
   pairing fails, pair by QR code; if either fails, turn the option off so a STUN server is used.
