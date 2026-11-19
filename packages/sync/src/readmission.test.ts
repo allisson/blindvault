@@ -10,6 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { FrameReader } from './frames';
 import { type MemoryPairOptions, memoryPair } from './memory';
+import { memoryBlobStore } from './memory-blobs';
 import { type Message, decodeMessage } from './messages';
 import type { Role } from './payload';
 import { type DevicesHeld, type ReadmitOptions, readmissionWrites, readmit } from './readmission';
@@ -74,6 +75,7 @@ function options(side: Side, overrides: Partial<ReadmitOptions<string>> = {}) {
       seen.merged.push([...records]);
       return Promise.resolve(`merged ${String(records.length)}`);
     },
+    blobs: { store: memoryBlobStore() },
     ...overrides,
   };
   return { opts, seen };
@@ -125,7 +127,8 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3)', () =>
     ]);
     expect(sideI.seen.merged.map((m) => m.map(toHex))).toEqual([recordsR.map(toHex)]);
     expect(sideR.seen.merged.map((m) => m.map(toHex))).toEqual([recordsI.map(toHex)]);
-    // The MACs and devices come first on both sides; committed is each side's last message.
+    // The MACs and devices come first on both sides; committed, then the blob phase, last: neither
+    // lacks a blob, so each phase is its blobs-end alone (§9 step 7).
     for (const direction of ['a-to-b', 'b-to-a']) {
       const sent = log.filter((m) => m.direction === direction).map((m) => m.t);
       const records = direction === 'a-to-b' ? recordsI.length : recordsR.length;
@@ -136,6 +139,7 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3)', () =>
         ...Array<string>(records).fill('record'),
         'records-end',
         'committed',
+        'blobs-end',
       ]);
     }
     expect(a.error?.reason).toBe('closed');

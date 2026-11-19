@@ -1,9 +1,10 @@
 // The pairing messages of `pairing-protocol.md` §10.2, under the strict codec shared with the sync
 // messages (`message-codec.ts`). `records-begin`, `record` and `records-end` are those of the full
-// transfer (`sync-protocol.md` §2.1).
+// transfer (`sync-protocol.md` §2.1), and the blob messages those of the blob phase (§10.1, D279).
 
 import { type CborValue } from '@blindvault/crypto';
 
+import { BLOB_SCHEMA, type BlobMessage } from './blob-messages';
 import {
   type Field,
   type MessageCodec,
@@ -50,6 +51,7 @@ export type Message =
   | { readonly t: 'record'; readonly r: Uint8Array }
   | { readonly t: 'records-end' }
   | { readonly t: 'committed' }
+  | BlobMessage
   | { readonly t: 'abort'; readonly reason: AbortReason };
 
 export type MessageType = Message['t'];
@@ -78,6 +80,7 @@ const PAIRING: MessageCodec<Message> = {
     record: { r: envelopeField },
     'records-end': {},
     committed: {},
+    ...BLOB_SCHEMA,
     abort: { reason: textField },
   },
   abortReasons: ABORT_REASONS,

@@ -27,6 +27,7 @@ import {
   pairingHandshake,
   readmit,
   syncHandshake,
+  memoryBlobStore,
 } from '@blindvault/sync';
 import {
   type ItemInput,
@@ -247,6 +248,7 @@ async function readmission(i: Device, r: Device, run: Run = {}) {
           if (role === 'responder') run.beforeMerge?.(device.session);
           return grant.merge(records, handshake.peerPublicKey);
         }),
+      blobs: { store: memoryBlobStore() },
     });
   };
 

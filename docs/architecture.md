@@ -47,6 +47,19 @@ every project through the references in the root `tsconfig.json`.
   blobs. Collection does nothing before the D277 pass or while an Item or Item Version is kept
   aside as corrupt, and a failure leaves the blobs for the next one. An item's new blobs must be
   ones its content cites, and go in the commit of the item.
+- **Blob phase (D278, D279, `sync-protocol.md` §10.1).** `packages/sync/src/blobs.ts` holds one
+  `BlobPhase` per session, the same in a sync, a pairing and a re-admission: it asks for what a
+  `BlobStore` says it lacks, each ID once per session, in `blobs-want` messages of 16,384 IDs at
+  most; answers each ID asked for, in order, after the `check` of §6, with the held blob in chunks
+  of 1 MiB once its length and hash check out, deleting it and answering `blob-missing` otherwise;
+  and receives one blob at a time, aborting on anything out of the order of §10.1 and writing it
+  only whole and matching its `blobId`, or reporting it. Units and transfers leave through one
+  `Outbox`, so their messages never interleave. `liveSession` asks once live and after each
+  merged transfer; `sendVault`, `ReceivedVault.commit` and `readmit` run the admission's phase
+  (`admissionBlobs`) after `committed`, and a phase cut short keeps the committed records and the
+  blobs written. The blob messages share one schema (`blob-messages.ts`) between the pairing and
+  the sync codecs. `memoryBlobStore` is the in-memory store of the protocol tests, alongside
+  `memoryPair`.
 - **Device identity bytes.** The encrypted part of Local Config holds the identity's private key,
   so `packages/crypto` seals and opens that part (`sealLocalConfigPart`, `openLocalConfigPart`):
   `packages/vault` never reads the private key as bytes, and the opened plaintext is wiped.

@@ -1,10 +1,12 @@
 // The sync messages of `sync-protocol.md` §11.1, under the strict codec shared with the pairing
 // messages (`message-codec.ts`). `records-begin`, `record` and `records-end` are those of the full
 // transfer (§2.1); a `summary` entry is the CBOR array of §7, each element checked against its
-// range. The order of the messages is each stage's to check (§11.1), not the codec's.
+// range. The blob messages of §10.1 are in `blob-messages.ts`, shared with pairing. The order of the
+// messages is each stage's to check (§11.1), not the codec's.
 
 import { type CborValue, type Hlc, hlcValue, readHlc } from '@blindvault/crypto';
 
+import { BLOB_SCHEMA, type BlobMessage } from './blob-messages';
 import {
   type Field,
   type MessageCodec,
@@ -54,6 +56,7 @@ export type SyncMessage =
   | { readonly t: 'records-end' }
   | { readonly t: 'committed' }
   | { readonly t: 'retired'; readonly r: Uint8Array }
+  | BlobMessage
   | { readonly t: 'abort'; readonly reason: SyncAbortReason };
 
 export type SyncMessageType = SyncMessage['t'];
@@ -111,6 +114,7 @@ const SYNC: MessageCodec<SyncMessage> = {
     'records-end': {},
     committed: {},
     retired: { r: envelopeField },
+    ...BLOB_SCHEMA,
     abort: { reason: textField },
   },
   abortReasons: SYNC_ABORT_REASONS,

@@ -703,6 +703,93 @@
         }
       },
       {
+        "case": "blobs-want with one id",
+        "bytes": "a361746a626c6f62732d77616e7461760263696473815820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+        "message": {
+          "v": 2,
+          "t": "blobs-want",
+          "ids": [
+            "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+          ]
+        }
+      },
+      {
+        "case": "blobs-want with three ids",
+        "bytes": "a361746a626c6f62732d77616e7461760263696473835820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf5820b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd05820b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1",
+        "message": {
+          "v": 2,
+          "t": "blobs-want",
+          "ids": [
+            "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+            "b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0",
+            "b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1"
+          ]
+        }
+      },
+      {
+        "case": "blobs-end",
+        "bytes": "a2617469626c6f62732d656e64617602",
+        "message": {
+          "v": 2,
+          "t": "blobs-end"
+        }
+      },
+      {
+        "case": "blob-begin with the shortest blob",
+        "bytes": "a461746a626c6f622d626567696e6176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf6473697a65182a",
+        "message": {
+          "v": 2,
+          "t": "blob-begin",
+          "id": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+          "size": 42
+        }
+      },
+      {
+        "case": "blob-begin with the longest blob",
+        "bytes": "a461746a626c6f622d626567696e6176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf6473697a651a00a00ac9",
+        "message": {
+          "v": 2,
+          "t": "blob-begin",
+          "id": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+          "size": 10488521
+        }
+      },
+      {
+        "case": "blob-chunk of 1 byte",
+        "bytes": "a36163410061746a626c6f622d6368756e6b617602",
+        "message": {
+          "v": 2,
+          "t": "blob-chunk",
+          "c": "00"
+        }
+      },
+      {
+        "case": "blob-chunk of 3 bytes",
+        "bytes": "a3616343c0c1c261746a626c6f622d6368756e6b617602",
+        "message": {
+          "v": 2,
+          "t": "blob-chunk",
+          "c": "c0c1c2"
+        }
+      },
+      {
+        "case": "blob-end",
+        "bytes": "a2617468626c6f622d656e64617602",
+        "message": {
+          "v": 2,
+          "t": "blob-end"
+        }
+      },
+      {
+        "case": "blob-missing",
+        "bytes": "a361746c626c6f622d6d697373696e676176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+        "message": {
+          "v": 2,
+          "t": "blob-missing",
+          "id": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+        }
+      },
+      {
         "case": "abort, ended",
         "bytes": "a361746561626f727461760266726561736f6e65656e646564",
         "message": {
@@ -961,6 +1048,91 @@
         "bytes": "a261746561626f7274617602"
       },
       {
+        "case": "blobs-want with no id",
+        "reason": "protocol-error",
+        "bytes": "a361746a626c6f62732d77616e746176026369647380"
+      },
+      {
+        "case": "blobs-want with an id of 31 bytes",
+        "reason": "protocol-error",
+        "bytes": "a361746a626c6f62732d77616e746176026369647381581fb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdce"
+      },
+      {
+        "case": "blobs-want with an id of 33 bytes",
+        "reason": "protocol-error",
+        "bytes": "a361746a626c6f62732d77616e7461760263696473825820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf5821b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1"
+      },
+      {
+        "case": "blobs-want with an id as text",
+        "reason": "protocol-error",
+        "bytes": "a361746a626c6f62732d77616e746176026369647381784062306230623062306230623062306230623062306230623062306230623062306230623062306230623062306230623062306230623062306230623062306230"
+      },
+      {
+        "case": "blobs-want with ids as bytes",
+        "reason": "protocol-error",
+        "bytes": "a361746a626c6f62732d77616e74617602636964735820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+      },
+      {
+        "case": "blobs-want without ids",
+        "reason": "protocol-error",
+        "bytes": "a261746a626c6f62732d77616e74617602"
+      },
+      {
+        "case": "blobs-end with an extra key",
+        "reason": "protocol-error",
+        "bytes": "a3617469626c6f62732d656e6461760263696473815820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+      },
+      {
+        "case": "blob-begin one byte shorter than the shortest blob",
+        "reason": "protocol-error",
+        "bytes": "a461746a626c6f622d626567696e6176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf6473697a651829"
+      },
+      {
+        "case": "blob-begin one byte longer than the longest blob",
+        "reason": "protocol-error",
+        "bytes": "a461746a626c6f622d626567696e6176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf6473697a651a00a00aca"
+      },
+      {
+        "case": "blob-begin with a negative size",
+        "reason": "protocol-error",
+        "bytes": "a461746a626c6f622d626567696e6176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf6473697a6520"
+      },
+      {
+        "case": "blob-begin with an id of 31 bytes",
+        "reason": "protocol-error",
+        "bytes": "a461746a626c6f622d626567696e617602626964581fb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdce6473697a65182a"
+      },
+      {
+        "case": "blob-begin without size",
+        "reason": "protocol-error",
+        "bytes": "a361746a626c6f622d626567696e6176026269645820b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf"
+      },
+      {
+        "case": "blob-chunk empty",
+        "reason": "protocol-error",
+        "bytes": "a361634061746a626c6f622d6368756e6b617602"
+      },
+      {
+        "case": "blob-chunk as text",
+        "reason": "protocol-error",
+        "bytes": "a3616362303061746a626c6f622d6368756e6b617602"
+      },
+      {
+        "case": "blob-end with an extra key",
+        "reason": "protocol-error",
+        "bytes": "a361634100617468626c6f622d656e64617602"
+      },
+      {
+        "case": "blob-missing with an id of 33 bytes",
+        "reason": "protocol-error",
+        "bytes": "a361746c626c6f622d6d697373696e676176026269645821b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0"
+      },
+      {
+        "case": "blob-missing without id",
+        "reason": "protocol-error",
+        "bytes": "a261746c626c6f622d6d697373696e67617602"
+      },
+      {
         "case": "keys not in deterministic order",
         "reason": "protocol-error",
         "bytes": "a2617602617469636f6d6d6974746564"
@@ -979,6 +1151,12 @@
     "largestEntry": "8619ffff19ffff505152535455565758595a5b5c5d5e5f60831b001fffffffffffff1affffffff507172737475767778797a7b7c7d7e7f80f51affffffff",
     "smallestEntry": "86000050000000000000000000000000000000008300005000000000000000000000000000000000f400",
     "maxEntryLength": 62,
-    "largestSummaryLength": 1015827
+    "largestSummaryLength": 1015827,
+    "maxBlobIds": 16384,
+    "blobChunkLength": 1048576,
+    "largestBlobChunkLength": 1048600,
+    "largestBlobsWantLength": 557080,
+    "minBlobLength": 42,
+    "maxBlobLength": 10488521
   }
 }

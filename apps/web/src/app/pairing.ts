@@ -52,6 +52,7 @@ import {
   type VaultSession,
 } from '@blindvault/vault';
 
+import { NO_BLOBS } from './blobs';
 import { DEFAULT_STUN_URLS, type StunSettings } from './stun-settings';
 
 /** WebRTC, behind a port so the controller's tests run over the in-memory transport. */
@@ -463,6 +464,7 @@ export class Inviting extends Flow {
             return grant.records();
           }),
         completed: () => grant.completed(peerDeviceId),
+        blobs: { store: NO_BLOBS },
       });
       this.succeeded({ kind: 'done', name, readmit: this.#readmit });
     } catch (error) {
@@ -556,7 +558,9 @@ export class Joining extends Flow {
         keyring: options.keyring,
         name: options.name,
       });
-      await received.commit(() => mapped(() => options.commit(received, peerPublicKey)));
+      await received.commit(() => mapped(() => options.commit(received, peerPublicKey)), {
+        store: NO_BLOBS,
+      });
       this.succeeded(undefined);
     } catch (error) {
       this.failed(error);
@@ -749,6 +753,7 @@ export class Readmitting extends Flow {
             this.#options.merged();
             return merged;
           }),
+        blobs: { store: NO_BLOBS },
       });
       this.succeeded({ kind: 'readmitted', name: peerName, result, peerCommitted });
     } catch (error) {

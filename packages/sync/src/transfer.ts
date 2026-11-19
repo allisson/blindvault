@@ -1,7 +1,8 @@
 // The Master Key transfer and the full transfer of a pairing (`pairing-protocol.md` §8,
 // `sync-protocol.md` §2.1, §2.2, D202), run once both devices confirmed the SAS. A sends
 // `master-key`, B answers `received` with its display name, A writes B's Device record and sends
-// every record it holds, and B persists them before it sends `committed`. This package never sees
+// every record it holds, and B persists them before it sends `committed`; then B asks A for the
+// blobs its records cite (§8 step 8, `sync-protocol.md` §10.1, D279). This package never sees
 // the vault: A's writes and B's commit are callbacks the app wires to the vault session, and a
 // callback refuses with the abort reason of §10.3 by throwing `TransferRefusal`.
 
@@ -12,6 +13,7 @@ import {
   importTransferKey,
 } from '@blindvault/crypto';
 
+import { type BlobOptions, BlobPhase, admissionBlobs } from './blobs';
 import type { AbortReason } from './messages';
 import { PairingError, type PairingSession } from './session';
 
@@ -50,9 +52,15 @@ export interface SendVaultOptions {
   readonly admit: (name: string) => Promise<readonly Uint8Array[]>;
   /** B committed: records the completed sync with B (D34). Runs after the session closed. */
   readonly completed: () => Promise<void>;
+  /** §8 step 8: the blobs B asks for, answered from A's store. */
+  readonly blobs: BlobOptions;
 }
 
-/** A's side of §8: resolves once B committed and `completed` ran. Rejects with `PairingError`. */
+/**
+ * A's side of §8: resolves once B committed, A answered every blob B asked for, and `completed`
+ * ran. Rejects with `PairingError` before B's `committed`; once it came, the pairing completed
+ * whatever happens to the blob phase (D279).
+ */
 export async function sendVault(session: PairingSession, options: SendVaultOptions): Promise<void> {
   const mk = exportTransferKey(options.masterKey);
   try {
@@ -66,8 +74,31 @@ export async function sendVault(session: PairingSession, options: SendVaultOptio
   await sendRecords(session, records);
   const last = await session.receive();
   if (last.t !== 'committed') return session.refuse('protocol-error');
-  session.close();
+  await blobPhase(session, options.blobs, { asks: false, answers: true });
   await options.completed();
+}
+
+/**
+ * The blob phase of an admission, then the end of the session. A phase cut by the end of the
+ * session keeps what it wrote: the rest is asked for at the next sync (D279).
+ */
+export async function blobPhase(
+  session: PairingSession,
+  blobs: BlobOptions,
+  roles: { readonly asks: boolean; readonly answers: boolean },
+): Promise<void> {
+  try {
+    const phase = new BlobPhase(session, {
+      ...blobs,
+      answers: roles.answers,
+      peerEnds: roles.answers,
+    });
+    await admissionBlobs(session, phase, roles.asks);
+    session.close();
+  } catch (error) {
+    /* v8 ignore next -- the phase turns every other failure into the session's own */
+    if (!(error instanceof PairingError)) throw error;
+  }
 }
 
 /** `records-begin`, every `record`, `records-end` (`sync-protocol.md` §2.1). */
@@ -147,11 +178,12 @@ export class ReceivedVault {
   }
 
   /**
-   * Runs `persist`, B's single commit (§8 step 6), then sends `committed` and ends the session.
-   * Refuses to start once the session ended. A `committed` lost after the commit leaves B
-   * committed; A then shows the pairing as not completed (D33).
+   * Runs `persist`, B's single commit (§8 step 6), then sends `committed`, asks A for the blobs it
+   * lacks (§8 step 8) and ends the session. Refuses to start once the session ended. A `committed`
+   * lost after the commit leaves B committed; A then shows the pairing as not completed (D33). A
+   * blob not received shows as waiting for sync, and the pairing still completed (D279).
    */
-  async commit<T>(persist: () => Promise<T>): Promise<T> {
+  async commit<T>(persist: () => Promise<T>, blobs: BlobOptions): Promise<T> {
     if (this.#committed) throw new Error('the transfer was already committed');
     this.#committed = true;
     if (this.session.error) throw this.session.error;
@@ -161,8 +193,9 @@ export class ReceivedVault {
     } catch (error) {
       /* v8 ignore next -- `send` rejects with nothing else for a valid message */
       if (!(error instanceof PairingError)) throw error;
+      return result;
     }
-    this.session.close();
+    await blobPhase(this.session, blobs, { asks: true, answers: false });
     return result;
   }
 }

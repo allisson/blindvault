@@ -53,6 +53,7 @@ import {
   type SyncResult,
 } from '@blindvault/vault';
 
+import { NO_BLOBS } from './blobs';
 import { DISCONNECT_GRACE_MS, iceServers } from './pairing';
 import { type StunSettings } from './stun-settings';
 
@@ -386,6 +387,7 @@ export class Syncing {
       merge: (records) => this.#vault(() => grant.mergeLive(records)),
       merged: (merged) => this.#merged(session, merged),
       retired: (envelope) => this.#ownRetirement(envelope),
+      blobs: { store: NO_BLOBS },
     });
     this.#live = live;
     for (const envelopes of this.#pending.splice(0)) this.#push(live, envelopes);

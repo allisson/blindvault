@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { FrameReader } from './frames';
 import { type MemoryPairOptions, memoryPair } from './memory';
+import { memoryBlobStore } from './memory-blobs';
 import { type Message, decodeMessage } from './messages';
 import { PairingError, PairingSession } from './session';
 import {
@@ -60,6 +61,7 @@ function pair(options: MemoryPairOptions = {}) {
         return Promise.resolve(records);
       },
       completed,
+      blobs: { store: memoryBlobStore() },
       ...overrides,
     });
   const receiver = () => receiveVault(b, { keyring: keyringB, name: 'Firefox on Linux' });
@@ -83,7 +85,9 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
     expect(received.records.map(toHex)).toEqual(records.map(toHex));
     expect(admitted).toEqual(['Firefox on Linux']);
     expect(completed).not.toHaveBeenCalled();
-    expect(await received.commit(() => Promise.resolve('persisted'))).toBe('persisted');
+    expect(
+      await received.commit(() => Promise.resolve('persisted'), { store: memoryBlobStore() }),
+    ).toBe('persisted');
     await sending;
     expect(completed).toHaveBeenCalledOnce();
     expect(log).toEqual([
@@ -95,6 +99,8 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
       { direction: 'a-to-b', t: 'record' },
       { direction: 'a-to-b', t: 'records-end' },
       { direction: 'b-to-a', t: 'committed' },
+      // B lacks no blob: its blob phase is its blobs-end alone (§8 step 8).
+      { direction: 'b-to-a', t: 'blobs-end' },
     ]);
     // The session ends with its last message, with no abort.
     expect(a.error?.reason).toBe('closed');
@@ -181,7 +187,7 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
     const sending = sender({ admit: () => Promise.resolve([]) });
     const received = await receiver();
     expect(received.records).toEqual([]);
-    await received.commit(() => Promise.resolve());
+    await received.commit(() => Promise.resolve(), { store: memoryBlobStore() });
     await sending;
   });
 
@@ -213,7 +219,9 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
     const { completed, sender, receiver } = pair();
     const sending = sender();
     const received = await receiver();
-    const commit = received.commit(() => Promise.reject(new TransferRefusal('retired-peer')));
+    const commit = received.commit(() => Promise.reject(new TransferRefusal('retired-peer')), {
+      store: memoryBlobStore(),
+    });
     expect(await failure(commit)).toEqual(['retired-peer', 'local']);
     expect(await failure(sending)).toEqual(['retired-peer', 'remote']);
     expect(completed).not.toHaveBeenCalled();
@@ -229,7 +237,10 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
       expect(received.ended).toBe(true);
     });
     const persist = vi.fn(() => Promise.resolve());
-    expect(await failure(received.commit(persist))).toEqual(['locked', 'remote']);
+    expect(await failure(received.commit(persist, { store: memoryBlobStore() }))).toEqual([
+      'locked',
+      'remote',
+    ]);
     expect(persist).not.toHaveBeenCalled();
   });
 
@@ -264,13 +275,16 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
     const { a, completed, sender, receiver } = pair();
     const sending = failure(sender());
     const received = await receiver();
-    const result = await received.commit(async () => {
-      await a.abort('cancelled');
-      await vi.waitFor(() => {
-        expect(received.ended).toBe(true);
-      });
-      return 'persisted';
-    });
+    const result = await received.commit(
+      async () => {
+        await a.abort('cancelled');
+        await vi.waitFor(() => {
+          expect(received.ended).toBe(true);
+        });
+        return 'persisted';
+      },
+      { store: memoryBlobStore() },
+    );
     expect(result).toBe('persisted');
     expect(await sending).toEqual(['cancelled', 'local']);
     expect(completed).not.toHaveBeenCalled();
@@ -280,9 +294,11 @@ describe('Master Key transfer and full transfer (pairing-protocol.md §8, sync-p
     const { sender, receiver } = pair();
     const sending = sender();
     const received = await receiver();
-    await received.commit(() => Promise.resolve());
+    await received.commit(() => Promise.resolve(), { store: memoryBlobStore() });
     await sending;
-    await expect(received.commit(() => Promise.resolve())).rejects.toThrow('already');
+    await expect(
+      received.commit(() => Promise.resolve(), { store: memoryBlobStore() }),
+    ).rejects.toThrow('already');
   });
 
   it('aborts on A when anything but committed follows the transfer (protocol-error)', async () => {

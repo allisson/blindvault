@@ -1,7 +1,13 @@
-import { MAX_ENVELOPE_LENGTH } from '@blindvault/crypto';
+import {
+  MAX_BLOB_LENGTH,
+  MAX_ENVELOPE_LENGTH,
+  MIN_BLOB_LENGTH,
+  encodeCbor,
+} from '@blindvault/crypto';
 import { describe, expect, it } from 'vitest';
 
 import vectors from '../test-vectors/sync-v2.json' with { type: 'json' };
+import { BLOB_CHUNK_LENGTH, MAX_BLOB_IDS } from './blob-messages';
 import { MAX_PROTOCOL_MESSAGE_LENGTH } from './frames';
 import { MessageError } from './message-codec';
 import { decodeMessage } from './messages';
@@ -38,7 +44,8 @@ function expected(json: Record<string, unknown>): SyncMessage {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(json)) {
     if (key === 'v') continue;
-    if (key === 'r') out[key] = hex(value as string);
+    if (key === 'r' || key === 'id' || key === 'c') out[key] = hex(value as string);
+    else if (key === 'ids') out[key] = (value as string[]).map(hex);
     else if (key === 'e') out[key] = (value as EntryJson[]).map(entryOf);
     else out[key] = value;
   }
@@ -112,6 +119,55 @@ describe('sync messages (sync-protocol.md §11.1)', () => {
     );
   });
 
+  describe('the blob messages at their bounds (§10.1)', () => {
+    /** A message map as the vectors encode it, with `v` 2, encoded without the codec's checks. */
+    const raw = (t: string, key: string, value: Uint8Array | Uint8Array[]) =>
+      encodeCbor(
+        new Map<string, unknown>([
+          [key, value],
+          ['t', t],
+          ['v', 2],
+        ]) as Parameters<typeof encodeCbor>[0],
+      );
+
+    it('uses the bounds of the vectors', () => {
+      expect(MAX_BLOB_IDS).toBe(v.maxBlobIds);
+      expect(BLOB_CHUNK_LENGTH).toBe(v.blobChunkLength);
+      expect(MIN_BLOB_LENGTH).toBe(v.minBlobLength);
+      expect(MAX_BLOB_LENGTH).toBe(v.maxBlobLength);
+    });
+
+    it('takes a blobs-want of 16,384 IDs and refuses one of 16,385', () => {
+      const ids = Array.from({ length: MAX_BLOB_IDS }, () => new Uint8Array(32));
+      const bytes = encodeSyncMessage({ t: 'blobs-want', ids });
+      expect(bytes).toHaveLength(v.largestBlobsWantLength);
+      expect(bytes.length).toBeLessThanOrEqual(MAX_PROTOCOL_MESSAGE_LENGTH);
+      const message = decodeSyncMessage(bytes);
+      expect(message.t === 'blobs-want' && message.ids.length).toBe(MAX_BLOB_IDS);
+      expect(rejection(raw('blobs-want', 'ids', [...ids, new Uint8Array(32)]))).toBe(
+        'protocol-error',
+      );
+    });
+
+    it('takes a blob-chunk of 1,048,576 bytes and refuses one of 1,048,577', () => {
+      const bytes = encodeSyncMessage({ t: 'blob-chunk', c: new Uint8Array(BLOB_CHUNK_LENGTH) });
+      expect(bytes).toHaveLength(v.largestBlobChunkLength);
+      expect(bytes.length).toBeLessThanOrEqual(MAX_PROTOCOL_MESSAGE_LENGTH);
+      const message = decodeSyncMessage(bytes);
+      expect(message.t === 'blob-chunk' && message.c.length).toBe(BLOB_CHUNK_LENGTH);
+      expect(rejection(raw('blob-chunk', 'c', new Uint8Array(BLOB_CHUNK_LENGTH + 1)))).toBe(
+        'protocol-error',
+      );
+    });
+
+    it('decodes the IDs of a blobs-want as copies', () => {
+      const bytes = encodeSyncMessage({ t: 'blobs-want', ids: [new Uint8Array(32).fill(7)] });
+      const message = decodeSyncMessage(bytes);
+      bytes.fill(0);
+      expect(message).toEqual({ t: 'blobs-want', ids: [new Uint8Array(32).fill(7)] });
+    });
+  });
+
   it('refuses to encode a message that decoding would reject', () => {
     const entry = entryOf(v.valid[3]?.message.e?.[0] as EntryJson);
     const bad: unknown[] = [
@@ -124,6 +180,10 @@ describe('sync messages (sync-protocol.md §11.1)', () => {
       { t: 'abort', reason: 'cancelled' },
       { t: 'nonce', n: new Uint8Array(32) },
       { t: 'committed', extra: 1 },
+      { t: 'blobs-want', ids: [] },
+      { t: 'blob-begin', id: new Uint8Array(32), size: MIN_BLOB_LENGTH - 1 },
+      { t: 'blob-chunk', c: new Uint8Array(0) },
+      { t: 'blob-missing', id: new Uint8Array(31) },
     ];
     for (const message of bad) {
       expect(() => encodeSyncMessage(message as SyncMessage)).toThrow(MessageError);

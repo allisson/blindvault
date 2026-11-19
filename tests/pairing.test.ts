@@ -29,6 +29,7 @@ import {
   pairingHandshake,
   receiveVault,
   sendVault,
+  memoryBlobStore,
 } from '@blindvault/sync';
 import {
   type ItemInput,
@@ -254,6 +255,7 @@ async function pairing(run: Run = {}) {
           return grant.records();
         }),
       completed: () => grant.completed(ha.peerDeviceId),
+      blobs: { store: memoryBlobStore() },
     });
   })().finally(() => {
     grant.wipe();
@@ -271,22 +273,24 @@ async function pairing(run: Run = {}) {
     }
     await sas.confirm();
     const received = await receiveVault(sb, { keyring: keyringB, name: B_NAME });
-    return received.commit(() =>
-      mapped(() =>
-        VaultSession.join({
-          store: lazyStore(factoryB),
-          keyring: keyringB,
-          kek: kekB,
-          salt: new Uint8Array(16).fill(8),
-          kdfParams: PARAMS,
-          identity: identityB,
-          vaultId: received.vaultId,
-          masterKey: received.masterKey,
-          records: received.records,
-          peerPublicKey: hb.peerPublicKey,
-          now: () => T0,
-        }),
-      ),
+    return received.commit(
+      () =>
+        mapped(() =>
+          VaultSession.join({
+            store: lazyStore(factoryB),
+            keyring: keyringB,
+            kek: kekB,
+            salt: new Uint8Array(16).fill(8),
+            kdfParams: PARAMS,
+            identity: identityB,
+            vaultId: received.vaultId,
+            masterKey: received.masterKey,
+            records: received.records,
+            peerPublicKey: hb.peerPublicKey,
+            now: () => T0,
+          }),
+        ),
+      { store: memoryBlobStore() },
     );
   })().catch((error: unknown) => {
     keyringB.wipeAll();

@@ -607,7 +607,10 @@ An unknown `reason` is shown as `protocol-error`. A merge already committed stay
 with the pairing messages: a pairing type is an unknown `t`, and a pairing `reason` reads as
 `protocol-error`. Each `summary` entry is checked against the ranges of section 7 as the message
 is decoded; `count`, duplicate identities and the order of this section are each stage's to check,
-with its task. `SyncSession` carries them over the Noise channel of `Noise_KK`, on the session the
+with its task; the blob messages of section 10.1 are one schema shared with the pairing codec
+(`blob-messages.ts`), and their order is `BlobPhase`'s in `blobs.ts`, which `liveSession` and the
+admissions run over a `BlobStore` the app wires to the vault. `SyncSession` carries them over the
+Noise channel of `Noise_KK`, on the session the
 pairing uses: a refused message aborts with its reason, a received `abort` ends the session, and a
 closed link ends it as closed. After the check of section 6 the app runs the exchange of
 section 9 (D222); once it has sent `committed`, it runs the live session of section 10
