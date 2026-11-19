@@ -642,7 +642,7 @@ every project through the references in the root `tsconfig.json`.
   up to 2 s for the channel's own close before closing the connection, because Firefox and WebKit
   otherwise report the close to the peer as an error. The payload's other fields (session ID,
   commitment, "holds a vault", formats) come from the caller. The vectors are in
-  `test-vectors/pairing-v1.json`, from `tests/vectors/generate.py`. `connection.ts` needs a
+  `test-vectors/pairing-v2.json`, from `tests/vectors/generate.py`. `connection.ts` needs a
   browser, so it is outside the Vitest coverage and covered by `e2e/connection.spec.ts`: Playwright
   on a page served by Vite from the package source (`playwright.config.ts`, on `127.0.0.1` because
   Playwright's Firefox gathers no candidate on `localhost`), two browser contexts pairing LAN-only by

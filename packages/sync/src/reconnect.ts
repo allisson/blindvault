@@ -1,4 +1,4 @@
-// The reconnection payload v1 (`sync-protocol.md` §4): what the peer needs to rebuild this device's
+// The reconnection payload v2 (`sync-protocol.md` §4): what the peer needs to rebuild this device's
 // SDP for one sync session, as one `Noise_K` message from this device's identity to the public key
 // of the peer the user picked (D17, D213, D214). Only the version byte is in the clear. Decoding is
 // strict, so one plaintext has exactly one encoding; the message `m`, as transmitted, is what
@@ -25,7 +25,7 @@ import {
 } from './link-fields';
 import type { PayloadExpectation } from './payload';
 
-export const RECONNECTION_VERSION = 1;
+export const RECONNECTION_VERSION = 2;
 
 // e (32) and the tag (16) around a plaintext of 85 to 714 bytes (§4.1): a shorter or longer `m` is
 // no payload, so it is refused as malformed before any decryption (D214).

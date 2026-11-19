@@ -29,11 +29,13 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "packages/crypto/test-vectors/crypto-v1.json"
 OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
 OUT_BACKUP = ROOT / "packages/backup/test-vectors/backup-v1.json"
-OUT_PAIRING = ROOT / "packages/sync/test-vectors/pairing-v1.json"
-OUT_SYNC = ROOT / "packages/sync/test-vectors/sync-v1.json"
+OUT_PAIRING = ROOT / "packages/sync/test-vectors/pairing-v2.json"
+OUT_SYNC = ROOT / "packages/sync/test-vectors/sync-v2.json"
 OUT_BLOB = ROOT / "packages/crypto/test-vectors/blob-v1.json"
 
 RECORD_FORMAT_VERSION = 1
+# The pairing and sync protocol version: payload `version` byte and message `v` (D279).
+PROTOCOL_VERSION = 2
 RT_ITEM, RT_FOLDER, RT_ITEM_VERSION, RT_VAULT_KEY, RT_RECOVERY_ENVELOPE, RT_DEVICE = 1, 2, 3, 4, 5, 6
 PAD_BLOCK = 256
 RECORD_CAP = 1024 * 1024
@@ -174,7 +176,7 @@ def _max_envelope_length() -> int:
 
 def sas_of(handshake_hash: bytes, nonce_i: bytes, nonce_r: bytes) -> tuple[bytes, int]:
     """pairing-protocol.md section 6.2: sasHash and the six-digit SAS."""
-    sas_hash = blake2b(layout(label("bv.sas.v1"), handshake_hash, nonce_i, nonce_r), 32)
+    sas_hash = blake2b(layout(label("bv.sas.v2"), handshake_hash, nonce_i, nonce_r), 32)
     return sas_hash, int.from_bytes(sas_hash[:8], "big") % 1_000_000
 
 
@@ -1708,7 +1710,7 @@ def encode_payload(p: dict) -> bytes:
     """Encodes without checking, so the negative vectors can break one rule at a time."""
     flags = (0 if p["role"] == "initiator" else 1) | (p["setupBits"] << 1) | (8 if p["holdsVault"] else 0)
     flags |= p.get("reservedBits", 0)
-    out = bytearray([p.get("version", 1), flags])
+    out = bytearray([p.get("version", PROTOCOL_VERSION), flags])
     out += p["sessionId"] + p["fingerprint"]
     for s in (p["ufrag"], p["pwd"]):
         out += u8(len(s)) + s.encode("ascii")
@@ -1726,7 +1728,7 @@ def decode_payload(b: bytes, expect_role: str, expect_session: bytes | None) -> 
     """Reference decoder of section 3.3: version, then structure, then role, then session."""
     if len(b) == 0:
         raise PayloadReject("malformed", "empty")
-    if b[0] != 1:
+    if b[0] != PROTOCOL_VERSION:
         raise PayloadReject("version", f"version {b[0]}")
     i = 1
 
@@ -1837,14 +1839,14 @@ def pairing_vectors() -> dict:
     valid = []
     for case, p, expect in (
         ("initiator holding a vault, every candidate kind", offer, expect_i),
-        ("responder, setup passive, no vault: the text starts with a space", answer, expect_r),
+        ("responder, setup passive, no vault: the text holds a space", answer, expect_r),
         ("responder, setup active, longest credentials, 8 candidates, 255 format versions", answer_active, expect_r),
     ):
         b = encode_payload(p)
         text = b45encode(b)
         assert b45decode(text) == b
         valid.append({"case": case, "expect": expect, "payload": check(b, expect), "bytes": h(b), "text": text})
-    assert valid[1]["text"].startswith(" ")
+    assert " " in valid[1]["text"].strip()
 
     neg = []
     def add(reason: str, case: str, p: dict | bytes, expect: dict) -> None:
@@ -1860,7 +1862,8 @@ def pairing_vectors() -> dict:
     first = offer["candidates"][2]
     add("malformed", "empty", b"", expect_i)
     add("version", "version 0", {**offer, "version": 0}, expect_i)
-    add("version", "version 2", {**offer, "version": 2}, expect_i)
+    add("version", "version 1", {**offer, "version": 1}, expect_i)
+    add("version", "version 3", {**offer, "version": 3}, expect_i)
     add("malformed", "reserved flag bit 4", {**offer, "reservedBits": 0x10}, expect_i)
     add("malformed", "reserved flag bit 7", {**offer, "reservedBits": 0x80}, expect_i)
     add("malformed", "setup 3", {**answer, "setupBits": 3}, expect_r)
@@ -1956,16 +1959,16 @@ class MessageReject(Exception):
 
 def check_message(m, schema=None, reasons=None) -> dict:
     """Reference decoder of section 10.2 (or sync-protocol.md section 11.1, with its schema and
-    reasons) over the value before encoding: `v` first (a uint other than 1 is `version`), then
+    reasons) over the value before encoding: `v` first (a uint other than 2 is `version`), then
     the type, the exact keys, and each key's type and length."""
     schema = MESSAGE_KEYS if schema is None else schema
     reasons = ABORT_REASONS if reasons is None else reasons
     if not isinstance(m, dict):
         raise MessageReject("protocol-error")
     v = m.get("v")
-    if isinstance(v, int) and not isinstance(v, bool) and v >= 0 and v != 1:
+    if isinstance(v, int) and not isinstance(v, bool) and v >= 0 and v != PROTOCOL_VERSION:
         raise MessageReject("version")
-    if v != 1 or isinstance(v, bool) or not all(isinstance(k, str) for k in m):
+    if v != PROTOCOL_VERSION or isinstance(v, bool) or not all(isinstance(k, str) for k in m):
         raise MessageReject("protocol-error")
     t = m.get("t")
     if not isinstance(t, str) or t not in schema:
@@ -2002,7 +2005,7 @@ def message_json(m: dict) -> dict:
 
 def message_vectors() -> dict:
     assert _max_envelope_length() + 64 == MAX_PROTOCOL_MESSAGE
-    msg = lambda t, **kw: {"v": 1, "t": t, **kw}  # noqa: E731
+    msg = lambda t, **kw: {"v": PROTOCOL_VERSION, "t": t, **kw}  # noqa: E731
     valid = [
         ("nonce", msg("nonce", n=seq(0x60, 32))),
         ("confirmed", msg("confirmed")),
@@ -2026,17 +2029,18 @@ def message_vectors() -> dict:
 
     base = msg("nonce", n=seq(0x60, 32))
     invalid = [
-        ("version", "v 2", {**base, "v": 2}),
+        ("version", "v 1", {**base, "v": 1}),
+        ("version", "v 3", {**base, "v": 3}),
         ("version", "v 0", {**base, "v": 0}),
-        ("version", "v 2 with an unknown type and other keys", {"v": 2, "t": "hello", "x": 1}),
+        ("version", "v 1 with an unknown type and other keys", {"v": 1, "t": "hello", "x": 1}),
         ("protocol-error", "not a map", [1, "nonce"]),
         ("protocol-error", "no v", {"t": "confirmed"}),
-        ("protocol-error", "v as text", {"v": "1", "t": "confirmed"}),
+        ("protocol-error", "v as text", {"v": "2", "t": "confirmed"}),
         ("protocol-error", "v negative", {"v": -1, "t": "confirmed"}),
         ("protocol-error", "v true", {"v": True, "t": "confirmed"}),
-        ("protocol-error", "no t", {"v": 1}),
+        ("protocol-error", "no t", {"v": PROTOCOL_VERSION}),
         ("protocol-error", "unknown t", msg("hello")),
-        ("protocol-error", "t as bytes", {"v": 1, "t": b"confirmed"}),
+        ("protocol-error", "t as bytes", {"v": PROTOCOL_VERSION, "t": b"confirmed"}),
         ("protocol-error", "records-begin without count", msg("records-begin")),
         ("protocol-error", "records-begin with a negative count", msg("records-begin", count=-1)),
         ("protocol-error", "records-begin with a count over 2^53 - 1", msg("records-begin", count=MAX_COUNT + 1)),
@@ -2077,16 +2081,16 @@ def message_vectors() -> dict:
     for case, b in (
         ("not CBOR", b"\xff"),
         ("a byte after the map", confirmed + b"\x00"),
-        ("v in a non-shortest integer", b"\xa2\x61t\x69confirmed\x61v\x18\x01"),
-        ("keys not in deterministic order", b"\xa2\x61v\x01\x61t\x69confirmed"),
-        ("a duplicate key", b"\xa3\x61t\x69confirmed\x61v\x01\x61v\x01"),
-        ("an indefinite-length map", b"\xbf\x61t\x69confirmed\x61v\x01\xff"),
+        ("v in a non-shortest integer", b"\xa2\x61t\x69confirmed\x61v\x18\x02"),
+        ("keys not in deterministic order", b"\xa2\x61v\x02\x61t\x69confirmed"),
+        ("a duplicate key", b"\xa3\x61t\x69confirmed\x61v\x02\x61v\x02"),
+        ("an indefinite-length map", b"\xbf\x61t\x69confirmed\x61v\x02\xff"),
         # Tag 64 (a typed array) around the nonce.
         ("a tagged nonce", b"\xa3" + cbor("n") + b"\xd8\x40" + cbor(seq(0x60, 32)) + cbor("t") + cbor("nonce")
-         + cbor("v") + cbor(1)),
+         + cbor("v") + cbor(PROTOCOL_VERSION)),
     ):
         out_invalid.append({"case": case, "reason": "protocol-error", "bytes": h(b)})
-    assert confirmed == b"\xa2\x61t\x69confirmed\x61v\x01"
+    assert confirmed == b"\xa2\x61t\x69confirmed\x61v\x02"
     return {"valid": out_valid, "invalid": out_invalid, "abortReasons": ABORT_REASONS,
             "maxMessageLength": MAX_PROTOCOL_MESSAGE, "maxRecordCount": MAX_COUNT,
             "maxRecordLength": _max_envelope_length()}
@@ -2138,7 +2142,7 @@ def sync_message_json(m: dict) -> dict:
 
 
 def sync_message_vectors() -> dict:
-    msg = lambda t, **kw: {"v": 1, "t": t, **kw}  # noqa: E731
+    msg = lambda t, **kw: {"v": PROTOCOL_VERSION, "t": t, **kw}  # noqa: E731
     check = lambda m: check_message(m, SYNC_MESSAGE_KEYS, SYNC_ABORT_REASONS)  # noqa: E731
     entry = [1, 1, seq(0x50, 16), [1_700_000_000_000, 0, seq(0x70, 16)], False, 1]
     largest = [0xFFFF, 0xFFFF, seq(0x51, 16), [2**53 - 1, 2**32 - 1, seq(0x71, 16)], True, 2**32 - 1]
@@ -2181,8 +2185,9 @@ def sync_message_vectors() -> dict:
         return with_entry(3, hlc)
 
     invalid = [
-        ("version", "v 2", {**msg("committed"), "v": 2}),
-        ("version", "v 2 with an unknown type", {"v": 2, "t": "hello"}),
+        ("version", "v 1", {**msg("committed"), "v": 1}),
+        ("version", "v 3", {**msg("committed"), "v": 3}),
+        ("version", "v 1 with an unknown type", {"v": 1, "t": "hello"}),
         ("protocol-error", "unknown t", msg("hello")),
         ("protocol-error", "a pairing type, nonce", msg("nonce", n=seq(0x60, 32))),
         ("protocol-error", "a pairing type, master-key", msg("master-key", mk=seq(0x11, 32), vid=seq(0x22, 16))),
@@ -2227,7 +2232,7 @@ def sync_message_vectors() -> dict:
             continue
         raise AssertionError(f"accepted: {case}")
     out_invalid.append({"case": "keys not in deterministic order", "reason": "protocol-error",
-                        "bytes": h(b"\xa2\x61v\x01\x61t\x69committed")})
+                        "bytes": h(b"\xa2\x61v\x02\x61t\x69committed")})
     for case, m in (("summary of 16,384 entries at every maximum", [largest] * MAX_SUMMARY_ENTRIES),
                     ("summary of 16,385 entries", [smallest] * (MAX_SUMMARY_ENTRIES + 1))):
         try:
@@ -2347,7 +2352,7 @@ def check_noise_k_against_official_vectors() -> None:
 
 
 def reconnect_prologue(vault_id: bytes, role: str) -> bytes:
-    return layout(label("bv.reconnect.v1"), vault_id, label(role))
+    return layout(label("bv.reconnect.v2"), vault_id, label(role))
 
 
 def encode_reconnection(p: dict) -> bytes:
@@ -2371,7 +2376,7 @@ def open_reconnection(text: str, s_sk: bytes, peer_pk: bytes, vault_id: bytes, e
         raise PayloadReject("malformed", "not base45")
     if len(b) == 0:
         raise PayloadReject("malformed", "empty")
-    if b[0] != 1:
+    if b[0] != PROTOCOL_VERSION:
         raise PayloadReject("version", f"version {b[0]}")
     m = b[1:]
     if not RECON_MIN_M <= len(m) <= RECON_MAX_M:
@@ -2469,7 +2474,7 @@ def sync_vectors() -> dict:
     other_of = {"initiator": "responder", "responder": "initiator"}
 
     def seal(p: dict, sender: str, receiver: str, *, role: str | None = None, vault: bytes = VAULT_ID,
-             version: int = 1) -> tuple[bytes, bytes, bytes]:
+             version: int = PROTOCOL_VERSION) -> tuple[bytes, bytes, bytes]:
         pt = encode_reconnection(p)
         prologue = reconnect_prologue(vault, role or p["role"])
         m = noise_k_write(prologue, RECON_KEYS[sender], pk[receiver], RECON_EPHEMERAL, pt)
@@ -2529,9 +2534,10 @@ def sync_vectors() -> dict:
     add("malformed", "not base45", "bb8", "responder", "initiator", "initiator")
     add("malformed", "empty", "", "responder", "initiator", "initiator")
     add("version", "version 0", raw(bytes([0]) + ok[1:]), "responder", "initiator", "initiator")
-    add("version", "version 2", raw(bytes([2]) + ok[1:]), "responder", "initiator", "initiator")
-    add("version", "version 2 and nothing else", raw(b"\x02"), "responder", "initiator", "initiator")
-    add("malformed", "version 1 and no m", raw(b"\x01"), "responder", "initiator", "initiator")
+    add("version", "version 1", raw(bytes([1]) + ok[1:]), "responder", "initiator", "initiator")
+    add("version", "version 3", raw(bytes([3]) + ok[1:]), "responder", "initiator", "initiator")
+    add("version", "version 1 and nothing else", raw(b"\x01"), "responder", "initiator", "initiator")
+    add("malformed", "version 2 and no m", raw(b"\x02"), "responder", "initiator", "initiator")
     add("malformed", "m one byte shorter than the shortest", raw(short[:-1]), "responder", "initiator", "initiator")
     add("malformed", "m one byte longer than the longest", raw(long + b"\x00"), "initiator", "responder", "responder")
     add("not-from-peer", "a byte of m changed", raw(bytes(tampered)), "responder", "initiator", "initiator")
@@ -2894,11 +2900,11 @@ def main() -> None:
         "dtlsFingerprintInitiator": h(fp_i), "dtlsFingerprintResponder": h(fp_r),
         "prologueXX": {
             "payloadInitiator": h(payload_i), "payloadResponder": h(payload_r),
-            "prologue": h(layout(label("bv.pairing.v1"), blake2b(payload_i, 32), blake2b(payload_r, 32), fp_i, fp_r)),
+            "prologue": h(layout(label("bv.pairing.v2"), blake2b(payload_i, 32), blake2b(payload_r, 32), fp_i, fp_r)),
         },
         "prologueKK": {
             "reconnectionInitiator": h(recon_i), "reconnectionResponder": h(recon_r),
-            "prologue": h(layout(label("bv.sync.v1"), blake2b(recon_i, 32), blake2b(recon_r, 32), fp_i, fp_r)),
+            "prologue": h(layout(label("bv.sync.v2"), blake2b(recon_i, 32), blake2b(recon_r, 32), fp_i, fp_r)),
         },
         "readmissionMac": [
             {"role": role, "handshakeHash": h(handshake_hash), "readmissionKey": h(k_readmission),
@@ -2912,7 +2918,7 @@ def main() -> None:
     nonce_r_low = next(n for n in (blake2b(u32(k), 32) for k in range(100_000))
                        if sas_of(handshake_hash, nonce_i, n)[1] < 1000)
     v["transcripts"]["pairingCommitment"] = {
-        "nonce": h(nonce_i), "commitment": h(blake2b(layout(label("bv.pairing.commit.v1"), nonce_i), 32)),
+        "nonce": h(nonce_i), "commitment": h(blake2b(layout(label("bv.pairing.commit.v2"), nonce_i), 32)),
     }
     v["transcripts"]["sas"] = [
         {"handshakeHash": h(handshake_hash), "nonceInitiator": h(nonce_i), "nonceResponder": h(nr),

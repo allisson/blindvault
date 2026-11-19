@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import vectors from '../test-vectors/pairing-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/pairing-v2.json' with { type: 'json' };
 import {
   type Candidate,
   type CandidateKind,
@@ -70,7 +70,7 @@ if (!offerVector || !answerVector) throw new Error('missing vectors');
 const offer = payload(offerVector.payload);
 const answer = payload(answerVector.payload);
 
-describe('pairing payload v1 (pairing-protocol.md §3)', () => {
+describe('pairing payload v2 (pairing-protocol.md §3)', () => {
   describe('vectors', () => {
     it.each(vectors.payloads.valid)('encodes and decodes: $case', (v) => {
       const p = payload(v.payload);
@@ -133,12 +133,12 @@ describe('pairing payload v1 (pairing-protocol.md §3)', () => {
       expect(decodePayloadText(broken, { role: 'initiator' })).toEqual(offer);
     });
 
-    it('keeps spaces, which are base45 characters: a payload may start with one', () => {
+    it('keeps spaces, which are base45 characters', () => {
       const text = encodePayloadText(answer);
-      expect(text.startsWith(' ')).toBe(true);
+      expect(text.trim()).toContain(' ');
       const expect_ = { role: 'responder', sessionId: answer.sessionId } as const;
       expect(decodePayloadText(text, expect_)).toEqual(answer);
-      expect(reason(() => decodePayloadText(text.trim(), expect_))).toBe('malformed');
+      expect(reason(() => decodePayloadText(text.replaceAll(' ', ''), expect_))).toBe('malformed');
       expect(reason(() => decodePayloadText(`${text} `, expect_))).toBe('malformed');
     });
 
@@ -149,7 +149,7 @@ describe('pairing payload v1 (pairing-protocol.md §3)', () => {
 
     it('rejects a payload of another version as version, before anything else', () => {
       const bytes = encodePayload(offer);
-      bytes[0] = 2;
+      bytes[0] = 1;
       bytes[1] = 0xff;
       expect(
         reason(() => decodePayload(bytes, { role: 'responder', sessionId: offer.sessionId })),

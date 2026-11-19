@@ -8,7 +8,7 @@ import {
 } from '@blindvault/crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import vectors from '../test-vectors/sync-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/sync-v2.json' with { type: 'json' };
 import type { Candidate, CandidateKind } from './link-fields';
 import type { PayloadExpectation } from './payload';
 import {
@@ -110,7 +110,7 @@ if (!offerVector || !answerVector) throw new Error('missing vectors');
 const offer = reconnection(offerVector.payload);
 const answer = reconnection(answerVector.payload);
 
-describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
+describe('reconnection payload v2 (sync-protocol.md §4, D213, D214)', () => {
   it('bounds m by the shortest and longest plaintext of §4.1', () => {
     expect([MIN_RECONNECTION_MESSAGE_LENGTH, MAX_RECONNECTION_MESSAGE_LENGTH]).toEqual([
       v.minMessageLength,
@@ -143,7 +143,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
       });
       expect(opened.reconnection).toEqual(offer);
       expect(opened.message).toEqual(sealed.message);
-      expect(sealed.bytes).toEqual(Uint8Array.from([1, ...sealed.message]));
+      expect(sealed.bytes).toEqual(Uint8Array.from([2, ...sealed.message]));
       expect(sealed.message.length).toBe(hex(offerVector.message).length);
     });
 
@@ -256,7 +256,7 @@ describe('reconnection payload v1 (sync-protocol.md §4, D213, D214)', () => {
     const [c] = v.valid;
     if (!c) throw new Error('no vector');
     const bytes = decodeReconnectionText(c.text);
-    expect(toHex(bytes)).toBe(`01${c.message}`);
+    expect(toHex(bytes)).toBe(`02${c.message}`);
     expect(encodeReconnectionText(bytes)).toBe(c.text);
     expect(
       openBytes(bytes, keys(c.receiver, c.sender), expectation(c.expect)).reconnection,

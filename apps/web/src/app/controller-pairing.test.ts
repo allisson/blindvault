@@ -477,7 +477,7 @@ describe('pairing through the controller (§8.4, D202, D203)', () => {
     expect(a.pairingAnswer(answer({ holdsVault: true }))).toBe('peer-holds-vault');
     expect(a.pairingAnswer(answer({ recordTypes: [1, 2, 3, 4, 5] }))).toBe('outdated-peer');
     const newer = decodeBase45(answer({}));
-    newer[0] = 2;
+    newer[0] = 3;
     expect(a.pairingAnswer(encodeBase45(newer))).toBe('version');
     expect(a.pairing?.kind).toBe('offer');
 

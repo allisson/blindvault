@@ -1,6 +1,6 @@
 // The strict codec shared by the pairing messages (`pairing-protocol.md` §10.2) and the sync
 // messages (`sync-protocol.md` §11.1): deterministic CBOR maps `{v, t, …}` with exactly the keys of
-// their type, decoded with the re-encode check (`crypto-spec.md` §14). A `v` other than 1 is refused
+// their type, decoded with the re-encode check (`crypto-spec.md` §14). A `v` other than 2 is refused
 // as `version`, anything else wrong as `protocol-error`, and the session aborts with that reason.
 // Each protocol gives its schema and its abort reasons; an unknown reason reads as `protocol-error`.
 
@@ -13,12 +13,12 @@ import {
   encodeCbor,
 } from '@blindvault/crypto';
 
-export const MESSAGE_VERSION = 1;
+export const MESSAGE_VERSION = 2;
 
 /** The largest `count`: a CBOR uint the decoder reads as a safe integer. */
 export const MAX_RECORD_COUNT = Number.MAX_SAFE_INTEGER;
 
-/** `version` for a `v` other than 1, `protocol-error` for the rest: the reason to abort with. */
+/** `version` for a `v` other than 2, `protocol-error` for the rest: the reason to abort with. */
 export type MessageRejection = 'version' | 'protocol-error';
 
 export class MessageError extends Error {

@@ -1,7 +1,7 @@
 import { MAX_ENVELOPE_LENGTH } from '@blindvault/crypto';
 import { describe, expect, it } from 'vitest';
 
-import vectors from '../test-vectors/sync-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/sync-v2.json' with { type: 'json' };
 import { MAX_PROTOCOL_MESSAGE_LENGTH } from './frames';
 import { MessageError } from './message-codec';
 import { decodeMessage } from './messages';
@@ -55,10 +55,10 @@ function rejection(bytes: Uint8Array): string {
   return 'accepted';
 }
 
-/** `{e: [entry × n], t: "summary", v: 1}` from one encoded entry, as the vectors give it. */
+/** `{e: [entry × n], t: "summary", v: 2}` from one encoded entry, as the vectors give it. */
 function summaryOf(entry: Uint8Array, n: number): Uint8Array {
   const head = [0xa3, 0x61, 0x65, ...(n < 24 ? [0x80 | n] : [0x99, n >> 8, n & 0xff])];
-  const tail = [0x61, 0x74, 0x67, ...new TextEncoder().encode('summary'), 0x61, 0x76, 0x01];
+  const tail = [0x61, 0x74, 0x67, ...new TextEncoder().encode('summary'), 0x61, 0x76, 0x02];
   const bytes = new Uint8Array(head.length + entry.length * n + tail.length);
   bytes.set(head);
   for (let i = 0; i < n; i++) bytes.set(entry, head.length + i * entry.length);
