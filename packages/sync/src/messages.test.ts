@@ -13,14 +13,18 @@ import {
 
 const v = vectors.messages;
 const hex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (b) => parseInt(b, 16));
-const BYTE_KEYS = new Set(['n', 'mk', 'vid', 'mac', 'r']);
+const BYTE_KEYS = new Set(['n', 'mk', 'vid', 'mac', 'r', 'id', 'c']);
 
 /** The message of a vector, without `v`, with its byte strings as bytes. */
 function expected(json: Record<string, unknown>): Message {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(json)) {
     if (key === 'v') continue;
-    out[key] = BYTE_KEYS.has(key) ? hex(value as string) : value;
+    out[key] = BYTE_KEYS.has(key)
+      ? hex(value as string)
+      : key === 'ids'
+        ? (value as string[]).map(hex)
+        : value;
   }
   return out as unknown as Message;
 }

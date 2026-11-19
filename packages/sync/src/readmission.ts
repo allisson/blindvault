@@ -2,13 +2,15 @@
 // once both devices confirmed the SAS. Each side sends its key-confirmation MAC and checks the
 // peer's, then both say which Device records they hold, the records neither side holds are
 // written, and both transfer every record they hold, at the same time, and merge what they
-// receive. No Master Key is transferred. This package never sees the vault: the MAC, the writes
+// receive, then each asks for the blobs it lacks (step 7, `sync-protocol.md` §10.1, D279). No
+// Master Key is transferred. This package never sees the vault: the MAC, the writes
 // and the merge are callbacks the app wires to the vault session, and a callback refuses with the
 // abort reason of §10.3 by throwing `TransferRefusal`.
 
 import type { Role } from './payload';
 import { PairingError, type PairingSession } from './session';
-import { guarded, receiveRecords, sendRecords } from './transfer';
+import { type BlobOptions } from './blobs';
+import { blobPhase, guarded, receiveRecords, sendRecords } from './transfer';
 
 /** Which Device records a side holds: its own, and the peer's. */
 export interface DevicesHeld {
@@ -61,6 +63,8 @@ export interface ReadmitOptions<T> {
   readonly records: () => Promise<readonly Uint8Array[]>;
   /** §9 step 6: merges the peer's records and records the completed sync with it, in one commit. */
   readonly merge: (records: readonly Uint8Array[]) => Promise<T>;
+  /** §9 step 7: the blobs this side asks for once both committed, and those it answers. */
+  readonly blobs: BlobOptions;
 }
 
 export interface Readmitted<T> {
@@ -72,7 +76,8 @@ export interface Readmitted<T> {
 
 /**
  * One side of §9 from step 2, after both confirmations. Rejects with `PairingError` before this
- * side's merge commits; once it has, resolves whatever the peer does.
+ * side's merge commits; once it has, resolves whatever the peer does. Once both committed, the
+ * blob phase runs before the session ends; a phase cut short keeps what it wrote (D279).
  */
 export async function readmit<T>(
   session: PairingSession,
@@ -108,10 +113,10 @@ export async function readmit<T>(
       await session.abort('protocol-error');
       return { result, peerCommitted: false };
     }
-    session.close();
-    return { result, peerCommitted: true };
   } catch (error) {
     if (!(error instanceof PairingError)) throw error;
     return { result, peerCommitted: false };
   }
+  await blobPhase(session, options.blobs, { asks: true, answers: true });
+  return { result, peerCommitted: true };
 }

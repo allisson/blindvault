@@ -8,6 +8,8 @@
 
 import { RecordType } from '@blindvault/crypto';
 
+import { isBlobMessage } from './blob-messages';
+import { type BlobOptions, BlobPhase, Outbox } from './blobs';
 import {
   MAX_SUMMARY_ENTRIES,
   type SummaryEntry,
@@ -173,12 +175,16 @@ async function sendRecords(session: SyncSession, records: readonly Uint8Array[])
   await session.send({ t: 'records-end' });
 }
 
-/** §9 with §2.1: the peer's records, unverified, in memory until `records-end`. */
+/**
+ * §9 with §2.1: the peer's records, unverified, in memory until `records-end`, from its
+ * `records-begin` when already read.
+ */
 async function receiveRecords(
   session: SyncSession,
   options: Pick<ExchangeOptions<unknown>, 'retired'>,
+  first?: SyncMessage,
 ): Promise<Uint8Array[]> {
-  const begin = await next(session, options);
+  const begin = first ?? (await next(session, options));
   if (begin.t !== 'records-begin') return session.refuse('protocol-error');
   const records: Uint8Array[] = [];
   for (;;) {
@@ -225,6 +231,8 @@ export interface LiveOptions<T> {
   readonly merged: (result: T) => Promise<void>;
   /** §6: as for `exchange`. */
   readonly retired: (envelope: Uint8Array) => Promise<void>;
+  /** §10.1: the blobs asked for once live and after each merged transfer, and those answered. */
+  readonly blobs: BlobOptions;
 }
 
 /** The live session of §10, once this device has sent its `committed`. */
@@ -235,29 +243,45 @@ export interface LiveSession {
    */
   push(records: readonly Uint8Array[]): Promise<void>;
   /**
-   * Reads the peer's `committed`, which makes the session live, then its transfers and `retired`,
-   * until the session ends: rejects with its `SyncError`. Anything else aborts (`protocol-error`).
+   * Reads the peer's `committed`, which makes the session live, then its transfers, its blob
+   * messages and `retired`, until the session ends: rejects with its `SyncError`. Anything else
+   * aborts (`protocol-error`).
    */
   readonly done: Promise<never>;
 }
 
-/** §10 (D225): run after this device sent `committed`. */
+/**
+ * §10 (D225) and §10.1: run after this device sent `committed`. Transfers and blob units leave one
+ * at a time; this device asks for the blobs it lacks once live and after each transfer it merges.
+ */
 export function liveSession<T>(session: SyncSession, options: LiveOptions<T>): LiveSession {
-  let sending: Promise<void> = Promise.resolve();
-  const push = (records: readonly Uint8Array[]): Promise<void> => {
-    const run = sending.then(() => sendRecords(session, records));
-    sending = run.catch(() => undefined);
-    return run;
-  };
+  const outbox = new Outbox();
+  const blobs = new BlobPhase(
+    session,
+    { ...options.blobs, answers: true, peerEnds: false },
+    outbox,
+  );
+  // A failed ask ends the session, which the reader below reports.
+  const ask = () => void blobs.ask().catch(() => undefined);
+  const push = (records: readonly Uint8Array[]): Promise<void> =>
+    outbox.run(() => sendRecords(session, records));
   const done = (async (): Promise<never> => {
     const first = await next(session, options);
     if (first.t !== 'committed') return session.refuse('protocol-error');
     session.live();
     options.live();
+    ask();
     for (;;) {
-      const records = await receiveRecords(session, options);
+      const message = await next(session, options);
+      if (blobs.receiving || isBlobMessage(message)) {
+        await blobs.receive(message);
+        continue;
+      }
+      if (message.t !== 'records-begin') return session.refuse('protocol-error');
+      const records = await receiveRecords(session, options, message);
       const result = await guarded(session, () => options.merge(records));
       await guarded(session, () => options.merged(result));
+      ask();
     }
   })();
   return { push, done };

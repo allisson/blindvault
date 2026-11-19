@@ -40,6 +40,7 @@ import {
   receiveReconnection,
   sealReconnection,
   syncHandshake,
+  memoryBlobStore,
 } from '@blindvault/sync';
 import {
   HISTORY_LIMIT,
@@ -762,6 +763,7 @@ async function liveSync(
         return Promise.resolve();
       },
       retired: () => Promise.reject(new Error('no retirement here')),
+      blobs: { store: memoryBlobStore() },
     });
     for (const envelopes of pending.splice(0)) live.push(envelopes).catch(() => undefined);
     live.done.catch(() => undefined);

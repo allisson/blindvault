@@ -13,6 +13,7 @@ import {
   selectRecords,
 } from './exchange';
 import { type MemoryPairOptions, memoryPair } from './memory';
+import { memoryBlobStore } from './memory-blobs';
 import { IDLE_TIMEOUT_MS } from './channel-session';
 import { MAX_SUMMARY_ENTRIES, type SummaryEntry } from './sync-messages';
 import { syncHandshake } from './sync-handshake';
@@ -527,6 +528,7 @@ describe('live session (sync-protocol.md §10, D225)', () => {
         seen.retired.push(envelope);
         return Promise.resolve();
       },
+      blobs: { store: memoryBlobStore() },
       ...overrides,
     };
     return { seen, options };

@@ -1931,6 +1931,20 @@ def pairing_vectors() -> dict:
 
 # --- pairing-protocol.md section 10 ----------------------------------------------------------
 
+# sync-protocol.md section 10.1: the blob phase, in a sync and in an admission (D278, D279).
+MAX_BLOB_IDS = 16_384
+# attachments.md section 2: blob_length(1) and blob_length(10 MiB), checked in blob_vectors.
+MIN_BLOB, MAX_BLOB = 42, 10_488_521
+BLOB_CHUNK = 1_048_576
+BLOB_MESSAGE_KEYS = {
+    "blobs-want": {"ids": ("ids",)},
+    "blobs-end": {},
+    "blob-begin": {"id": ("bstr", 32), "size": ("blob-size",)},
+    "blob-chunk": {"c": ("chunk",)},
+    "blob-end": {},
+    "blob-missing": {"id": ("bstr", 32)},
+}
+
 MESSAGE_KEYS = {
     "nonce": {"n": ("bstr", 32)},
     "confirmed": {},
@@ -1942,6 +1956,7 @@ MESSAGE_KEYS = {
     "record": {"r": ("envelope",)},
     "records-end": {},
     "committed": {},
+    **BLOB_MESSAGE_KEYS,
     "abort": {"reason": ("text",)},
 }
 MAX_COUNT = 2**53 - 1
@@ -1990,6 +2005,11 @@ def check_message(m, schema=None, reasons=None) -> dict:
             # sync-protocol.md section 7.
             "entries": lambda: isinstance(x, list) and 1 <= len(x) <= MAX_SUMMARY_ENTRIES
                                and all(check_entry(e) for e in x),
+            # sync-protocol.md section 10.1.
+            "ids": lambda: isinstance(x, list) and 1 <= len(x) <= MAX_BLOB_IDS
+                           and all(isinstance(i, bytes) and len(i) == 32 for i in x),
+            "blob-size": lambda: _uint(x, MAX_BLOB) and x >= MIN_BLOB,
+            "chunk": lambda: isinstance(x, bytes) and 1 <= len(x) <= BLOB_CHUNK,
         }[kind]()
         if not ok:
             raise MessageReject("protocol-error")
@@ -2000,7 +2020,44 @@ def check_message(m, schema=None, reasons=None) -> dict:
 
 
 def message_json(m: dict) -> dict:
-    return {k: h(x) if isinstance(x, bytes) else x for k, x in m.items()}
+    return {k: h(x) if isinstance(x, bytes) else [h(i) for i in x] if k == "ids" else x
+            for k, x in m.items()}
+
+
+def blob_messages(msg) -> tuple[list, list]:
+    """The valid and invalid blob messages of sync-protocol.md section 10.1, under `msg`."""
+    ident = seq(0xB0, 32)
+    valid = [
+        ("blobs-want with one id", msg("blobs-want", ids=[ident])),
+        ("blobs-want with three ids", msg("blobs-want", ids=[ident, seq(0xB1, 32), seq(0xB2, 32)])),
+        ("blobs-end", msg("blobs-end")),
+        ("blob-begin with the shortest blob", msg("blob-begin", id=ident, size=MIN_BLOB)),
+        ("blob-begin with the longest blob", msg("blob-begin", id=ident, size=MAX_BLOB)),
+        ("blob-chunk of 1 byte", msg("blob-chunk", c=b"\x00")),
+        ("blob-chunk of 3 bytes", msg("blob-chunk", c=seq(0xC0, 3))),
+        ("blob-end", msg("blob-end")),
+        ("blob-missing", msg("blob-missing", id=ident)),
+    ]
+    invalid = [
+        ("blobs-want with no id", msg("blobs-want", ids=[])),
+        ("blobs-want with an id of 31 bytes", msg("blobs-want", ids=[seq(0xB0, 31)])),
+        ("blobs-want with an id of 33 bytes", msg("blobs-want", ids=[ident, seq(0xB1, 33)])),
+        ("blobs-want with an id as text", msg("blobs-want", ids=["b0" * 32])),
+        ("blobs-want with ids as bytes", msg("blobs-want", ids=ident)),
+        ("blobs-want without ids", msg("blobs-want")),
+        ("blobs-end with an extra key", {**msg("blobs-end"), "ids": [ident]}),
+        ("blob-begin one byte shorter than the shortest blob", msg("blob-begin", id=ident, size=MIN_BLOB - 1)),
+        ("blob-begin one byte longer than the longest blob", msg("blob-begin", id=ident, size=MAX_BLOB + 1)),
+        ("blob-begin with a negative size", msg("blob-begin", id=ident, size=-1)),
+        ("blob-begin with an id of 31 bytes", msg("blob-begin", id=seq(0xB0, 31), size=MIN_BLOB)),
+        ("blob-begin without size", msg("blob-begin", id=ident)),
+        ("blob-chunk empty", msg("blob-chunk", c=b"")),
+        ("blob-chunk as text", msg("blob-chunk", c="00")),
+        ("blob-end with an extra key", {**msg("blob-end"), "c": b"\x00"}),
+        ("blob-missing with an id of 33 bytes", msg("blob-missing", id=seq(0xB0, 33))),
+        ("blob-missing without id", msg("blob-missing")),
+    ]
+    return valid, invalid
 
 
 def message_vectors() -> dict:
@@ -2020,6 +2077,7 @@ def message_vectors() -> dict:
         ("record", msg("record", r=seq(0x44, 40))),
         ("records-end", msg("records-end")),
         ("committed", msg("committed")),
+        *blob_messages(msg)[0],
         *((f"abort, {r}", msg("abort", reason=r)) for r in ABORT_REASONS),
         ("abort with an unknown reason, read as protocol-error", msg("abort", reason="out-of-coffee")),
     ]
@@ -2067,6 +2125,7 @@ def message_vectors() -> dict:
         ("protocol-error", "devices without peer", msg("devices", own=True, name="Chrome")),
         ("protocol-error", "abort with a reason as an integer", msg("abort", reason=1)),
         ("protocol-error", "abort without a reason", msg("abort")),
+        *(("protocol-error", case, m) for case, m in blob_messages(msg)[1]),
     ]
     out_invalid = []
     for reason, case, m in invalid:
@@ -2107,6 +2166,7 @@ SYNC_MESSAGE_KEYS = {
     "records-end": {},
     "committed": {},
     "retired": {"r": ("envelope",)},
+    **BLOB_MESSAGE_KEYS,
     "abort": {"reason": ("text",)},
 }
 SYNC_ABORT_REASONS = ["ended", "locked", "expired", "retired-peer", "verification-failed", "version",
@@ -2137,8 +2197,8 @@ def entry_json(e: list) -> dict:
 
 
 def sync_message_json(m: dict) -> dict:
-    return {k: [entry_json(e) for e in x] if k == "e" else h(x) if isinstance(x, bytes) else x
-            for k, x in m.items()}
+    return {k: [entry_json(e) for e in x] if k == "e" else [h(i) for i in x] if k == "ids"
+            else h(x) if isinstance(x, bytes) else x for k, x in m.items()}
 
 
 def sync_message_vectors() -> dict:
@@ -2167,6 +2227,7 @@ def sync_message_vectors() -> dict:
         ("records-end", msg("records-end")),
         ("committed", msg("committed")),
         ("retired", msg("retired", r=seq(0x45, 40))),
+        *blob_messages(msg)[0],
         *((f"abort, {r}", msg("abort", reason=r)) for r in SYNC_ABORT_REASONS),
         ("abort with a pairing reason, read as protocol-error", msg("abort", reason="cancelled")),
         ("abort with an unknown reason, read as protocol-error", msg("abort", reason="out-of-coffee")),
@@ -2221,6 +2282,7 @@ def sync_message_vectors() -> dict:
         ("protocol-error", "committed with an extra key", {**msg("committed"), "x": 0}),
         ("protocol-error", "abort with a reason as an integer", msg("abort", reason=1)),
         ("protocol-error", "abort without a reason", msg("abort")),
+        *(("protocol-error", case, m) for case, m in blob_messages(msg)[1]),
     ]
     out_invalid = []
     for reason, case, m in invalid:
@@ -2240,6 +2302,22 @@ def sync_message_vectors() -> dict:
             assert len(m) == MAX_SUMMARY_ENTRIES, case
         except MessageReject:
             assert len(m) > MAX_SUMMARY_ENTRIES, case
+    # The bounds of section 10.1, too long to write out: the tests build them from these.
+    for n, ok in ((MAX_BLOB_IDS, True), (MAX_BLOB_IDS + 1, False)):
+        try:
+            check(msg("blobs-want", ids=[seq(0xB0, 32)] * n))
+            assert ok
+        except MessageReject:
+            assert not ok
+    for n, ok in ((BLOB_CHUNK, True), (BLOB_CHUNK + 1, False)):
+        try:
+            check(msg("blob-chunk", c=bytes(n)))
+            assert ok
+        except MessageReject:
+            assert not ok
+    largest_chunk = len(cbor(msg("blob-chunk", c=bytes(BLOB_CHUNK))))
+    largest_want = len(cbor(msg("blobs-want", ids=[bytes(32)] * MAX_BLOB_IDS)))
+    assert largest_chunk <= MAX_PROTOCOL_MESSAGE and largest_want <= MAX_PROTOCOL_MESSAGE
     return {
         "valid": out_valid,
         "invalid": out_invalid,
@@ -2250,6 +2328,12 @@ def sync_message_vectors() -> dict:
         "smallestEntry": h(cbor(smallest)),
         "maxEntryLength": MAX_ENTRY_LENGTH,
         "largestSummaryLength": largest_summary,
+        "maxBlobIds": MAX_BLOB_IDS,
+        "blobChunkLength": BLOB_CHUNK,
+        "largestBlobChunkLength": largest_chunk,
+        "largestBlobsWantLength": largest_want,
+        "minBlobLength": MIN_BLOB,
+        "maxBlobLength": MAX_BLOB,
     }
 
 
@@ -2645,7 +2729,7 @@ def blob_vectors() -> dict:
         blob = blob_seal(pt)
         assert len(blob) == blob_length(size) and blob_open(blob, BLOB_KEY, size) == pt
         valid.append({"size": size, "blob": b64(blob), "blobId": blake2b(blob, 32).hex()})
-    assert blob_length(1) == 42 and blob_length(BLOB_MAX_SIZE) == 10_488_521
+    assert blob_length(1) == MIN_BLOB and blob_length(BLOB_MAX_SIZE) == MAX_BLOB
     two = base64.b64decode(valid[2]["blob"])
     rejected = [
         {"case": "stream header byte changed", "base": 2, "flip": 0},

@@ -1,6 +1,13 @@
 // @blindvault/sync: Pairing, Noise handshake, WebRTC transport, sync protocol, HLC and merge.
 
 export { Base45Error, decodeBase45, encodeBase45 } from './base45';
+export {
+  BLOB_CHUNK_LENGTH,
+  type BlobMessage,
+  type BlobMessageType,
+  MAX_BLOB_IDS,
+} from './blob-messages';
+export { type BlobOptions, type BlobStore } from './blobs';
 export { MAX_CHANNEL_MESSAGE_LENGTH, noiseChannel } from './channel';
 export {
   type ConnectionOptions,
@@ -32,6 +39,7 @@ export {
 } from './frames';
 export { type LinkFields } from './link-fields';
 export { type Direction, type MemoryPair, type MemoryPairOptions, memoryPair } from './memory';
+export { type MemoryBlobStore, memoryBlobStore } from './memory-blobs';
 export {
   ABORT_REASONS,
   MAX_RECORD_COUNT,
