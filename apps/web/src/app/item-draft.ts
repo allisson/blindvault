@@ -8,6 +8,7 @@ import {
   parseTotpSecret,
 } from '@blindvault/crypto';
 import {
+  type AttachmentValue,
   type FieldType,
   type Item,
   type ItemInput,
@@ -40,6 +41,8 @@ export interface DraftField {
    */
   readonly value: string;
   readonly totp?: TotpValue;
+  /** An attachment field's value, kept as it is: the editor never rewrites it (D278). */
+  readonly attachment?: AttachmentValue;
 }
 
 export interface Draft {
@@ -122,7 +125,8 @@ export function draftChanged(initial: Draft, draft: Draft): boolean {
         f.type !== g.type ||
         f.label !== g.label ||
         f.value !== g.value ||
-        f.totp !== g.totp
+        f.totp !== g.totp ||
+        f.attachment !== g.attachment
       );
     })
   );
@@ -135,7 +139,11 @@ export function draftOf(item: Item): Draft {
     type: f.type,
     ...(f.role !== undefined ? { role: f.role } : {}),
     label: f.label ?? '',
-    ...(typeof f.value === 'string' ? { value: f.value } : { value: '', totp: f.value }),
+    ...(typeof f.value === 'string'
+      ? { value: f.value }
+      : 'blobId' in f.value
+        ? { value: '', attachment: f.value }
+        : { value: '', totp: f.value }),
   }));
   const held = new Set(item.fields.map((f) => f.role));
   for (const r of template(item.templateId)?.roles ?? []) {
@@ -182,6 +190,7 @@ function parseTotp(typed: string): Checked {
 
 /** The stored value of `f`, `null` when empty (never written), or why it is refused. */
 function check(f: DraftField, monthOnly: boolean): Checked {
+  if (f.type === 'attachment') return f.attachment ? { value: f.attachment } : null;
   if (f.type === 'totp') {
     const typed = trim(f.value);
     if (typed !== '') return parseTotp(typed);
@@ -226,7 +235,8 @@ export function inputOf(draft: Draft): DraftResult {
       fieldErrors.set(f.key, checked.error);
       continue;
     }
-    if (f.role === undefined && label === '') {
+    // An attachment without a label is shown by its name (D278).
+    if (f.role === undefined && label === '' && f.type !== 'attachment') {
       fieldErrors.set(f.key, 'label-required');
       continue;
     }

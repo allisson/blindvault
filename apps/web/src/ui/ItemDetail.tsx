@@ -26,7 +26,8 @@ export function fieldName(m: Messages, item: Pick<Item, 'templateId'>, field: Fi
     field.label ??
     (field.role !== undefined ? roleName(m, item.templateId, field.role) : undefined) ??
     field.role ??
-    ''
+    // An attachment without a label is shown by its name (D278).
+    (typeof field.value !== 'string' && 'blobId' in field.value ? field.value.name : '')
   );
 }
 
@@ -55,6 +56,10 @@ export function FieldValue({
   const m = useLanguage().messages;
   const { copy, checked } = useCopy(clearSeconds);
   const { value } = field;
+  if (typeof value !== 'string' && 'blobId' in value) {
+    // Shown as text only; adding and downloading come with the attachment UI (attachments.md §7).
+    return <span className="min-w-0 break-words">{value.name}</span>;
+  }
   if (typeof value !== 'string') {
     return <TotpView value={value} name={name} clearSeconds={clearSeconds} />;
   }

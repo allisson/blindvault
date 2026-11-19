@@ -425,10 +425,12 @@ TEMPLATES = {
 }
 TEMPLATE_VERSION = 1
 MONTH_PRECISION_ROLES = {("card", "expiry")}
-FIELD_TYPES = {"text", "long-text", "secret", "url", "email", "phone", "date", "number", "totp", "seed-phrase"}
+FIELD_TYPES = {"text", "long-text", "secret", "url", "email", "phone", "date", "number", "totp", "seed-phrase",
+               "attachment"}
 ITEM_KEYS = {"templateId", "templateVersion", "title", "fields", "tags", "notes", "folderId", "trashOperationId"}
 FIELD_KEYS = {"type", "value", "role", "label"}
 TOTP_KEYS = {"secret", "algorithm", "digits", "period", "issuer", "accountName"}
+ATTACHMENT_KEYS = {"name", "size", "mediaType", "blobId", "key"}
 BIP39_WORDS = set(Mnemonic("english").wordlist)
 
 
@@ -516,6 +518,19 @@ def check_value(ftype: str, value, template_id: str, role) -> None:
                 and all(single_line(value[k]) for k in ("issuer", "accountName") if k in value)):
             raise ReadOnly(6, "invalid totp value")
         return
+    if ftype == "attachment":
+        if not isinstance(value, dict) or not all(isinstance(k, str) for k in value):
+            raise ReadOnly(6, "attachment value is not a text-keyed map")
+        if set(value) - ATTACHMENT_KEYS:
+            raise ReadOnly(3, "unknown attachment key")
+        media = value.get("mediaType")
+        if not (set(value) == ATTACHMENT_KEYS
+                and single_line(value["name"]) and len(value["name"]) <= 255
+                and is_uint(value["size"]) and 1 <= value["size"] <= 10_485_760
+                and isinstance(media, str) and re.fullmatch(r"[\x21-\x7e]{1,255}", media) is not None
+                and all(isinstance(value[k], bytes) and len(value[k]) == 32 for k in ("blobId", "key"))):
+            raise ReadOnly(6, "invalid attachment value")
+        return
     if not ok[ftype]():
         raise ReadOnly(6, f"invalid {ftype} value")
 
@@ -558,7 +573,7 @@ def check_item(item, deleted: bool | None) -> None:
             seen_roles.add(role)
         if "label" in f and not bounded_line(f["label"], 128):
             raise ReadOnly(6, "label")
-        if "role" not in f and "label" not in f:
+        if "role" not in f and "label" not in f and f["type"] != "attachment":
             raise ReadOnly(6, "user field without a label")
         if "value" not in f:
             raise ReadOnly(6, "field without a value")
@@ -728,6 +743,12 @@ def _user_field(ftype: str, value) -> dict:
 
 
 TOTP = {"secret": "JBSWY3DPEHPK3PXP", "algorithm": "SHA1", "digits": 6, "period": 30}
+ATTACHMENT = {"name": "scan.pdf", "size": 1, "mediaType": "application/pdf", "blobId": seq(0xB0, 32),
+              "key": seq(0xC0, 32)}
+
+
+def _attachment(**over) -> dict:
+    return {"type": "attachment", "value": {**ATTACHMENT, **over}}
 
 VALID_ITEMS = [
     ("login with three role fields", _login(), False),
@@ -767,6 +788,11 @@ VALID_ITEMS = [
         _user_field("date", "1999-12"), _user_field("number", "-007.50"),
         _user_field("totp", {**TOTP, "issuer": "GitHub", "accountName": "alice@example.com"}),
         _user_field("seed-phrase", SEED_12)]), False),
+    ("attachment without a label, of 1 byte", _with_field(_attachment()), False),
+    ("attachment with a label, of 10,485,760 bytes", _with_field({**_attachment(size=10_485_760),
+                                                                  "label": "Contract"}), False),
+    ("attachment with an untrimmed name of 255 astral code points and a mediaType of 255",
+     _with_field(_attachment(name=" " + "\U0001F4C4" * 254, mediaType="x" * 255)), False),
     ("title of 512 astral code points", _login(title="\U0001F600" * 512), False),
     ("title starting with U+FEFF, which is not White_Space", _login(title="\ufeffExample"), False),
     ("32 tags of 64 code points", _login(tags=sorted(f"{i:02d}" + "x" * 62 for i in range(32))), False),
@@ -778,6 +804,7 @@ READ_ONLY_ITEMS = [
     (2, "unknown field type", _with_field(_user_field("passkey", "x")), False),
     (3, "unknown field key", _with_field({**_user_field("text", "x"), "hidden": True}), False),
     (3, "unknown TOTP key", _with_field(_user_field("totp", {**TOTP, "counter": 0})), False),
+    (3, "unknown attachment key", _with_field(_attachment(page=1)), False),
     (4, "role the template does not define", _with_field({"type": "text", "role": "pin", "value": "1"}), False),
     (5, "unknown templateId", _login(templateId="passkey"), False),
     (5, "newer templateVersion", _login(templateVersion=2), False),
@@ -823,6 +850,22 @@ READ_ONLY_ITEMS = [
     (6, "TOTP without an algorithm", _with_field(_user_field("totp", {k: v for k, v in TOTP.items()
                                                                     if k != "algorithm"})), False),
     (6, "TOTP with an empty issuer", _with_field(_user_field("totp", {**TOTP, "issuer": ""})), False),
+    (6, "attachment of 0 bytes", _with_field(_attachment(size=0)), False),
+    (6, "attachment of 10,485,761 bytes", _with_field(_attachment(size=10_485_761)), False),
+    (6, "attachment with a blobId of 31 bytes", _with_field(_attachment(blobId=seq(0xB0, 31))), False),
+    (6, "attachment with a key of 33 bytes", _with_field(_attachment(key=seq(0xC0, 33))), False),
+    (6, "attachment without a mediaType", _with_field({"type": "attachment", "value": {
+        k: v for k, v in ATTACHMENT.items() if k != "mediaType"}}), False),
+    (6, "attachment with a role", _with_field({**_attachment(), "role": "password"}), False),
+    (6, "attachment with a line break in its name", _with_field(_attachment(name="scan\n.pdf")), False),
+    (6, "attachment with an empty name", _with_field(_attachment(name="")), False),
+    (6, "attachment with a name of 256 code points", _with_field(_attachment(name="n" * 256)), False),
+    (6, "attachment with a space in its mediaType", _with_field(_attachment(mediaType="text/plain; a=b")),
+     False),
+    (6, "attachment with a non-ASCII mediaType", _with_field(_attachment(mediaType="text/plaîn")), False),
+    (6, "attachment with a mediaType of 256 characters", _with_field(_attachment(mediaType="x" * 256)), False),
+    (6, "attachment as a text value", _with_field({"type": "attachment", "label": "File", "value": "scan.pdf"}),
+     False),
     (6, "seed phrase of 13 words", _with_field(_user_field("seed-phrase", SEED_12 + " zoo")), False),
     (6, "seed phrase with a word outside the list", _with_field(_user_field("seed-phrase",
         " ".join(SEED_12.split(" ")[:-1] + ["blindvault"]))), False),
