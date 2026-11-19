@@ -9,6 +9,7 @@ export {
   SCHEMA_VERSION,
   type StorageCommit,
   type StorageKey,
+  type StoredBlob,
   VaultDatabase,
   databaseName,
   deleteDatabase,

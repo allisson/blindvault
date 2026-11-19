@@ -2,16 +2,20 @@ import {
   type CborMap,
   type EncryptedRecord,
   Keyring,
+  MAX_BLOB_LENGTH,
+  MIN_BLOB_LENGTH,
   RECORD_FORMAT_VERSION,
   type RecordEnvelope,
   RecordType,
+  blobId,
   generateKey,
   initCrypto,
   randomId,
+  sealBlob,
   sealRecord,
   versionId,
 } from '@blindvault/crypto';
-import { IDBFactory, IDBRequest } from 'fake-indexeddb';
+import { IDBFactory, IDBObjectStore, IDBRequest } from 'fake-indexeddb';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -123,13 +127,14 @@ describe('vault database (D79, D82, D158)', () => {
     expect(() => databaseName(new Uint8Array(15))).toThrow(RangeError);
   });
 
-  it('creates the two object stores and no Local Config', async () => {
+  it('creates the three object stores and no Local Config', async () => {
     const db = await VaultDatabase.open(vaultId, factory);
     expect(await db.localConfig()).toBeUndefined();
     expect(await db.records()).toEqual([]);
+    expect(await db.blobIds()).toEqual([]);
     db.close();
     const { stores } = await raw(databaseName(vaultId));
-    expect(stores.sort()).toEqual(['localConfig', 'records']);
+    expect(stores.sort()).toEqual(['blobs', 'localConfig', 'records']);
     expect((await factory.databases()).map((d) => d.version)).toEqual([SCHEMA_VERSION]);
   });
 
@@ -373,6 +378,180 @@ describe('vault database (D79, D82, D158)', () => {
     await expect(other.localConfig()).rejects.toThrow(StorageClosedError);
   });
 
+  describe('blobs (attachments.md §4, D278)', () => {
+    function blob(bytes = 3) {
+      const { blob, blobId } = sealBlob(new Uint8Array(bytes).fill(5));
+      return { blobId, blob };
+    }
+
+    /** Every blob key and value, read straight from IndexedDB. */
+    async function rawBlobs() {
+      const db = await openDatabase(factory, databaseName(vaultId));
+      const tx = db.transaction(['blobs']);
+      const keys = tx.objectStore('blobs').getAllKeys();
+      const values = tx.objectStore('blobs').getAll();
+      await new Promise((resolve) => (tx.oncomplete = resolve));
+      db.close();
+      return { keys: keys.result, values: values.result as unknown[] };
+    }
+
+    it('writes a new attachment’s blob in the commit of its item, keyed by its blobId', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const a = folder('a');
+      const b = blob();
+      await db.commit({ put: [a], delete: [], localConfig: LOCAL_CONFIG, putBlobs: [b] });
+      expect(await db.records()).toEqual([a]);
+      expect(await db.blobIds()).toEqual([b.blobId]);
+      expect(await db.blob(b.blobId)).toEqual(b.blob);
+      expect(await db.blob(new Uint8Array(32))).toBeUndefined();
+      db.close();
+      expect((await rawBlobs()).keys).toEqual([b.blobId.slice().buffer]);
+    });
+
+    it('writes a received blob in its own transaction, and a blob already held never again', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const b = blob();
+      const c = blob(70_000);
+      const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+      try {
+        await db.putBlob(b);
+        await db.putBlob(c);
+        expect(put).toHaveBeenCalledTimes(2);
+        await db.putBlob(b);
+        expect(put).toHaveBeenCalledTimes(2);
+      } finally {
+        put.mockRestore();
+      }
+      expect((await db.blobIds()).length).toBe(2);
+      expect(await db.blob(c.blobId)).toEqual(c.blob);
+      expect(await db.localConfig()).toBeUndefined();
+      db.close();
+    });
+
+    it('deletes only the blobs named', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const b = blob(1);
+      const c = blob(2);
+      await db.putBlob(b);
+      await db.putBlob(c);
+      await db.deleteBlobs([b.blobId, new Uint8Array(32).fill(9)]);
+      expect(await db.blobIds()).toEqual([c.blobId]);
+      await expect(db.deleteBlobs([new Uint8Array(31)])).rejects.toThrow(
+        new StorageRejectedError('a blobId is 32 bytes'),
+      );
+      expect(await db.blobIds()).toEqual([c.blobId]);
+      db.close();
+    });
+
+    it('refuses a blob with a blobId not of 32 bytes, a length out of range, or another hash, writing nothing', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const good = blob();
+      const tampered = good.blob.slice();
+      tampered[30] = (tampered[30] ?? 0) ^ 1;
+      const cases: [{ blobId: Uint8Array; blob: Uint8Array }, string][] = [
+        [{ blobId: good.blobId.subarray(0, 31), blob: good.blob }, 'a blobId is 32 bytes'],
+        [{ blobId: new Uint8Array(33), blob: good.blob }, 'a blobId is 32 bytes'],
+        [
+          { blobId: good.blobId, blob: new Uint8Array(MIN_BLOB_LENGTH - 1) },
+          'blob length out of range',
+        ],
+        [
+          { blobId: good.blobId, blob: new Uint8Array(MAX_BLOB_LENGTH + 1) },
+          'blob length out of range',
+        ],
+        [
+          { blobId: good.blobId, blob: 'not bytes' as unknown as Uint8Array },
+          'blob length out of range',
+        ],
+        [{ blobId: good.blobId, blob: tampered }, 'blob does not match its blobId'],
+        [{ blobId: blobId(tampered), blob: good.blob }, 'blob does not match its blobId'],
+      ];
+      for (const [bad, message] of cases) {
+        await expect(db.putBlob(bad)).rejects.toThrow(new StorageRejectedError(message));
+        await expect(
+          db.commit({
+            put: [folder()],
+            delete: [],
+            localConfig: LOCAL_CONFIG,
+            putBlobs: [good, bad],
+          }),
+        ).rejects.toThrow(new StorageRejectedError(message));
+      }
+      expect(await db.blobIds()).toEqual([]);
+      expect(await db.records()).toEqual([]);
+      expect(await db.localConfig()).toBeUndefined();
+      db.close();
+    });
+
+    it('writes no blob when the commit fails', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const failing = { put: [], delete: [BROKEN], localConfig: LOCAL_CONFIG, putBlobs: [blob()] };
+      await expect(db.commit(failing)).rejects.toThrow();
+      expect(await db.blobIds()).toEqual([]);
+      db.close();
+    });
+
+    it('clears every blob in a clearing commit (D153)', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      await db.putBlob(blob(1));
+      const kept = blob(2);
+      await db.commit({
+        put: [],
+        delete: [],
+        localConfig: LOCAL_CONFIG,
+        putBlobs: [kept],
+        clear: true,
+      });
+      expect(await db.blobIds()).toEqual([kept.blobId]);
+      db.close();
+    });
+
+    it('stores exactly the bytes of each blob and blobId, never the rest of its buffer', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const b = blob();
+      const wide = new Uint8Array(b.blob.length + 64).fill(0xee);
+      wide.set(b.blob, 32);
+      const id = new Uint8Array(96).fill(0xee);
+      id.set(b.blobId, 32);
+      await db.putBlob({
+        blobId: id.subarray(32, 64),
+        blob: wide.subarray(32, 32 + b.blob.length),
+      });
+      db.close();
+      const { keys, values } = await rawBlobs();
+      expect((keys[0] as ArrayBuffer).byteLength).toBe(32);
+      expect((values[0] as Uint8Array).buffer.byteLength).toBe(b.blob.length);
+    });
+
+    it('hands back a value that is not bytes as empty, and skips a key that is not a blobId', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      const b = blob();
+      await db.putBlob(b);
+      db.close();
+      const opened = await openDatabase(factory, databaseName(vaultId));
+      const tx = opened.transaction(['blobs'], 'readwrite');
+      tx.objectStore('blobs').put('not bytes', b.blobId.slice().buffer);
+      tx.objectStore('blobs').put(b.blob.slice(), 'stray');
+      tx.objectStore('blobs').put(b.blob.slice(), new Uint8Array(31).buffer);
+      await new Promise((resolve) => (tx.oncomplete = resolve));
+      opened.close();
+      const again = await VaultDatabase.open(vaultId, factory);
+      expect(await again.blobIds()).toEqual([b.blobId]);
+      expect(await again.blob(b.blobId)).toEqual(new Uint8Array(0));
+      again.close();
+    });
+
+    it('refuses every blob call once closed', async () => {
+      const db = await VaultDatabase.open(vaultId, factory);
+      db.close();
+      const b = blob();
+      await expect(db.blobIds()).rejects.toThrow(StorageClosedError);
+      await expect(db.blob(b.blobId)).rejects.toThrow(StorageClosedError);
+      await expect(db.putBlob(b)).rejects.toThrow(StorageClosedError);
+      await expect(db.deleteBlobs([b.blobId])).rejects.toThrow(StorageClosedError);
+    });
+  });
+
   describe('migrations', () => {
     it('runs only the missing steps, in order, keeping the data', async () => {
       const db = await VaultDatabase.open(vaultId, factory);
@@ -380,22 +559,42 @@ describe('vault database (D79, D82, D158)', () => {
       await db.commit({ put: [record], delete: [], localConfig: LOCAL_CONFIG });
       db.close();
       const ran: number[] = [];
-      const v2: Migration = (upgraded, tx) => {
-        ran.push(2);
-        expect(upgraded.objectStoreNames.contains('records')).toBe(true);
+      const steps = MIGRATIONS.map((step, i): Migration => (...args) => {
+        ran.push(i + 1);
+        step(...args);
+      });
+      const next: Migration = (upgraded, tx) => {
+        ran.push(steps.length + 1);
+        expect(upgraded.objectStoreNames.contains('blobs')).toBe(true);
         tx.objectStore('records').createIndex('probe', 'missing');
       };
-      const first: Migration = (...args) => {
-        ran.push(1);
-        MIGRATIONS[0]?.(...args);
-      };
-      const upgraded = await openDatabase(factory, databaseName(vaultId), [first, v2]);
-      expect(ran).toEqual([2]);
-      expect(upgraded.version).toBe(2);
+      const upgraded = await openDatabase(factory, databaseName(vaultId), [...steps, next]);
+      expect(ran).toEqual([3]);
+      expect(upgraded.version).toBe(3);
       upgraded.close();
-      const fresh = await openDatabase(factory, databaseName(randomId()), [first, v2]);
-      expect(ran).toEqual([2, 1, 2]);
+      const fresh = await openDatabase(factory, databaseName(randomId()), [...steps, next]);
+      expect(ran).toEqual([3, 1, 2, 3]);
       fresh.close();
+    });
+
+    it('adds the blobs object store to a version-1 database, keeping its records (attachments.md §4)', async () => {
+      const v1 = await openDatabase(factory, databaseName(vaultId), MIGRATIONS.slice(0, 1));
+      const record = folder();
+      const tx = v1.transaction(['records', 'localConfig'], 'readwrite');
+      tx.objectStore('records').put(record.envelope.slice(), [
+        record.recordType,
+        record.recordId.slice().buffer,
+      ]);
+      tx.objectStore('localConfig').put(LOCAL_CONFIG.slice(), 'localConfig');
+      await new Promise((resolve) => (tx.oncomplete = resolve));
+      v1.close();
+      const db = await VaultDatabase.open(vaultId, factory);
+      expect(await db.records()).toEqual([record]);
+      expect(await db.localConfig()).toEqual(LOCAL_CONFIG);
+      expect(await db.blobIds()).toEqual([]);
+      db.close();
+      expect(SCHEMA_VERSION).toBe(2);
+      expect((await factory.databases()).map((d) => d.version)).toEqual([2]);
     });
 
     it('refuses a database written by a newer schema, leaving it untouched', async () => {

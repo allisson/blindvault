@@ -695,9 +695,11 @@ every project through the references in the root `tsconfig.json`.
     What remains is mostly CBOR: the re-encode check of `crypto-spec.md` §14 on the envelope and
     the content, and `itemContentLength` encoding the item again for the cap (§9.5 step 9). No
     unlock target is set.
-- **IndexedDB layout.** Database `blindvault-<vaultId>` (D79) with two object stores: `records`,
-  keyed by `[recordType, recordId]` (D158) with no other index, and `localConfig`, holding the one
-  Local Config value (`record-content.md` §9). Both are written in one transaction (D82).
+- **IndexedDB layout.** Database `blindvault-<vaultId>` (D79) with three object stores: `records`,
+  keyed by `[recordType, recordId]` (D158) with no other index; `localConfig`, holding the one
+  Local Config value (`record-content.md` §9), written in one transaction with `records` (D82);
+  and `blobs`, keyed by `blobId` (32 bytes), each value an attachment's blob as written
+  (`attachments.md` §4), added by schema version 2 with no data migration.
 - **Storage (`packages/storage`).** It imports only `@blindvault/crypto` (ESLint, covered by
   `tests/boundaries.test.ts`) and never parses records or Local Config. `vaultId` in names is
   lowercase hex, and the vault's Web Lock has its database's name.
@@ -707,6 +709,11 @@ every project through the references in the root `tsconfig.json`.
     `crypto-spec.md` §9.5, nothing decrypted) and refuses one whose header is not its key, before
     any write. Each value is copied before it is written, since IndexedDB stores a view's whole
     underlying buffer.
+  - **Blobs (D278).** A blob is accepted only with a 32-byte `blobId`, a length of 42 to
+    10,488,521 bytes and a BLAKE2b-256 equal to its `blobId`, checked before any write; storage
+    never decrypts one. A new attachment's blob goes in the commit of its item (`putBlobs`); a
+    received one in its own transaction (`putBlob`), not written again when held. `deleteBlobs`
+    serves collection, and `clear` clears the blobs too.
   - **Deletes (D224).** A commit refuses a delete of anything but an Item Version, before any
     write, so no tombstone is ever removed (CRYPTO-INV-013); `clear` replaces the whole vault
     (D153). `MemoryStore` in `packages/vault` applies the same rule.
