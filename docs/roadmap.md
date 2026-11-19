@@ -491,25 +491,25 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ## Phase 9 — Attachments
 
-**Goal:** Attachments in items, synced and backed up, before the extension and the Android app start from the final formats, with less memory held by an unlocked vault (D273, D275, D277, D278).
+**Goal:** Attachments in items, synced and backed up, before the extension and the Android app start from the final formats, with less memory held by an unlocked vault (D273, D275, D277, D278, D279).
 
 ### Tasks
 
 - [x] Memory of the unlocked vault (D277): benchmark in `tests/memory/`, measured, budget recorded
 - [x] Item Versions verified in the background after unlock and held as summaries, within the budget of D277
 - [x] Items held as summaries: not needed, items hold 24 MiB of the 577 MiB of 10,000 items with their versions (D277)
-- [ ] `docs/attachments.md` (D278), with `record-content.md`, `sync-protocol.md` and `backup-format.md` version 2 updated
+- [x] `docs/attachments.md` (D278, D279), with `record-content.md`, `sync-protocol.md`, `pairing-protocol.md` and `backup-format.md` version 2 updated
 - [ ] `packages/crypto`: the blob stream
 - [ ] `packages/vault`: the `attachment` field type and blob collection
 - [ ] `packages/storage`: the `blobs` object store
-- [ ] `packages/sync`: protocol version 2 and the blob phase
+- [ ] `packages/sync`: protocol version 2 and the blob phase, in sync, pairing and re-admission (D279)
 - [ ] `packages/backup`: format version 2, export in parts, restore in two passes
 - [ ] UI: add, view and download attachments
 
 ### Attachments Gate
 
 - [ ] A blob that does not match the hash in its field is refused, on sync and on restore
-- [ ] Two devices end a sync holding the same blobs, and a blob no record cites is removed
+- [ ] Two devices end a sync, and a pairing, holding the same blobs, and a blob no record cites is removed
 - [ ] A `.bvault` with blobs restores them, and a `.bvault` of the previous format version still restores
 - [ ] `security-invariants.md` and `threat-model.md` updated for attachments
 

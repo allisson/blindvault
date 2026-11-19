@@ -398,11 +398,11 @@ the transport.
 **Prologues**, in fixed role order (initiator first):
 
 ```
-prologue_XX = layout("bv.pairing.v1", BLAKE2b-256(payload_initiator), BLAKE2b-256(payload_responder),
+prologue_XX = layout("bv.pairing.v2", BLAKE2b-256(payload_initiator), BLAKE2b-256(payload_responder),
                      dtlsFingerprint_initiator, dtlsFingerprint_responder)
-prologue_KK = layout("bv.sync.v1",    BLAKE2b-256(reconnection_initiator), BLAKE2b-256(reconnection_responder),
+prologue_KK = layout("bv.sync.v2",    BLAKE2b-256(reconnection_initiator), BLAKE2b-256(reconnection_responder),
                      dtlsFingerprint_initiator, dtlsFingerprint_responder)
-prologue_K  = layout("bv.reconnect.v1", vaultId, role)
+prologue_K  = layout("bv.reconnect.v2", vaultId, role)
 ```
 
 Inputs, pinned so both sides hash the same bytes:

@@ -1,10 +1,11 @@
-# BlindVault — Pairing Protocol v1
+# BlindVault — Pairing Protocol v2
 
 > Normative for the bytes and the order of pairing and re-admission; `overview.md` prevails on
 > design. Implements overview §8 and D1, D4, D22, D29, D30, D33, D34, D35, D45, D49, D50, D93,
 > D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201, D202, D203 and D206, using the conventions, primitives
 > and encodings of `crypto-spec.md` (§1, §2, §3, §13, §14). The full transfer that follows the
-> handshake is in `sync-protocol.md` §2.
+> handshake is in `sync-protocol.md` §2, and the blob phase after the commit in `sync-protocol.md`
+> §10.1 (D278, D279).
 
 ## 1. Overview
 
@@ -54,7 +55,7 @@ All integers big-endian. The payload is exactly these fields, in this order:
 
 | Field | Size | Value |
 | --- | --- | --- |
-| `version` | u8 | **1** |
+| `version` | u8 | **2** |
 | `flags` | u8 | bit 0: role, 0 = I, 1 = R. Bits 1–2: DTLS `setup`, 0 = `actpass`, 1 = `active`, 2 = `passive`. Bit 3: `holdsVault`. Bits 4–7: 0 |
 | `sessionId` | 16 | random from I; R repeats I's |
 | `fingerprint` | 32 | SHA-256 fingerprint of this device's DTLS certificate |
@@ -63,7 +64,7 @@ All integers big-endian. The payload is exactly these fields, in this order:
 | `candidates` | u8 count ‖ entries | 1 to 8 entries, each `u8 kind ‖ address ‖ u16 port` (section 3.2) |
 | `formatVersions` | u8 count ‖ u16 × count | supported `recordFormatVersion`s, 1 to 255, strictly ascending (D122) |
 | `recordTypes` | u8 count ‖ u16 × count | supported `recordType`s, 1 to 255, strictly ascending (D122) |
-| `commitment` | 32 | I only: `BLAKE2b-256(layout("bv.pairing.commit.v1", nonce_I))` (section 6) |
+| `commitment` | 32 | I only: `BLAKE2b-256(layout("bv.pairing.commit.v2", nonce_I))` (section 6) |
 
 I's `setup` is `actpass`; R's is `active` or `passive`, whichever its browser chose for the answer.
 
@@ -93,7 +94,8 @@ cap, not a measured optimum; when the srflx candidate arrives on mobile data is 
 
 The receiver decodes after base45 and rejects the payload, before any connection, when:
 
-- `version` is not 1, or a reserved flag bit is set, or `setup` is 3;
+- `version` is not 2, or a reserved flag bit is set, or `setup` is 3 (a `version` 1 asks the user
+  to update the other device, a greater one to update this one);
 - the role is not the one expected (a device waiting for an answer accepts only R, a device
   scanning a first payload only I);
 - I's `setup` is not `actpass`, or R's is `actpass`;
@@ -158,13 +160,13 @@ its own.
 1. I draws `nonce_I` (32 random bytes) before building `payload_I`, which carries its commitment.
 2. After the handshake, R draws `nonce_R` (32 random bytes) and sends `nonce` with it.
 3. I sends `nonce` with `nonce_I` only after receiving `nonce_R`.
-4. R checks `BLAKE2b-256(layout("bv.pairing.commit.v1", nonce_I))` against the commitment in
+4. R checks `BLAKE2b-256(layout("bv.pairing.commit.v2", nonce_I))` against the commitment in
    `payload_I` with `sodium_memcmp`; a mismatch aborts (`protocol-error`).
 
 ### 6.2 Derivation
 
 ```
-sasHash = BLAKE2b-256(layout("bv.sas.v1", h, nonce_I, nonce_R))
+sasHash = BLAKE2b-256(layout("bv.sas.v2", h, nonce_I, nonce_R))
 SAS     = u64(sasHash[0..8]) mod 1,000,000
 ```
 
@@ -269,8 +271,11 @@ After both confirmations (section 6.4):
    - the completed sync with A (D34).
 
    A replacement of a vault commits as D153 states.
-7. B sends `committed`, then the session ends. A records the completed sync with B on receiving it
-   (D34).
+7. B sends `committed`. A records the completed sync with B on receiving it (D34).
+8. B asks A for the blobs its new records cite (`sync-protocol.md` §10.1): its `blobs-want`
+   messages, then `blobs-end`. A answers each ID, and the session ends once B has every answer
+   (D279). B writes each blob that matches its `blobId` in its own transaction; a blob A lacks, or
+   one cut by the end of the session, shows as waiting for sync, and the pairing still completed.
 
 B holds the identity, the Device KEK, the Master Key and the received records only in memory until
 step 6, and discards them on any abort: an interruption before the commit leaves its storage
@@ -305,7 +310,11 @@ In this order:
    (`sync-protocol.md` §2.3). A record of an unknown format or type aborts with
    `unsupported-format` before the merge (D206).
 6. Each side commits its merge, records the completed sync with the peer in the same transaction
-   (D34), sends `committed`, and ends the session on the peer's `committed`.
+   (D34) and sends `committed`.
+7. On the peer's `committed`, each side asks for the blobs it lacks (`sync-protocol.md` §10.1):
+   its `blobs-want` messages, then `blobs-end`, while it answers the peer's. Each side ends the
+   session once it has every answer it asked for and has answered every ID before the peer's
+   `blobs-end` (D279).
 
 No Master Key is transferred: both already hold it (D22). Neither side asks for the local password
 or a passkey again: the MAC uses `K_readmission`, which the unlocked session holds (D206).
@@ -329,7 +338,7 @@ frame that fails decryption aborts.
 
 ### 10.2 Types
 
-Every message has `v` (uint, **1**) and `t` (text). Its other keys are exactly those listed:
+Every message has `v` (uint, **2**) and `t` (text). Its other keys are exactly those listed:
 
 | `t` | Keys | Sent by |
 | --- | --- | --- |
@@ -341,9 +350,10 @@ Every message has `v` (uint, **1**) and `t` (text). Its other keys are exactly t
 | `devices` | `own`: bool, `peer`: bool, `name`: text | both (section 9) |
 | `records-begin`, `record`, `records-end` | `sync-protocol.md` §2.1 | section 8 or 9 |
 | `committed` | — | B in pairing, both in re-admission |
+| `blobs-want`, `blobs-end`, `blob-begin`, `blob-chunk`, `blob-end`, `blob-missing` | `sync-protocol.md` §11.1 | section 8 step 8 or 9 step 7 |
 | `abort` | `reason`: text | either, at any time |
 
-A message whose `v` is not 1 aborts (`version`). An unknown `t`, a missing or extra key, a wrong
+A message whose `v` is not 2 aborts (`version`). An unknown `t`, a missing or extra key, a wrong
 type or length, or a message out of the order of sections 6, 8 and 9 aborts (`protocol-error`).
 
 ### 10.3 Abort
@@ -391,13 +401,16 @@ says, the receiver aborts.
 
 | Layer | Version | Unknown value |
 | --- | --- | --- |
-| Payload | `version` byte, 1 | refused before the connection; the UI asks to update the app |
-| Prologue | label `bv.pairing.v1` | a device of another version computes another prologue, so the handshake fails |
-| SAS and commitment | labels `bv.sas.v1`, `bv.pairing.commit.v1` | changed only with the prologue label |
-| Messages | `v`, 1 | `abort` with `version` |
+| Payload | `version` byte, 2 | refused before the connection; the UI asks to update the app |
+| Prologue | label `bv.pairing.v2` | a device of another version computes another prologue, so the handshake fails |
+| SAS and commitment | labels `bv.sas.v2`, `bv.pairing.commit.v2` | changed only with the prologue label |
+| Messages | `v`, 2 | `abort` with `version` |
 
 A change to the payload, the messages or the derivations takes a new payload `version` and a new
-prologue label, so two devices of different versions never reach a SAS that looks valid.
+prologue label, so two devices of different versions never reach a SAS that looks valid. Version 2
+added the blob phase after the commit (D279), with no fallback to version 1. The re-admission MAC
+label `bv.v1.readmission` is unchanged: it binds the handshake hash, which the new prologue label
+already changes.
 
 ## 13. Invariants and tests
 
@@ -408,7 +421,7 @@ prologue label, so two devices of different versions never reach a SAS that look
 
 The tests of overview §16 (pairing tests) and of Gate C cover this document. The payload and
 base45 vectors, and the message and framing vectors of section 10, are in
-`packages/sync/test-vectors/pairing-v1.json`; the commitment and SAS vectors are in the
+`packages/sync/test-vectors/pairing-v2.json`; the commitment and SAS vectors are in the
 `transcripts` section of `packages/crypto/test-vectors/crypto-v1.json` (`crypto-spec.md` §15). The
 nonces, the SAS and the confirmations are tested over the in-memory transport with a nonce that
 does not open the commitment, messages out of order (a key or MAC before both confirmations), a
