@@ -79,6 +79,8 @@ function lazyStore(factory: IDBFactory, vaultId?: Uint8Array) {
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+    blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+    deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(
@@ -165,6 +167,8 @@ async function reopen(a: Awaited<ReturnType<typeof deviceA>>) {
     store: {
       records: () => database.records(),
       record: (key) => database.record(key),
+      blobIds: () => database.blobIds(),
+      deleteBlobs: (ids) => database.deleteBlobs(ids),
       commit: (c) => database.commit(c),
     },
     localConfig: parseLocalConfig(must(await database.localConfig())),

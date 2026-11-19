@@ -44,6 +44,7 @@ import {
   sealRecord,
   sealRecoveryEnvelope,
   sameKey,
+  sealBlob,
   sealVaultKeyRecord,
   unwrapKey,
   vaultKeyRecordId,
@@ -6358,5 +6359,190 @@ describe('Item Versions verified after unlock (D277)', () => {
     const oldest = must((await again.versions(id)).at(-1));
     expect(await again.restoreVersion(id, oldest.versionId)).toBe(true);
     expect(again.item(id)?.item?.title).toBe('Bank');
+  });
+});
+
+describe('blob collection (attachments.md §4, §5, D278)', () => {
+  function sealed(byte: number) {
+    const { blob, blobId, key } = sealBlob(new Uint8Array(3).fill(byte));
+    return { stored: { blobId, blob }, blobId, key };
+  }
+
+  /** A login with an attachment field for each blob. */
+  function attached(title: string, ...blobs: ReturnType<typeof sealed>[]): ItemInput {
+    const base = login(title);
+    return {
+      ...base,
+      fields: [
+        ...base.fields,
+        ...blobs.map(({ blobId, key }) => ({
+          type: 'attachment' as const,
+          value: { name: 'scan.pdf', size: 3, mediaType: 'application/pdf', blobId, key },
+        })),
+      ],
+    };
+  }
+
+  function held(store: MemoryStore): string[] {
+    return [...store.blobs.keys()].sort();
+  }
+
+  /** Resolves once every operation queued before it, collection included, has run. */
+  function drained(session: VaultSession): Promise<void> {
+    return session.setPreferences(session.preferences);
+  }
+
+  it('writes a new attachment’s blob in the commit of its item', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    expect(must(store.commits.at(-1)).putBlobs).toEqual([a.stored]);
+    expect(held(store)).toEqual([idKey(a.blobId)]);
+    const b = sealed(2);
+    expect(await session.updateItem(id, attached('Passport', a, b), [b.stored])).toBe(true);
+    expect(must(store.commits.at(-1)).putBlobs).toEqual([b.stored]);
+    expect(held(store)).toEqual([idKey(a.blobId), idKey(b.blobId)].sort());
+  });
+
+  it('refuses a blob its item does not cite, writing nothing', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const commits = store.commits.length;
+    await expect(session.createItem(login('Passport'), [a.stored])).rejects.toThrow(
+      ContentInvalidError,
+    );
+    const id = await session.createItem(login('Passport'));
+    await expect(session.updateItem(id, login('Visa'), [a.stored])).rejects.toThrow(
+      ContentInvalidError,
+    );
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(held(store)).toEqual([]);
+  });
+
+  it('keeps a blob cited only by an Item Version, and drops it after the history cut', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    // Removing the field: the version of the previous state still cites the blob.
+    await session.updateItem(id, login('Passport'));
+    expect(held(store)).toEqual([idKey(a.blobId)]);
+    for (let i = 1; i < HISTORY_LIMIT; i++) {
+      await session.updateItem(id, login(`Passport ${String(i)}`));
+      expect(held(store)).toEqual([idKey(a.blobId)]);
+    }
+    await session.updateItem(id, login('Passport, last'));
+    expect(held(store)).toEqual([]);
+  });
+
+  it('keeps a blob cited by a trashed item, and drops it after the purge', async () => {
+    const { session, store, clock } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    await session.trashItem(id);
+    expect(held(store)).toEqual([idKey(a.blobId)]);
+    session.lock();
+    clock.t += PURGE_DELAY_MS + 1;
+    const again = await unlock(store, clock);
+    await again.verified;
+    await drained(again);
+    expect(held(store)).toEqual([]);
+  });
+
+  it('keeps a blob cited by a duplicate when the original drops it', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    await session.duplicateItem(id, ' (copy)');
+    await session.trashItem(id);
+    expect(held(store)).toEqual([idKey(a.blobId)]);
+  });
+
+  it('drops a blob no record cites at unlock, once the versions are verified', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    await session.updateItem(id, login('Passport'));
+    const stray = sealed(9);
+    store.putBlob(stray.stored);
+    session.lock();
+    const again = await unlock(store);
+    await again.verified;
+    await drained(again);
+    // Cited only by a version, which unlock verifies after the vault is shown (D277).
+    expect(held(store)).toEqual([idKey(a.blobId)]);
+  });
+
+  it('does not run before the versions are verified, even on a commit at unlock', async () => {
+    const { session, store, clock } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    await session.updateItem(id, login('Passport'));
+    // An item whose purge is due, so the purge at unlock commits before the versions are read.
+    await session.trashItem(await session.createItem(login('Old')));
+    session.lock();
+    clock.t += PURGE_DELAY_MS + 1;
+    const deletes = store.blobDeletes.length;
+    const again = await unlock(store, clock);
+    expect(store.blobDeletes).toHaveLength(deletes);
+    await again.verified;
+    await drained(again);
+    expect(held(store)).toEqual([idKey(a.blobId)]);
+  });
+
+  it('does not run while an Item or an Item Version is kept aside as corrupt', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    await session.updateItem(id, login('Passport'));
+    const [version] = store.ofType(RecordType.itemVersion);
+    const tampered = must(version).envelope.slice();
+    tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 1;
+    store.put({ ...must(version), envelope: tampered as RecordEnvelope });
+    const stray = sealed(9);
+    store.putBlob(stray.stored);
+    session.lock();
+    const again = await unlock(store);
+    await again.verified;
+    expect(again.corrupt()).toHaveLength(1);
+    await again.createItem(login('Visa'));
+    await drained(again);
+    expect(held(store)).toEqual([idKey(a.blobId), idKey(stray.blobId)].sort());
+
+    // An Item kept aside as corrupt at unlock: its citations are unknown too.
+    again.lock();
+    store.put(must(version));
+    const [item] = store.ofType(RecordType.item);
+    const damaged = must(item).envelope.slice();
+    damaged[damaged.length - 1] = (damaged[damaged.length - 1] ?? 0) ^ 1;
+    store.put({ ...must(item), envelope: damaged as RecordEnvelope });
+    const third = await unlock(store);
+    await third.verified;
+    expect(third.corrupt()).toHaveLength(1);
+    await third.createItem(login('Visa'));
+    await drained(third);
+    expect(held(store)).toEqual([idKey(a.blobId), idKey(stray.blobId)].sort());
+  });
+
+  it('stops on lock, deleting nothing, even while it reads the blobs held', async () => {
+    const { session, store } = await create();
+    const a = sealed(1);
+    const id = await session.createItem(attached('Passport', a), [a.stored]);
+    await session.updateItem(id, login('Passport'));
+    store.putBlob(sealed(9).stored);
+    session.lock();
+    const before = await unlock(store);
+    before.lock();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(store.blobDeletes).toEqual([]);
+
+    const again = await unlock(store);
+    const blobIds = store.blobIds.bind(store);
+    store.blobIds = () => {
+      again.lock();
+      return blobIds();
+    };
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(store.blobDeletes).toEqual([]);
+    expect(held(store)).toHaveLength(2);
   });
 });

@@ -95,6 +95,8 @@ function lazyStore(factory: IDBFactory): RecordStore {
   return {
     records: () => (db ? db.records() : Promise.resolve([])),
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+    blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+    deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);

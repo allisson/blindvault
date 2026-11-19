@@ -29,7 +29,9 @@ every project through the references in the root `tsconfig.json`.
   the whole new Local Config in one transaction. Every commit re-seals the Local Config encrypted
   part around the current HLC state (D62). The session runs one operation at a time, builds its
   writes from the held state, and applies them in memory only once the commit succeeds; an
-  operation that changes nothing commits nothing. A lock aborts the operation in progress.
+  operation that changes nothing commits nothing. A lock aborts the operation in progress. A
+  commit also carries the blobs of new attachments (`putBlobs`), and `blobIds()` and
+  `deleteBlobs()` serve blob collection (D278).
 - **Unlock.** The KEK opens the Master Key wrap (any failure is one `UnlockRejectedError`), the
   Master Key's subkey opens the encrypted part (a failure is a corrupt Local Config), and every
   record is verified as on receipt (`crypto-spec.md` §9.5). A record that fails, an invalid Folder
@@ -38,6 +40,13 @@ every project through the references in the root `tsconfig.json`.
 - **Maintenance.** The automatic purge and the history cut run at unlock and every hour while
   unlocked, against an injectable clock; they issue no HLC, so they run while the vault is
   read-only (D73, D94). A failed pass changes nothing and is retried at the next one.
+- **Blob collection (D278, `attachments.md` §5).** Inside the operation queue, after every commit
+  of records and once at unlock after the Item Versions are verified (D277), the session deletes
+  every held blob that no held Item or Item Version cites. Each Item Version's summary keeps the
+  `blobId`s it cites, read from the raw content so an item read-only for newer content keeps its
+  blobs. Collection does nothing before the D277 pass or while an Item or Item Version is kept
+  aside as corrupt, and a failure leaves the blobs for the next one. An item's new blobs must be
+  ones its content cites, and go in the commit of the item.
 - **Device identity bytes.** The encrypted part of Local Config holds the identity's private key,
   so `packages/crypto` seals and opens that part (`sealLocalConfigPart`, `openLocalConfigPart`):
   `packages/vault` never reads the private key as bytes, and the opened plaintext is wiped.
