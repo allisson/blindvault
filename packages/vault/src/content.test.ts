@@ -6,6 +6,8 @@ import { ContentInvalidError } from './errors';
 import { deviceToCbor, folderToCbor, readDevice } from './folder';
 import {
   type Item,
+  attachmentMediaType,
+  attachmentName,
   isValidDate,
   isValidSeedPhrase,
   itemToCbor,
@@ -133,6 +135,72 @@ describe('item writes', () => {
 
   it('counts code points', () => {
     expect(codePointLength('a\u{1F600}')).toBe(2);
+  });
+
+  it('writes an attachment field without a label and reads it back (§4, D278)', () => {
+    const attachment = {
+      name: ' scan 01.pdf',
+      size: 10_485_760,
+      mediaType: 'application/pdf',
+      blobId: new Uint8Array(32).fill(1),
+      key: new Uint8Array(32).fill(2),
+    };
+    const item: Item = { ...login, fields: [{ type: 'attachment', value: attachment }] };
+    const content = itemToCbor(item, false);
+    const value = (content.get('fields') as CborMap[])[0]?.get('value');
+    expect(value).toEqual(
+      map([
+        ['name', attachment.name],
+        ['size', attachment.size],
+        ['mediaType', attachment.mediaType],
+        ['blobId', attachment.blobId],
+        ['key', attachment.key],
+      ]),
+    );
+    expect(readItem(content, false)).toEqual({ readOnly: false, item });
+    const invalid = {
+      ...item,
+      fields: [{ type: 'attachment', value: { ...attachment, size: 0 } }],
+    };
+    expect(() => itemToCbor(invalid as Item, false)).toThrow(ContentInvalidError);
+  });
+});
+
+describe('attachment input (attachments.md §3)', () => {
+  it('keeps a name of up to 255 code points, line breaks replaced by spaces', () => {
+    expect(attachmentName('scan.pdf')).toBe('scan.pdf');
+    expect(attachmentName('a\r\nb\nc.txt')).toBe('a  b c.txt');
+    expect(attachmentName(' ')).toBe(' ');
+    expect(attachmentName('\u{1F4C4}'.repeat(255))).toBe('\u{1F4C4}'.repeat(255));
+  });
+
+  it('names an empty file name `attachment`', () => {
+    expect(attachmentName('')).toBe('attachment');
+  });
+
+  it('cuts a longer name to 255 code points, keeping an extension of 1 to 16', () => {
+    const cut = attachmentName(`${'\u{1F4C4}'.repeat(300)}.pdf`);
+    expect(codePointLength(cut)).toBe(255);
+    expect(cut).toBe(`${'\u{1F4C4}'.repeat(251)}.pdf`);
+    const sixteen = `.${'e'.repeat(16)}`;
+    expect(attachmentName(`${'n'.repeat(300)}${sixteen}`)).toBe(`${'n'.repeat(238)}${sixteen}`);
+    // An extension of 17, an empty one or none: a plain cut.
+    expect(attachmentName(`${'n'.repeat(300)}.${'e'.repeat(17)}`)).toBe('n'.repeat(255));
+    expect(attachmentName(`${'n'.repeat(300)}.`)).toBe('n'.repeat(255));
+    expect(attachmentName('n'.repeat(300))).toBe('n'.repeat(255));
+    // The extension is after the last dot.
+    expect(attachmentName(`${'n'.repeat(300)}.tar.gz`)).toBe(`${'n'.repeat(252)}.gz`);
+  });
+
+  it('keeps a media type of 1 to 255 characters U+0021 to U+007E, else application/octet-stream', () => {
+    const octet = 'application/octet-stream';
+    expect(attachmentMediaType('application/pdf')).toBe('application/pdf');
+    expect(attachmentMediaType('x'.repeat(255))).toBe('x'.repeat(255));
+    expect(attachmentMediaType('')).toBe(octet);
+    expect(attachmentMediaType('x'.repeat(256))).toBe(octet);
+    expect(attachmentMediaType('text/plain; charset=utf-8')).toBe(octet);
+    expect(attachmentMediaType('text/plaîn')).toBe(octet);
+    expect(attachmentMediaType('text/plain\u007f')).toBe(octet);
   });
 });
 

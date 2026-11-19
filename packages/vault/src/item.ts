@@ -1,26 +1,51 @@
 // Item content (record-content.md §2–§5, D52, D165): read with the read-only rules, written only
 // when valid.
 
-import { type CborMap, type CborValue, type TotpValue, checkTotpValue } from '@blindvault/crypto';
+import {
+  BLOB_ID_LENGTH,
+  BLOB_KEY_LENGTH,
+  type CborMap,
+  type CborValue,
+  MAX_ATTACHMENT_SIZE,
+  type TotpValue,
+  checkTotpValue,
+} from '@blindvault/crypto';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
 import { ContentInvalidError } from './errors';
 import { FIELD_TYPES, type FieldType, type Template, roleOf, template } from './templates';
 import {
+  codePointLength,
   compareCodePoints,
   isBoundedLine,
+  isBytes,
   isId,
   isSingleLine,
   isText,
   isTextKeyed,
   isUint,
+  uintIn,
 } from './text';
+
+/** An `attachment` field's value (record-content.md §4, D278): the file's metadata and its blob. */
+export interface AttachmentValue {
+  /** The file's own name: single-line, 1 to 255 code points, not trimmed. */
+  readonly name: string;
+  /** The file's length in bytes, 1 to `MAX_ATTACHMENT_SIZE`. */
+  readonly size: number;
+  /** Shown as text only, never used to open the file (attachments.md §7). */
+  readonly mediaType: string;
+  /** BLAKE2b-256 of the blob as stored. */
+  readonly blobId: Uint8Array;
+  /** The blob's `secretstream` key. */
+  readonly key: Uint8Array;
+}
 
 export interface Field {
   readonly type: FieldType;
-  /** Text for every type but `totp`. */
-  readonly value: string | TotpValue;
+  /** Text for every type but `totp` and `attachment`. */
+  readonly value: string | TotpValue | AttachmentValue;
   readonly role?: string;
   readonly label?: string;
 }
@@ -61,6 +86,11 @@ const ITEM_KEYS = new Set([
 ]);
 const FIELD_KEYS = new Set(['type', 'value', 'role', 'label']);
 const TOTP_KEYS = new Set(['secret', 'algorithm', 'digits', 'period', 'issuer', 'accountName']);
+const ATTACHMENT_KEYS = new Set(['name', 'size', 'mediaType', 'blobId', 'key']);
+export const ATTACHMENT_NAME_MAX = 255;
+const EXTENSION_MAX = 16;
+const MEDIA_TYPE = /^[\x21-\x7e]{1,255}$/;
+const OCTET_STREAM = 'application/octet-stream';
 const TYPES = new Set<string>(FIELD_TYPES);
 
 class ReadOnly extends Error {
@@ -154,12 +184,50 @@ function readTotp(value: CborValue | undefined): TotpValue {
   return totp;
 }
 
+function readAttachment(value: CborValue | undefined): AttachmentValue {
+  require(isTextKeyed(value));
+  require(!hasUnknownKey(value, ATTACHMENT_KEYS), 3);
+  const name = value.get('name');
+  const size = value.get('size');
+  const mediaType = value.get('mediaType');
+  const blobId = value.get('blobId');
+  const key = value.get('key');
+  require(isSingleLine(name) && codePointLength(name) <= ATTACHMENT_NAME_MAX);
+  require(uintIn(size, 1, MAX_ATTACHMENT_SIZE));
+  require(typeof mediaType === 'string' && MEDIA_TYPE.test(mediaType));
+  require(isBytes(blobId, BLOB_ID_LENGTH) && isBytes(key, BLOB_KEY_LENGTH));
+  return { name, size, mediaType, blobId, key };
+}
+
+/**
+ * A picked file's name as stored (attachments.md §3): line breaks as spaces, cut to 255 code points
+ * keeping an extension of 1 to 16 after the last `.`, `attachment` when empty.
+ */
+export function attachmentName(fileName: string): string {
+  const points = Array.from(fileName.replace(/[\n\r]/g, ' '));
+  if (points.length === 0) return 'attachment';
+  if (points.length <= ATTACHMENT_NAME_MAX) return points.join('');
+  const dot = points.lastIndexOf('.');
+  const extension = points.length - dot - 1;
+  if (dot < 0 || extension < 1 || extension > EXTENSION_MAX) {
+    return points.slice(0, ATTACHMENT_NAME_MAX).join('');
+  }
+  const stem = points.slice(0, ATTACHMENT_NAME_MAX - extension - 1);
+  return [...stem, ...points.slice(dot)].join('');
+}
+
+/** A picked file's media type as stored (attachments.md §3): `application/octet-stream` unless valid. */
+export function attachmentMediaType(type: string): string {
+  return MEDIA_TYPE.test(type) ? type : OCTET_STREAM;
+}
+
 function readValue(
   type: FieldType,
   value: CborValue | undefined,
   monthOnly: boolean,
 ): Field['value'] {
   if (type === 'totp') return readTotp(value);
+  if (type === 'attachment') return readAttachment(value);
   switch (type) {
     case 'long-text':
     case 'secret':
@@ -207,7 +275,8 @@ function readFields(raw: CborValue | undefined, t: Template): Field[] {
       roles.add(r);
     }
     if (map.has('label')) require(isBoundedLine(label, LABEL_MAX));
-    require(map.has('role') || map.has('label'));
+    // An attachment is shown by its name when it has no label (D278).
+    require(map.has('role') || map.has('label') || type === 'attachment');
     require(map.has('value'));
     const value = readValue(type, map.get('value'), monthOnly);
     return {
@@ -278,6 +347,20 @@ export function readItem(content: CborValue, deleted: boolean | null): ItemReadi
   }
 }
 
+function valueToCbor(v: Field['value']): CborValue {
+  if (typeof v === 'string') return v;
+  if ('blobId' in v) {
+    return new Map<CborValue, CborValue>([
+      ['name', v.name],
+      ['size', v.size],
+      ['mediaType', v.mediaType],
+      ['blobId', v.blobId],
+      ['key', v.key],
+    ]);
+  }
+  return totpToCbor(v);
+}
+
 function totpToCbor(v: TotpValue): CborMap {
   const map: CborMap = new Map<CborValue, CborValue>([
     ['secret', v.secret],
@@ -298,7 +381,7 @@ export function itemToCbor(item: Item, deleted: boolean): CborMap {
   const fields = item.fields.map((f) => {
     const map: CborMap = new Map<CborValue, CborValue>([
       ['type', f.type],
-      ['value', typeof f.value === 'string' ? f.value : totpToCbor(f.value)],
+      ['value', valueToCbor(f.value)],
     ]);
     if (f.role !== undefined) map.set('role', f.role);
     if (f.label !== undefined) map.set('label', f.label);

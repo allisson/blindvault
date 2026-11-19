@@ -836,6 +836,7 @@ const en = {
     number: 'Number',
     totp: 'TOTP',
     'seed-phrase': 'Seed phrase',
+    attachment: 'Attachment',
   },
   generator: {
     title: 'Password generator',
@@ -2023,6 +2024,7 @@ const ptBR: Messages = {
     number: 'Número',
     totp: 'TOTP',
     'seed-phrase': 'Frase-semente',
+    attachment: 'Anexo',
   },
   generator: {
     title: 'Gerador de senhas',

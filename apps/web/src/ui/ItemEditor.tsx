@@ -71,7 +71,10 @@ function FieldEditor({
   const { meter, hint } = useMeter(field.value, rated(field));
 
   let input;
-  if (field.type === 'totp') {
+  if (field.type === 'attachment') {
+    // The file is fixed; only its label is edited (attachments.md §7).
+    input = <p className="text-value break-words">{field.attachment?.name}</p>;
+  } else if (field.type === 'totp') {
     // Masked like a secret: an otpauth:// URI holds the TOTP secret (D127).
     input = (
       <SecretInput
@@ -367,7 +370,8 @@ export function ItemEditor({
             }}
             data-testid="add-field-type"
           >
-            {FIELD_TYPES.map((t) => (
+            {/* An attachment is added from a file, not as an empty field (attachments.md §7). */}
+            {FIELD_TYPES.filter((t) => t !== 'attachment').map((t) => (
               <option key={t} value={t}>
                 {m.fieldTypes[t]}
               </option>

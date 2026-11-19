@@ -44,6 +44,8 @@ export {
   template,
 } from './templates';
 export {
+  ATTACHMENT_NAME_MAX,
+  type AttachmentValue,
   type Field,
   type Item,
   type ItemReading,
@@ -52,6 +54,8 @@ export {
   TAGS_MAX,
   TAG_MAX,
   TITLE_MAX,
+  attachmentMediaType,
+  attachmentName,
   isValidDate,
   isValidSeedPhrase,
   itemToCbor,

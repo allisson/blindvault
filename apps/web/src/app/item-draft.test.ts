@@ -196,6 +196,47 @@ describe('item drafts (record-content.md §3, §4)', () => {
     expect(itemToCbor(input, false)).toEqual(itemToCbor(item, false));
   });
 
+  it('keeps an attachment field as it is, with or without a label (D278)', () => {
+    const value = {
+      name: 'scan.pdf',
+      size: 1,
+      mediaType: 'application/pdf',
+      blobId: new Uint8Array(32).fill(1),
+      key: new Uint8Array(32).fill(2),
+    };
+    const item: Item = {
+      templateId: 'secure-note',
+      templateVersion: 1,
+      title: 'Lease',
+      fields: [
+        { type: 'attachment', value },
+        { type: 'attachment', label: 'Signed', value: { ...value, name: 'signed.pdf' } },
+      ],
+      tags: [],
+    };
+    const draft = draftOf(item);
+    expect(draft.fields.map((f) => f.attachment)).toEqual(item.fields.map((f) => f.value));
+    expect(draftChanged(draft, draft)).toBe(false);
+    expect(ok(draft)).toEqual(item);
+    // Relabeling keeps the file; a new value object is a change.
+    const relabeled = {
+      ...draft,
+      fields: draft.fields.map((f, i) => (i === 1 ? { ...f, label: 'Lease, signed' } : f)),
+    };
+    expect(ok(relabeled).fields[1]).toEqual({
+      type: 'attachment',
+      label: 'Lease, signed',
+      value: { ...value, name: 'signed.pdf' },
+    });
+    const replaced = {
+      ...draft,
+      fields: draft.fields.map((f, i) => (i === 0 ? { ...f, attachment: { ...value } } : f)),
+    };
+    expect(draftChanged(draft, replaced)).toBe(true);
+    // Removed from the draft: not written.
+    expect(ok({ ...draft, fields: draft.fields.slice(1) }).fields).toHaveLength(1);
+  });
+
   it('stores a value that reads like an error code as typed', () => {
     const draft = set({ ...login(), title: 'x' }, 'username', ' number ');
     expect(ok(draft).fields).toEqual([{ type: 'text', role: 'username', value: 'number' }]);
