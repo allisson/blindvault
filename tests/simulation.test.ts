@@ -70,6 +70,7 @@ function lazyStore(factory: IDBFactory): RecordStore {
   let db: VaultDatabase | undefined;
   return {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -179,9 +180,9 @@ async function sync(
   ]);
   const sx = new SyncSession(hx.channel);
   const sy = new SyncSession(hy.channel);
-  const run = (session: SyncSession, grant: typeof gx) =>
+  const run = async (session: SyncSession, grant: typeof gx) =>
     exchange(session, {
-      summary: grant.summary(),
+      summary: await grant.summary(),
       records: (selected) => grant.records(selected),
       merge: (records) => grant.merge(records),
       retired: () => Promise.reject(new Error('no retirement here')),
@@ -216,12 +217,10 @@ function failing(failure: Failure, direction: Direction, at: number) {
 }
 
 /** Every synchronized record by its header, comparable across devices. */
-function held(session: VaultSession): string[] {
+async function held(session: VaultSession): Promise<string[]> {
   const peer = session.devices().find((d) => idKey(d.deviceId) !== idKey(session.deviceId));
   if (!peer) throw new Error('no peer');
-  return session
-    .openSync(peer.deviceId)
-    .summary()
+  return (await session.openSync(peer.deviceId).summary())
     .map((e) =>
       JSON.stringify([
         e.recordType,
@@ -371,7 +370,7 @@ describe('simulation with three devices and injected failures (Gate D)', () => {
         await sync(x, y);
       }
       for (const device of [phone, tablet]) {
-        expect(held(device)).toEqual(held(laptop));
+        expect(await held(device)).toEqual(await held(laptop));
         expect(shown(device)).toEqual(shown(laptop));
       }
       // Converged: one more sync of each pair moves nothing.

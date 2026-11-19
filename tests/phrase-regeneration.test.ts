@@ -61,6 +61,7 @@ function lazyStore(factory: IDBFactory, vaultId?: Uint8Array) {
   let db: VaultDatabase | undefined;
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(
@@ -144,7 +145,11 @@ describe('Recovery Phrase regeneration through IndexedDB (Gate B, D2, D185)', ()
     const database = db();
     const unlockKeyring = new Keyring();
     const again = await VaultSession.unlock({
-      store: { records: () => database.records(), commit: (c) => database.commit(c) },
+      store: {
+        records: () => database.records(),
+        record: (key) => database.record(key),
+        commit: (c) => database.commit(c),
+      },
       localConfig: parseLocalConfig(must(await database.localConfig())),
       keyring: unlockKeyring,
       kek: kek(unlockKeyring, 1),
@@ -155,7 +160,7 @@ describe('Recovery Phrase regeneration through IndexedDB (Gate B, D2, D185)', ()
     expect(again.recovery).toEqual(recovery);
     expect(again.lastPhraseId).toEqual(recovery.phraseId);
     expect(again.item(id)?.item?.title).toBe('Bank, renamed');
-    expect(again.versions(id).map((v) => v.item?.title)).toEqual(['Bank']);
+    expect((await again.versions(id)).map((v) => v.item?.title)).toEqual(['Bank']);
     expect(again.corrupt()).toEqual([]);
 
     // The new backup restores with the new phrase into a new installation, every record matching.

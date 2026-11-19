@@ -9,6 +9,7 @@ import {
   KeyWipedError,
   PhraseRejectedError,
   Keyring,
+  RecordRejectedError,
   LocalPurpose,
   MEMLIMIT,
   type MasterSubkeys,
@@ -1359,7 +1360,9 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     const { session, store } = await restore(source.file.bytes, source.words);
     expect(session.vaultId).toEqual(source.session.vaultId);
     expect(session.items().map((i) => i.item?.title)).toEqual(['Renamed']);
-    expect(session.versions(source.id)).toHaveLength(source.session.versions(source.id).length);
+    expect(await session.versions(source.id)).toHaveLength(
+      (await source.session.versions(source.id)).length,
+    );
     expect(session.folders().map((f) => f.name)).toEqual(['Work']);
     expect(session.recovery).toEqual(source.session.recovery);
     session.lock();
@@ -1865,8 +1868,8 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     });
   }
 
-  function titles(session: VaultSession, id: Uint8Array) {
-    return session.versions(id).map((v) => v.item?.title);
+  async function versionTitles(session: VaultSession, id: Uint8Array) {
+    return (await session.versions(id)).map((v) => v.item?.title);
   }
 
   it('takes a newer edit from the backup and keeps the local one in history (Gate B)', async () => {
@@ -1881,13 +1884,13 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     const result = await a.session.mergeBackup(backup);
     expect(result).toMatchObject({ added: 0, replaced: 1, versions: 1, phraseChanged: false });
     expect(a.session.item(id)?.item?.title).toBe('Edited on B');
-    expect(titles(a.session, id)).toEqual(['Edited on A', 'Original']);
+    expect(await versionTitles(a.session, id)).toEqual(['Edited on A', 'Original']);
     expect(a.store.commits).toHaveLength(commits + 1);
 
     a.session.lock();
     const again = await unlock(a.store, clockA);
     expect(again.item(id)?.item?.title).toBe('Edited on B');
-    expect(titles(again, id)).toEqual(['Edited on A', 'Original']);
+    expect(await versionTitles(again, id)).toEqual(['Edited on A', 'Original']);
     // The receive rule (D109): a write after the merge takes an HLC above every merged one.
     const next = await again.createItem(login('After'));
     expect(must(again.item(next)).hlc.physicalMs).toBe(T0 + 2000);
@@ -1905,8 +1908,8 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
     expect(result).toMatchObject({ added: 0, replaced: 0, versions: 1 });
     expect(a.session.item(id)?.item?.title).toBe('Edited on A');
-    expect(titles(a.session, id)).toEqual(['Edited on B', 'Original']);
-    expect(a.session.versions(id)[0]?.hlc).toEqual(loser);
+    expect(await versionTitles(a.session, id)).toEqual(['Edited on B', 'Original']);
+    expect((await a.session.versions(id))[0]?.hlc).toEqual(loser);
   });
 
   it('stores a losing tombstone as an Item Version of its content, not deleted (D56)', async () => {
@@ -1918,7 +1921,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
 
     await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
     expect(a.session.item(id)?.inTrash).toBe(false);
-    const [version] = a.session.versions(id);
+    const [version] = await a.session.versions(id);
     expect(version?.hlc).toEqual(must(b.session.item(id)).hlc);
     expect(version?.item?.trashOperationId).toBeDefined();
     const stored = a.store.get({
@@ -1942,7 +1945,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     const result = await a.session.mergeBackup(backup);
     expect(result.droppedLosers).toEqual([{ itemId: id, title: 'Edited on A' }]);
     expect(a.session.item(id)).toBeUndefined();
-    expect(a.session.versions(id)).toEqual([]);
+    expect(await a.session.versions(id)).toEqual([]);
     const stored = must(a.store.get({ recordType: RecordType.item, recordId: id }));
     const { header } = decodeEnvelope(stored.envelope);
     expect(header.deleted).toBe(true);
@@ -1967,9 +1970,10 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     const result = await b.session.mergeBackup(await backupOf(a.session, 1, a.words));
     expect(result.droppedLosers).toEqual([]);
     expect(b.session.item(id)).toMatchObject({ inTrash: false, item: { title: 'Edited on A' } });
-    const history = (s: VaultSession) => s.versions(id).map((v) => [v.hlc, v.item?.title]);
-    expect(a.session.versions(id)).toHaveLength(3);
-    expect(history(b.session)).toEqual(history(a.session));
+    const history = async (s: VaultSession) =>
+      (await s.versions(id)).map((v) => [v.hlc, v.item?.title]);
+    expect(await a.session.versions(id)).toHaveLength(3);
+    expect(await history(b.session)).toEqual(await history(a.session));
   });
 
   it('applies the history cut across held, received and losing versions, naming an own loser cut (D6, D70)', async () => {
@@ -1982,9 +1986,9 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     }
     const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
     expect(result.droppedLosers).toEqual([{ itemId: id, title: 'Edited on A' }]);
-    expect(a.session.versions(id)).toHaveLength(HISTORY_LIMIT);
-    expect(titles(a.session, id)).not.toContain('Edited on A');
-    expect(titles(a.session, id)).not.toContain('Original');
+    expect(await a.session.versions(id)).toHaveLength(HISTORY_LIMIT);
+    expect(await versionTitles(a.session, id)).not.toContain('Edited on A');
+    expect(await versionTitles(a.session, id)).not.toContain('Original');
     expect(a.store.ofType(RecordType.itemVersion)).toHaveLength(HISTORY_LIMIT);
   });
 
@@ -1998,8 +2002,8 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     }
     const result = await a.session.mergeBackup(await backupOf(b.session, 2, a.words));
     expect(result.droppedLosers).toEqual([]);
-    expect(titles(a.session, id)).not.toContain('Edited on B');
-    expect(a.session.versions(id)).toHaveLength(HISTORY_LIMIT);
+    expect(await versionTitles(a.session, id)).not.toContain('Edited on B');
+    expect(await a.session.versions(id)).toHaveLength(HISTORY_LIMIT);
   });
 
   it('merges folders by last-write-wins and adds what only the backup holds', async () => {
@@ -2409,7 +2413,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     const key = { recordType: RecordType.item, recordId: id };
     const versionKey = {
       recordType: RecordType.itemVersion,
-      recordId: must(a.session.versions(id)[0]).versionId,
+      recordId: must((await a.session.versions(id))[0]).versionId,
     };
     const stored = must(a.store.get(key));
     for (const k of [key, versionKey]) {
@@ -2421,13 +2425,16 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
     }
     a.session.lock();
     const damaged = await unlock(a.store, clockA);
+    // The version is found corrupt by the verification after unlock (D277).
+    expect(damaged.corrupt()).toEqual([key]);
+    await damaged.verified;
     expect(damaged.corrupt()).toEqual(expect.arrayContaining([key, versionKey]));
 
     const result = await damaged.mergeBackup(backup);
     expect(result).toMatchObject({ added: 0, replaced: 2, versions: 1 });
     expect(damaged.corrupt()).toEqual([]);
     expect(damaged.item(id)?.item?.title).toBe('Edited');
-    expect(titles(damaged, id)).toEqual(['Original']);
+    expect(await versionTitles(damaged, id)).toEqual(['Original']);
     expect(must(a.store.get(key)).envelope).toEqual(stored.envelope);
   });
 
@@ -2444,7 +2451,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
 
     await behind.mergeBackup(await backupOf(b.session, 2, a.words));
     expect(behind.item(id)?.item?.title).toBe('Edited on B');
-    expect(titles(behind, id)).toEqual(['Original']);
+    expect(await versionTitles(behind, id)).toEqual(['Original']);
     expect(behind.writable).toBe(false);
   });
 
@@ -2481,7 +2488,7 @@ describe('items and history (D6, D165)', () => {
 
     const after = await unlock(store, clock);
     expect(after.item(id)?.item?.title).toBe('Renamed');
-    const [version, ...rest] = after.versions(id);
+    const [version, ...rest] = await after.versions(id);
     expect(rest).toEqual([]);
     expect(version?.hlc).toEqual(before?.hlc);
     expect(version?.item?.title).toBe('Example');
@@ -2505,7 +2512,7 @@ describe('items and history (D6, D165)', () => {
     expect(await session.updateItem(id, login())).toBe(false);
     expect(store.commits).toHaveLength(commits);
     expect(session.item(id)?.hlc).toEqual(hlc);
-    expect(session.versions(id)).toEqual([]);
+    expect(await session.versions(id)).toEqual([]);
   });
 
   it('treats a move as an edit that stores a version', async () => {
@@ -2514,10 +2521,10 @@ describe('items and history (D6, D165)', () => {
     const folderId = await session.createFolder('Work');
     expect(await session.updateItem(id, { ...login(), folderId })).toBe(true);
     expect(session.item(id)?.item?.folderId).toEqual(folderId);
-    expect(session.versions(id)[0]?.item?.folderId).toBeUndefined();
+    expect((await session.versions(id))[0]?.item?.folderId).toBeUndefined();
     await session.updateItem(id, login());
     expect(session.item(id)?.item?.folderId).toBeUndefined();
-    expect(session.versions(id)).toHaveLength(2);
+    expect(await session.versions(id)).toHaveLength(2);
   });
 
   it(`keeps the ${String(HISTORY_LIMIT)} greatest versions per item`, async () => {
@@ -2528,13 +2535,13 @@ describe('items and history (D6, D165)', () => {
       hlcs.push(must(session.item(id)).hlc);
       await session.updateItem(id, login(`v${String(i)}`));
     }
-    const versions = session.versions(id);
+    const versions = await session.versions(id);
     expect(versions.map((v) => v.item?.title)).toEqual(
       Array.from({ length: HISTORY_LIMIT }, (_, i) => `v${String(24 - i)}`),
     );
     expect(versions.map((v) => v.hlc)).toEqual(hlcs.slice(5).reverse());
     expect(store.ofType(RecordType.itemVersion)).toHaveLength(HISTORY_LIMIT);
-    expect((await unlock(store)).versions(id)).toHaveLength(HISTORY_LIMIT);
+    expect(await (await unlock(store)).versions(id)).toHaveLength(HISTORY_LIMIT);
   });
 
   it('trashes under a trashOperationId and restores without it, storing both states', async () => {
@@ -2559,7 +2566,7 @@ describe('items and history (D6, D165)', () => {
     expect(restored?.inTrash).toBe(false);
     expect(restored?.purgeAt).toBeUndefined();
     expect(restored?.item?.trashOperationId).toBeUndefined();
-    const [ofTrashed, ofLive] = session.versions(id);
+    const [ofTrashed, ofLive] = await session.versions(id);
     expect(ofTrashed?.item?.trashOperationId).toEqual(trashOperationId);
     expect(ofLive?.item?.trashOperationId).toBeUndefined();
     await expect(session.restoreItem(id)).rejects.toThrow(new RecordBlockedError('not-in-trash'));
@@ -2582,19 +2589,19 @@ describe('items and history (D6, D165)', () => {
     const { session } = await create();
     const id = await session.createItem(login('First'));
     await session.updateItem(id, login('Second'));
-    const [first] = session.versions(id);
+    const [first] = await session.versions(id);
     expect(await session.restoreVersion(id, must(first).versionId)).toBe(true);
     expect(session.item(id)?.item?.title).toBe('First');
-    expect(session.versions(id).map((v) => v.item?.title)).toEqual(['Second', 'First']);
+    expect((await session.versions(id)).map((v) => v.item?.title)).toEqual(['Second', 'First']);
     expect(await session.restoreVersion(id, must(first).versionId)).toBe(false);
 
     await session.trashItem(id);
-    const [latest] = session.versions(id);
+    const [latest] = await session.versions(id);
     await expect(session.restoreVersion(id, must(latest).versionId)).rejects.toThrow(
       new RecordBlockedError('in-trash'),
     );
     await session.restoreItem(id);
-    const trashedState = session.versions(id).find((v) => v.item?.trashOperationId);
+    const trashedState = (await session.versions(id)).find((v) => v.item?.trashOperationId);
     expect(trashedState?.item?.title).toBe('First');
     await session.updateItem(id, login('Third'));
     expect(await session.restoreVersion(id, must(trashedState).versionId)).toBe(true);
@@ -2641,7 +2648,7 @@ describe('items and history (D6, D165)', () => {
       ]),
     );
     session.lock();
-    const [version] = (await unlock(store)).versions(id);
+    const [version] = await (await unlock(store)).versions(id);
     expect(version).toMatchObject({ readOnly: 'newer-content', readOnlyRule: 1 });
   });
 
@@ -2666,7 +2673,7 @@ describe('items and history (D6, D165)', () => {
     const s = await unlock(store);
     await s.updateItem(id, login('Next'));
     expect(must(store.commits.at(-1)).put.map((p) => p.recordType)).toEqual([RecordType.item]);
-    expect(s.versions(id)).toHaveLength(1);
+    expect(await s.versions(id)).toHaveLength(1);
   });
 
   it('writes no Item Version that falls below the cut', async () => {
@@ -2690,10 +2697,10 @@ describe('items and history (D6, D165)', () => {
     }
     session.lock();
     const s = await unlock(store);
-    const before = s.versions(id).map((v) => idKey(v.versionId));
+    const before = (await s.versions(id)).map((v) => idKey(v.versionId));
     await s.updateItem(id, login('Next'));
     expect(must(store.commits.at(-1)).put.map((p) => p.recordType)).toEqual([RecordType.item]);
-    expect(s.versions(id).map((v) => idKey(v.versionId))).toEqual(before);
+    expect((await s.versions(id)).map((v) => idKey(v.versionId))).toEqual(before);
   });
 
   it('refuses unknown items and versions', async () => {
@@ -2701,7 +2708,7 @@ describe('items and history (D6, D165)', () => {
     await expect(session.updateItem(randomId(), login())).rejects.toThrow(RecordNotFoundError);
     await expect(session.trashItem(randomId())).rejects.toThrow(RecordNotFoundError);
     expect(session.item(randomId())).toBeUndefined();
-    expect(session.versions(randomId())).toEqual([]);
+    expect(await session.versions(randomId())).toEqual([]);
   });
 
   it('serializes concurrent operations', async () => {
@@ -2709,7 +2716,7 @@ describe('items and history (D6, D165)', () => {
     const id = await session.createItem(login('A'));
     await Promise.all([session.updateItem(id, login('B')), session.updateItem(id, login('C'))]);
     expect(session.item(id)?.item?.title).toBe('C');
-    expect(session.versions(id).map((v) => v.item?.title)).toEqual(['B', 'A']);
+    expect((await session.versions(id)).map((v) => v.item?.title)).toEqual(['B', 'A']);
   });
 
   it('leaves the state unchanged when a commit fails', async () => {
@@ -2718,7 +2725,7 @@ describe('items and history (D6, D165)', () => {
     store.failNext = true;
     await expect(session.updateItem(id, login('B'))).rejects.toThrow('storage failure');
     expect(session.item(id)?.item?.title).toBe('A');
-    expect(session.versions(id)).toEqual([]);
+    expect(await session.versions(id)).toEqual([]);
     expect(await session.updateItem(id, login('B'))).toBe(true);
     expect((await unlock(store)).item(id)?.item?.title).toBe('B');
   });
@@ -3086,7 +3093,7 @@ describe('re-founding (§14, D28, D40, D60, D72, D86, D99, D187)', () => {
         .sort(),
     ).toEqual(['Bank, edited', 'Root item']);
     // No history, no record ID and no record of the old vault (D99).
-    for (const i of session.items()) expect(session.versions(i.id)).toEqual([]);
+    for (const i of session.items()) expect(await session.versions(i.id)).toEqual([]);
     const oldIds = new Set(oldHeld.map((r) => idKey(r.recordId)));
     // Only the Vault Key record shares its ID, fixed by the epoch alone (crypto-spec.md §4).
     expect([...ids(store)].filter((id) => oldIds.has(id))).toEqual([idKey(vaultKeyRecordId(1))]);
@@ -3372,7 +3379,7 @@ describe('read-only records (D52, D73, D74)', () => {
     }
     session.lock();
     const s = await unlock(store);
-    const [ahead, newerVersion] = s.versions(id);
+    const [ahead, newerVersion] = await s.versions(id);
     expect(ahead?.readOnly).toBe('future-clock');
     expect(newerVersion?.readOnly).toBe('newer-content');
     await expect(s.restoreVersion(id, must(ahead).versionId)).rejects.toThrow(
@@ -3448,10 +3455,10 @@ describe('duplicate (D135, D140, D156, D169)', () => {
     const view = must(session.item(copy));
     expect(view.item).toEqual({ ...login('Current (copy)'), folderId, tags: ['bank'], notes: 'n' });
     expect(view.hlc.physicalMs).toBe(T0 + 2000);
-    expect(session.versions(copy)).toEqual([]);
+    expect(await session.versions(copy)).toEqual([]);
     // The original is untouched: no new state, no new version.
     expect(session.item(id)).toEqual(original);
-    expect(session.versions(id)).toHaveLength(1);
+    expect(await session.versions(id)).toHaveLength(1);
     expect((await unlock(store, clock)).item(copy)?.item?.title).toBe('Current (copy)');
   });
 
@@ -3683,7 +3690,7 @@ describe('folders (D14, D59, D112, D171)', () => {
     expect(session.folder(sub)?.trashOperationId).toEqual(op);
     for (const id of [inTop, inSub]) {
       expect(session.item(id)).toMatchObject({ inTrash: true, item: { trashOperationId: op } });
-      expect(session.versions(id)).toHaveLength(1);
+      expect(await session.versions(id)).toHaveLength(1);
     }
     expect(session.item(earlier)?.item?.trashOperationId).toEqual(earlierOp);
     expect(session.item(elsewhere)?.inTrash).toBe(false);
@@ -3875,7 +3882,7 @@ describe('import (§15, D125)', () => {
       ['Mine', []],
       ['Root', ['Imported from Bitwarden']],
     ]);
-    expect(s.items().every((v) => s.versions(v.id).length === 0)).toBe(true);
+    for (const v of s.items()) expect(await s.versions(v.id)).toEqual([]);
     // The same file again: a second folder, nothing merged (D125).
     const again = await s.importItems('Imported from Bitwarden', [at('Root')]);
     expect(again).not.toEqual(landing);
@@ -3919,7 +3926,7 @@ describe('automatic purge (D7, D27, D94)', () => {
     const s = await unlock(store, clock);
     expect(s.item(id)).toBeUndefined();
     expect(s.items()).toEqual([]);
-    expect(s.versions(id)).toEqual([]);
+    expect(await s.versions(id)).toEqual([]);
     const after = decodeEnvelope((store.get(key) as { envelope: Uint8Array }).envelope);
     expect(after.header).toEqual(before.header);
     expect(after.ct.c).toHaveLength(16);
@@ -4024,10 +4031,10 @@ describe('automatic purge (D7, D27, D94)', () => {
     }
     session.lock();
     const s = await unlock(store);
-    expect(s.versions(id).map((v) => v.item?.title)).toEqual(
+    expect((await s.versions(id)).map((v) => v.item?.title)).toEqual(
       Array.from({ length: HISTORY_LIMIT }, (_, i) => `v${String(HISTORY_LIMIT + 1 - i)}`),
     );
-    expect(s.versions(purgedId)).toEqual([]);
+    expect(await s.versions(purgedId)).toEqual([]);
     expect(store.ofType(RecordType.itemVersion)).toHaveLength(HISTORY_LIMIT);
   });
 });
@@ -4047,7 +4054,6 @@ describe('lock (CRYPTO-INV-010)', () => {
     for (const read of [
       () => session.items(),
       () => session.item(id),
-      () => session.versions(id),
       () => session.devices(),
       () => session.corrupt(),
       () => session.vaultId,
@@ -4058,6 +4064,7 @@ describe('lock (CRYPTO-INV-010)', () => {
     ]) {
       expect(read).toThrow(VaultLockedError);
     }
+    await expect(session.versions(id)).rejects.toThrow(VaultLockedError);
     await expect(session.createItem(login())).rejects.toThrow(VaultLockedError);
     await expect(session.updateItem(id, login('x'))).rejects.toThrow(VaultLockedError);
   });
@@ -4067,7 +4074,7 @@ describe('lock (CRYPTO-INV-010)', () => {
     const itemId = await session.createItem(login());
     const folderId = await session.createFolder('Work');
     await session.updateItem(itemId, login('Example', 'rotated'));
-    const versionId = must(session.versions(itemId)[0]).versionId;
+    const versionId = must((await session.versions(itemId))[0]).versionId;
     const commits = store.commits.length;
     session.lock();
     expect(keyring.wiped).toBe(true);
@@ -4117,6 +4124,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       items: () => session.items(),
       item: () => session.item(itemId),
       versions: () => session.versions(itemId),
+      verified: () => session.verified,
       devices: () => session.devices(),
       folders: () => session.folders(),
       folder: () => session.folder(folderId),
@@ -4529,7 +4537,7 @@ describe('content rules through the session (record-content.md §2, Gate A)', ()
     plant(store, keys, RecordType.itemVersion, version, hlc, false, content);
     session.lock();
     const again = await unlock(store);
-    expect(again.versions(id)).toMatchObject([
+    expect(await again.versions(id)).toMatchObject([
       { readOnly: 'newer-content', readOnlyRule: must(row).rule },
     ]);
     await expect(again.restoreVersion(id, version)).rejects.toThrow(
@@ -5734,7 +5742,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
   it('summarizes every record held by its header, but those kept aside as corrupt (§7)', async () => {
     const { x } = await peers();
     const stored = await x.store.records();
-    const summary = x.grant.summary();
+    const summary = await x.grant.summary();
     expect(summary.map(keyOf).sort()).toEqual(stored.map(keyOf).sort());
     for (const r of stored) {
       const { header } = decodeEnvelope(r.envelope);
@@ -5755,10 +5763,11 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     });
     x.session.lock();
     const again = await unlock(x.store, x.clock);
-    const ids = again
-      .openSync(must(again.devices().find((d) => !sameId(d.deviceId, again.deviceId))).deviceId)
-      .summary()
-      .map(keyOf);
+    const ids = (
+      await again
+        .openSync(must(again.devices().find((d) => !sameId(d.deviceId, again.deviceId))).deviceId)
+        .summary()
+    ).map(keyOf);
     expect(ids).toHaveLength(stored.length);
     expect(ids).not.toContain(keyOf({ recordType: RecordType.item, recordId: damaged }));
   });
@@ -5769,7 +5778,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
 
   it('reads the records selected again and verifies them, skipping one gone meanwhile (§8, D181)', async () => {
     const { x } = await peers();
-    const summary = x.grant.summary();
+    const summary = await x.grant.summary();
     const items = summary.filter((e) => e.recordType === RecordType.item);
     const gone = { ...must(items[0]), recordId: randomId() };
     const envelopes = await x.grant.records([...items, gone]);
@@ -5797,8 +5806,8 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     await y.session.updateItem(edited, login('Edited on Y'));
     await y.session.createItem(login('New on Y'));
     await x.session.createItem(login('New on X'));
-    const fromY = await y.grant.records(y.grant.summary());
-    const fromX = await x.grant.records(x.grant.summary());
+    const fromY = await y.grant.records(await y.grant.summary());
+    const fromX = await x.grant.records(await x.grant.summary());
     clock.t = T0 + 2 * DAY;
     const commits = x.store.commits.length;
     const result = await x.grant.merge(fromY);
@@ -5811,14 +5820,14 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     expect(result.versions).toBeGreaterThan(0);
     expect(x.session.lastSyncByPeer).toEqual([[y.session.deviceId, T0 + 2 * DAY]]);
     // A second exchange changes nothing but the date.
-    const again = await x.grant.merge(await y.grant.records(y.grant.summary()));
+    const again = await x.grant.merge(await y.grant.records(await y.grant.summary()));
     expect(again).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
   });
 
   it('rejects and reports a record that fails verification, is newer or breaks D42, merging the rest (§9, D68)', async () => {
     const { x, y } = await peers();
     await y.session.createItem(login('Good'));
-    const records = await y.grant.records(y.grant.summary());
+    const records = await y.grant.records(await y.grant.summary());
     const keys = keysOf(x.store);
     const tampered = (await y.store.records()).find((r) => r.recordType === RecordType.item);
     const flipped = must(tampered).envelope.slice();
@@ -5870,7 +5879,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       const { x, y } = await peers();
       const edited = must(y.session.items().find((i) => i.item?.title === 'From X')).id;
       await y.session.updateItem(edited, login('Edited on Y'));
-      const records = await y.grant.records(y.grant.summary());
+      const records = await y.grant.records(await y.grant.summary());
       const target = must(records.find((r) => decodeEnvelope(r).header.recordType === type));
       const forged = decodeCbor(target) as CborMap;
       forged.set('del', true);
@@ -6014,7 +6023,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
 
     // A merge of the peer's records, the purge and the history cut issue no HLC: nothing reported.
     await y.session.createItem(login('From Y'));
-    await x.grant.merge(await y.grant.records(y.grant.summary()));
+    await x.grant.merge(await y.grant.records(await y.grant.summary()));
     clock.t += PURGE_DELAY_MS + DAY;
     await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
     expect(x.session.item(id)).toBeUndefined();
@@ -6052,7 +6061,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       ]),
     );
     const sent = [
-      ...(await y.grant.records(y.grant.summary())).filter(
+      ...(await y.grant.records(await y.grant.summary())).filter(
         (r) => decodeEnvelope(r).header.recordType !== RecordType.recoveryEnvelope,
       ),
       forged,
@@ -6106,7 +6115,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
     clock.t = T0 + DAY;
     const edited = must(y.session.items().find((i) => i.item?.title === 'From X')).id;
     await y.session.updateItem(edited, login('Edited on Y'));
-    const sent = await y.grant.records(y.grant.summary());
+    const sent = await y.grant.records(await y.grant.summary());
     x.session.lock();
     const session = await unlock(x.store, clock);
     expect(session.writable).toBe(false);
@@ -6133,7 +6142,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       const id = await y.session.createItem(login('On Y'));
       await y.session.updateItem(id, login('Edited on Y'));
       await y.session.trashItem(id);
-      const sent = await y.grant.records(y.grant.summary());
+      const sent = await y.grant.records(await y.grant.summary());
       if (state !== 'writable') {
         // X wrote with its clock 40 days ahead, then the clock came back past the purge date.
         clock.t = T0 + 40 * DAY;
@@ -6147,11 +6156,11 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       const result = await grant.merge(sent);
       expect(result).toMatchObject({ added: 1, rejected: [], droppedLosers: [] });
       expect(session.item(id)).toBeUndefined();
-      expect(session.versions(id)).toEqual([]);
+      expect(await session.versions(id)).toEqual([]);
       // The tombstone is kept, under the header Y sent.
-      const entry = grant
-        .summary()
-        .find((e) => e.recordType === RecordType.item && sameId(e.recordId, id));
+      const entry = (await grant.summary()).find(
+        (e) => e.recordType === RecordType.item && sameId(e.recordId, id),
+      );
       expect(entry).toMatchObject({ deleted: true, hlc: must(y.session.item(id)).hlc });
       expect(session.writable).toBe(state === 'writable');
     },
@@ -6204,7 +6213,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
 
   it('refuses two records of one identity (protocol-error), writing nothing (§2.1)', async () => {
     const { x, y } = await peers();
-    const records = await y.grant.records(y.grant.summary());
+    const records = await y.grant.records(await y.grant.summary());
     const commits = x.store.commits.length;
     expect(await rejection(x.grant.merge([...records, must(records[0])]))).toBe('protocol-error');
     expect(x.store.commits).toHaveLength(commits);
@@ -6219,30 +6228,135 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       clock.t = T0 + 1000;
       await x.session.updateItem(id, login('Edited on X'));
       await x.session.trashItem(id);
-      await y.grant.merge(await x.grant.records(x.grant.summary()));
+      await y.grant.merge(await x.grant.records(await x.grant.summary()));
       clock.t = T0 + 29 * DAY;
       await x.session.restoreItem(id);
       clock.t = T0 + 31 * DAY;
       await vi.advanceTimersByTimeAsync(MAINTENANCE_INTERVAL_MS);
       expect(y.session.item(id)).toBeUndefined();
-      expect(y.session.versions(id)).toEqual([]);
+      expect(await y.session.versions(id)).toEqual([]);
 
-      const records = await x.grant.records(x.grant.summary());
+      const records = await x.grant.records(await x.grant.summary());
       const result = await y.grant.merge(order === 'reversed' ? records.reverse() : records);
       expect(result).toMatchObject({ rejected: [], droppedLosers: [] });
       expect(y.session.item(id)).toMatchObject({ inTrash: false, item: { title: 'Edited on X' } });
-      const history = (s: VaultSession) => s.versions(id).map((v) => [v.hlc, v.item?.title]);
-      expect(x.session.versions(id)).toHaveLength(3);
-      expect(history(y.session)).toEqual(history(x.session));
+      const history = async (s: VaultSession) =>
+        (await s.versions(id)).map((v) => [v.hlc, v.item?.title]);
+      expect(await x.session.versions(id)).toHaveLength(3);
+      expect(await history(y.session)).toEqual(await history(x.session));
     },
   );
 
   it('does nothing once the vault locks (D93)', async () => {
     const { x, y } = await peers();
-    const records = await y.grant.records(y.grant.summary());
+    const records = await y.grant.records(await y.grant.summary());
     x.session.lock();
-    expect(() => x.grant.summary()).toThrow(VaultLockedError);
+    await expect(x.grant.summary()).rejects.toThrow(VaultLockedError);
     await expect(x.grant.records([])).rejects.toThrow(VaultLockedError);
     await expect(x.grant.merge(records)).rejects.toThrow(VaultLockedError);
+  });
+});
+
+describe('Item Versions verified after unlock (D277)', () => {
+  /** An item edited `edits` times: `edits` versions, at most HISTORY_LIMIT kept. */
+  async function edited(session: VaultSession, title: string, edits: number) {
+    const id = await session.createItem(login(title));
+    for (let i = 1; i <= edits; i++) await session.updateItem(id, login(`${title} ${String(i)}`));
+    return id;
+  }
+
+  function versionKeys(store: MemoryStore) {
+    return store
+      .ofType(RecordType.itemVersion)
+      .map((r) => ({ recordType: r.recordType, recordId: r.recordId }));
+  }
+
+  it('shows the items before the versions are verified, then holds every version', async () => {
+    const { session, store } = await create();
+    // More versions than one batch, so the pass yields between batches.
+    const ids: Uint8Array[] = [];
+    for (let i = 0; i < 26; i++)
+      ids.push(await edited(session, `Item ${String(i)}`, HISTORY_LIMIT));
+    session.lock();
+    const again = await unlock(store);
+    expect(again.items()).toHaveLength(26);
+    await again.verified;
+    expect(again.corrupt()).toEqual([]);
+    for (const id of ids) expect(await again.versions(id)).toHaveLength(HISTORY_LIMIT);
+  });
+
+  it('makes the history cut wait for the versions, so an edit right after unlock keeps the cap', async () => {
+    const { session, store } = await create();
+    const id = await edited(session, 'Bank', HISTORY_LIMIT);
+    expect(store.ofType(RecordType.itemVersion)).toHaveLength(HISTORY_LIMIT);
+    session.lock();
+    const again = await unlock(store);
+    await again.updateItem(id, login('Bank, edited'));
+    expect(store.ofType(RecordType.itemVersion)).toHaveLength(HISTORY_LIMIT);
+    expect(must((await again.versions(id))[0]).item?.title).toBe(`Bank ${String(HISTORY_LIMIT)}`);
+  });
+
+  it('keeps aside a version that fails verification, and the rest of the vault opens', async () => {
+    const { session, store } = await create();
+    const id = await edited(session, 'Bank', 2);
+    const [first] = versionKeys(store);
+    const record = must(store.get(must(first)));
+    const tampered = record.envelope.slice();
+    tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 1;
+    store.put({ ...record, envelope: tampered as RecordEnvelope });
+    session.lock();
+    const again = await unlock(store);
+    expect(again.corrupt()).toEqual([]);
+    await again.verified;
+    expect(again.corrupt()).toEqual([first]);
+    expect(await again.versions(id)).toHaveLength(1);
+  });
+
+  it('stops on lock, writing nothing', async () => {
+    const { session, store } = await create();
+    await edited(session, 'Bank', 3);
+    session.lock();
+    const again = await unlock(store);
+    const verified = again.verified;
+    const commits = store.commits.length;
+    again.lock();
+    await verified;
+    expect(store.commits).toHaveLength(commits);
+    expect(() => again.verified).toThrow(VaultLockedError);
+  });
+
+  it('reads a version again from storage when shown, refusing one changed since unlock', async () => {
+    const { session, store } = await create();
+    const id = await edited(session, 'Bank', 2);
+    const [a, b] = versionKeys(store);
+    session.lock();
+    const again = await unlock(store);
+    await again.verified;
+
+    // Another valid version stored under this one's key: refused, never shown as this one.
+    const recordA = must(store.get(must(a)));
+    store.put({ ...recordA, envelope: must(store.get(must(b))).envelope });
+    await expect(again.versions(id)).rejects.toThrow(ContentInvalidError);
+    await expect(again.restoreVersion(id, must(a).recordId)).rejects.toThrow(ContentInvalidError);
+
+    // A version whose bytes were altered fails verification.
+    const altered = recordA.envelope.slice();
+    altered[altered.length - 1] = (altered[altered.length - 1] ?? 0) ^ 1;
+    store.put({ ...recordA, envelope: altered as RecordEnvelope });
+    await expect(again.versions(id)).rejects.toThrow(RecordRejectedError);
+
+    // A version gone from storage.
+    store.held.delete(`${String(RecordType.itemVersion)}:${idKey(must(a).recordId)}`);
+    await expect(again.versions(id)).rejects.toThrow(RecordNotFoundError);
+  });
+
+  it('restores a version read again from storage', async () => {
+    const { session, store } = await create();
+    const id = await edited(session, 'Bank', 2);
+    session.lock();
+    const again = await unlock(store);
+    const oldest = must((await again.versions(id)).at(-1));
+    expect(await again.restoreVersion(id, oldest.versionId)).toBe(true);
+    expect(again.item(id)?.item?.title).toBe('Bank');
   });
 });

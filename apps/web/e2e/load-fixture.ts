@@ -141,6 +141,7 @@ async function build(password: string, params: KdfParams, items: number, edits: 
     `${String(r.recordType)}:${Buffer.from(r.recordId).toString('hex')}`;
   const store: RecordStore = {
     records: () => Promise.resolve([...held.values()]),
+    record: (k) => Promise.resolve(held.get(key(k))),
     commit: (commit) => {
       for (const d of commit.delete) held.delete(key(d));
       for (const p of commit.put) held.set(key(p), p);
@@ -204,6 +205,12 @@ export async function unlockInMemory(fixture: Fixture, password: string): Promis
   );
   const store: RecordStore = {
     records: () => Promise.resolve(fixture.records),
+    record: (k) =>
+      Promise.resolve(
+        fixture.records.find(
+          (r) => r.recordType === k.recordType && r.recordId.every((b, i) => b === k.recordId[i]),
+        ),
+      ),
     commit: () => Promise.reject(new Error('read only')),
   };
   const start = performance.now();

@@ -97,7 +97,7 @@ import {
   readFolder,
 } from './folder';
 import { FUTURE_CLOCK_BOUND_MS, HlcClock, compareHlc } from './hlc';
-import { idKey, sameBytes } from './ids';
+import { idBytes, idKey, sameBytes } from './ids';
 import { type MappedItem } from './import/mapping';
 import {
   type Item,
@@ -134,6 +134,9 @@ export const PURGE_DELAY_MS = 30 * 24 * 60 * 60 * 1000;
 function purgeHlc(header: RecordHeader): Hlc {
   return { ...header.hlc, physicalMs: header.hlc.physicalMs + PURGE_DELAY_MS };
 }
+/** Item Versions verified per batch after unlock, between two yields to the UI (D277). */
+const VERSION_BATCH = 500;
+
 /** While unlocked, the automatic purge and the history cut run this often (D94). */
 export const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -499,8 +502,11 @@ export interface SyncGrant {
    * Device record, retired, passing verification on receipt and within the future-clock bound.
    */
   mergeOwnRetirement(envelope: Uint8Array): Promise<MergeResult>;
-  /** §7: the header of every record held, but those kept aside as corrupt at unlock (D182). */
-  summary(): RecordSummary[];
+  /**
+   * §7: the header of every record held, but those kept aside as corrupt at unlock (D182); waits
+   * for the versions verified after unlock (D277).
+   */
+  summary(): Promise<RecordSummary[]>;
   /**
    * §8: the stored envelopes of `selected`, in its order, read again and verified (D181); one no
    * longer stored is skipped. `SyncRejectedError` (`verification-failed`) names a record that fails.
@@ -563,12 +569,50 @@ interface LiveItem extends HeldItem {
   readonly reading: { readonly readOnly: false; readonly item: Item };
 }
 
-interface HeldVersion {
-  readonly header: RecordHeader;
+/**
+ * An Item Version as held (D277): one small object per version, since a vault holds up to 20 per
+ * item. Its header is kept as numbers, its `versionId` as the key of its map, and its item's ID and
+ * device ID are shared; `header` builds the header again. Its content is read again from storage
+ * when shown or restored; only a version received in a merge keeps it, as written.
+ */
+class HeldVersion {
+  readonly #recordFormatVersion: number;
+  readonly #keyEpoch: number;
+  readonly #physicalMs: number;
+  readonly #counter: number;
+  readonly #deleted: boolean;
+  readonly #versionKey: string;
+  readonly #deviceId: Uint8Array;
   readonly itemId: Uint8Array;
-  readonly reading: ItemReading;
-  /** `{item, itemId}`, as written. */
-  readonly content: CborMap;
+  readonly content: CborMap | undefined;
+
+  constructor(
+    header: RecordHeader,
+    versionKey: string,
+    shared: { readonly itemId: Uint8Array; readonly deviceId: Uint8Array },
+    content?: CborMap,
+  ) {
+    this.#recordFormatVersion = header.recordFormatVersion;
+    this.#keyEpoch = header.keyEpoch;
+    this.#physicalMs = header.hlc.physicalMs;
+    this.#counter = header.hlc.counter;
+    this.#deleted = header.deleted;
+    this.#versionKey = versionKey;
+    this.#deviceId = shared.deviceId;
+    this.itemId = shared.itemId;
+    this.content = content;
+  }
+
+  get header(): RecordHeader {
+    return {
+      recordFormatVersion: this.#recordFormatVersion,
+      recordType: RecordType.itemVersion,
+      recordId: idBytes(this.#versionKey),
+      keyEpoch: this.#keyEpoch,
+      hlc: { physicalMs: this.#physicalMs, counter: this.#counter, deviceId: this.#deviceId },
+      deleted: this.#deleted,
+    };
+  }
 }
 
 interface HeldFolder {
@@ -651,6 +695,8 @@ interface State {
   readonly items: Map<string, HeldItem>;
   /** By `itemId`, then by `versionId`. */
   readonly versions: Map<string, Map<string, HeldVersion>>;
+  /** One copy of each device ID the versions cite (D277). */
+  readonly versionDevices: Map<string, Uint8Array>;
   readonly folders: Map<string, HeldFolder>;
   readonly devices: Map<string, HeldDevice>;
   /** `null` for a vault created before the Recovery Envelope existed (D177, D179). */
@@ -664,6 +710,7 @@ function emptyState(): State {
     vaultKeyHeaders: new Map(),
     items: new Map(),
     versions: new Map(),
+    versionDevices: new Map(),
     folders: new Map(),
     devices: new Map(),
     recovery: null,
@@ -703,17 +750,35 @@ function versionReading(content: CborMap): ItemReading {
   return readItem(content.get('item') as CborValue, null);
 }
 
-/** An Item Version as held. Verification checked its `item` map and `itemId` (steps 9, 10). */
-function versionOf(header: RecordHeader, content: CborMap | null): HeldVersion {
+/** The `itemId` of an Item Version's content. Verification checked it (steps 9, 10). */
+function itemIdOf(content: CborMap | null): Uint8Array {
   const itemId = content?.get('itemId');
-  if (!content || !(itemId instanceof Uint8Array)) throw new ContentInvalidError('item version');
-  return { header, itemId, reading: versionReading(content), content };
+  if (!(itemId instanceof Uint8Array)) throw new ContentInvalidError('item version');
+  return itemId;
 }
 
-function addVersion(state: State, version: HeldVersion): void {
-  const itemKey = idKey(version.itemId);
+/**
+ * Holds an Item Version, its content only when given, for a merge. Its IDs are copied once: a view
+ * would keep the whole decrypted content, or the whole envelope, alive (D277).
+ */
+function addVersion(
+  state: State,
+  header: RecordHeader,
+  itemId: Uint8Array,
+  content?: CborMap,
+): void {
+  const itemKey = idKey(itemId);
   const versions = state.versions.get(itemKey) ?? new Map<string, HeldVersion>();
-  versions.set(idKey(version.header.recordId), version);
+  const [first] = versions.values();
+  const deviceKey = idKey(header.hlc.deviceId);
+  let deviceId = state.versionDevices.get(deviceKey);
+  if (!deviceId) {
+    deviceId = header.hlc.deviceId.slice();
+    state.versionDevices.set(deviceKey, deviceId);
+  }
+  const versionKey = idKey(header.recordId);
+  const shared = { itemId: first?.itemId ?? itemId.slice(), deviceId };
+  versions.set(versionKey, new HeldVersion(header, versionKey, shared, content));
   state.versions.set(itemKey, versions);
 }
 
@@ -728,7 +793,9 @@ function readOnlyOf(reading: ItemReading, beyond: boolean) {
  * Decrypts every stored record with the `crypto-spec.md` §9.5 verification. A record that fails
  * it, holds an invalid Folder or Device value (D59), or sits under another key than its header's
  * is kept aside as corrupt: never shown and never written. `known` are Vault Keys already held, used
- * first for their epochs, so a merged record verifies under the local Vault Key (D57).
+ * first for their epochs, so a merged record verifies under the local Vault Key (D57). An Item
+ * Version keeps its content only with `keepVersions`, for a merge (D277). Read into `state`, a new
+ * one unless given.
  */
 function load(
   keyring: Keyring,
@@ -736,8 +803,9 @@ function load(
   vaultId: Uint8Array,
   subkeys: MasterSubkeys,
   known?: ReadonlyMap<number, SymmetricKey>,
+  keepVersions = false,
+  state: State = emptyState(),
 ): { state: State; held: Hlc[] } {
-  const state = emptyState();
   const held: Hlc[] = [];
   const keys = {
     vaultId,
@@ -786,7 +854,12 @@ function load(
           });
           break;
         case RecordType.itemVersion:
-          addVersion(state, versionOf(header, content));
+          addVersion(
+            state,
+            header,
+            itemIdOf(content),
+            keepVersions ? (content ?? undefined) : undefined,
+          );
           break;
         case RecordType.folder:
           state.folders.set(key, {
@@ -837,6 +910,8 @@ export class VaultSession {
   #state: State;
   readonly #now: () => number;
   #queue: Promise<unknown> = Promise.resolve();
+  /** The Item Versions verified after unlock (D277): every operation but the first purge waits. */
+  #verified: Promise<void> = Promise.resolve();
   /** Told the records of each local write once committed (sync-protocol.md §10, D225). */
   readonly #watchers = new Set<(envelopes: readonly Uint8Array[]) => void>();
   #timer: ReturnType<typeof setInterval> | undefined;
@@ -1246,7 +1321,11 @@ export class VaultSession {
         if (error instanceof CryptoError) throw new ContentInvalidError('local config');
         throw error;
       }
-      const { state, held } = load(keyring, await store.records(), vaultId, subkeys);
+      // Item Versions are verified after the vault is shown (D277).
+      const stored = await store.records();
+      const versions = stored.filter((r) => r.recordType === RecordType.itemVersion);
+      const others = stored.filter((r) => r.recordType !== RecordType.itemVersion);
+      const { state, held } = load(keyring, others, vaultId, subkeys);
       const session = new VaultSession({
         store,
         keyring,
@@ -1264,7 +1343,11 @@ export class VaultSession {
         state,
         now,
       });
-      await session.#run(() => session.#maintenance());
+      // The purge now; the versions of a purged item go with the pass after verification.
+      await session.#run(() => session.#maintenance(), false);
+      session.#verified = session.#verifyVersions(versions);
+      session.#verified.catch(() => undefined);
+      session.#run(() => session.#maintenance()).catch(() => undefined);
       session.#startMaintenance();
       return session;
     } catch (error) {
@@ -1528,6 +1611,15 @@ export class VaultSession {
   }
 
   // --- reading ---------------------------------------------------------------------------------
+
+  /**
+   * Resolves once the Item Versions are verified after unlock (D277), each held or kept aside as
+   * corrupt; a lock ends it early.
+   */
+  get verified(): Promise<void> {
+    this.#unlocked();
+    return this.#verified;
+  }
 
   get vaultId(): Uint8Array {
     this.#unlocked();
@@ -1805,6 +1897,7 @@ export class VaultSession {
       vaultId,
       this.#subkeys,
       this.#state.vaultKeys,
+      true,
     );
     let planned = false;
     try {
@@ -1956,7 +2049,7 @@ export class VaultSession {
           held: false,
           write: {
             header: version.header,
-            content: version.content,
+            content: present(version.content),
             envelope: present(envelopes.get(key)),
           },
         });
@@ -2143,17 +2236,51 @@ export class VaultSession {
     return held ? this.#itemView(held) : undefined;
   }
 
-  /** The item's history, newest first. */
-  versions(itemId: Uint8Array): VersionView[] {
+  /**
+   * The item's history, newest first, each version read again from storage and verified (D277).
+   * Waits for the versions verified after unlock.
+   */
+  versions(itemId: Uint8Array): Promise<VersionView[]> {
+    return this.#run(async () => {
+      const held = [...(this.#state.versions.get(idKey(itemId))?.values() ?? [])].sort((a, b) =>
+        newestFirst(a.header, b.header),
+      );
+      const result: VersionView[] = [];
+      for (const v of held) {
+        const content = await this.#versionContent(v);
+        result.push({
+          versionId: v.header.recordId.slice(),
+          hlc: copyHlc(v.header.hlc),
+          ...readOnlyOf(versionReading(content), this.#clock.beyondBound(v.header.hlc)),
+        });
+      }
+      return { writes: [], deletes: [], result };
+    });
+  }
+
+  /** A held version's content, read again from storage and verified as unlock verifies (D277). */
+  async #versionContent(v: HeldVersion): Promise<CborMap> {
+    const stored = await this.#store.record(headerKey(v.header));
     this.#unlocked();
-    const versions = [...(this.#state.versions.get(idKey(itemId))?.values() ?? [])];
-    return versions
-      .sort((a, b) => newestFirst(a.header, b.header))
-      .map((v) => ({
-        versionId: v.header.recordId.slice(),
-        hlc: copyHlc(v.header.hlc),
-        ...readOnlyOf(v.reading, this.#clock.beyondBound(v.header.hlc)),
-      }));
+    if (!stored) throw new RecordNotFoundError();
+    const { envelope, content } = verifyRecord(this.#keyring, stored.envelope, {
+      vaultId: this.#cleartext.vaultId,
+      vaultKey: (epoch: number) => this.#state.vaultKeys.get(epoch),
+      vaultKeyWrapKey: this.#subkeys.vaultKeyWrap,
+      versionIdKey: this.#subkeys.versionId,
+    });
+    const itemId = content?.get('itemId');
+    if (
+      !content ||
+      envelope.header.recordType !== v.header.recordType ||
+      !sameBytes(envelope.header.recordId, v.header.recordId) ||
+      !sameVersion(envelope.header, v.header) ||
+      !(itemId instanceof Uint8Array) ||
+      !sameBytes(itemId, v.itemId)
+    ) {
+      throw new ContentInvalidError('item version');
+    }
+    return content;
   }
 
   devices(): DeviceView[] {
@@ -2364,10 +2491,7 @@ export class VaultSession {
       peerName: peer.device.value.displayName,
       peerRetirement: () => this.#run(() => this.#peerRetirement(id)),
       mergeOwnRetirement: (envelope) => this.#run(() => this.#ownRetirement(envelope)),
-      summary: () => {
-        this.#unlocked();
-        return this.#summary();
-      },
+      summary: () => this.#run(() => ({ writes: [], deletes: [], result: this.#summary() })),
       records: (selected) => this.#run(() => this.#syncRecords(selected)),
       merge: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id, false)),
       mergeLive: (envelopes) => this.#run(() => this.#syncMerge(envelopes, id, true)),
@@ -2665,6 +2789,7 @@ export class VaultSession {
         vaultId,
         this.#subkeys,
         this.#state.vaultKeys,
+        true,
       );
       let planned = false;
       try {
@@ -2864,18 +2989,18 @@ export class VaultSession {
    * content equals the current one.
    */
   restoreVersion(itemId: Uint8Array, versionIdOf: Uint8Array): Promise<boolean> {
-    return this.#run(() => {
-      const held = this.#editable(itemId, false);
+    return this.#run(async () => {
+      this.#editable(itemId, false);
       const version = this.#state.versions.get(idKey(itemId))?.get(idKey(versionIdOf));
       if (!version) throw new RecordNotFoundError();
-      if (version.reading.readOnly) throw new RecordBlockedError('newer-content');
+      const reading = versionReading(await this.#versionContent(version));
+      // Read again: the item may have changed while its version was read.
+      const held = this.#editable(itemId, false);
+      if (reading.readOnly) throw new RecordBlockedError('newer-content');
       if (this.#clock.beyondBound(version.header.hlc)) {
         throw new RecordBlockedError('future-clock');
       }
-      const content = itemToCbor(
-        liveItem(version.reading.item, version.reading.item.folderId),
-        false,
-      );
+      const content = itemToCbor(liveItem(reading.item, reading.item.folderId), false);
       if (sameContent(content, held.content)) return { writes: [], deletes: [], result: false };
       return { ...this.#replace(held, content, false), result: true };
     });
@@ -3259,6 +3384,30 @@ export class VaultSession {
     };
   }
 
+  // --- versions after unlock -------------------------------------------------------------------
+
+  /**
+   * Verifies the Item Versions after unlock (D277), in batches that yield to the UI, with `load`'s
+   * checks: each is held as a summary or kept aside as corrupt, as at unlock. A lock stops it.
+   */
+  async #verifyVersions(stored: readonly StoredRecord[]): Promise<void> {
+    for (let i = 0; i < stored.length; i += VERSION_BATCH) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (this.#locked) return;
+      // Only Item Versions: each is held, or kept aside as corrupt, in the session's own state.
+      const { held } = load(
+        this.#keyring,
+        stored.slice(i, i + VERSION_BATCH),
+        this.#cleartext.vaultId,
+        this.#subkeys,
+        this.#state.vaultKeys,
+        false,
+        this.#state,
+      );
+      for (const hlc of held) this.#clock.receive(hlc);
+    }
+  }
+
   // --- purge and the history cut ---------------------------------------------------------------
 
   #startMaintenance(): void {
@@ -3369,8 +3518,9 @@ export class VaultSession {
    * them with the Local Config in one transaction (D62), and applies them to memory only once the
    * commit succeeds. An operation that writes nothing commits nothing.
    */
-  #run<T>(build: () => Plan<T> | Promise<Plan<T>>): Promise<T> {
+  #run<T>(build: () => Plan<T> | Promise<Plan<T>>, afterVersions = true): Promise<T> {
     const task = this.#queue.then(async () => {
+      if (afterVersions) await this.#verified;
       this.#unlocked();
       const issued = this.#clock.issued;
       let plan: Plan<T>;
@@ -3437,7 +3587,7 @@ export class VaultSession {
         });
         break;
       case RecordType.itemVersion:
-        addVersion(this.#state, versionOf(h, content));
+        addVersion(this.#state, h, itemIdOf(content));
         break;
       case RecordType.folder:
         this.#state.folders.set(key, {

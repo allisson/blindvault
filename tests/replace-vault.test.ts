@@ -73,6 +73,7 @@ async function vault(factory: IDBFactory, title: string) {
   const session = await VaultSession.create({
     store: {
       records: () => (db ? db.records() : Promise.resolve([])),
+      record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
       commit: async (commit) => {
         db ??= await database(factory, parseLocalConfig(commit.localConfig).vaultId);
         await db.commit(commit);
@@ -120,7 +121,11 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
     const backup = restoreWithPhrase(keyring, parseBackup(other.file), other.words);
     const db = await database(factory, backup.vaultId);
     const session = await VaultSession.restore({
-      store: { records: () => db.records(), commit: (c) => db.commit(c) },
+      store: {
+        records: () => db.records(),
+        record: (key) => db.record(key),
+        commit: (c) => db.commit(c),
+      },
       keyring,
       kek: kek(keyring, 2),
       salt: new Uint8Array(16).fill(9),
@@ -178,6 +183,7 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
     const session = await VaultSession.restore({
       store: {
         records: () => held.db.records(),
+        record: (key) => held.db.record(key),
         commit: async (commit) => {
           await held.db.commit({ ...commit, clear });
           clear = false;

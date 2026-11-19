@@ -50,6 +50,8 @@ describe('forgotten password reset through IndexedDB (D173, D184)', () => {
     let db: VaultDatabase | undefined;
     const store = {
       records: () => (db ? db.records() : Promise.resolve([])),
+      record: (key: Parameters<VaultDatabase['record']>[0]) =>
+        db ? db.record(key) : Promise.resolve(undefined),
       commit: async (commit: Parameters<VaultDatabase['commit']>[0]) => {
         if (!db) {
           db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);

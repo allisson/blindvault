@@ -1272,7 +1272,7 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(done.a.result).toMatchObject({ added: 1, replaced: 1, rejected: [] });
     expect(done.b.result).toMatchObject({ added: 1, replaced: 0, rejected: [] });
     // The edit's loser went to history on B, and its version reached A.
-    expect(session(a).versions(shared)).toHaveLength(1);
+    expect(await session(a).versions(shared)).toHaveLength(1);
     // The date itself is the vault's test: these controllers share one fixed clock.
     expect(session(a).lastSyncByPeer.map(([id]) => hex(id))).toEqual([hex(idB)]);
     a.cancelSync();
@@ -1291,12 +1291,9 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     expect(session(b).item(shared)?.item?.title).toBe(winner);
     const loser = winner === 'Edited on A' ? 'Edited on B' : 'Edited on A';
     for (const c of [a, b]) {
-      expect(
-        session(c)
-          .versions(shared)
-          .map((v) => v.item?.title)
-          .sort(),
-      ).toEqual([loser, 'Shared'].sort());
+      expect((await session(c).versions(shared)).map((v) => v.item?.title).sort()).toEqual(
+        [loser, 'Shared'].sort(),
+      );
     }
     a.cancelSync();
   });
@@ -1379,7 +1376,7 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
   it("lists a peer whose record was rejected for its format, and dismisses it at the user's word (D68, D115, D227)", async () => {
     const { a, b, idA, idB } = await paired();
     const fromA = session(a).openSync(idB);
-    const [first] = await fromA.records(fromA.summary());
+    const [first] = await fromA.records(await fromA.summary());
     const map = decodeCbor(first ?? new Uint8Array()) as CborMap;
     map.set('v', RECORD_FORMAT_VERSION + 1);
     await session(b)

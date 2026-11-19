@@ -710,6 +710,7 @@ export class VaultController {
       const store: RecordStore = {
         // Empty until the founding commit opens the database; read from it afterwards (export).
         records: () => (db ? db.records() : Promise.resolve([])),
+        record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -901,6 +902,7 @@ export class VaultController {
       let clear = same;
       const store: RecordStore = {
         records: () => (db ? db.records() : Promise.resolve([])),
+        record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -2049,6 +2051,7 @@ export class VaultController {
     let clear = same;
     const store: RecordStore = {
       records: () => (db && !clear ? db.records() : Promise.resolve([])),
+      record: (key) => (db && !clear ? db.record(key) : Promise.resolve(undefined)),
       commit: async (commit) => {
         if (epoch !== this.#epoch) throw new Aborted();
         if (!db) {
@@ -2329,6 +2332,7 @@ export class VaultController {
       if (epoch !== this.#epoch) throw new Aborted();
       const store: RecordStore = {
         records: () => (db ? db.records() : Promise.resolve([])),
+        record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {

@@ -767,6 +767,7 @@ const en = {
     historyNote:
       'Earlier values stay in this history, on every device and in later backups, in up to 20 versions. To remove them, duplicate the item and move the original to the trash: its history is deleted when it is purged from the trash.',
     noHistory: 'No earlier versions.',
+    historyLoading: 'Loading the history…',
     backToItem: 'Back to the item',
     restoreVersion: 'Restore this version',
     versionNewer: 'Saved by a newer version of BlindVault: it cannot be restored here.',
@@ -1953,6 +1954,7 @@ const ptBR: Messages = {
     historyNote:
       'Valores antigos ficam neste histórico, em todos os dispositivos e nos backups seguintes, em até 20 versões. Para removê-los, duplique o item e mova o original para a lixeira: o histórico dele é apagado quando ele é removido de vez da lixeira.',
     noHistory: 'Nenhuma versão anterior.',
+    historyLoading: 'Carregando o histórico…',
     backToItem: 'Voltar ao item',
     restoreVersion: 'Restaurar esta versão',
     versionNewer: 'Salva por uma versão mais nova do BlindVault: não pode ser restaurada aqui.',

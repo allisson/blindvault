@@ -23,6 +23,8 @@ export interface Commit {
 export interface RecordStore {
   /** Every record held, read once at unlock. */
   records(): Promise<readonly StoredRecord[]>;
+  /** The record of `key`, or `undefined` when none is held: an Item Version read again (D277). */
+  record(key: RecordKey): Promise<StoredRecord | undefined>;
   /** Applies `commit` in one transaction: all of it or none of it. */
   commit(commit: Commit): Promise<void>;
 }

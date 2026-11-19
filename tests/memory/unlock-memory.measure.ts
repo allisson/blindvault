@@ -1,6 +1,6 @@
 // D277: the memory and time an unlock takes, measured on synthetic vaults of 1,000, 5,000 and
-// 10,000 login items with 20 Item Versions each. Each size is unlocked twice: with every record,
-// then without the Item Versions, so the table shows what the versions alone hold. Not part of
+// 10,000 login items with 20 Item Versions each: the time until the vault is usable, the time until
+// its Item Versions are verified, and the heap and buffers held once they are. Not part of
 // `pnpm test`: run `pnpm --filter @blindvault/tests measure:memory`.
 
 import { setFlagsFromString } from 'node:v8';
@@ -9,7 +9,6 @@ import { runInNewContext } from 'node:vm';
 import {
   Keyring,
   MEMLIMIT,
-  RecordType,
   type SymmetricKey,
   derivePrfKek,
   generateRecoveryPhrase,
@@ -53,22 +52,23 @@ function login(i: number, edit: number): ItemInput {
   };
 }
 
-/** An in-memory store; `withoutVersions` hands unlock every record but the Item Versions. */
+function key(r: { recordType: number; recordId: Uint8Array }): string {
+  return `${String(r.recordType)}:${Buffer.from(r.recordId).toString('hex')}`;
+}
+
 class Store implements RecordStore {
   readonly held = new Map<string, StoredRecord>();
   localConfig: Uint8Array = new Uint8Array(0);
-  withoutVersions = false;
+
+  record(k: { recordType: number; recordId: Uint8Array }): Promise<StoredRecord | undefined> {
+    return Promise.resolve(this.held.get(key(k)));
+  }
 
   records(): Promise<readonly StoredRecord[]> {
-    const all = [...this.held.values()];
-    return Promise.resolve(
-      this.withoutVersions ? all.filter((r) => r.recordType !== RecordType.itemVersion) : all,
-    );
+    return Promise.resolve([...this.held.values()]);
   }
 
   commit(commit: Parameters<RecordStore['commit']>[0]): Promise<void> {
-    const key = (r: { recordType: number; recordId: Uint8Array }) =>
-      `${String(r.recordType)}:${Buffer.from(r.recordId).toString('hex')}`;
     for (const d of commit.delete) this.held.delete(key(d));
     for (const p of commit.put) this.held.set(key(p), p);
     this.localConfig = commit.localConfig;
@@ -77,9 +77,10 @@ class Store implements RecordStore {
 }
 
 interface Sample {
+  readonly usableMs: number;
+  readonly verifiedMs: number;
   readonly heapMiB: number;
   readonly buffersMiB: number;
-  readonly ms: number;
 }
 
 const MiB = 1024 * 1024;
@@ -97,15 +98,19 @@ async function measure(store: Store): Promise<Sample> {
     method: 'password',
     now,
   });
-  const ms = performance.now() - start;
+  const usableMs = performance.now() - start;
+  expect(session.items().length).toBeGreaterThan(0);
+  await session.verified;
+  const verifiedMs = performance.now() - start;
+  expect(session.corrupt()).toEqual([]);
   gc();
   const after = process.memoryUsage();
-  expect(session.items().length).toBeGreaterThan(0);
   session.lock();
   return {
+    usableMs,
+    verifiedMs,
     heapMiB: (after.heapUsed - before.heapUsed) / MiB,
     buffersMiB: (after.arrayBuffers - before.arrayBuffers) / MiB,
-    ms,
   };
 }
 
@@ -124,8 +129,8 @@ it('measures unlock memory per vault size (D277)', { timeout: 0 }, async () => {
     now,
   });
   const rows: string[] = [
-    '| Items | Records | Stored MiB | Heap MiB | Buffers MiB | Unlock ms | Heap MiB, no versions | Buffers MiB, no versions | Unlock ms, no versions |',
-    '| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Items | Records | Stored MiB | Usable ms | Verified ms | Heap MiB | Buffers MiB |',
+    '| ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ];
   let count = 0;
   for (const size of SIZES) {
@@ -133,16 +138,14 @@ it('measures unlock memory per vault size (D277)', { timeout: 0 }, async () => {
       const id = await writer.createItem(login(count, 0));
       for (let edit = 1; edit <= VERSIONS; edit++) await writer.updateItem(id, login(count, edit));
     }
-    expect(writer.versions(writer.items()[0]?.id ?? new Uint8Array()).length).toBe(VERSIONS);
+    expect((await writer.versions(writer.items()[0]?.id ?? new Uint8Array())).length).toBe(
+      VERSIONS,
+    );
     const stored = [...store.held.values()].reduce((n, r) => n + r.envelope.length, 0) / MiB;
-    store.withoutVersions = false;
-    const full = await measure(store);
-    store.withoutVersions = true;
-    const items = await measure(store);
-    store.withoutVersions = false;
+    const m = await measure(store);
     const f = (n: number) => n.toFixed(1);
     rows.push(
-      `| ${String(size)} | ${String(store.held.size)} | ${f(stored)} | ${f(full.heapMiB)} | ${f(full.buffersMiB)} | ${f(full.ms)} | ${f(items.heapMiB)} | ${f(items.buffersMiB)} | ${f(items.ms)} |`,
+      `| ${String(size)} | ${String(store.held.size)} | ${f(stored)} | ${f(m.usableMs)} | ${f(m.verifiedMs)} | ${f(m.heapMiB)} | ${f(m.buffersMiB)} |`,
     );
     console.log(rows.at(-1));
   }

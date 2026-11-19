@@ -116,7 +116,7 @@ const SYNCED: SyncResult = {
 
 /** A vault holding nothing, so the exchange sends and merges nothing. */
 const EMPTY = {
-  summary: () => [],
+  summary: () => Promise.resolve([]),
   records: () => Promise.resolve([]),
   merge: () => Promise.resolve(SYNCED),
   mergeLive: () => Promise.resolve(SYNCED),
@@ -842,7 +842,7 @@ describe('summaries and transfer (sync-protocol.md §7 to §9, D69, D222)', () =
     const result: SyncResult = { ...SYNCED, added: 1 };
     const { i, r } = await connect(
       () => ({
-        summary: () => [ENTRY],
+        summary: () => Promise.resolve([ENTRY]),
         records: (keys) => {
           selected.push(...keys);
           return Promise.resolve([ENVELOPE]);
@@ -867,7 +867,7 @@ describe('summaries and transfer (sync-protocol.md §7 to §9, D69, D222)', () =
     const merged: unknown[] = [];
     const { i, r } = await connect(
       () => ({
-        summary: () => [ENTRY],
+        summary: () => Promise.resolve([ENTRY]),
         records: () => Promise.reject(new SyncRejectedError('verification-failed', record)),
       }),
       () => ({
@@ -935,7 +935,7 @@ describe('summaries and transfer (sync-protocol.md §7 to §9, D69, D222)', () =
     const merged: Uint8Array[] = [];
     const { i, r, sent } = await connect(
       () => ({
-        summary: () => [ENTRY],
+        summary: () => Promise.resolve([ENTRY]),
         // I reads its records while the peer is retired here.
         records: async () => {
           reading = true;

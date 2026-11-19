@@ -154,6 +154,16 @@ describe('vault database (D79, D82, D158)', () => {
     db.close();
   });
 
+  it('reads one record by [recordType, recordId], undefined when none is held (D277)', async () => {
+    const db = await VaultDatabase.open(vaultId, factory);
+    const a = folder('a');
+    await db.commit({ put: [a], delete: [], localConfig: LOCAL_CONFIG });
+    expect(await db.record(a)).toEqual(a);
+    expect(await db.record({ recordType: RecordType.item, recordId: a.recordId })).toBeUndefined();
+    db.close();
+    await expect(db.record(a)).rejects.toThrow(StorageClosedError);
+  });
+
   it('reads each request’s result once, however many records it holds', async () => {
     // Reading `result` per record made unlock quadratic in the number of records in WebKit
     // (architecture.md, load test).
@@ -334,6 +344,7 @@ describe('vault database (D79, D82, D158)', () => {
     await new Promise((resolve) => (tx.oncomplete = resolve));
     raw.close();
     const again = await VaultDatabase.open(vaultId, factory);
+    expect((await again.record(record))?.envelope).toEqual(new Uint8Array(0));
     expect(await again.records()).toEqual([
       { recordType: RecordType.folder, recordId: record.recordId, envelope: new Uint8Array(0) },
     ]);

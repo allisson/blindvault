@@ -496,7 +496,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 ### Tasks
 
 - [x] Memory of the unlocked vault (D277): benchmark in `tests/memory/`, measured, budget recorded
-- [ ] Item Versions verified in the background after unlock and held as summaries, within the budget of D277
+- [x] Item Versions verified in the background after unlock and held as summaries, within the budget of D277
 - [x] Items held as summaries: not needed, items hold 24 MiB of the 577 MiB of 10,000 items with their versions (D277)
 - [ ] `docs/attachments.md` (D278), with `record-content.md`, `sync-protocol.md` and `backup-format.md` version 2 updated
 - [ ] `packages/crypto`: the blob stream

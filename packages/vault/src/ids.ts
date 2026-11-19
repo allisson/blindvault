@@ -5,6 +5,11 @@ export function idKey(id: Uint8Array): string {
   return Array.from(id, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** The ID of an `idKey`. */
+export function idBytes(key: string): Uint8Array {
+  return Uint8Array.from(key.match(/../g) ?? [], (hex) => parseInt(hex, 16));
+}
+
 export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
