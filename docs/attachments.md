@@ -169,8 +169,10 @@ named in the item's notes.
 
 ## 10. Tests
 
-- **Crypto.** Round trip at 1 byte, 65,535, 65,536, 65,537 and 10 MiB; `blobId` vectors from
-  `tests/vectors/generate.py` (PyNaCl); a tampered chunk, a truncated blob, a missing `TAG_FINAL`,
+- **Crypto.** Round trip at 1 byte, 65,535, 65,536, 65,537 and 10 MiB; blobs of 1, 65,536 and
+  65,537 bytes with their `blobId`, and edits of them to refuse, in
+  `packages/crypto/test-vectors/blob-v1.json` from `tests/vectors/generate.py` (PyNaCl), which
+  checks them against its own reader; a tampered chunk, a truncated blob, a missing `TAG_FINAL`,
   a `TAG_FINAL` early, bytes after it and a wrong key refused; a plaintext length differing from
   `size` refused.
 - **Content.** The `attachment` cases of `record-content.md` §10.

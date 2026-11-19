@@ -109,6 +109,19 @@ export {
   openBackupStream,
 } from './backup-stream';
 export {
+  BLOB_ID_LENGTH,
+  BLOB_KEY_LENGTH,
+  MAX_ATTACHMENT_SIZE,
+  MAX_BLOB_LENGTH,
+  MIN_BLOB_LENGTH,
+  type SealedBlob,
+  blobId,
+  blobLength,
+  blobMatches,
+  openBlob,
+  sealBlob,
+} from './blob';
+export {
   PUBLIC_KEY_LENGTH,
   deviceId,
   recoveryEnvelopeRecordId,

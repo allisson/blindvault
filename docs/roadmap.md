@@ -499,7 +499,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Item Versions verified in the background after unlock and held as summaries, within the budget of D277
 - [x] Items held as summaries: not needed, items hold 24 MiB of the 577 MiB of 10,000 items with their versions (D277)
 - [x] `docs/attachments.md` (D278, D279), with `record-content.md`, `sync-protocol.md`, `pairing-protocol.md` and `backup-format.md` version 2 updated
-- [ ] `packages/crypto`: the blob stream
+- [x] `packages/crypto`: the blob stream
 - [ ] `packages/vault`: the `attachment` field type and blob collection
 - [ ] `packages/storage`: the `blobs` object store
 - [ ] `packages/sync`: protocol version 2 and the blob phase, in sync, pairing and re-admission (D279)
