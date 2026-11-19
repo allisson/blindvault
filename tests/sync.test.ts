@@ -40,7 +40,6 @@ import {
   receiveReconnection,
   sealReconnection,
   syncHandshake,
-  memoryBlobStore,
 } from '@blindvault/sync';
 import {
   HISTORY_LIMIT,
@@ -48,6 +47,7 @@ import {
   MAINTENANCE_INTERVAL_MS,
   PURGE_DELAY_MS,
   type RecordStore,
+  type RejectedRecord,
   type SyncResult,
   SyncRefusedError,
   VaultSession,
@@ -56,6 +56,8 @@ import {
 } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { attachment, vaultBlobs } from './blobs';
 
 beforeAll(initCrypto);
 
@@ -98,6 +100,8 @@ function lazyStore(factory: IDBFactory): RecordStore {
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
     deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+    blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+    putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -703,13 +707,15 @@ describe('the Recovery Envelope over a sync (sync-protocol.md §1.3, §1.6, D2, 
 /**
  * One sync between `x` and `y` that stays live (§10, D225): each side reports its local writes from
  * its summary on, and pushes them once it has sent `committed`, as the app does. `during` runs on
- * `x` between its summary and its selection.
+ * `x` between its summary and its selection; `tamper` changes each message `x` sends, before the
+ * channel encrypts it. Each side asks for the blobs it lacks and answers the peer's (§10.1).
  */
 async function liveSync(
   x: VaultSession,
   y: VaultSession,
   during?: () => Promise<void>,
   link: MemoryPair = memoryPair(),
+  tamper?: (message: Uint8Array) => Uint8Array,
 ) {
   const gx = x.openSync(y.deviceId);
   const gy = y.openSync(x.deviceId);
@@ -733,10 +739,12 @@ async function liveSync(
     }),
   ]);
   const merges = { x: [] as SyncResult[], y: [] as SyncResult[] };
+  const rejected = { x: [] as RejectedRecord[], y: [] as RejectedRecord[] };
   const open = async (
     session: SyncSession,
     grant: typeof gx,
     merged: SyncResult[],
+    blobsRejected: RejectedRecord[],
     hook?: () => Promise<void>,
   ) => {
     const pending: (readonly Uint8Array[])[] = [];
@@ -763,17 +771,24 @@ async function liveSync(
         return Promise.resolve();
       },
       retired: () => Promise.reject(new Error('no retirement here')),
-      blobs: { store: memoryBlobStore() },
+      blobs: { store: vaultBlobs(() => grant.blobs, blobsRejected) },
     });
     for (const envelopes of pending.splice(0)) live.push(envelopes).catch(() => undefined);
     live.done.catch(() => undefined);
     return stop;
   };
-  const sx = new SyncSession(hx.channel);
+  const channel: Transport = tamper
+    ? { ...hx.channel, send: (message) => hx.channel.send(tamper(message)) }
+    : hx.channel;
+  const sx = new SyncSession(channel);
   const sy = new SyncSession(hy.channel);
-  const stops = await Promise.all([open(sx, gx, merges.x, during), open(sy, gy, merges.y)]);
+  const stops = await Promise.all([
+    open(sx, gx, merges.x, rejected.x, during),
+    open(sy, gy, merges.y, rejected.y),
+  ]);
   return {
     merges,
+    rejected,
     end: async () => {
       for (const stop of stops) stop();
       await sx.abort('ended');
@@ -844,6 +859,83 @@ describe('the live session (sync-protocol.md §10, D225)', () => {
     // Each purged on its own clock: nothing crossed.
     expect(live.merges.x).toEqual([]);
     expect(live.merges.y).toEqual([]);
+    await live.end();
+  });
+});
+
+describe('attachments over a sync (attachments.md §6, sync-protocol.md §10.1, D278)', () => {
+  /** The blob of `blobId` as `session` stores it. */
+  function stored(session: VaultSession, blobId: Uint8Array) {
+    return session.blobGrant().read(blobId);
+  }
+
+  it('ends with both devices holding the same blobs, and drops a blob no record cites', async () => {
+    const { clock, x, y } = await peers();
+    // One blob of more than one chunk of the wire (§10.1).
+    const a = attachment('Passport', 1, 1_500_000);
+    const b = attachment('Visa', 2);
+    const stray = attachment('Nothing cites it', 3);
+    await x.createItem(a.item, [a.stored]);
+    await y.createItem(b.item, [b.stored]);
+    await y.blobGrant().write(stray.blobId, stray.blob);
+    const live = await liveSync(x, y);
+    // Polled on the IDs lacked: reading the large blob back on each poll would slow the transfer.
+    await vi.waitFor(async () => {
+      expect(await y.blobGrant().lacking()).toEqual([]);
+      expect(await x.blobGrant().lacking()).toEqual([]);
+    });
+    expect(await stored(y, a.blobId)).toEqual(a.blob);
+    expect(await stored(x, b.blobId)).toEqual(b.blob);
+    // The merge on Y collected it; X never held it, nor asked for it.
+    expect(await stored(y, stray.blobId)).toBeUndefined();
+    expect(await stored(x, stray.blobId)).toBeUndefined();
+
+    // A blob added once live comes with its item's transfer.
+    clock.t = T0 + MINUTE;
+    const c = attachment('Licence', 4);
+    await y.createItem(c.item, [c.stored]);
+    await vi.waitFor(async () => {
+      expect(await stored(x, c.blobId)).toEqual(c.blob);
+    });
+    for (const session of [x, y]) expect(await session.blobGrant().lacking()).toEqual([]);
+    expect(live.rejected).toEqual({ x: [], y: [] });
+    await live.end();
+  });
+
+  it('refuses a blob that does not match its blobId, reports its item, and goes on', async () => {
+    const { clock, x, y } = await peers();
+    const a = attachment('Passport', 1);
+    const b = attachment('Visa', 2);
+    const passport = await x.createItem(a.item, [a.stored]);
+    await x.createItem(b.item, [b.stored]);
+    // One byte of A's blob changed in its chunk, under the channel's encryption.
+    const header = a.blob.subarray(0, 24);
+    const tamper = (message: Uint8Array) => {
+      const at = Buffer.from(message).indexOf(Buffer.from(header));
+      if (at < 0) return message;
+      const changed = message.slice();
+      changed[at + 30] = (changed[at + 30] ?? 0) ^ 1;
+      return changed;
+    };
+    const live = await liveSync(x, y, undefined, memoryPair(), tamper);
+    await vi.waitFor(async () => {
+      expect(await stored(y, b.blobId)).toEqual(b.blob);
+    });
+    expect(await stored(y, a.blobId)).toBeUndefined();
+    expect(live.rejected.y).toEqual([
+      {
+        reason: 'verification-failed',
+        record: { recordType: RecordType.item, recordId: passport },
+      },
+    ]);
+    // The session goes on: a later edit still arrives.
+    clock.t = T0 + MINUTE;
+    await x.updateItem(passport, { ...a.item, title: 'Passport, renewed' });
+    await vi.waitFor(() => {
+      expect(titleOf(y, passport)).toBe('Passport, renewed');
+    });
+    // Still lacked, so asked for again at the next sync.
+    expect((await y.blobGrant().lacking()).map((id) => [...id])).toEqual([[...a.blobId]]);
     await live.end();
   });
 });

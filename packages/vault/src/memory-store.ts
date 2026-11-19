@@ -64,9 +64,14 @@ export class MemoryStore implements RecordStore {
     return Promise.resolve();
   }
 
-  /** Writes a blob straight into the store, as a sync or a restore would. */
-  putBlob(b: StoredBlob): void {
-    this.blobs.set(idKey(b.blobId), b.blob);
+  blob(blobId: Uint8Array): Promise<Uint8Array | undefined> {
+    return Promise.resolve(this.blobs.get(idKey(blobId)));
+  }
+
+  /** Writes a blob in its own transaction, as a sync or a restore does; a test calls it too. */
+  putBlob(b: StoredBlob): Promise<void> {
+    if (!this.blobs.has(idKey(b.blobId))) this.blobs.set(idKey(b.blobId), b.blob);
+    return Promise.resolve();
   }
 
   get(k: RecordKey): StoredRecord | undefined {

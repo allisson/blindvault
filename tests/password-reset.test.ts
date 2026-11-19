@@ -54,6 +54,9 @@ describe('forgotten password reset through IndexedDB (D173, D184)', () => {
         db ? db.record(key) : Promise.resolve(undefined),
       blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
       deleteBlobs: (ids: readonly Uint8Array[]) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+      blob: (id: Uint8Array) => (db ? db.blob(id) : Promise.resolve(undefined)),
+      putBlob: (b: Parameters<VaultDatabase['putBlob']>[0]) =>
+        db ? db.putBlob(b) : Promise.resolve(),
       commit: async (commit: Parameters<VaultDatabase['commit']>[0]) => {
         if (!db) {
           db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);

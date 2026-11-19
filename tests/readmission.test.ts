@@ -27,7 +27,6 @@ import {
   pairingHandshake,
   readmit,
   syncHandshake,
-  memoryBlobStore,
 } from '@blindvault/sync';
 import {
   type ItemInput,
@@ -42,6 +41,8 @@ import {
 } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+import { attachment, vaultBlobs } from './blobs';
 
 beforeAll(initCrypto);
 
@@ -81,6 +82,8 @@ function lazyStore(factory: IDBFactory) {
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
     deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+    blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+    putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -248,7 +251,7 @@ async function readmission(i: Device, r: Device, run: Run = {}) {
           if (role === 'responder') run.beforeMerge?.(device.session);
           return grant.merge(records, handshake.peerPublicKey);
         }),
-      blobs: { store: memoryBlobStore() },
+      blobs: { store: vaultBlobs(() => grant.blobs) },
     });
   };
 
@@ -331,6 +334,8 @@ async function reopened(device: Device): Promise<VaultSession> {
       record: (key) => db.record(key),
       blobIds: () => db.blobIds(),
       deleteBlobs: (ids) => db.deleteBlobs(ids),
+      blob: (id) => db.blob(id),
+      putBlob: (b) => db.putBlob(b),
       commit: (c) => db.commit(c),
     },
     localConfig: parseLocalConfig((await db.localConfig()) ?? new Uint8Array()),
@@ -344,6 +349,27 @@ async function reopened(device: Device): Promise<VaultSession> {
 }
 
 describe('re-admission end to end (pairing-protocol.md §9, Gate C)', () => {
+  it('ends with both devices holding the blobs of both (§9 step 7, D279)', async () => {
+    const x = await created('Laptop');
+    const scan = attachment('Passport', 1);
+    await x.session.createItem(scan.item, [scan.stored]);
+    // The backup carries the item, not its blob: the restored device lacks it.
+    const y = await restored(x, 'Restored phone', 2);
+    expect((await y.session.blobGrant().lacking()).map((id) => [...id])).toEqual([
+      [...scan.blobId],
+    ]);
+    const card = attachment('Card', 2);
+    await y.session.createItem(card.item, [card.stored]);
+    const { outI, outR } = await readmission(y, x);
+    expect(reasonOf(outI)).toBe('completed');
+    expect(reasonOf(outR)).toBe('completed');
+    for (const device of [x, y]) {
+      expect(await device.session.blobGrant().lacking()).toEqual([]);
+      expect(await device.session.blobGrant().read(scan.blobId)).toEqual(scan.blob);
+      expect(await device.session.blobGrant().read(card.blobId)).toEqual(card.blob);
+    }
+  });
+
   it('re-admits a restored device: both hold both Device records and every item, in IndexedDB (D22, D34, D35)', async () => {
     const x = await created('Laptop');
     const y = await restored(x, 'Restored phone', 2);

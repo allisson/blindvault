@@ -29,7 +29,6 @@ import {
   pairingHandshake,
   receiveVault,
   sendVault,
-  memoryBlobStore,
 } from '@blindvault/sync';
 import {
   type ItemInput,
@@ -42,6 +41,8 @@ import {
 } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+import { attachment, vaultBlobs } from './blobs';
 
 beforeAll(initCrypto);
 
@@ -82,6 +83,8 @@ function lazyStore(factory: IDBFactory) {
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
     deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+    blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+    putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -255,7 +258,7 @@ async function pairing(run: Run = {}) {
           return grant.records();
         }),
       completed: () => grant.completed(ha.peerDeviceId),
-      blobs: { store: memoryBlobStore() },
+      blobs: { store: vaultBlobs(() => grant.blobs) },
     });
   })().finally(() => {
     grant.wipe();
@@ -273,9 +276,14 @@ async function pairing(run: Run = {}) {
     }
     await sas.confirm();
     const received = await receiveVault(sb, { keyring: keyringB, name: B_NAME });
+    let joined: VaultSession | undefined;
+    const joinedBlobs = () => {
+      if (!joined) throw new Error('B is not committed');
+      return joined.blobGrant();
+    };
     return received.commit(
-      () =>
-        mapped(() =>
+      async () =>
+        (joined = await mapped(() =>
           VaultSession.join({
             store: lazyStore(factoryB),
             keyring: keyringB,
@@ -289,8 +297,8 @@ async function pairing(run: Run = {}) {
             peerPublicKey: hb.peerPublicKey,
             now: () => T0,
           }),
-        ),
-      { store: memoryBlobStore() },
+        )),
+      { store: vaultBlobs(joinedBlobs) },
     );
   })().catch((error: unknown) => {
     keyringB.wipeAll();
@@ -404,6 +412,29 @@ async function databases(factory: IDBFactory): Promise<number> {
 }
 
 describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
+  it('B ends holding every blob A holds; one A lacks waits for sync on both (§8 step 8, D279)', async () => {
+    const a = await vaultA();
+    // One blob of more than one chunk of the wire (sync-protocol.md §10.1).
+    const scan = attachment('Passport', 1, 1_500_000);
+    const card = attachment('Card', 2);
+    const lost = attachment('Visa', 3);
+    await a.session.createItem(scan.item, [scan.stored]);
+    await a.session.createItem(card.item, [card.stored]);
+    // Cited, never held: A answers it with blob-missing.
+    await a.session.createItem(lost.item);
+    const { outA, outB } = await pairing({ a });
+    expect(reasonOf(outA)).toBe('completed');
+    if (outB.status !== 'fulfilled') throw outB.reason;
+    const b = outB.value;
+    expect(await b.blobGrant().read(scan.blobId)).toEqual(scan.blob);
+    expect(await b.blobGrant().read(card.blobId)).toEqual(card.blob);
+    for (const session of [a.session, b]) {
+      expect((await session.blobGrant().lacking()).map((id) => [...id])).toEqual([
+        [...lost.blobId],
+      ]);
+    }
+  });
+
   it('B holds the whole vault, committed in IndexedDB, and both record the sync (D33, D34)', async () => {
     const { a, factoryB, identityB, outA, outB } = await pairing();
     expect(reasonOf(outA)).toBe('completed');
@@ -436,6 +467,8 @@ describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
         record: (key) => db.record(key),
         blobIds: () => db.blobIds(),
         deleteBlobs: (ids) => db.deleteBlobs(ids),
+        blob: (id) => db.blob(id),
+        putBlob: (b) => db.putBlob(b),
         commit: (c) => db.commit(c),
       },
       localConfig: parseLocalConfig(config ?? new Uint8Array()),

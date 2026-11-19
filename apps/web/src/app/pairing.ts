@@ -43,16 +43,18 @@ import {
   sendVault,
 } from '@blindvault/sync';
 import {
+  type BlobGrant,
   JoinRejectedError,
   type PairingGrant,
   PairingRefusedError,
   type ReadmissionGrant,
   type ReadmissionResult,
+  type RejectedRecord,
   VaultLockedError,
   type VaultSession,
 } from '@blindvault/vault';
 
-import { NO_BLOBS } from './blobs';
+import { vaultBlobs } from './blobs';
 import { DEFAULT_STUN_URLS, type StunSettings } from './stun-settings';
 
 /** WebRTC, behind a port so the controller's tests run over the in-memory transport. */
@@ -464,7 +466,13 @@ export class Inviting extends Flow {
             return grant.records();
           }),
         completed: () => grant.completed(peerDeviceId),
-        blobs: { store: NO_BLOBS },
+        // A only answers: it asks for nothing, so receives no blob to reject.
+        blobs: {
+          store: vaultBlobs(
+            () => grant.blobs,
+            () => undefined,
+          ),
+        },
       });
       this.succeeded({ kind: 'done', name, readmit: this.#readmit });
     } catch (error) {
@@ -558,9 +566,20 @@ export class Joining extends Flow {
         keyring: options.keyring,
         name: options.name,
       });
-      await received.commit(() => mapped(() => options.commit(received, peerPublicKey)), {
-        store: NO_BLOBS,
-      });
+      let joined: BlobGrant | undefined;
+      const persist = async () => {
+        joined = (await mapped(() => options.commit(received, peerPublicKey))).blobGrant();
+      };
+      // A blob that does not match is not written: the next sync asks for it again, and reports it.
+      const blobs = vaultBlobs(
+        () => {
+          /* v8 ignore next -- the blob phase starts only after the commit */
+          if (!joined) throw new Error('the vault is not committed');
+          return joined;
+        },
+        () => undefined,
+      );
+      await received.commit(persist, { store: blobs });
       this.succeeded(undefined);
     } catch (error) {
       this.failed(error);
@@ -736,7 +755,8 @@ export class Readmitting extends Flow {
       );
       const peerRole: Role = role === 'initiator' ? 'responder' : 'initiator';
       let peerName = '';
-      const { result, peerCommitted } = await readmit(session, {
+      const rejected: RejectedRecord[] = [];
+      const readmitted = await readmit(session, {
         role,
         mac: () => grant.mac(role, handshakeHash),
         checkPeerMac: (mac) => grant.checkMac(peerRole, handshakeHash, mac),
@@ -753,8 +773,18 @@ export class Readmitting extends Flow {
             this.#options.merged();
             return merged;
           }),
-        blobs: { store: NO_BLOBS },
+        blobs: {
+          store: vaultBlobs(
+            () => grant.blobs,
+            (records) => rejected.push(...records),
+          ),
+        },
       });
+      const { peerCommitted } = readmitted;
+      const result = {
+        ...readmitted.result,
+        rejected: [...readmitted.result.rejected, ...rejected],
+      };
       this.succeeded({ kind: 'readmitted', name: peerName, result, peerCommitted });
     } catch (error) {
       this.failed(error);

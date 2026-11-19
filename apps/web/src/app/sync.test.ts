@@ -6,7 +6,7 @@
 // handshake (D219) or once it becomes retired during the session (D220); the summaries, the transfer
 // and the commit that follow (D222), and the live session after them (D225).
 
-import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
+import { Keyring, generateDeviceIdentity, initCrypto, sealBlob } from '@blindvault/crypto';
 import {
   type ConnectionOptions,
   type LinkFields,
@@ -23,6 +23,7 @@ import {
   syncHandshake,
 } from '@blindvault/sync';
 import {
+  type BlobGrant,
   type MergeResult,
   type SyncGrant,
   SyncRejectedError,
@@ -114,8 +115,40 @@ const SYNCED: SyncResult = {
   ownRetired: false,
 };
 
+/** Blobs held by `blobId` in hex, and the IDs lacked until written; logs what the phase does. */
+function blobVault(
+  options: {
+    held?: readonly (readonly [Uint8Array, Uint8Array])[];
+    lacking?: readonly Uint8Array[];
+  } = {},
+) {
+  const hex = (id: Uint8Array) => Array.from(id, (b) => b.toString(16).padStart(2, '0')).join('');
+  const held = new Map((options.held ?? []).map(([id, blob]) => [hex(id), blob]));
+  const log: string[] = [];
+  const blobs: BlobGrant = {
+    lacking: () => Promise.resolve((options.lacking ?? []).filter((id) => !held.has(hex(id)))),
+    read: (id) => {
+      log.push('read');
+      return Promise.resolve(held.get(hex(id)));
+    },
+    discard: (id) => {
+      log.push('discard');
+      held.delete(hex(id));
+      return Promise.resolve();
+    },
+    write: (id, blob) => {
+      log.push('write');
+      held.set(hex(id), blob);
+      return Promise.resolve();
+    },
+    citing: () => [],
+  };
+  return { blobs, held, log, hex };
+}
+
 /** A vault holding nothing, so the exchange sends and merges nothing. */
 const EMPTY = {
+  blobs: blobVault().blobs,
   summary: () => Promise.resolve([]),
   records: () => Promise.resolve([]),
   merge: () => Promise.resolve(SYNCED),
@@ -1133,6 +1166,78 @@ describe('live session (sync-protocol.md §10, D225)', () => {
     write([E(2)]);
     expect(await stage(r, 'failed')).toEqual({ kind: 'failed', reason: 'retired' });
     expect(await stage(i, 'failed')).toEqual({ kind: 'failed', reason: 'ended' });
+  });
+});
+
+describe('blob phase of the live session (sync-protocol.md §10.1, D278)', () => {
+  function sealed(byte: number) {
+    return sealBlob(new Uint8Array(3).fill(byte));
+  }
+
+  async function synced(i: SyncGrant, r: SyncGrant) {
+    const { make } = flows();
+    const fi = make('initiator', i);
+    const fr = make('responder', r);
+    fi.begin();
+    fr.begin();
+    expect(await fr.submit(textOf(await stage(fi, 'offer')))).toBe('ok');
+    expect(await fi.submit(textOf(await stage(fr, 'answer')))).toBe('ok');
+    await stage(fi, 'synced');
+    await stage(fr, 'synced');
+    return { fi, fr };
+  }
+
+  it('writes the blob it lacks, sent after the check of §6', async () => {
+    const a = sealed(1);
+    const { grant } = devices();
+    const iv = blobVault({ lacking: [a.blobId] });
+    const log: string[] = [];
+    const rv = blobVault({ held: [[a.blobId, a.blob]] });
+    const r: SyncGrant = {
+      ...grant('r', 'i'),
+      blobs: {
+        ...rv.blobs,
+        read: (id) => {
+          log.push('read');
+          return rv.blobs.read(id);
+        },
+      },
+      peerRetirement: () => {
+        log.push('check');
+        return Promise.resolve(undefined);
+      },
+    };
+    await synced({ ...grant('i', 'r'), blobs: iv.blobs }, r);
+    await vi.waitFor(() => {
+      expect(iv.held.get(iv.hex(a.blobId))).toEqual(a.blob);
+    });
+    // After Noise_KK, before `committed`, then before the blob leaves (§6).
+    expect(log).toEqual(['check', 'check', 'check', 'read']);
+  });
+
+  it('discards a held blob that fails its check and answers it missing, reporting nothing', async () => {
+    const [a, b] = [sealed(1), sealed(2)];
+    const { grant } = devices();
+    const iv = blobVault({ lacking: [a.blobId, b.blobId] });
+    const rv = blobVault({
+      held: [
+        [a.blobId, b.blob],
+        [b.blobId, b.blob],
+      ],
+    });
+    const { fi } = await synced(
+      { ...grant('i', 'r'), blobs: iv.blobs },
+      { ...grant('r', 'i'), blobs: rv.blobs },
+    );
+    await vi.waitFor(() => {
+      expect(iv.held.get(iv.hex(b.blobId))).toEqual(b.blob);
+    });
+    expect(iv.held.has(iv.hex(a.blobId))).toBe(false);
+    expect(rv.held.has(rv.hex(a.blobId))).toBe(false);
+    expect(rv.log).toEqual(['read', 'discard', 'read']);
+    const s = fi.stage;
+    if (s.kind !== 'synced') throw new Error(s.kind);
+    expect(s.result.rejected).toEqual([]);
   });
 });
 

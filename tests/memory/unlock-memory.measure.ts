@@ -83,6 +83,14 @@ class Store implements RecordStore {
   deleteBlobs(): Promise<void> {
     return Promise.resolve();
   }
+
+  blob(): Promise<undefined> {
+    return Promise.resolve(undefined);
+  }
+
+  putBlob(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 interface Sample {

@@ -406,7 +406,30 @@ export interface PairingGrant {
   records(): Promise<Uint8Array[]>;
   /** Records the completed sync with the device `peerId` (D34). */
   completed(peerId: Uint8Array): Promise<void>;
+  /** The blobs A sends in the blob phase (pairing-protocol.md §8, D279). */
+  readonly blobs: BlobGrant;
   wipe(): void;
+}
+
+/**
+ * The blobs of this vault, as the blob phase of a sync or an admission reads and writes them
+ * (attachments.md §6, `sync-protocol.md` §10.1, D278, D279). Every call throws `VaultLockedError`
+ * once the vault is locked.
+ */
+export interface BlobGrant {
+  /**
+   * The `blobId` of every blob a held record cites and storage does not hold, read after the
+   * operations queued before it, once the Item Versions are verified (D277).
+   */
+  lacking(): Promise<Uint8Array[]>;
+  /** The blob of `blobId` as stored, or `undefined` when none is held. */
+  read(blobId: Uint8Array): Promise<Uint8Array | undefined>;
+  /** Deletes a held blob that failed its check, so the next sync asks for it again. */
+  discard(blobId: Uint8Array): Promise<void>;
+  /** Writes a received blob, checked against `blobId`, in its own transaction (attachments.md §4). */
+  write(blobId: Uint8Array, blob: Uint8Array): Promise<void>;
+  /** The Items that cite `blobId`, themselves or through an Item Version, each once. */
+  citing(blobId: Uint8Array): RecordKey[];
 }
 
 /**
@@ -461,6 +484,8 @@ export interface ReadmissionGrant {
    * reported, and the rest merges (sync-protocol.md §2.3, D206).
    */
   merge(envelopes: readonly Uint8Array[], peerPublicKey: Uint8Array): Promise<ReadmissionResult>;
+  /** The blobs of the blob phase, asked and sent (pairing-protocol.md §9, D279). */
+  readonly blobs: BlobGrant;
 }
 
 /** One record as a sync summary lists it (sync-protocol.md §7): the six fields of its header. */
@@ -535,6 +560,8 @@ export interface SyncGrant {
    * must not throw: the write has already committed.
    */
   watch(watcher: (envelopes: readonly Uint8Array[]) => void): () => void;
+  /** The blobs of the blob phase, asked and sent (sync-protocol.md §10.1, D278). */
+  readonly blobs: BlobGrant;
 }
 
 /** A sync, or a sync that only tells a retired peer it is retired (sync-protocol.md §3, D219). */
@@ -2411,6 +2438,7 @@ export class VaultSession {
       vaultId: this.#cleartext.vaultId.slice(),
       masterKey,
       identity: this.#identity,
+      blobs: this.blobGrant(),
       admit: (publicKey, displayName) => this.#admit(publicKey, displayName, ownName),
       records: () =>
         this.#run(async () => {
@@ -2510,6 +2538,7 @@ export class VaultSession {
     return {
       identity: this.#identity,
       vaultId: this.vaultId,
+      blobs: this.blobGrant(),
       peerPublicKey: peer.device.value.publicKey.slice(),
       peerDeviceId: id,
       peerName: peer.device.value.displayName,
@@ -2666,6 +2695,7 @@ export class VaultSession {
     if (this.retired) throw new PairingRefusedError('retired');
     return {
       identity: this.#identity,
+      blobs: this.blobGrant(),
       mac: (role, handshakeHash) => {
         this.#unlocked();
         return readmissionMac(this.#subkeys.readmission, role, handshakeHash);
@@ -3635,18 +3665,78 @@ export class VaultSession {
     );
     if (unknown) return;
     // Read before the store: a lock empties the state, which would then cite nothing.
-    const cited = new Set<string>();
-    for (const item of this.#state.items.values()) {
-      for (const id of citedBlobIds(item.content)) cited.add(idKey(id));
-    }
-    for (const versions of this.#state.versions.values()) {
-      for (const v of versions.values()) for (const id of v.blobIds) cited.add(idKey(id));
-    }
+    const cited = this.#cited();
     const held = await this.#store.blobIds();
     // A lock while reading: nothing is written after it.
     this.#unlocked();
     const uncited = held.filter((id) => !cited.has(idKey(id)));
     if (uncited.length > 0) await this.#store.deleteBlobs(uncited);
+  }
+
+  /** Every `blobId` a held Item or Item Version cites, by its key (attachments.md §5). */
+  #cited(): Map<string, Uint8Array> {
+    const cited = new Map<string, Uint8Array>();
+    for (const item of this.#state.items.values()) {
+      for (const id of citedBlobIds(item.content)) cited.set(idKey(id), id);
+    }
+    for (const versions of this.#state.versions.values()) {
+      for (const v of versions.values()) for (const id of v.blobIds) cited.set(idKey(id), id);
+    }
+    return cited;
+  }
+
+  /**
+   * The blobs of this vault for the blob phase of a sync or an admission (attachments.md §6).
+   * Reads and writes go straight to storage, each in its own transaction, outside the queue: a
+   * collection meanwhile deletes only a blob it read as held and no record cites.
+   */
+  blobGrant(): BlobGrant {
+    this.#unlocked();
+    return {
+      lacking: () => {
+        const task = this.#queue.then(async () => {
+          await this.#verified;
+          this.#unlocked();
+          const cited = this.#cited();
+          const held = new Set((await this.#store.blobIds()).map(idKey));
+          this.#unlocked();
+          return [...cited].filter(([key]) => !held.has(key)).map(([, id]) => id.slice());
+        });
+        this.#queue = task.catch(() => undefined);
+        return task;
+      },
+      read: async (blobId) => {
+        this.#unlocked();
+        return this.#store.blob(blobId);
+      },
+      discard: async (blobId) => {
+        this.#unlocked();
+        await this.#store.deleteBlobs([blobId]);
+      },
+      write: async (blobId, blob) => {
+        this.#unlocked();
+        await this.#store.putBlob({ blobId: blobId.slice(), blob });
+      },
+      citing: (blobId) => {
+        this.#unlocked();
+        const key = idKey(blobId);
+        const items = new Map<string, Uint8Array>();
+        for (const [itemKey, item] of this.#state.items) {
+          if (citedBlobIds(item.content).some((id) => idKey(id) === key)) {
+            items.set(itemKey, item.header.recordId);
+          }
+        }
+        for (const versions of this.#state.versions.values()) {
+          for (const v of versions.values()) {
+            if (v.blobIds.some((id) => idKey(id) === key)) items.set(idKey(v.itemId), v.itemId);
+          }
+        }
+        return [...items.values()].map((id) => ({
+          recordType: RecordType.item,
+          recordId: id.slice(),
+        }));
+      },
+    };
   }
 
   #apply(w: Write): void {

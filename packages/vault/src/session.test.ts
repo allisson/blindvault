@@ -4153,6 +4153,7 @@ describe('lock (CRYPTO-INV-010)', () => {
       openPairing: () => session.openPairing({ kek: kek(caller), method: 'password' }),
       openReadmission: () => session.openReadmission(),
       openSync: () => session.openSync(new Uint8Array(16)),
+      blobGrant: () => session.blobGrant(),
       confirmUser: () => {
         session.confirmUser({ kek: kek(caller), method: 'password' });
       },
@@ -6463,7 +6464,7 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
     const id = await session.createItem(attached('Passport', a), [a.stored]);
     await session.updateItem(id, login('Passport'));
     const stray = sealed(9);
-    store.putBlob(stray.stored);
+    await store.putBlob(stray.stored);
     session.lock();
     const again = await unlock(store);
     await again.verified;
@@ -6499,7 +6500,7 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
     tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 1;
     store.put({ ...must(version), envelope: tampered as RecordEnvelope });
     const stray = sealed(9);
-    store.putBlob(stray.stored);
+    await store.putBlob(stray.stored);
     session.lock();
     const again = await unlock(store);
     await again.verified;
@@ -6528,7 +6529,7 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
     const a = sealed(1);
     const id = await session.createItem(attached('Passport', a), [a.stored]);
     await session.updateItem(id, login('Passport'));
-    store.putBlob(sealed(9).stored);
+    await store.putBlob(sealed(9).stored);
     session.lock();
     const before = await unlock(store);
     before.lock();
@@ -6544,5 +6545,81 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(store.blobDeletes).toEqual([]);
     expect(held(store)).toHaveLength(2);
+  });
+
+  describe('the blob grant of a sync or an admission (attachments.md §6, D278, D279)', () => {
+    it('lacks every blob a record cites and no blob holds, read once the versions are verified', async () => {
+      const { session, store } = await create();
+      const [a, b, c, d] = [sealed(1), sealed(2), sealed(3), sealed(4)];
+      const id = await session.createItem(attached('Passport', a, b), [a.stored, b.stored]);
+      // `a` cited only by the version once its field is removed, `c` by a trashed item.
+      await session.updateItem(id, attached('Passport', b));
+      await session.trashItem(await session.createItem(attached('Old', c), [c.stored]));
+      await session.createItem(attached('Visa', d), [d.stored]);
+      store.blobs.clear();
+      await store.putBlob(b.stored);
+      session.lock();
+      const again = await unlock(store);
+      const lacking = await again.blobGrant().lacking();
+      expect(lacking.map(idKey).sort()).toEqual([a, c, d].map((x) => idKey(x.blobId)).sort());
+      await store.putBlob(a.stored);
+      await store.putBlob(c.stored);
+      await store.putBlob(d.stored);
+      expect(await again.blobGrant().lacking()).toEqual([]);
+    });
+
+    it('reads, writes and discards a blob in storage, by its blobId', async () => {
+      const { session, store } = await create();
+      const a = sealed(1);
+      const id = await session.createItem(attached('Passport', a), [a.stored]);
+      await session.updateItem(id, attached('Passport'));
+      const grant = session.blobGrant();
+      expect(await grant.read(a.blobId)).toEqual(a.stored.blob);
+      await grant.discard(a.blobId);
+      expect(held(store)).toEqual([]);
+      expect(await grant.read(a.blobId)).toBeUndefined();
+      expect((await grant.lacking()).map(idKey)).toEqual([idKey(a.blobId)]);
+      await grant.write(a.blobId, a.stored.blob);
+      expect(held(store)).toEqual([idKey(a.blobId)]);
+      expect(await grant.lacking()).toEqual([]);
+    });
+
+    it('names each item that cites a blob, by itself or by a version, once', async () => {
+      const { session } = await create();
+      const [a, b] = [sealed(1), sealed(2)];
+      const first = await session.createItem(attached('Passport', a), [a.stored]);
+      await session.updateItem(first, login('Passport'));
+      const second = await session.createItem(attached('Visa', a, b), [b.stored]);
+      await session.updateItem(second, attached('Visa', a));
+      const grant = session.blobGrant();
+      const citing = grant.citing(a.blobId);
+      expect(citing.map((k) => k.recordType)).toEqual([RecordType.item, RecordType.item]);
+      expect(citing.map((k) => idKey(k.recordId)).sort()).toEqual(
+        [idKey(first), idKey(second)].sort(),
+      );
+      expect(grant.citing(b.blobId).map((k) => idKey(k.recordId))).toEqual([idKey(second)]);
+      expect(grant.citing(sealed(9).blobId)).toEqual([]);
+    });
+
+    it('is the one each sync, pairing and re-admission grant carries', async () => {
+      const { session, store } = await create();
+      const a = sealed(1);
+      await session.createItem(attached('Passport', a), [a.stored]);
+      store.blobs.clear();
+      const grant = session.openReadmission();
+      expect((await grant.blobs.lacking()).map(idKey)).toEqual([idKey(a.blobId)]);
+    });
+
+    it('refuses every call once the vault is locked', async () => {
+      const { session } = await create();
+      const a = sealed(1);
+      const grant = session.blobGrant();
+      session.lock();
+      await expect(grant.lacking()).rejects.toThrow(VaultLockedError);
+      await expect(grant.read(a.blobId)).rejects.toThrow(VaultLockedError);
+      await expect(grant.discard(a.blobId)).rejects.toThrow(VaultLockedError);
+      await expect(grant.write(a.blobId, a.stored.blob)).rejects.toThrow(VaultLockedError);
+      expect(() => grant.citing(a.blobId)).toThrow(VaultLockedError);
+    });
   });
 });

@@ -77,6 +77,8 @@ async function vault(factory: IDBFactory, title: string) {
       record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
       blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
       deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+      blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+      putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
       commit: async (commit) => {
         db ??= await database(factory, parseLocalConfig(commit.localConfig).vaultId);
         await db.commit(commit);
@@ -122,6 +124,8 @@ async function refound(old: Awaited<ReturnType<typeof vault>>, factory: IDBFacto
       record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
       blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
       deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+      blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+      putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
       commit: async (c) => {
         db ??= await database(factory, parseLocalConfig(c.localConfig).vaultId);
         if (!commit) throw new Error('interrupted');
@@ -186,6 +190,8 @@ describe('re-founding through IndexedDB (Gate B, D28, D89, D96, D187)', () => {
         record: (key) => kept.record(key),
         blobIds: () => kept.blobIds(),
         deleteBlobs: (ids) => kept.deleteBlobs(ids),
+        blob: (id) => kept.blob(id),
+        putBlob: (b) => kept.putBlob(b),
         commit: (c) => kept.commit(c),
       },
       localConfig: parseLocalConfig(must(await kept.localConfig())),
