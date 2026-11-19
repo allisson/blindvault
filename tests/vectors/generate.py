@@ -3,7 +3,7 @@
 # dependencies = ["pynacl==1.6.2", "mnemonic==0.21"]
 # ///
 """Independent generator for docs/crypto-spec.md, docs/record-content.md, docs/backup-format.md and
-docs/pairing-protocol.md test vectors (v1).
+docs/pairing-protocol.md and docs/attachments.md test vectors (v1).
 
 Uses hashlib (BLAKE2b, crypto_kdf) and PyNaCl (AEAD, Argon2id, seed key pair, padding, sealed box,
 secretstream), never the
@@ -31,6 +31,7 @@ OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
 OUT_BACKUP = ROOT / "packages/backup/test-vectors/backup-v1.json"
 OUT_PAIRING = ROOT / "packages/sync/test-vectors/pairing-v1.json"
 OUT_SYNC = ROOT / "packages/sync/test-vectors/sync-v1.json"
+OUT_BLOB = ROOT / "packages/crypto/test-vectors/blob-v1.json"
 
 RECORD_FORMAT_VERSION = 1
 RT_ITEM, RT_FOLDER, RT_ITEM_VERSION, RT_VAULT_KEY, RT_RECOVERY_ENVELOPE, RT_DEVICE = 1, 2, 3, 4, 5, 6
@@ -2540,6 +2541,94 @@ def sync_vectors() -> dict:
     }
 
 
+# --- attachments.md section 2: attachment blobs -------------------------------------------------
+
+BLOB_KEY = seq(0x60, 32)
+BLOB_MAX_SIZE = 10_485_760
+
+
+class BlobReject(Exception):
+    pass
+
+
+def blob_length(size: int) -> int:
+    return 24 + size + 17 * (size // BV_CHUNK + 1)
+
+
+def blob_seal(pt: bytes, key: bytes = BLOB_KEY) -> bytes:
+    st = bindings.crypto_secretstream_xchacha20poly1305_state()
+    sh = bindings.crypto_secretstream_xchacha20poly1305_init_push(st, key)
+    parts = bv_chunks(pt)
+    tags = [T_MESSAGE] * (len(parts) - 1) + [T_FINAL]
+    return sh + b"".join(
+        bindings.crypto_secretstream_xchacha20poly1305_push(st, part, None, tag) for part, tag in zip(parts, tags)
+    )
+
+
+def blob_open(blob: bytes, key: bytes, size: int) -> bytes:
+    """Reference reader of attachments.md section 2."""
+    if not 1 <= size <= BLOB_MAX_SIZE or len(blob) != blob_length(size):
+        raise BlobReject("length")
+    st = bindings.crypto_secretstream_xchacha20poly1305_state()
+    try:
+        bindings.crypto_secretstream_xchacha20poly1305_init_pull(st, blob[:24], key)
+    except Exception as e:
+        raise BlobReject("header") from e
+    full = size // BV_CHUNK
+    out = b""
+    for i in range(full + 1):
+        start = 24 + i * (BV_CHUNK + 17)
+        chunk = blob[start:start + BV_CHUNK + 17] if i < full else blob[start:]
+        try:
+            msg, tag = bindings.crypto_secretstream_xchacha20poly1305_pull(st, chunk, None)
+        except Exception as e:
+            raise BlobReject("chunk") from e
+        if tag != (T_MESSAGE if i < full else T_FINAL):
+            raise BlobReject("tag")
+        out += msg
+    return out
+
+
+def blob_vectors() -> dict:
+    valid = []
+    for size in (1, BV_CHUNK, BV_CHUNK + 1):
+        pt = bv_filler(size)
+        blob = blob_seal(pt)
+        assert len(blob) == blob_length(size) and blob_open(blob, BLOB_KEY, size) == pt
+        valid.append({"size": size, "blob": b64(blob), "blobId": blake2b(blob, 32).hex()})
+    assert blob_length(1) == 42 and blob_length(BLOB_MAX_SIZE) == 10_488_521
+    two = base64.b64decode(valid[2]["blob"])
+    rejected = [
+        {"case": "stream header byte changed", "base": 2, "flip": 0},
+        {"case": "first chunk byte changed", "base": 2, "flip": 100},
+        {"case": "final chunk byte changed", "base": 2, "flip": len(two) - 1},
+        {"case": "final chunk dropped", "base": 2, "keep": 24 + BV_CHUNK + 17},
+        {"case": "byte appended", "base": 2, "append": "00"},
+        {"case": "wrong key", "base": 0, "key": seq(0x61, 32).hex()},
+        {"case": "size one byte larger", "base": 1, "size": BV_CHUNK + 1},
+        {"case": "size one byte smaller", "base": 2, "size": BV_CHUNK},
+    ]
+    for c in rejected:
+        b = bytearray(base64.b64decode(valid[c["base"]]["blob"]))
+        if "flip" in c:
+            b[c["flip"]] ^= 1
+        if "keep" in c:
+            b = b[:c["keep"]]
+        if "append" in c:
+            b += bytes.fromhex(c["append"])
+        try:
+            blob_open(bytes(b), bytes.fromhex(c.get("key", BLOB_KEY.hex())), c.get("size", valid[c["base"]]["size"]))
+            raise AssertionError(f"accepted: {c['case']}")
+        except BlobReject:
+            pass
+    return {
+        "description": "attachments.md section 2: blobs under `key`, plaintext bytes (i * 31 + 7) & 0xff",
+        "key": BLOB_KEY.hex(),
+        "valid": valid,
+        "rejected": rejected,
+    }
+
+
 def main() -> None:
     v: dict = {"recordFormatVersion": RECORD_FORMAT_VERSION, "generator": "tests/vectors/generate.py"}
 
@@ -2955,7 +3044,7 @@ def main() -> None:
         [cbor(vk_env), cbor(rec_env), cbor(item_env)], keyslot_pk, metadata["phraseCreatedAt"]
     )
     for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup),
-                       (OUT_PAIRING, pairing_vectors()), (OUT_SYNC, sync)):
+                       (OUT_PAIRING, pairing_vectors()), (OUT_SYNC, sync), (OUT_BLOB, blob_vectors())):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {path}")
