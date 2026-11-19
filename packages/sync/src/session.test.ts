@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import vectors from '../test-vectors/pairing-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/pairing-v2.json' with { type: 'json' };
 import { toFrames } from './frames';
 import { memoryPair } from './memory';
 import { encodeMessage } from './messages';
@@ -82,7 +82,7 @@ describe('pairing session (pairing-protocol.md §10, §11)', () => {
         ...new TextEncoder().encode('confirmed'),
         0x61,
         0x76,
-        0x02,
+        0x01,
       ),
       'version',
     ],
@@ -253,7 +253,7 @@ describe('pairing session (pairing-protocol.md §10, §11)', () => {
 
   it('joins a message of several frames before decoding it', async () => {
     const { a, b, link } = sessions();
-    // { name: 70,000 × "a", t: "received", v: 1 }: two frames, then refused for its long name.
+    // { name: 70,000 × "a", t: "received", v: 2 }: two frames, then refused for its long name.
     const name = new TextEncoder().encode('a'.repeat(70_000));
     const bytes = Uint8Array.of(
       0xa3,
@@ -271,7 +271,7 @@ describe('pairing session (pairing-protocol.md §10, §11)', () => {
       ...new TextEncoder().encode('received'),
       0x61,
       0x76,
-      0x01,
+      0x02,
     );
     const frames = toFrames(bytes);
     expect(frames).toHaveLength(2);

@@ -5,7 +5,7 @@
 import { Keyring, generateDeviceIdentity, initCrypto } from '@blindvault/crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import vectors from '../test-vectors/sync-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/sync-v2.json' with { type: 'json' };
 import { toFrames } from './frames';
 import { type Direction, type MemoryPairOptions, memoryPair } from './memory';
 import { encodeMessage } from './messages';
@@ -135,7 +135,7 @@ describe('sync session (sync-protocol.md §11, CRYPTO-INV-009)', () => {
     ['a pairing abort reason', encodeMessage({ t: 'abort', reason: 'cancelled' }), 'abort'],
     [
       'a message of another version',
-      hex(vectors.messages.invalid.find((c) => c.case === 'v 2')?.bytes ?? ''),
+      hex(vectors.messages.invalid.find((c) => c.case === 'v 1')?.bytes ?? ''),
       'version',
     ],
     [

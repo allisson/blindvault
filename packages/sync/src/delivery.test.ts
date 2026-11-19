@@ -127,8 +127,8 @@ describe('payload delivery (sync-protocol.md §4.4, D215)', () => {
     it('takes the first payload that opens, reporting every other one', async () => {
       const junk = [
         new Uint8Array(0),
-        Uint8Array.of(2, 0xff),
-        Uint8Array.of(1, 0),
+        Uint8Array.of(1, 0xff),
+        Uint8Array.of(2, 0),
         sealReconnection(offer, keys(stranger, responder)).bytes,
         sealReconnection(offer, {
           ...keys(initiator, responder),
@@ -179,14 +179,14 @@ describe('payload delivery (sync-protocol.md §4.4, D215)', () => {
     it('returns null when the delivery closes before a payload opens: a lost payload', async () => {
       const pair = memoryDelivery({ intercept: () => [] });
       await pair.a.send(sealReconnection(offer, keys(initiator, responder)).bytes);
-      pair.inject('a-to-b', Uint8Array.of(1, 2, 3));
+      pair.inject('a-to-b', Uint8Array.of(2, 2, 3));
       const waiting = waitForOffer(pair.b);
       setTimeout(() => {
         pair.b.close();
       }, 0);
       expect(await waiting).toEqual({ opened: null, refused: ['malformed'] });
       await expect(pair.b.send(Uint8Array.of(1))).rejects.toThrow(DeliveryClosedError);
-      pair.inject('a-to-b', Uint8Array.of(1, 2, 3));
+      pair.inject('a-to-b', Uint8Array.of(2, 2, 3));
       expect(await waitForOffer(pair.b)).toEqual({ opened: null, refused: [] });
     });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import vectors from '../test-vectors/pairing-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/pairing-v2.json' with { type: 'json' };
 import { Base45Error, decodeBase45, encodeBase45 } from './base45';
 
 const hex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (b) => parseInt(b, 16));

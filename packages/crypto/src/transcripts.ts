@@ -30,7 +30,7 @@ function fingerprint(value: Uint8Array): Uint8Array {
 }
 
 /**
- * `prologue_XX = layout("bv.pairing.v1", BLAKE2b-256(payload_initiator),
+ * `prologue_XX = layout("bv.pairing.v2", BLAKE2b-256(payload_initiator),
  * BLAKE2b-256(payload_responder), dtlsFingerprint_initiator, dtlsFingerprint_responder)`: the
  * payloads are the decoded bytes exactly as exchanged, commitment included.
  */
@@ -41,7 +41,7 @@ export function pairingPrologue(
   fingerprintResponder: Uint8Array,
 ): Uint8Array {
   return layout(
-    label('bv.pairing.v1'),
+    label('bv.pairing.v2'),
     lib().crypto_generichash(PAYLOAD_HASH_LENGTH, payloadInitiator, null),
     lib().crypto_generichash(PAYLOAD_HASH_LENGTH, payloadResponder, null),
     fingerprint(fingerprintInitiator),
@@ -50,18 +50,18 @@ export function pairingPrologue(
 }
 
 /**
- * `prologue_K = layout("bv.reconnect.v1", vaultId, role)`, `role` being the session role of the
+ * `prologue_K = layout("bv.reconnect.v2", vaultId, role)`, `role` being the session role of the
  * reconnection payload's sender (`sync-protocol.md` §4.2, D213).
  */
 export function reconnectionPrologue(
   vaultId: Uint8Array,
   role: 'initiator' | 'responder',
 ): Uint8Array {
-  return layout(label('bv.reconnect.v1'), id(vaultId), label(role));
+  return layout(label('bv.reconnect.v2'), id(vaultId), label(role));
 }
 
 /**
- * `prologue_KK = layout("bv.sync.v1", BLAKE2b-256(reconnection_initiator),
+ * `prologue_KK = layout("bv.sync.v2", BLAKE2b-256(reconnection_initiator),
  * BLAKE2b-256(reconnection_responder), dtlsFingerprint_initiator, dtlsFingerprint_responder)`: the
  * reconnection payloads are the `Noise_K` messages `m` exactly as transmitted (D217).
  */
@@ -72,7 +72,7 @@ export function syncPrologue(
   fingerprintResponder: Uint8Array,
 ): Uint8Array {
   return layout(
-    label('bv.sync.v1'),
+    label('bv.sync.v2'),
     lib().crypto_generichash(PAYLOAD_HASH_LENGTH, reconnectionInitiator, null),
     lib().crypto_generichash(PAYLOAD_HASH_LENGTH, reconnectionResponder, null),
     fingerprint(fingerprintInitiator),
@@ -80,11 +80,11 @@ export function syncPrologue(
   );
 }
 
-/** `BLAKE2b-256(layout("bv.pairing.commit.v1", nonce_I))` */
+/** `BLAKE2b-256(layout("bv.pairing.commit.v2", nonce_I))` */
 export function pairingCommitment(nonce: Uint8Array): Uint8Array {
   return lib().crypto_generichash(
     PAIRING_COMMITMENT_LENGTH,
-    layout(label('bv.pairing.commit.v1'), sized(nonce, PAIRING_NONCE_LENGTH, 'a pairing nonce')),
+    layout(label('bv.pairing.commit.v2'), sized(nonce, PAIRING_NONCE_LENGTH, 'a pairing nonce')),
     null,
   );
 }
@@ -102,7 +102,7 @@ export function checkPairingCommitment(commitment: Uint8Array, nonce: Uint8Array
 }
 
 /**
- * The SAS: `u64(BLAKE2b-256(layout("bv.sas.v1", h, nonce_I, nonce_R))[0..8]) mod 1,000,000`, read
+ * The SAS: `u64(BLAKE2b-256(layout("bv.sas.v2", h, nonce_I, nonce_R))[0..8]) mod 1,000,000`, read
  * big-endian, as six decimal digits with leading zeros. Grouping it for display is the UI's.
  */
 export function pairingSas(
@@ -113,7 +113,7 @@ export function pairingSas(
   const sasHash = lib().crypto_generichash(
     SAS_HASH_LENGTH,
     layout(
-      label('bv.sas.v1'),
+      label('bv.sas.v2'),
       sized(handshakeHash, HANDSHAKE_HASH_LENGTH, 'a handshake hash'),
       sized(nonceInitiator, PAIRING_NONCE_LENGTH, 'a pairing nonce'),
       sized(nonceResponder, PAIRING_NONCE_LENGTH, 'a pairing nonce'),

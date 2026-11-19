@@ -256,7 +256,7 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
     const { offer, answer } = await exchanged();
     for (const text of [offer, answer]) {
       const bytes = decodeReconnectionText(text);
-      expect(bytes[0]).toBe(1);
+      expect(bytes[0]).toBe(2);
       expect(bytes.length).toBeGreaterThan(133);
     }
   });
@@ -272,7 +272,7 @@ describe('manual sync flow (sync-protocol.md §3 to §5, D216)', () => {
     expect(await f.r.submit(fromOther)).toBe('not-from-peer');
     const bytes = decodeReconnectionText(fromOther);
     expect(await f.r.submit(encodeReconnectionText(bytes.slice(0, 60)))).toBe('malformed');
-    bytes[0] = 2;
+    bytes[0] = 1;
     expect(await f.r.submit(encodeReconnectionText(bytes))).toBe('version');
     expect(f.r.stage.kind).toBe('scan');
 

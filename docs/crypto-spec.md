@@ -452,7 +452,7 @@ the reconnection payload in `sync-protocol.md`, using the layout encoding.
 
 The same generator writes the `record-content.md` vectors to
 `packages/vault/test-vectors/content-v1.json` (`record-content.md` §10), and the
-`pairing-protocol.md` vectors to `packages/sync/test-vectors/pairing-v1.json`: base45 (the RFC
+`pairing-protocol.md` vectors to `packages/sync/test-vectors/pairing-v2.json`: base45 (the RFC
 9285 examples and rejected texts), valid payloads with their bytes and text, and one invalid payload
 per rule of §3.3, tagged with the reason it is refused (`version`, `malformed`, `wrong-role`,
 `wrong-session`); every message type of §10.2, the transfer's of `sync-protocol.md` §2.1

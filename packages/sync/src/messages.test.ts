@@ -1,7 +1,7 @@
 import { MAX_ENVELOPE_LENGTH } from '@blindvault/crypto';
 import { describe, expect, it } from 'vitest';
 
-import vectors from '../test-vectors/pairing-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/pairing-v2.json' with { type: 'json' };
 import {
   ABORT_REASONS,
   MAX_RECORD_COUNT,

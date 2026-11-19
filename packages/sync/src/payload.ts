@@ -1,4 +1,4 @@
-// The pairing payload v1 (`pairing-protocol.md` §3): what the other device needs to rebuild this
+// The pairing payload v2 (`pairing-protocol.md` §3): what the other device needs to rebuild this
 // device's SDP, plus the session ID, the "holds a vault" flag, the supported formats and, from the
 // initiator, the commitment to its nonce. Decoding is strict, so one payload has exactly one
 // encoding; the decoded bytes are what the Noise prologue binds (`crypto-spec.md` §13).
@@ -21,7 +21,7 @@ import {
 
 export type { Candidate, CandidateKind, Role, Setup };
 
-export const PAYLOAD_VERSION = 1;
+export const PAYLOAD_VERSION = 2;
 
 export interface Payload extends LinkFields {
   readonly holdsVault: boolean;
