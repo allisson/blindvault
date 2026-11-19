@@ -200,6 +200,25 @@ function readAttachment(value: CborValue | undefined): AttachmentValue {
 }
 
 /**
+ * The `blobId`s an item's content cites (attachments.md §5): from every field of type `attachment`
+ * whose value is a map with a 32-byte `blobId`, whether or not the rest of the item validates, so
+ * an item read-only for newer content keeps its blobs.
+ */
+export function citedBlobIds(item: CborValue | null | undefined): Uint8Array[] {
+  if (!(item instanceof Map)) return [];
+  const fields = item.get('fields');
+  if (!Array.isArray(fields)) return [];
+  const cited: Uint8Array[] = [];
+  for (const field of fields) {
+    if (!(field instanceof Map) || field.get('type') !== 'attachment') continue;
+    const value = field.get('value');
+    const blobId = value instanceof Map ? value.get('blobId') : undefined;
+    if (isBytes(blobId, BLOB_ID_LENGTH)) cited.push(blobId);
+  }
+  return cited;
+}
+
+/**
  * A picked file's name as stored (attachments.md §3): line breaks as spaces, cut to 255 code points
  * keeping an extension of 1 to 16 after the last `.`, `attachment` when empty.
  */

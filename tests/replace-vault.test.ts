@@ -74,6 +74,8 @@ async function vault(factory: IDBFactory, title: string) {
     store: {
       records: () => (db ? db.records() : Promise.resolve([])),
       record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+      blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+      deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
       commit: async (commit) => {
         db ??= await database(factory, parseLocalConfig(commit.localConfig).vaultId);
         await db.commit(commit);
@@ -124,6 +126,8 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
       store: {
         records: () => db.records(),
         record: (key) => db.record(key),
+        blobIds: () => db.blobIds(),
+        deleteBlobs: (ids) => db.deleteBlobs(ids),
         commit: (c) => db.commit(c),
       },
       keyring,
@@ -184,6 +188,8 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
       store: {
         records: () => held.db.records(),
         record: (key) => held.db.record(key),
+        blobIds: () => held.db.blobIds(),
+        deleteBlobs: (ids) => held.db.deleteBlobs(ids),
         commit: async (commit) => {
           await held.db.commit({ ...commit, clear });
           clear = false;

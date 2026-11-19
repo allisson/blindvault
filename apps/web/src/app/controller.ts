@@ -711,6 +711,8 @@ export class VaultController {
         // Empty until the founding commit opens the database; read from it afterwards (export).
         records: () => (db ? db.records() : Promise.resolve([])),
         record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+        blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+        deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -903,6 +905,8 @@ export class VaultController {
       const store: RecordStore = {
         records: () => (db ? db.records() : Promise.resolve([])),
         record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+        blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+        deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -2052,6 +2056,8 @@ export class VaultController {
     const store: RecordStore = {
       records: () => (db && !clear ? db.records() : Promise.resolve([])),
       record: (key) => (db && !clear ? db.record(key) : Promise.resolve(undefined)),
+      blobIds: () => (db && !clear ? db.blobIds() : Promise.resolve([])),
+      deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
       commit: async (commit) => {
         if (epoch !== this.#epoch) throw new Aborted();
         if (!db) {
@@ -2333,6 +2339,8 @@ export class VaultController {
       const store: RecordStore = {
         records: () => (db ? db.records() : Promise.resolve([])),
         record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+        blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+        deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {

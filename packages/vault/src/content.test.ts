@@ -8,6 +8,7 @@ import {
   type Item,
   attachmentMediaType,
   attachmentName,
+  citedBlobIds,
   isValidDate,
   isValidSeedPhrase,
   itemToCbor,
@@ -163,6 +164,51 @@ describe('item writes', () => {
       fields: [{ type: 'attachment', value: { ...attachment, size: 0 } }],
     };
     expect(() => itemToCbor(invalid as Item, false)).toThrow(ContentInvalidError);
+  });
+});
+
+describe('cited blobs (attachments.md §5)', () => {
+  const id = (byte: number) => new Uint8Array(32).fill(byte);
+  const attachment = (value: CborValue): CborMap =>
+    new Map<string, CborValue>([
+      ['type', 'attachment'],
+      ['value', value],
+    ]);
+
+  it('reads every attachment field’s 32-byte blobId, whether or not the item validates', () => {
+    const item: CborMap = new Map<string, CborValue>([
+      ['templateId', 'login'],
+      ['unknown', 'from a newer app'],
+      [
+        'fields',
+        [
+          attachment(new Map([['blobId', id(1)]])),
+          new Map<string, CborValue>([
+            ['type', 'secret'],
+            ['value', new Map([['blobId', id(2)]])],
+          ]),
+          attachment(
+            new Map<string, CborValue>([
+              ['blobId', id(3)],
+              ['size', 0],
+            ]),
+          ),
+          attachment(new Map([['blobId', new Uint8Array(31)]])),
+          attachment(new Map([['blobId', 'not bytes']])),
+          attachment(id(4)),
+          attachment(new Map()),
+          'not a field',
+        ],
+      ],
+    ]);
+    expect(citedBlobIds(item)).toEqual([id(1), id(3)]);
+  });
+
+  it('cites nothing from a purged tombstone or content that is not an item', () => {
+    expect(citedBlobIds(null)).toEqual([]);
+    expect(citedBlobIds(undefined)).toEqual([]);
+    expect(citedBlobIds('item')).toEqual([]);
+    expect(citedBlobIds(new Map([['fields', 'none']]))).toEqual([]);
   });
 });
 

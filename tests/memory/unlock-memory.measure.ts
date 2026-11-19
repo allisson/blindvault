@@ -74,6 +74,15 @@ class Store implements RecordStore {
     this.localConfig = commit.localConfig;
     return Promise.resolve();
   }
+
+  // The benchmark holds no attachment.
+  blobIds(): Promise<readonly Uint8Array[]> {
+    return Promise.resolve([]);
+  }
+
+  deleteBlobs(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 interface Sample {

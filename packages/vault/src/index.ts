@@ -93,7 +93,13 @@ export {
   readLocalConfigEncrypted,
   readLocalConfigState,
 } from './local-config';
-export { type Commit, type RecordKey, type RecordStore, type StoredRecord } from './store';
+export {
+  type Commit,
+  type RecordKey,
+  type RecordStore,
+  type StoredBlob,
+  type StoredRecord,
+} from './store';
 export {
   type BackupFile,
   type BackupOptions,

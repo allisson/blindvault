@@ -79,6 +79,8 @@ function lazyStore(factory: IDBFactory) {
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+    blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+    deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -428,6 +430,8 @@ describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
       store: {
         records: () => db.records(),
         record: (key) => db.record(key),
+        blobIds: () => db.blobIds(),
+        deleteBlobs: (ids) => db.deleteBlobs(ids),
         commit: (c) => db.commit(c),
       },
       localConfig: parseLocalConfig(config ?? new Uint8Array()),

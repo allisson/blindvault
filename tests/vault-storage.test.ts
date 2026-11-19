@@ -139,6 +139,8 @@ async function created(factory: IDBFactory) {
   const store: RecordStore = {
     records: () => Promise.resolve([]),
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
+    blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
+    deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         vaultId = parseLocalConfig(commit.localConfig).vaultId;

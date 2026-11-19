@@ -104,6 +104,7 @@ import {
   type ItemReading,
   type ReadOnlyRule,
   TITLE_MAX,
+  citedBlobIds,
   itemToCbor,
   readItem,
 } from './item';
@@ -118,7 +119,7 @@ import {
   readLocalConfigState,
 } from './local-config';
 import { incomingDeviceWins, incomingWins, sameVersion } from './merge';
-import { type RecordKey, type RecordStore, type StoredRecord } from './store';
+import { type RecordKey, type RecordStore, type StoredBlob, type StoredRecord } from './store';
 import { codePointLength, compareBytes, isId } from './text';
 import { type TreeNode, buildTree, displayedParents, isWithin } from './tree';
 
@@ -584,12 +585,15 @@ class HeldVersion {
   readonly #versionKey: string;
   readonly #deviceId: Uint8Array;
   readonly itemId: Uint8Array;
+  /** The `blobId`s its content cites, copied (attachments.md §5). */
+  readonly blobIds: readonly Uint8Array[];
   readonly content: CborMap | undefined;
 
   constructor(
     header: RecordHeader,
     versionKey: string,
     shared: { readonly itemId: Uint8Array; readonly deviceId: Uint8Array },
+    blobIds: readonly Uint8Array[],
     content?: CborMap,
   ) {
     this.#recordFormatVersion = header.recordFormatVersion;
@@ -600,6 +604,7 @@ class HeldVersion {
     this.#versionKey = versionKey;
     this.#deviceId = shared.deviceId;
     this.itemId = shared.itemId;
+    this.blobIds = blobIds;
     this.content = content;
   }
 
@@ -685,6 +690,8 @@ interface Plan<T> {
   readonly seen?: Seen;
   /** A completed sync with a peer (D34): `[deviceId, date]`. */
   readonly lastSync?: readonly [Uint8Array, number];
+  /** The blobs of new attachments, committed with the writes (attachments.md §4). */
+  readonly blobs?: readonly StoredBlob[];
 }
 
 /** The records held, decrypted at unlock. */
@@ -757,6 +764,15 @@ function itemIdOf(content: CborMap | null): Uint8Array {
   return itemId;
 }
 
+/** No blob cited: one array shared by every such version (D277). */
+const NO_BLOBS: readonly Uint8Array[] = [];
+
+/** The `blobId`s an Item Version's content cites, copied. */
+function versionBlobIds(content: CborMap | null): readonly Uint8Array[] {
+  const cited = citedBlobIds(content?.get('item'));
+  return cited.length === 0 ? NO_BLOBS : cited.map((id) => id.slice());
+}
+
 /**
  * Holds an Item Version, its content only when given, for a merge. Its IDs are copied once: a view
  * would keep the whole decrypted content, or the whole envelope, alive (D277).
@@ -765,6 +781,7 @@ function addVersion(
   state: State,
   header: RecordHeader,
   itemId: Uint8Array,
+  blobIds: readonly Uint8Array[],
   content?: CborMap,
 ): void {
   const itemKey = idKey(itemId);
@@ -778,7 +795,7 @@ function addVersion(
   }
   const versionKey = idKey(header.recordId);
   const shared = { itemId: first?.itemId ?? itemId.slice(), deviceId };
-  versions.set(versionKey, new HeldVersion(header, versionKey, shared, content));
+  versions.set(versionKey, new HeldVersion(header, versionKey, shared, blobIds, content));
   state.versions.set(itemKey, versions);
 }
 
@@ -858,6 +875,7 @@ function load(
             state,
             header,
             itemIdOf(content),
+            versionBlobIds(content),
             keepVersions ? (content ?? undefined) : undefined,
           );
           break;
@@ -912,6 +930,8 @@ export class VaultSession {
   #queue: Promise<unknown> = Promise.resolve();
   /** The Item Versions verified after unlock (D277): every operation but the first purge waits. */
   #verified: Promise<void> = Promise.resolve();
+  /** Whether every Item Version is verified, so that blob collection knows every citation. */
+  #versionsVerified = true;
   /** Told the records of each local write once committed (sync-protocol.md §10, D225). */
   readonly #watchers = new Set<(envelopes: readonly Uint8Array[]) => void>();
   #timer: ReturnType<typeof setInterval> | undefined;
@@ -1343,11 +1363,15 @@ export class VaultSession {
         state,
         now,
       });
+      // Until the versions are verified, collection would miss their citations.
+      session.#versionsVerified = false;
       // The purge now; the versions of a purged item go with the pass after verification.
       await session.#run(() => session.#maintenance(), false);
       session.#verified = session.#verifyVersions(versions);
       session.#verified.catch(() => undefined);
       session.#run(() => session.#maintenance()).catch(() => undefined);
+      // Collection waits for the versions: one not yet verified cites nothing known.
+      session.#runCollection().catch(() => undefined);
       session.#startMaintenance();
       return session;
     } catch (error) {
@@ -2901,15 +2925,19 @@ export class VaultSession {
 
   // --- item operations -------------------------------------------------------------------------
 
-  /** A new item at the given folder or the vault root; returns its ID. No history. */
-  createItem(input: ItemInput): Promise<Uint8Array> {
+  /**
+   * A new item at the given folder or the vault root; returns its ID. No history. `blobs` are the
+   * blobs of its new attachments, written in the same commit (attachments.md §4).
+   */
+  createItem(input: ItemInput, blobs: readonly StoredBlob[] = []): Promise<Uint8Array> {
     return this.#run(() => {
       if (input.folderId) this.#target(input.folderId);
       const content = itemToCbor(liveItem(input, input.folderId), false);
       checkCap(content);
+      checkBlobs(content, blobs);
       const id = randomId();
       const write = this.#seal(RecordType.item, id, this.#clock.issue(), false, content);
-      return { writes: [write], deletes: [], result: id.slice() };
+      return { writes: [write], deletes: [], result: id.slice(), blobs };
     });
   }
 
@@ -2944,9 +2972,14 @@ export class VaultSession {
 
   /**
    * Edits or moves an item: its previous state becomes an Item Version (D6). Unchanged content
-   * writes nothing and returns false (D165).
+   * writes nothing and returns false (D165). `blobs` are the blobs of its new attachments, written
+   * in the same commit (attachments.md §4).
    */
-  updateItem(id: Uint8Array, input: ItemInput): Promise<boolean> {
+  updateItem(
+    id: Uint8Array,
+    input: ItemInput,
+    blobs: readonly StoredBlob[] = [],
+  ): Promise<boolean> {
     return this.#run(() => {
       const held = this.#editable(id, false);
       const current = held.reading.item.folderId;
@@ -2954,8 +2987,9 @@ export class VaultSession {
         this.#target(input.folderId);
       }
       const content = itemToCbor(liveItem(input, input.folderId), false);
+      checkBlobs(content, blobs);
       if (sameContent(content, held.content)) return { writes: [], deletes: [], result: false };
-      return { ...this.#replace(held, content, false), result: true };
+      return { ...this.#replace(held, content, false), result: true, blobs };
     });
   }
 
@@ -3406,6 +3440,7 @@ export class VaultSession {
       );
       for (const hlc of held) this.#clock.receive(hlc);
     }
+    this.#versionsVerified = true;
   }
 
   // --- purge and the history cut ---------------------------------------------------------------
@@ -3554,6 +3589,7 @@ export class VaultSession {
         })),
         delete: plan.deletes,
         localConfig: localConfig.bytes,
+        ...(plan.blobs && plan.blobs.length > 0 ? { putBlobs: plan.blobs } : {}),
       });
       this.#unlocked();
       this.#localState = localConfig.localState;
@@ -3564,10 +3600,53 @@ export class VaultSession {
       if (this.#clock.issued !== issued && plan.writes.length > 0) {
         for (const watcher of this.#watchers) watcher(plan.writes.map((w) => w.envelope.slice()));
       }
+      // Any commit of records can drop a last citation: the purge, the history cut, a merge, an
+      // edit. A failed collection leaves the blobs for the next one.
+      if (plan.writes.length > 0 || plan.deletes.length > 0) {
+        await this.#collect().catch(() => undefined);
+      }
       return plan.result;
     });
     this.#queue = task.catch(() => undefined);
     return task;
+  }
+
+  /** Blob collection on its own, after the operations queued before it. */
+  #runCollection(): Promise<void> {
+    const task = this.#queue.then(async () => {
+      await this.#verified;
+      await this.#collect();
+    });
+    this.#queue = task.catch(() => undefined);
+    return task;
+  }
+
+  /**
+   * Blob collection (attachments.md §5): deletes every held blob that no held record cites, an
+   * Item (live, trashed, or a tombstone that still holds content) or an Item Version. Runs inside
+   * the queue, so no commit lands between reading the citations and the deletion. Waits for the
+   * Item Versions to be verified, and does nothing while an Item or an Item Version is kept aside
+   * as corrupt, whose citations are unknown.
+   */
+  async #collect(): Promise<void> {
+    if (this.#locked || !this.#versionsVerified) return;
+    const unknown = this.#state.corrupt.some(
+      (k) => k.recordType === RecordType.item || k.recordType === RecordType.itemVersion,
+    );
+    if (unknown) return;
+    // Read before the store: a lock empties the state, which would then cite nothing.
+    const cited = new Set<string>();
+    for (const item of this.#state.items.values()) {
+      for (const id of citedBlobIds(item.content)) cited.add(idKey(id));
+    }
+    for (const versions of this.#state.versions.values()) {
+      for (const v of versions.values()) for (const id of v.blobIds) cited.add(idKey(id));
+    }
+    const held = await this.#store.blobIds();
+    // A lock while reading: nothing is written after it.
+    this.#unlocked();
+    const uncited = held.filter((id) => !cited.has(idKey(id)));
+    if (uncited.length > 0) await this.#store.deleteBlobs(uncited);
   }
 
   #apply(w: Write): void {
@@ -3587,7 +3666,7 @@ export class VaultSession {
         });
         break;
       case RecordType.itemVersion:
-        addVersion(this.#state, h, itemIdOf(content));
+        addVersion(this.#state, h, itemIdOf(content), versionBlobIds(content));
         break;
       case RecordType.folder:
         this.#state.folders.set(key, {
@@ -3676,6 +3755,14 @@ function headerKey(h: RecordHeader): RecordKey {
 
 function copyKey(k: RecordKey): RecordKey {
   return { recordType: k.recordType, recordId: k.recordId.slice() };
+}
+
+/** Every blob saved with an item is one its content cites: no blob is written to be collected. */
+function checkBlobs(content: CborMap, blobs: readonly StoredBlob[]): void {
+  const cited = new Set(citedBlobIds(content).map(idKey));
+  if (blobs.some((b) => !cited.has(idKey(b.blobId)))) {
+    throw new ContentInvalidError('attachment blob');
+  }
 }
 
 /** The item cap (D139): refused before any HLC is issued. */
