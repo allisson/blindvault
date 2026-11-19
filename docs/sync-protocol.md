@@ -6,6 +6,8 @@ pairing and a re-admission run after their handshake (`pairing-protocol.md`, Pha
 Sections 3 to 14 are the sync session of two registered devices (Phase 5, D12, D17, D213): the
 reconnection payload, the `Noise_KK` handshake, summaries, the transfer of divergent records and
 the live session. They reuse the transfer messages of section 2.1 and the merge rules of section 1.
+Section 10.1, the blob phase, carries attachment blobs after the records, in a sync and in an
+admission (`attachments.md`, D278, D279). This is protocol version 2.
 
 The overview prevails over this document (sections 9.2 and 10). Record identities, headers and
 verification on receipt are in `crypto-spec.md`.
@@ -126,7 +128,7 @@ merge sync of a re-admission (§8.4).
 
 ### 2.1 Messages
 
-Each message has the keys `v` (1) and `t` of `pairing-protocol.md` §10.2, plus:
+Each message has the keys `v` (2) and `t` of `pairing-protocol.md` §10.2, plus:
 
 | `t` | Keys | Meaning |
 | --- | --- | --- |
@@ -201,7 +203,7 @@ and not its own, so the user cannot pick a device `openSync` would refuse. The p
 ### 4.1 Bytes
 
 The payload as shown or pasted is `u8 version ‖ m`, encoded in base45 like the pairing payload
-(`pairing-protocol.md` §3.4), where `version` is **1** and `m` is one `Noise_K` handshake message
+(`pairing-protocol.md` §3.4), where `version` is **2** and `m` is one `Noise_K` handshake message
 (section 4.2). Nothing else is in the clear: no `deviceId`, no address (D117, D213).
 
 The plaintext of `m` is exactly these fields, in this order, with the encodings of
@@ -227,7 +229,7 @@ and a record of an unknown format or type is rejected one by one (section 9, D68
   responder, whatever their session roles: I's payload is sent by I to R, R's by R to I.
 - Static keys: the sender's own identity, and the receiver's public key from the receiver's Device
   record the sender holds.
-- Prologue: `prologue_K = layout("bv.reconnect.v1", vaultId, role)` (`crypto-spec.md` §13), where
+- Prologue: `prologue_K = layout("bv.reconnect.v2", vaultId, role)` (`crypto-spec.md` §13), where
   `role` is the sender's session role as the label `"initiator"` (I) or `"responder"` (R). Binding the role keeps I's
   payload from being given back to I as R's; binding `vaultId` keeps a payload to one vault.
 - The plaintext of section 4.1 is the message payload. The ephemeral key is new for each payload.
@@ -241,7 +243,8 @@ The receiver removes line breaks and tabs, decodes base45 strictly, and refuses 
 any connection and with nothing sent, when:
 
 - the text is empty or not base45 (`malformed`);
-- `version` is not 1 (`version`): the UI asks to update the app;
+- `version` is not 2 (`version`): the UI asks to update the app, or to update the other device's
+  when it is lower;
 - `m` is shorter than 133 bytes or longer than 762, the plaintext bounds of section 4.1 (85 to 714
   bytes) plus the ephemeral key and the tag (`malformed`), checked before any decryption, so a
   text cut short is not reported as a code from another device (D214);
@@ -485,7 +488,8 @@ While the session is open (§9.1):
   sends no acknowledgement; then it runs the check of section 6 again (D220), and a merge that
   retired its own Device record ends the session (D69);
 - purge is local and sends nothing (D7), and the history cut sends nothing, since each device cuts
-  the same versions.
+  the same versions;
+- blobs travel in the blob phase of section 10.1, never inside a transfer.
 
 The session stays open while the user leaves Settings, until it ends as section 12 says (D225).
 
@@ -500,11 +504,61 @@ sync's summaries resend what is missing.
 
 A device whose peer's Device record becomes retired during the session follows section 6 (D69).
 
+### 10.1 Blobs (D278, D279)
+
+An attachment's blob (`attachments.md` §2) is not a record: it has no header, no summary entry
+and no merge. A device asks for the blobs it lacks and the peer sends them, one at a time.
+
+**Asking.** A device **lacks** a blob when a record it holds cites its `blobId`
+(`attachments.md` §5) and it holds no blob of that `blobId`. It sends `blobs-want` with the
+`blobId`s it lacks, in messages of 1 to 16,384 IDs, and none when it lacks nothing:
+
+- in a sync, once it has sent its `committed` and received the peer's, after the Item Version pass
+  of D277, and again after each live transfer it merges, for the IDs it has not yet asked for in
+  this session;
+- in a pairing, B after its `committed`; in a re-admission, both sides after their `committed`
+  (`pairing-protocol.md` §8 and §9). In an admission the wants end with `blobs-end`, so the peer
+  knows no more will come.
+
+An ID is asked for at most once per session. One the peer answers with `blob-missing`, or one
+rejected below, is asked for again at the next session.
+
+**Answering.** The device answers every ID of every `blobs-want` it receives, in the order received,
+each with one unit:
+
+- `blob-begin` with the `blobId` and the blob's length, then the blob in `blob-chunk` messages of
+  exactly 1,048,576 bytes each but the last, which holds 1 to 1,048,576 bytes, then `blob-end`; or
+- `blob-missing` with the `blobId`, when it holds no such blob.
+
+Before sending, it reads the blob from storage and checks its length and its hash; a held blob that
+fails either is deleted and answered with `blob-missing`. Units and transfers leave one at a time,
+in the order they are queued, so the messages of two never interleave, and each passes the check of
+section 6: nothing is sent to a retired peer but its record (CRYPTO-INV-015).
+
+**Receiving.** The receiver expects the answers in the order of its IDs. It aborts
+(`protocol-error`) on an answer for any other ID, a length outside 42 to 10,488,521, a chunk that is
+not full before the last, chunks that run past the length, a `blob-end` before the length is
+reached, or a `blob-chunk` or `blob-end` outside a unit. At `blob-end` it computes the BLAKE2b-256
+of the received bytes:
+
+- equal to the `blobId`: the blob is written in its own storage transaction, unless already held;
+- different: the blob is rejected and reported, naming the items that cite it, like a rejected
+  record (section 9); the session goes on.
+
+A unit cut by the end of the session is dropped: no partial blob is written. The receiver holds one
+blob in memory at a time.
+
+**Ending.** A sync's blob phase has no end of its own: it runs inside the live session. A pairing
+ends once B has received the answer to every ID it asked for; A answers until then. A re-admission
+ends, on each side, once it has received the answer to every ID it asked for and, after the peer's
+`blobs-end`, sent the answer to every ID the peer asked for. The connection closes once the last
+message had time to leave.
+
 ## 11. Messages
 
 ### 11.1 Types
 
-Every message has `v` (uint, **1**) and `t` (text), framed as in `pairing-protocol.md` §10.1. Its
+Every message has `v` (uint, **2**) and `t` (text), framed as in `pairing-protocol.md` §10.1. Its
 other keys are exactly those listed:
 
 | `t` | Keys | Sent by |
@@ -515,13 +569,20 @@ other keys are exactly those listed:
 | `records-begin`, `record`, `records-end` | section 2.1 | both (sections 9 and 10) |
 | `committed` | — | both, once (section 9) |
 | `retired` | `r`: bstr, one record envelope | a device whose copy of the peer's record is retired (section 6) |
+| `blobs-want` | `ids`: array of 1 to 16,384 bstr 32 | both (section 10.1) |
+| `blobs-end` | — | B in a pairing, both in a re-admission (section 10.1) |
+| `blob-begin` | `id`: bstr 32, `size`: uint, 42 to 10,488,521 | the device asked (section 10.1) |
+| `blob-chunk` | `c`: bstr, 1 to 1,048,576 | the device asked (section 10.1) |
+| `blob-end` | — | the device asked (section 10.1) |
+| `blob-missing` | `id`: bstr 32 | the device asked (section 10.1) |
 | `abort` | `reason`: text | either, at any time |
 
-A message whose `v` is not 1 aborts (`version`). An unknown `t`, a missing or extra key, a wrong
+A message whose `v` is not 2 aborts (`version`). An unknown `t`, a missing or extra key, a wrong
 type or length, or a message out of the order of sections 6 to 10 aborts (`protocol-error`): no
 `records-begin` before the peer's `summary-end` has been received by the sender, no second
 `summary-begin`, no second `committed`, no transfer of section 10 before the sender's `committed`,
-nothing but a transfer of section 10 or `retired` after it.
+nothing but a transfer of section 10, a message of section 10.1 or `retired` after it, no
+`blobs-want` before the sender's `committed`.
 
 ### 11.2 Abort
 
@@ -582,13 +643,15 @@ with `ended`, a lock sends `locked`, and the connection closes once the `abort` 
 
 | Layer | Version | Unknown value |
 | --- | --- | --- |
-| Reconnection payload | `version` byte, 1 | refused before the connection; the UI asks to update the app |
-| `Noise_K` prologue | label `bv.reconnect.v1` | the payload does not decrypt (`not-from-peer`) |
-| `Noise_KK` prologue | label `bv.sync.v1` | the handshake fails |
-| Messages | `v`, 1 | `abort` with `version` |
+| Reconnection payload | `version` byte, 2 | refused before the connection; the UI asks to update the app |
+| `Noise_K` prologue | label `bv.reconnect.v2` | the payload does not decrypt (`not-from-peer`) |
+| `Noise_KK` prologue | label `bv.sync.v2` | the handshake fails |
+| Messages | `v`, 2 | `abort` with `version` |
 
 A change to the payload, the messages or the send rules of section 8 takes a new payload
-`version` and new prologue labels. Records keep their own `recordFormatVersion`, which a protocol
+`version` and new prologue labels. Version 2 added the blob phase of section 10.1 (D279), with no
+fallback: a device of version 1 is refused at the payload and told to update, whichever side is
+older. Records keep their own `recordFormatVersion`, which a protocol
 version never changes (D32).
 
 ## 14. Invariants and tests
@@ -603,7 +666,8 @@ version never changes (D32).
   that opens as the only one taken (section 4.4).
 
 Gate D covers this document. The payload vectors (plaintext, `Noise_K` message under fixed keys and
-ephemeral, base45) and the summary and message vectors go to `packages/sync/test-vectors/sync-v1.json`,
+ephemeral, base45) and the summary and message vectors go to `packages/sync/test-vectors/sync-v2.json`,
+with the blob messages at their bounds,
 and `prologue_K` and one `Noise_K` message to the `transcripts` section of
 `packages/crypto/test-vectors/crypto-v1.json`, from a second `Noise_K` in `tests/vectors/generate.py`
 checked against the official vectors (D214).
@@ -612,4 +676,7 @@ role, of an old session, and a bad version; a `Noise_KK` with a key other than t
 a retired peer on each side, at the handshake and during the live session; summaries with a wrong
 `count`, a duplicate identity and an entry out of range; the send rules of section 8, including a
 forged newer non-retired Device record; messages out of order and repeated records; a lock and a
-closed link at each step, leaving every committed merge whole and nothing half-written.
+closed link at each step, leaving every committed merge whole and nothing half-written; and the
+blob phase of section 10.1: a blob that does not match its `blobId` rejected while the session goes
+on, an unasked or out-of-order answer, a length out of range, a short chunk and chunks past the
+length aborting, a unit cut by the end of the session leaving no blob.

@@ -3,7 +3,8 @@
 > Normative for the content of every record and of Local Config; `overview.md` prevails on design.
 > Implements overview §6 and D165, and completes `crypto-spec.md` §9.3 and §12, which fix the
 > envelope, padding, caps and encryption around this content. Record format version 1: changing
-> anything here is a record format change (D32).
+> anything here is a record format change (D32), except a new field type, which an older app reads
+> as content from a newer version (section 2) under the same version, as `attachment` does (D278).
 
 ## 1. Conventions
 
@@ -34,7 +35,7 @@ An Item or Item Version holds **content from a newer app version** when any of t
 
 1. its item map has a key not listed in section 3;
 2. a field has a `type` not listed in section 4;
-3. a field map, or a TOTP value map, has a key not listed for it;
+3. a field map, or a TOTP or attachment value map, has a key not listed for it;
 4. a field has a `role` that the item's `templateId` and `templateVersion` do not define;
 5. `templateId` is unknown, or `templateVersion` is greater than the one the app knows;
 6. a value fails the validation of its known key or type.
@@ -81,7 +82,8 @@ receipt. A held record that fails it is shown as corrupt and is not written.
 | `label` | text, optional | single-line, trimmed, 1 to 128 code points |
 
 - A field with a `role` has that role's field type, and an item holds each role at most once.
-- A field without a `role`, one the user added, MUST have a `label`.
+- A field without a `role`, one the user added, MUST have a `label`, except an `attachment` field,
+  whose `label` is optional: the viewer shows its `name` without one (D278).
 - A field with a `role` and no `label` is shown with the role's localized name, so a template
   field reads in the viewer's language. A `label` is always the user's own text.
 - An empty value is never stored: a field the user leaves empty, or clears, is not written.
@@ -98,6 +100,7 @@ receipt. A held record that fails it is shown as corrupt and is not written.
 | `number` | text | a decimal numeral: `-?[0-9]+(\.[0-9]+)?`, leading zeros kept |
 | `totp` | map | below |
 | `seed-phrase` | text | below |
+| `attachment` | map | below; never has a `role` (D278) |
 
 Every text value is at least 1 code point. `email` and `phone` are not checked further, since
 real values vary too much to reject any.
@@ -123,11 +126,25 @@ An invalid BIP39 checksum is **not** a validation failure: the value is stored a
 that the checksum does not match, since the user's own copy, typo included, is the best one there
 is. A seed phrase is unrelated to the Recovery Phrase.
 
+**Attachment value (D273, D278).** The file's metadata and its blob's identity and key; the blob
+is in `attachments.md`.
+
+| Key | Type | Rule |
+| --- | --- | --- |
+| `name` | text | single-line, 1 to 255 code points; not trimmed, the file's own name |
+| `size` | uint | 1 to 10,485,760: the file's length in bytes |
+| `mediaType` | text | 1 to 255 characters, each U+0021 to U+007E |
+| `blobId` | bytes, 32 | BLAKE2b-256 of the blob as stored |
+| `key` | bytes, 32 | the blob's `secretstream` key |
+
+The map holds exactly these keys. `name` and `mediaType` are set when the file is added
+(`attachments.md` §3) and never edited; replacing the file adds a new attachment.
+
 ## 5. Factory templates (D20, D165)
 
 Templates are definitions in code. A template sets the fields a new item starts with; the item can
-then hold fields beyond them, each of a v1 field type (D124). Every template is at
-`templateVersion` 1.
+then hold fields beyond them, each of a v1 field type (D124), attachments included: no template
+defines an `attachment` role (D278). Every template is at `templateVersion` 1.
 
 | `templateId` | Field roles (field type) |
 | --- | --- |
@@ -222,7 +239,7 @@ Every case is the CBOR of one content map with its expected result:
 
 | Section | Cases | Expected |
 | --- | --- | --- |
-| `items` | each template, every field type, length limits counted in code points (astral characters), and one case per violation, tagged with its section 2 rule | `valid`, or `read-only` with `rule` |
+| `items` | each template, every field type, length limits counted in code points (astral characters), and one case per violation, tagged with its section 2 rule; `attachment` with and without `label`, at `size` 1 and 10,485,760, and refused at `size` 0 and 10,485,761, with a 31-byte `blobId`, an extra key, a `role`, a line break in `name` and a `mediaType` outside U+0021 to U+007E | `valid`, or `read-only` with `rule` |
 | `itemVersions` | `{item, itemId}` of a live and a trashed state, and of a newer template | `valid` or `read-only` |
 | `folders`, `devices` | valid records, unknown keys to keep (`unknownKeys`), invalid known values | `valid` or `invalid` |
 | `localConfig` | cleartext part, with and without PRF state and `replacesVaultId` | `valid`, `corrupt` or `unsupported-version` |

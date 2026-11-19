@@ -1,9 +1,11 @@
-# BlindVault — Backup Format v1
+# BlindVault — Backup Format v2
 
 > Normative for the bytes of a `.bvault` file; `overview.md` prevails on design. Implements
-> overview §10 and D3, D16, D43, D64, D78, D95, D178 and D181, using the conventions, primitives and
-> encodings of `crypto-spec.md` (§1, §2, §3, §6, §14). Backup format version 1.
-> Test vectors: `packages/backup/test-vectors/backup-v1.json` (section 9).
+> overview §10 and D3, D16, D43, D64, D78, D95, D178, D181, D273, D278 and D279, using the
+> conventions, primitives and encodings of `crypto-spec.md` (§1, §2, §3, §6, §14). Backup format
+> version 2, which adds attachment blobs (`attachments.md`); an export writes version 2, and a
+> restore reads versions 1 and 2. Test vectors: `packages/backup/test-vectors/backup-v2.json` and,
+> for version 1, `backup-v1.json` (section 9).
 
 ## 1. Overview
 
@@ -11,8 +13,10 @@
 file    = header ‖ stream
 header  = magic ‖ u16 formatVersion ‖ u32 headerLength ‖ CBOR(headerMap)
 stream  = secretstream chunks of the payload, under the file key
-payload = u32 len ‖ CBOR(meta) ‖ (u32 len ‖ record envelope) × recordCount
+payload = u32 len ‖ CBOR(meta) ‖ (u32 len ‖ record envelope) × recordCount ‖ (u32 len ‖ blob) × blobCount
 ```
+
+Version 1 has no `blobCount` and no blobs; everything else is the same.
 
 - A random 32-byte **file key** encrypts the payload with
   `crypto_secretstream_xchacha20poly1305`. Each keyslot wraps the file key (D3).
@@ -30,7 +34,7 @@ payload = u32 len ‖ CBOR(meta) ‖ (u32 len ‖ record envelope) × recordCoun
 | Field | Size | Value |
 | --- | --- | --- |
 | `magic` | 8 | `89 42 56 41 55 4c 54 0a` (`\x89BVAULT\n`) |
-| `formatVersion` | 2 | `u16`, **1** |
+| `formatVersion` | 2 | `u16`, **2**; **1** still read |
 | `headerLength` | 4 | `u32`, length of `CBOR(headerMap)`, 1 to 4,096 |
 | `headerMap` | `headerLength` | deterministic CBOR map, below |
 
@@ -48,7 +52,7 @@ transfer fail the magic check.
 
 `phraseId` and `phraseCreatedAt` are the only values shown before a keyslot opens, to choose one;
 the UI marks them unverified until the stream's first chunk authenticates the header (D95).
-`vaultId`, the export date and the record count are inside the payload.
+`vaultId`, the export date and the record and blob counts are inside the payload.
 
 ## 3. Keyslots
 
@@ -131,10 +135,18 @@ m       = CBOR(meta),   1 ≤ len(m) ≤ 256
 ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(ei) ≤ 1,049,130
 ```
 
+followed, in version 2, by
+
+```
+‖ u32 len(b1) ‖ b1 ‖ … ‖ u32 len(bM) ‖ bM
+bj      = a blob exactly as stored (attachments.md §2),   42 ≤ len(bj) ≤ 10,488,521
+```
+
 `meta` has exactly these keys, decoded strictly:
 
 | Key | CBOR type | Value |
 | --- | --- | --- |
+| `blobCount` | uint | `M`, the number of blobs after the envelopes; version 2 only |
 | `exportedAt` | uint | export time, Unix ms |
 | `masterKey` | bstr, 32 | the Master Key (D25) |
 | `recordCount` | uint | `N`, the number of envelopes that follow |
@@ -143,18 +155,28 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
 - The envelopes are every record the device holds, of every type: Items, Item Versions, Folders,
   tombstones, Vault Keys, Device records and the Recovery Envelope. Local Config and the device
   identity are local and are not exported.
-- The payload ends exactly after `eN`: fewer envelopes than `recordCount`, a length out of range, a
-  length that runs past the payload, or any byte after `eN` is rejected.
+- The blobs are every blob the device holds (`attachments.md` §4), each once, in any order. Two
+  blobs with the same BLAKE2b-256 are rejected.
+- The payload ends exactly after `eN` (version 1) or `bM` (version 2): fewer envelopes than
+  `recordCount` or blobs than `blobCount`, a length out of range, a length that runs past the
+  payload, or any byte after the last one is rejected.
 - The length prefixes are inside the stream and reveal nothing outside it.
-- A restore pulls the whole stream, through the final chunk, before it parses anything, then reads
-  the envelopes one by one, never decoding the payload as one CBOR value (D266).
+- A restore reads the file in two passes (D278), never decoding the payload as one CBOR value. The
+  **first** pulls the whole stream through the final chunk and parses the payload's structure as
+  it goes, the lengths, the counts and the end, hashing each blob, and keeps only the list of
+  `blobId`s. The **second** pulls the stream again from the start and decodes it chunk by chunk:
+  `meta` and the envelopes are kept for section 8, and each blob is read when section 8 step 11
+  reaches it. Neither pass holds the whole payload; the largest single item held is one blob.
+- An export builds the file as the parts of a `Blob`: the header, then each encrypted chunk as it
+  is pushed, the blobs read from storage one at a time. It never builds the file as one buffer.
 
 ## 7. Versions and unknown content
 
 - A wrong `magic` is rejected as not a BlindVault backup; `formatVersion` 0 likewise.
-- A `formatVersion` above 1 is rejected before anything else is read: the backup needs a newer app.
-- Format v1 is strict: an unknown key in `headerMap`, a keyslot or `meta` is rejected. Any
-  extension is a new `formatVersion`.
+- A `formatVersion` above 2 is rejected before anything else is read: the backup needs a newer app.
+- Each version is strict: an unknown key in `headerMap`, a keyslot or `meta` is rejected, and so is
+  `blobCount` in a version-1 `meta` or its absence in a version-2 one. Any extension is a new
+  `formatVersion`.
 - Unknown content inside records is untouched: envelopes travel as stored, so a newer app's content
   keys survive an export and a restore (D98). A record with an unknown `recordFormatVersion` or
   `recordType` rejects the whole restore (D61, D81) as needing a newer app: a `v` above 1, or `v`
@@ -176,7 +198,10 @@ ei      = a record envelope exactly as stored (crypto-spec §9.2),   1 ≤ len(e
    a vault without one cannot export (D179).
 4. Generate the file key; build the recovery keyslot and, with an export password, the password
    keyslot at the export parameters of section 4.
-5. Encode the header, then stream the payload.
+5. Encode the header, then stream the payload, envelopes then blobs, as the parts of a `Blob`
+   (section 6). Before it starts, it waits for the Item Version pass (D277); an attachment whose
+   blob is not held does not stop the export, which warns, naming each such item, that the backup
+   lacks its attachment (D279).
 6. Wipe the Master Key, the file key and the KEKs. Record the date of the last backup in Local
    Config (§13.4) once the file is made, since the app cannot know whether it was saved.
 
@@ -190,9 +215,13 @@ rejection names its reason (in parentheses):
    Recovery keyslot: parse the phrase (`crypto-spec.md` §5.1), derive the key pair and open `c`.
    A wrong secret and a tampered keyslot fail with the same error, which says only that the file
    did not open with that secret (`wrong-secret`).
-4. Pull the stream (section 5); the first chunk authenticates the header, after which `phraseId`,
-   `phraseCreatedAt` and the keyslot parameters count as verified (`corrupt`).
-5. Decode `meta` and the envelopes (section 6) (`malformed`).
+4. First pass (section 6): pull the stream (section 5); the first chunk authenticates the header,
+   after which `phraseId`, `phraseCreatedAt` and the keyslot parameters count as verified
+   (`corrupt`). The payload's structure is checked as it goes, a repeated blob included
+   (`malformed`).
+5. Second pass: pull the stream again and decode `meta` and the envelopes (section 6). A chunk that
+   no longer authenticates, or a payload that differs from the first pass, means the file changed
+   between the passes (`corrupt`).
 6. Verify every record as on receipt (`crypto-spec.md` §9.5) under `meta.vaultId`, with
    `K_vaultKeyWrap` and `K_versionId` derived from `meta.masterKey`: the Vault Key records first,
    since every other record needs the Vault Key of its epoch.
@@ -218,25 +247,37 @@ rejection names its reason (in parentheses):
    backup merge follows `sync-protocol.md` §1 (D182).
 10. Wipe the file key, the KEK, the phrase-derived keys, the Vault Keys and subkeys used in step 6
     and, unless the restore committed, the Master Key.
+11. Version 2, once step 9 committed: read the blobs (second pass) one at a time. A blob whose
+    `blobId` a committed record cites and that the device lacks is written in its own transaction;
+    any other is dropped (D278, D279). A chunk that fails here, the file having changed after the
+    first pass, stops the reading: the committed records stay, the blobs not yet written show as
+    waiting for sync, and the result says so. The result also names each item whose attachment's
+    blob was not in the file.
 
 Steps 3 to 8 run in `packages/backup` and return the `vaultId`, the export date, the Master Key,
-every envelope with its `recordType` and `recordId`, exactly as in the file, and whether the
-phrase or an export password opened it. Nothing is written before step 9.
+every envelope with its `recordType` and `recordId`, exactly as in the file, whether the phrase or
+an export password opened it, and, in version 2, the `blobId`s of the file and a reader of its
+blobs in order. Nothing is written before step 9, and no blob before the records commit.
 
 ## 9. Test vectors
 
-`tests/vectors/generate.py` writes `packages/backup/test-vectors/backup-v1.json` with PyNaCl
+`tests/vectors/generate.py` writes `packages/backup/test-vectors/backup-v2.json`, and keeps
+`backup-v1.json` for version 1, with PyNaCl
 (`crypto_secretstream_xchacha20poly1305_*`, `crypto_box_seal`, Argon2id), independently of the
 TypeScript code (`crypto-spec.md` §15). `crypto_box_seal` and `init_push` draw their own randomness,
 so the vectors are whole files that `packages/backup` MUST open, and files it MUST reject, each
 tagged with the restore step of section 8 that rejects it:
 
 - valid: opened by the recovery keyslot and by the password keyslot; a payload whose length is an
-  exact multiple of 65,536 (empty final chunk); a payload of more than one chunk;
-- rejected: wrong magic; `formatVersion` 0 and 2; unknown header key; three keyslots; password
+  exact multiple of 65,536 (empty final chunk); a payload of more than one chunk; in version 2, no
+  blob, a blob cited by an Item and one cited only by an Item Version, a blob no record cites (kept
+  by the reader, dropped by step 11) and a blob of more than one chunk;
+- rejected: wrong magic; `formatVersion` 0; unknown header key; three keyslots; password
   keyslot first; parameters below and above the range; header byte changed; keyslot byte changed;
   truncated before `TAG_FINAL`; bytes after `TAG_FINAL`; `TAG_FINAL` on an earlier chunk;
-  `recordCount` too high and too low; trailing payload byte;
+  `recordCount` too high and too low; trailing payload byte; in version 2, `formatVersion` 3,
+  `blobCount` absent, `blobCount` too high and too low, a blob length of 41 and 10,488,522, and the
+  same blob twice; in version 1, `blobCount` present;
 - rejected by the restore checks of section 8, each opened with the phrase and with the export
   password: a record with `recordFormatVersion` 2 and one with an unknown `recordType` (step 6,
   `newer-record`); a record whose `ct` does not authenticate, a record of an epoch without its Vault
