@@ -1,13 +1,18 @@
 // The vault database (architecture.md "IndexedDB layout", D79, D82, D158): `blindvault-<vaultId>`
-// with two object stores, `records` keyed by `[recordType, recordId]` and `localConfig`, written in
-// one transaction. Only sealed records and Local Config come in, and only Item Versions go out: a
-// tombstone is never removed (CRYPTO-INV-013, D224).
+// with three object stores, `records` keyed by `[recordType, recordId]`, `localConfig`, written in
+// one transaction, and `blobs` keyed by `blobId` (attachments.md §4). Only sealed records, Local
+// Config and blobs that hash to their `blobId` come in, and only Item Versions go out of `records`:
+// a tombstone is never removed (CRYPTO-INV-013, D224).
 
 import {
+  BLOB_ID_LENGTH,
   type EncryptedRecord,
   ID_LENGTH,
+  MAX_BLOB_LENGTH,
+  MIN_BLOB_LENGTH,
   type RecordEnvelope,
   RecordType,
+  blobMatches,
   decodeEnvelope,
 } from '@blindvault/crypto';
 
@@ -16,6 +21,7 @@ import { StorageClosedError, StorageRejectedError, UnsupportedSchemaError } from
 export const DATABASE_PREFIX = 'blindvault-';
 const RECORDS = 'records';
 const LOCAL_CONFIG = 'localConfig';
+const BLOBS = 'blobs';
 /** The key of the one Local Config value in its object store. */
 const LOCAL_CONFIG_KEY = 'localConfig';
 
@@ -28,6 +34,10 @@ export const MIGRATIONS: readonly Migration[] = [
     db.createObjectStore(RECORDS);
     db.createObjectStore(LOCAL_CONFIG);
   },
+  // Attachments (D278): blobs keyed by `blobId`, with no data to migrate.
+  (db) => {
+    db.createObjectStore(BLOBS);
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
@@ -38,14 +48,23 @@ export interface StorageKey {
   readonly recordId: Uint8Array;
 }
 
+/** An attachment's blob as written, named by the BLAKE2b-256 of its bytes (attachments.md §2). */
+export interface StoredBlob {
+  readonly blobId: Uint8Array;
+  readonly blob: Uint8Array;
+}
+
 /** One atomic write: records put and deleted, and the whole new Local Config (D62, D82). */
 export interface StorageCommit {
   readonly put: readonly EncryptedRecord[];
   readonly delete: readonly StorageKey[];
   readonly localConfig: Uint8Array;
+  /** The blobs of new attachments, written with their items (attachments.md §4). */
+  readonly putBlobs?: readonly StoredBlob[];
   /**
-   * Clears every record and the Local Config first, in the same transaction: a vault replaced by
-   * one of the same `vaultId`, which cannot be built in a second database of the same name (D153).
+   * Clears every record, blob and the Local Config first, in the same transaction: a vault
+   * replaced by one of the same `vaultId`, which cannot be built in a second database of the same
+   * name (D153).
    */
   readonly clear?: boolean;
 }
@@ -155,7 +174,26 @@ function checkRecord(record: EncryptedRecord): void {
   }
 }
 
-/** The records and Local Config of one vault, in its own database. */
+function checkBlobId(blobId: Uint8Array): void {
+  if (!(blobId instanceof Uint8Array) || blobId.length !== BLOB_ID_LENGTH) {
+    throw new StorageRejectedError('a blobId is 32 bytes');
+  }
+}
+
+/** A blob is checked by its length and hash only: storage never decrypts one. */
+function checkBlob({ blobId, blob }: StoredBlob): void {
+  checkBlobId(blobId);
+  if (
+    !(blob instanceof Uint8Array) ||
+    blob.length < MIN_BLOB_LENGTH ||
+    blob.length > MAX_BLOB_LENGTH
+  ) {
+    throw new StorageRejectedError('blob length out of range');
+  }
+  if (!blobMatches(blob, blobId)) throw new StorageRejectedError('blob does not match its blobId');
+}
+
+/** The records, Local Config and blobs of one vault, in its own database. */
 export class VaultDatabase {
   readonly #db: IDBDatabase;
   #closed = false;
@@ -183,9 +221,12 @@ export class VaultDatabase {
     }
   }
 
-  #transaction(mode: IDBTransactionMode): IDBTransaction {
+  #transaction(
+    mode: IDBTransactionMode,
+    stores: string[] = [RECORDS, LOCAL_CONFIG, BLOBS],
+  ): IDBTransaction {
     if (this.#closed) throw new StorageClosedError();
-    return this.#db.transaction([RECORDS, LOCAL_CONFIG], mode, { durability: 'strict' });
+    return this.#db.transaction(stores, mode, { durability: 'strict' });
   }
 
   /**
@@ -252,12 +293,14 @@ export class VaultDatabase {
 
   /**
    * Applies `commit` in one transaction: all of it or none of it. Every record put must be a
-   * sealed envelope whose header matches its key, and every record deleted an Item Version (D224),
-   * both checked before anything is written. With `clear`, the old vault stays whole until the
-   * transaction commits (D153).
+   * sealed envelope whose header matches its key, every record deleted an Item Version (D224) and
+   * every blob put in range and hashing to its `blobId`, all checked before anything is written.
+   * With `clear`, the old vault stays whole until the transaction commits (D153).
    */
   async commit(commit: StorageCommit): Promise<void> {
     commit.put.forEach(checkRecord);
+    const blobs = commit.putBlobs ?? [];
+    blobs.forEach(checkBlob);
     for (const d of commit.delete) {
       if (d.recordType !== RecordType.itemVersion) {
         throw new StorageRejectedError('only an Item Version is ever deleted');
@@ -273,9 +316,11 @@ export class VaultDatabase {
       if (commit.clear) {
         records.clear();
         tx.objectStore(LOCAL_CONFIG).clear();
+        tx.objectStore(BLOBS).clear();
       }
       for (const d of commit.delete) records.delete([d.recordType, own(d.recordId)]);
       for (const p of commit.put) records.put(own(p.envelope), [p.recordType, own(p.recordId)]);
+      for (const b of blobs) tx.objectStore(BLOBS).put(own(b.blob), own(b.blobId).buffer);
       tx.objectStore(LOCAL_CONFIG).put(own(commit.localConfig), LOCAL_CONFIG_KEY);
     } catch (error) {
       // A request that throws leaves the earlier ones queued: abort, or they would commit.
@@ -305,6 +350,55 @@ export class VaultDatabase {
       }
       if (next !== undefined && next.length > 0) store.put(own(next), LOCAL_CONFIG_KEY);
     };
+    await settled(tx);
+  }
+
+  /** The `blobId` of every blob held; a key that is not 32 bytes is skipped. */
+  async blobIds(): Promise<Uint8Array[]> {
+    const tx = this.#transaction('readonly', [BLOBS]);
+    const keys = tx.objectStore(BLOBS).getAllKeys();
+    await settled(tx);
+    return keys.result
+      .filter((k): k is ArrayBuffer => k instanceof ArrayBuffer && k.byteLength === BLOB_ID_LENGTH)
+      .map((k) => new Uint8Array(k));
+  }
+
+  /**
+   * The blob of `blobId`, or `undefined` when none is held; a value that is not bytes comes back
+   * empty, so the download fails as corrupt.
+   */
+  async blob(blobId: Uint8Array): Promise<Uint8Array | undefined> {
+    checkBlobId(blobId);
+    const tx = this.#transaction('readonly', [BLOBS]);
+    const request = tx.objectStore(BLOBS).get(own(blobId).buffer);
+    await settled(tx);
+    const value: unknown = request.result;
+    if (value === undefined) return undefined;
+    return value instanceof Uint8Array ? value : new Uint8Array(0);
+  }
+
+  /**
+   * Writes a received blob in its own transaction, once checked as `commit` checks one; a blob
+   * already held is not written again (attachments.md §4).
+   */
+  async putBlob(blob: StoredBlob): Promise<void> {
+    checkBlob(blob);
+    const tx = this.#transaction('readwrite', [BLOBS]);
+    const store = tx.objectStore(BLOBS);
+    const key = own(blob.blobId).buffer;
+    const held = store.getKey(key);
+    held.onsuccess = () => {
+      if (held.result === undefined) store.put(own(blob.blob), key);
+    };
+    await settled(tx);
+  }
+
+  /** Deletes the blobs of `blobIds` in one transaction; one not held is skipped. */
+  async deleteBlobs(blobIds: readonly Uint8Array[]): Promise<void> {
+    blobIds.forEach(checkBlobId);
+    const tx = this.#transaction('readwrite', [BLOBS]);
+    const store = tx.objectStore(BLOBS);
+    for (const id of blobIds) store.delete(own(id).buffer);
     await settled(tx);
   }
 

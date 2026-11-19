@@ -501,7 +501,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `docs/attachments.md` (D278, D279), with `record-content.md`, `sync-protocol.md`, `pairing-protocol.md` and `backup-format.md` version 2 updated
 - [x] `packages/crypto`: the blob stream
 - [x] `packages/vault`: the `attachment` field type
-- [ ] `packages/storage`: the `blobs` object store
+- [x] `packages/storage`: the `blobs` object store
 - [ ] `packages/vault`: blob collection, on the `blobs` object store
 - [ ] `packages/sync`: protocol version 2 and the blob phase, in sync, pairing and re-admission (D279)
 - [ ] `packages/backup`: format version 2, export in parts, restore in two passes
