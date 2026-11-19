@@ -231,6 +231,26 @@ export class VaultDatabase {
   }
 
   /**
+   * The record of `key`, or `undefined` when none is held; a value that is not bytes comes back
+   * empty, as in `records`, so it fails verification.
+   */
+  async record(key: {
+    readonly recordType: RecordType;
+    readonly recordId: Uint8Array;
+  }): Promise<EncryptedRecord | undefined> {
+    const tx = this.#transaction('readonly');
+    const request = tx.objectStore(RECORDS).get([key.recordType, own(key.recordId)]);
+    await settled(tx);
+    const value: unknown = request.result;
+    if (value === undefined) return undefined;
+    return {
+      recordType: key.recordType,
+      recordId: key.recordId.slice(),
+      envelope: (value instanceof Uint8Array ? value : new Uint8Array(0)) as RecordEnvelope,
+    };
+  }
+
+  /**
    * Applies `commit` in one transaction: all of it or none of it. Every record put must be a
    * sealed envelope whose header matches its key, and every record deleted an Item Version (D224),
    * both checked before anything is written. With `clear`, the old vault stays whole until the

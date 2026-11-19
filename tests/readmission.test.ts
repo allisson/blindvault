@@ -77,6 +77,7 @@ function lazyStore(factory: IDBFactory) {
   let db: VaultDatabase | undefined;
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -280,9 +281,9 @@ async function sync(x: VaultSession, y: VaultSession): Promise<[SyncResult, Sync
   ]);
   const sx = new SyncSession(hx.channel);
   const sy = new SyncSession(hy.channel);
-  const run = (session: SyncSession, grant: typeof gx) =>
+  const run = async (session: SyncSession, grant: typeof gx) =>
     exchange(session, {
-      summary: grant.summary(),
+      summary: await grant.summary(),
       records: (selected) => grant.records(selected),
       merge: (records) => grant.merge(records),
       retired: () => Promise.reject(new Error('no retirement here')),
@@ -321,7 +322,11 @@ async function reopened(device: Device): Promise<VaultSession> {
   opened.push(db);
   const keyring = new Keyring();
   const session = await VaultSession.unlock({
-    store: { records: () => db.records(), commit: (c) => db.commit(c) },
+    store: {
+      records: () => db.records(),
+      record: (key) => db.record(key),
+      commit: (c) => db.commit(c),
+    },
     localConfig: parseLocalConfig((await db.localConfig()) ?? new Uint8Array()),
     keyring,
     kek: kek(keyring, device.seed),

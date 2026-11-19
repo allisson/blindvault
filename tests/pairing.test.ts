@@ -78,6 +78,7 @@ function lazyStore(factory: IDBFactory) {
   let db: VaultDatabase | undefined;
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -408,8 +409,8 @@ describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
     expect(b.items().map((i) => i.item?.title)).toEqual(['Bank, renamed']);
     expect(b.folders().map((f) => f.name)).toEqual(['Work']);
     const [item] = b.items();
-    expect(b.versions(item?.id ?? new Uint8Array())).toHaveLength(
-      a.session.versions(item?.id ?? new Uint8Array()).length,
+    expect(await b.versions(item?.id ?? new Uint8Array())).toHaveLength(
+      (await a.session.versions(item?.id ?? new Uint8Array())).length,
     );
     // Both Device records, on both devices (CRYPTO-INV-007: written by A after the SAS).
     expect(names(a.session)).toEqual(['Chrome on macOS', B_NAME]);
@@ -424,7 +425,11 @@ describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
     const config = await db.localConfig();
     const keyring = new Keyring();
     const again = await VaultSession.unlock({
-      store: { records: () => db.records(), commit: (c) => db.commit(c) },
+      store: {
+        records: () => db.records(),
+        record: (key) => db.record(key),
+        commit: (c) => db.commit(c),
+      },
       localConfig: parseLocalConfig(config ?? new Uint8Array()),
       keyring,
       kek: kek(keyring, 2),

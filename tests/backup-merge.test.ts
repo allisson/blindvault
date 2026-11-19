@@ -78,6 +78,7 @@ function lazyStore(factory: IDBFactory, vaultId?: Uint8Array) {
   let db: VaultDatabase | undefined;
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(
@@ -161,7 +162,11 @@ async function reopen(a: Awaited<ReturnType<typeof deviceA>>) {
   const database = a.database();
   const keyring = new Keyring();
   const session = await VaultSession.unlock({
-    store: { records: () => database.records(), commit: (c) => database.commit(c) },
+    store: {
+      records: () => database.records(),
+      record: (key) => database.record(key),
+      commit: (c) => database.commit(c),
+    },
     localConfig: parseLocalConfig(must(await database.localConfig())),
     keyring,
     kek: kek(keyring, 1),
@@ -195,7 +200,10 @@ describe('backup merge through IndexedDB (Gate B, D13, D182)', () => {
 
       const again = await reopen(a);
       expect(again.item(a.id)?.item?.title).toBe('Bank, edited on B');
-      expect(again.versions(a.id).map((v) => v.item?.title)).toEqual(['Bank, edited on A', 'Bank']);
+      expect((await again.versions(a.id)).map((v) => v.item?.title)).toEqual([
+        'Bank, edited on A',
+        'Bank',
+      ]);
       expect(again.corrupt()).toEqual([]);
       // The winning record is stored as the backup carried it, byte for byte.
       const stored = await a.database().records();

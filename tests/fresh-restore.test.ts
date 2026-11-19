@@ -79,6 +79,7 @@ function lazyStore(factory: IDBFactory, vaultId?: Uint8Array) {
   let db: VaultDatabase | undefined;
   const store: RecordStore = {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(
@@ -188,7 +189,11 @@ describe('fresh restore through IndexedDB (Gate B, D33)', () => {
       session.lock();
       const keyring = new Keyring();
       const again = await VaultSession.unlock({
-        store: { records: () => database.records(), commit: (c) => database.commit(c) },
+        store: {
+          records: () => database.records(),
+          record: (key) => database.record(key),
+          commit: (c) => database.commit(c),
+        },
         localConfig: parseLocalConfig(config),
         keyring,
         kek: kek(keyring, 2),

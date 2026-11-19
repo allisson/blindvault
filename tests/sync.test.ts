@@ -94,6 +94,7 @@ function lazyStore(factory: IDBFactory): RecordStore {
   let db: VaultDatabase | undefined;
   return {
     records: () => (db ? db.records() : Promise.resolve([])),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(parseLocalConfig(commit.localConfig).vaultId, factory);
@@ -183,9 +184,9 @@ async function sync(
   ]);
   const sx = new SyncSession(messages ? recording(hx.channel, messages) : hx.channel);
   const sy = new SyncSession(messages ? recording(hy.channel, messages) : hy.channel);
-  const run = (session: SyncSession, grant: typeof gx) =>
+  const run = async (session: SyncSession, grant: typeof gx) =>
     exchange(session, {
-      summary: grant.summary(),
+      summary: await grant.summary(),
       records: async (selected) =>
         grant === gx ? sent(await grant.records(selected)) : grant.records(selected),
       merge: (records) => grant.merge(records),
@@ -216,12 +217,10 @@ function recording(channel: Transport, sent: Uint8Array[]): Transport {
 }
 
 /** The summary of every synchronized record, comparable across devices. */
-function held(session: VaultSession): string[] {
+async function held(session: VaultSession): Promise<string[]> {
   const peer = session.devices().find((d) => !same(d.deviceId, session.deviceId));
   if (!peer) throw new Error('no peer');
-  return session
-    .openSync(peer.deviceId)
-    .summary()
+  return (await session.openSync(peer.deviceId).summary())
     .map((e) =>
       JSON.stringify([
         e.recordType,
@@ -245,8 +244,8 @@ function titleOf(session: VaultSession, id: Uint8Array): string | undefined {
   return session.item(id)?.item?.title;
 }
 
-function history(session: VaultSession, id: Uint8Array): (string | undefined)[] {
-  return session.versions(id).map((v) => v.item?.title);
+async function history(session: VaultSession, id: Uint8Array): Promise<(string | undefined)[]> {
+  return (await session.versions(id)).map((v) => v.item?.title);
 }
 
 describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, §8, D6, D223)', () => {
@@ -260,12 +259,12 @@ describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, �
     for (const session of [x, y]) {
       expect(titleOf(session, shared)).toBe('Edited on Phone');
       // The loser and the state both edits started from, each once (D6).
-      expect(history(session, shared).sort()).toEqual(['Edited on Laptop', 'Shared']);
+      expect((await history(session, shared)).sort()).toEqual(['Edited on Laptop', 'Shared']);
     }
     expect(rx).toMatchObject({ replaced: 1, rejected: [], droppedLosers: [] });
     expect(ry).toMatchObject({ replaced: 0, rejected: [], droppedLosers: [] });
     // The loser is one record with one versionId on both: the devices hold the same records.
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('converges the same way whichever device edited last', async () => {
@@ -277,9 +276,9 @@ describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, �
     await sync(y, x);
     for (const session of [x, y]) {
       expect(titleOf(session, shared)).toBe('Edited on Laptop');
-      expect(history(session, shared).sort()).toEqual(['Edited on Phone', 'Shared']);
+      expect((await history(session, shared)).sort()).toEqual(['Edited on Phone', 'Shared']);
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('stores a losing trash as a version of the trashed state, and the newer edit restores the item (D56)', async () => {
@@ -294,9 +293,9 @@ describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, �
       expect(session.item(shared)).toMatchObject({ inTrash: false });
       expect(titleOf(session, shared)).toBe('Edited on Phone');
       // The edit made before the trash exists nowhere else: both keep it.
-      expect(history(session, shared)).toContain('Edited, then trashed');
+      expect(await history(session, shared)).toContain('Edited, then trashed');
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('never lets an older copy win: a newer trash stays in the trash on both (CRYPTO-INV-013)', async () => {
@@ -308,9 +307,9 @@ describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, �
     await sync(x, y);
     for (const session of [x, y]) {
       expect(session.item(shared)).toMatchObject({ inTrash: true });
-      expect(history(session, shared)).toContain('Edited on Phone');
+      expect(await history(session, shared)).toContain('Edited on Phone');
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('changes nothing on a second sync once converged', async () => {
@@ -320,13 +319,13 @@ describe('per-item last-write-wins over a sync (sync-protocol.md §1.2, §1.3, �
     clock.t = T0 + 2 * MINUTE;
     await y.updateItem(shared, login('Edited on Phone'));
     await sync(x, y);
-    const before = held(x);
+    const before = await held(x);
     const again = await sync(x, y);
     for (const result of again) {
       expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
     }
-    expect(held(x)).toEqual(before);
-    expect(held(y)).toEqual(before);
+    expect(await held(x)).toEqual(before);
+    expect(await held(y)).toEqual(before);
   });
 });
 
@@ -347,16 +346,16 @@ describe('a purged item over a sync (sync-protocol.md §1.4, D137)', () => {
     await vi.waitFor(() => {
       expect(y.item(shared)).toBeUndefined();
     });
-    expect(y.versions(shared)).toEqual([]);
+    expect(await y.versions(shared)).toEqual([]);
 
     const [, ry] = await sync(x, y);
     expect(ry).toMatchObject({ rejected: [], droppedLosers: [] });
     expect(y.item(shared)).toMatchObject({ inTrash: false });
     expect(titleOf(y, shared)).toBe('Edited on Laptop');
     // Before the edit, before the trash and before the restore, on both.
-    expect(history(x, shared)).toHaveLength(3);
-    expect(history(y, shared)).toEqual(history(x, shared));
-    expect(held(x)).toEqual(held(y));
+    expect(await history(x, shared)).toHaveLength(3);
+    expect(await history(y, shared)).toEqual(await history(x, shared));
+    expect(await held(x)).toEqual(await held(y));
   });
 });
 
@@ -374,11 +373,11 @@ describe('the history cut over a sync (sync-protocol.md §1.4, D6, D70)', () => 
     expect(ry.droppedLosers).toEqual([]);
     for (const session of [x, y]) {
       expect(titleOf(session, shared)).toBe(`Phone ${String(HISTORY_LIMIT)}`);
-      expect(history(session, shared)).toHaveLength(HISTORY_LIMIT);
-      expect(history(session, shared)).not.toContain('Edited on Laptop');
+      expect(await history(session, shared)).toHaveLength(HISTORY_LIMIT);
+      expect(await history(session, shared)).not.toContain('Edited on Laptop');
     }
-    expect(history(x, shared)).toEqual(history(y, shared));
-    expect(held(x)).toEqual(held(y));
+    expect(await history(x, shared)).toEqual(await history(y, shared));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('cuts two histories of fewer than 20 each to the same 20 of their union, with no notice', async () => {
@@ -392,19 +391,19 @@ describe('the history cut over a sync (sync-protocol.md §1.4, D6, D70)', () => 
       clock.t = T0 + 2 * MINUTE + i;
       await y.updateItem(shared, login(`Phone ${String(i)}`));
     }
-    expect(history(x, shared)).toHaveLength(edits);
-    expect(history(y, shared)).toHaveLength(edits);
+    expect(await history(x, shared)).toHaveLength(edits);
+    expect(await history(y, shared)).toHaveLength(edits);
     const results = await sync(x, y);
     for (const result of results) expect(result.droppedLosers).toEqual([]);
     for (const session of [x, y]) {
-      expect(history(session, shared)).toHaveLength(HISTORY_LIMIT);
+      expect(await history(session, shared)).toHaveLength(HISTORY_LIMIT);
       // The two oldest of 22 go: the state both started from and the Laptop's first edit.
-      expect(history(session, shared)).not.toContain('Shared');
-      expect(history(session, shared)).not.toContain('Laptop 0');
+      expect(await history(session, shared)).not.toContain('Shared');
+      expect(await history(session, shared)).not.toContain('Laptop 0');
       // The Laptop's last edit lost, and is kept.
-      expect(history(session, shared)).toContain(`Laptop ${String(edits - 1)}`);
+      expect(await history(session, shared)).toContain(`Laptop ${String(edits - 1)}`);
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('brings back nothing the cut dropped on a second sync', async () => {
@@ -416,12 +415,12 @@ describe('the history cut over a sync (sync-protocol.md §1.4, D6, D70)', () => 
       await y.updateItem(shared, login(`Phone ${String(i)}`));
     }
     await sync(x, y);
-    const before = held(x);
+    const before = await held(x);
     for (const result of await sync(x, y)) {
       expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0, droppedLosers: [] });
     }
-    expect(held(x)).toEqual(before);
-    expect(held(y)).toEqual(before);
+    expect(await held(x)).toEqual(before);
+    expect(await held(y)).toEqual(before);
   });
 });
 
@@ -432,13 +431,12 @@ async function maintenance(check: () => void): Promise<void> {
 }
 
 /** The summary entry of an item, or of a record of `type`, as the session would send it. */
-function entryOf(session: VaultSession, id: Uint8Array, type: RecordType = RecordType.item) {
+async function entryOf(session: VaultSession, id: Uint8Array, type: RecordType = RecordType.item) {
   const peer = session.devices().find((d) => !same(d.deviceId, session.deviceId));
   if (!peer) throw new Error('no peer');
-  return session
-    .openSync(peer.deviceId)
-    .summary()
-    .find((e) => e.recordType === type && same(e.recordId, id));
+  return (await session.openSync(peer.deviceId).summary()).find(
+    (e) => e.recordType === type && same(e.recordId, id),
+  );
 }
 
 describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-013)', () => {
@@ -459,10 +457,10 @@ describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-0
     expect(rx.droppedLosers).toEqual([]);
     for (const session of [x, y]) {
       expect(session.item(shared)).toBeUndefined();
-      expect(session.versions(shared)).toEqual([]);
-      expect(entryOf(session, shared)).toMatchObject({ deleted: true });
+      expect(await session.versions(shared)).toEqual([]);
+      expect(await entryOf(session, shared)).toMatchObject({ deleted: true });
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('trashes a folder and its item on both over older edits of either (D27)', async () => {
@@ -480,9 +478,9 @@ describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-0
     for (const session of [x, y]) {
       expect(session.folder(folder)).toMatchObject({ inTrash: true, name: 'Work' });
       expect(session.item(item)).toMatchObject({ inTrash: true });
-      expect(history(session, item)).toContain('Edited on Phone');
+      expect(await history(session, item)).toContain('Edited on Phone');
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('keeps a purged tombstone of an item it never held, and nothing changes on a second sync', async () => {
@@ -499,8 +497,8 @@ describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-0
     expect(ry).toMatchObject({ added: 1, rejected: [] });
     expect(y.item(later)).toBeUndefined();
     expect(y.items().map((i) => i.item?.title)).toEqual(['Shared']);
-    expect(entryOf(y, later)).toMatchObject({ deleted: true });
-    expect(held(x)).toEqual(held(y));
+    expect(await entryOf(y, later)).toMatchObject({ deleted: true });
+    expect(await held(x)).toEqual(await held(y));
     for (const result of await sync(x, y)) {
       expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
     }
@@ -522,7 +520,7 @@ describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-0
 
     // Identical entries: neither copy is sent (the residual risk of overview §9). Y's version of the
     // item reaches X, which drops it for the purged item (D137).
-    expect(entryOf(x, shared)).toEqual(entryOf(y, shared));
+    expect(await entryOf(x, shared)).toEqual(await entryOf(y, shared));
     for (const result of await sync(x, y)) {
       expect(result).toMatchObject({ added: 0, replaced: 0, versions: 0 });
     }
@@ -532,7 +530,7 @@ describe('tombstones over a sync (sync-protocol.md §1.3, §8, D27, CRYPTO-INV-0
     await maintenance(() => {
       expect(y.item(shared)).toBeUndefined();
     });
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 });
 
@@ -547,14 +545,14 @@ describe('the trash and its purge over a sync (sync-protocol.md §1.3, §1.4, D7
       const from = trasher === 'x' ? x : y;
       await from.trashItem(shared);
       await sync(x, y);
-      const tombstone = entryOf(from, shared);
+      const tombstone = await entryOf(from, shared);
       for (const session of [x, y]) {
         expect(session.item(shared)).toMatchObject({
           inTrash: true,
           purgeAt: (tombstone?.hlc.physicalMs ?? 0) + PURGE_DELAY_MS,
         });
       }
-      expect(held(x)).toEqual(held(y));
+      expect(await held(x)).toEqual(await held(y));
     },
   );
 
@@ -567,15 +565,15 @@ describe('the trash and its purge over a sync (sync-protocol.md §1.3, §1.4, D7
     // X's clock is past the purge date; Y's, an hour behind, is not yet.
     clock.y = -60 * MINUTE;
     clock.t = T0 + MINUTE + PURGE_DELAY_MS + 30 * MINUTE;
-    expect(history(y, later)).toHaveLength(2);
+    expect(await history(y, later)).toHaveLength(2);
 
     const [rx] = await sync(x, y);
     expect(rx).toMatchObject({ added: 1, rejected: [], droppedLosers: [] });
     expect(x.item(later)).toBeUndefined();
-    expect(x.versions(later)).toEqual([]);
+    expect(await x.versions(later)).toEqual([]);
     // The tombstone is kept, under the header Y sent.
-    expect(entryOf(x, later)).toMatchObject({ deleted: true });
-    expect(entryOf(x, later)).toEqual(entryOf(y, later));
+    expect(await entryOf(x, later)).toMatchObject({ deleted: true });
+    expect(await entryOf(x, later)).toEqual(await entryOf(y, later));
     expect(y.item(later)).toMatchObject({ inTrash: true });
   });
 
@@ -590,8 +588,10 @@ describe('the trash and its purge over a sync (sync-protocol.md §1.3, §1.4, D7
     const [rx] = await sync(x, y);
     expect(rx).toMatchObject({ rejected: [] });
     expect(x.folder(folder)).toBeUndefined();
-    expect(entryOf(x, folder, RecordType.folder)).toMatchObject({ deleted: true });
-    expect(entryOf(x, folder, RecordType.folder)).toEqual(entryOf(y, folder, RecordType.folder));
+    expect(await entryOf(x, folder, RecordType.folder)).toMatchObject({ deleted: true });
+    expect(await entryOf(x, folder, RecordType.folder)).toEqual(
+      await entryOf(y, folder, RecordType.folder),
+    );
     expect(y.folder(folder)).toMatchObject({ inTrash: true, name: 'Created on Phone' });
   });
 });
@@ -644,7 +644,7 @@ describe('the Recovery Envelope over a sync (sync-protocol.md §1.3, §1.6, D2, 
       expect(result).toMatchObject({ added: 0, replaced: 0, phraseChanged: false });
       expect(result.phraseSuperseded).toBeUndefined();
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('keeps the later of two concurrent regenerations on both, warning the device whose phrase lost (D145)', async () => {
@@ -673,7 +673,7 @@ describe('the Recovery Envelope over a sync (sync-protocol.md §1.3, §1.6, D2, 
       expect(result).toMatchObject({ added: 0, replaced: 0, phraseChanged: false });
       expect(result.phraseSuperseded).toBeUndefined();
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('warns the device that wrote the envelope a later regeneration replaced, synced in between (D185)', async () => {
@@ -743,7 +743,7 @@ async function liveSync(
       else pending.push(envelopes);
     });
     await exchange(session, {
-      summary: grant.summary(),
+      summary: await grant.summary(),
       records: async (selected) => {
         await hook?.();
         return grant.records(selected);
@@ -787,7 +787,7 @@ describe('the live session (sync-protocol.md §10, D225)', () => {
       expect(titleOf(y, shared)).toBe('Edited live on Laptop');
     });
     // The Item Version of the state before the edit came with it.
-    expect(history(y, shared)).toEqual(history(x, shared));
+    expect(await history(y, shared)).toEqual(await history(x, shared));
 
     clock.t = T0 + 2 * MINUTE;
     const folder = await y.createFolder('Made on Phone');
@@ -803,7 +803,7 @@ describe('the live session (sync-protocol.md §10, D225)', () => {
       expect(y.recovery).toEqual(x.recovery);
     });
     expect(live.merges.y.some((r) => r.phraseChanged)).toBe(true);
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
     await live.end();
 
     // Nothing was left for a sync to bring.
@@ -821,7 +821,7 @@ describe('the live session (sync-protocol.md §10, D225)', () => {
     await vi.waitFor(() => {
       expect(made && titleOf(y, made)).toBe('Made during the exchange');
     });
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
     await live.end();
   });
 
@@ -942,7 +942,7 @@ describe('an interrupted connection (sync-protocol.md §9, §10, §12, Gate D)',
         await sync(x, y);
         expect(titles(x)).toEqual(union);
         expect(titles(y)).toEqual(union);
-        expect(held(x)).toEqual(held(y));
+        expect(await held(x)).toEqual(await held(y));
       }
     },
   );
@@ -963,7 +963,7 @@ describe('an interrupted connection (sync-protocol.md §9, §10, §12, Gate D)',
         expect(cut() || titleOf(y, shared) === title).toBe(true);
       });
       if (!cut()) {
-        expect(held(x)).toEqual(held(y));
+        expect(await held(x)).toEqual(await held(y));
         await live.end();
         expect(at).toBeGreaterThan(2);
         break;
@@ -971,13 +971,13 @@ describe('an interrupted connection (sync-protocol.md §9, §10, §12, Gate D)',
       await link.b.closed;
       expect(live.merges.y).toEqual([]);
       expect(titleOf(y, shared)).toBe(before);
-      expect(history(y, shared)).not.toContain(title);
+      expect(await history(y, shared)).not.toContain(title);
 
       const [, ry] = await sync(x, y);
       expect(ry).toMatchObject({ rejected: [] });
       expect(titleOf(y, shared)).toBe(title);
-      expect(history(y, shared)).toEqual(history(x, shared));
-      expect(held(x)).toEqual(held(y));
+      expect(await history(y, shared)).toEqual(await history(x, shared));
+      expect(await held(x)).toEqual(await held(y));
     }
   });
 });
@@ -1019,7 +1019,7 @@ describe('concurrent moves creating a cycle (overview §9.3, D14, D171, Gate D)'
       await second();
       await sync(x, y);
       for (const session of [x, y]) expect(paths(session)).toEqual([...expected, 'Shared']);
-      expect(held(x)).toEqual(held(y));
+      expect(await held(x)).toEqual(await held(y));
     },
   );
 
@@ -1040,7 +1040,7 @@ describe('concurrent moves creating a cycle (overview §9.3, D14, D171, Gate D)'
     for (const session of [x, y]) {
       expect(paths(session)).toEqual(['B/', 'B/A/', 'B/A/C/', 'Shared']);
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 });
 
@@ -1068,7 +1068,7 @@ describe('a folder trashed while an item is added to it (overview §9.3, D14, Ga
         expect(session.item(added)).toMatchObject({ inTrash: false });
         expect(paths(session)).toEqual(['Added on Phone', 'Shared']);
       }
-      expect(held(x)).toEqual(held(y));
+      expect(await held(x)).toEqual(await held(y));
 
       // Restored from the trash, the folder is live again and the new item shows inside it.
       clock.t = T0 + 3 * MINUTE;
@@ -1077,7 +1077,7 @@ describe('a folder trashed while an item is added to it (overview §9.3, D14, Ga
       for (const session of [x, y]) {
         expect(paths(session)).toEqual(['Work/', 'Work/Added on Phone', 'Work/In Work', 'Shared']);
       }
-      expect(held(x)).toEqual(held(y));
+      expect(await held(x)).toEqual(await held(y));
     },
   );
 });
@@ -1102,7 +1102,7 @@ describe('a child received before its parent (overview §9.3, D14, Gate D)', () 
     for (const session of [x, y]) {
       expect(paths(session)).toEqual(['Parent/', 'Parent/Child/', 'Parent/In Parent', 'Shared']);
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 });
 
@@ -1123,8 +1123,8 @@ describe('identical vaults, one-way and bidirectional changes (sync-protocol.md 
 
   it('sends and changes nothing between identical vaults, either way', async () => {
     const { x, y } = await peers();
-    const before = held(x);
-    expect(held(y)).toEqual(before);
+    const before = await held(x);
+    expect(await held(y)).toEqual(before);
     for (const [from, to] of [
       [x, y],
       [y, x],
@@ -1133,8 +1133,8 @@ describe('identical vaults, one-way and bidirectional changes (sync-protocol.md 
       expect(sent).toBe(0);
       for (const result of results) expect(result).toMatchObject(nothing);
     }
-    expect(held(x)).toEqual(before);
-    expect(held(y)).toEqual(before);
+    expect(await held(x)).toEqual(before);
+    expect(await held(y)).toEqual(before);
   });
 
   it("brings one device's changes to the other, whose older copy of the edited item changes nothing back (D223)", async () => {
@@ -1156,9 +1156,9 @@ describe('identical vaults, one-way and bidirectional changes (sync-protocol.md 
     for (const session of [x, y]) {
       expect(paths(session)).toEqual(['Work/', 'Work/In Work', 'Edited on Laptop']);
       expect(session.item(gone)).toMatchObject({ inTrash: true });
-      expect(history(session, shared)).toEqual(['Shared']);
+      expect(await history(session, shared)).toEqual(['Shared']);
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
     expect((await counted(x, y)).sent).toBe(0);
   });
 
@@ -1186,7 +1186,7 @@ describe('identical vaults, one-way and bidirectional changes (sync-protocol.md 
       ]);
       expect(session.folder(work)).toMatchObject({ name: 'Work' });
     }
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
     expect((await counted(x, y)).sent).toBe(0);
     expect((await counted(y, x)).sent).toBe(0);
   });
@@ -1210,18 +1210,18 @@ describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, 
     const [, reversed] = await sync(x, y, (records) => [...records].reverse());
     expect(reversed).toEqual(inOrder);
     expect(paths(y)).toEqual(paths(plain.y));
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('aborts a transfer holding one record twice, Y writing nothing, then converges (§2.1, D158)', async () => {
     const { x, y } = await changed();
-    const before = held(y);
+    const before = await held(y);
     await expect(
       sync(x, y, (records) => [...records, ...records.slice(0, 1)]),
     ).rejects.toMatchObject({ reason: 'protocol-error' });
-    expect(held(y)).toEqual(before);
+    expect(await held(y)).toEqual(before);
     await sync(x, y);
-    expect(held(x)).toEqual(held(y));
+    expect(await held(x)).toEqual(await held(y));
   });
 
   it('changes nothing when a later session sends the same records again', async () => {
@@ -1231,11 +1231,11 @@ describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, 
       first = records;
       return records;
     });
-    const before = held(y);
+    const before = await held(y);
     const [, again] = await sync(x, y, () => first);
     expect(first.length).toBeGreaterThan(0);
     expect(again).toMatchObject({ added: 0, replaced: 0, versions: 0, rejected: [] });
-    expect(held(y)).toEqual(before);
+    expect(await held(y)).toEqual(before);
   });
 
   type Fault = 'duplicate' | 'reorder' | 'replay';
@@ -1290,15 +1290,15 @@ describe('duplicate, out-of-order and repeated messages (sync-protocol.md §10, 
       expect(to - from).toBeGreaterThan(3);
       for (let at = from; at <= to; at++) {
         const { x, y } = await changed();
-        const before = held(y);
+        const before = await held(y);
         const ended = await sync(x, y, (records) => records, faulty(fault, at)).then(
           () => false,
           () => true,
         );
-        const now = held(y);
+        const now = await held(y);
         await sync(x, y);
-        const after = held(y);
-        expect(held(x)).toEqual(after);
+        const after = await held(y);
+        expect(await held(x)).toEqual(after);
         if (at < total) {
           expect(ended).toBe(true);
           expect(now).toEqual(before);

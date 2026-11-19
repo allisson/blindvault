@@ -357,7 +357,7 @@ export class Syncing {
     let result: SyncResult;
     try {
       result = await exchange(session, {
-        summary: grant.summary(),
+        summary: await this.#vault(() => grant.summary()),
         records: (selected) => this.#vault(() => grant.records(selected)),
         merge: (records) => this.#vault(() => grant.merge(records)),
         retired: (envelope) => this.#ownRetirement(envelope),

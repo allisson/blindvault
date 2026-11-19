@@ -74,6 +74,7 @@ async function vault(factory: IDBFactory, title: string) {
   const session = await VaultSession.create({
     store: {
       records: () => (db ? db.records() : Promise.resolve([])),
+      record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
       commit: async (commit) => {
         db ??= await database(factory, parseLocalConfig(commit.localConfig).vaultId);
         await db.commit(commit);
@@ -116,6 +117,7 @@ async function refound(old: Awaited<ReturnType<typeof vault>>, factory: IDBFacto
   const session = await VaultSession.refound(old.session, {
     store: {
       records: () => (db ? db.records() : Promise.resolve([])),
+      record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
       commit: async (c) => {
         db ??= await database(factory, parseLocalConfig(c.localConfig).vaultId);
         if (!commit) throw new Error('interrupted');
@@ -175,7 +177,11 @@ describe('re-founding through IndexedDB (Gate B, D28, D89, D96, D187)', () => {
     expect(parseLocalConfig(must(await kept.localConfig())).replacesVaultId).toBeUndefined();
     const keyring = new Keyring();
     const session = await VaultSession.unlock({
-      store: { records: () => kept.records(), commit: (c) => kept.commit(c) },
+      store: {
+        records: () => kept.records(),
+        record: (key) => kept.record(key),
+        commit: (c) => kept.commit(c),
+      },
       localConfig: parseLocalConfig(must(await kept.localConfig())),
       keyring,
       kek: kek(keyring, 3),

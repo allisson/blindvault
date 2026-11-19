@@ -23,6 +23,10 @@ export class MemoryStore implements RecordStore {
     return Promise.resolve([...this.held.values()]);
   }
 
+  record(k: RecordKey): Promise<StoredRecord | undefined> {
+    return Promise.resolve(this.held.get(key(k)));
+  }
+
   async commit(commit: Commit): Promise<void> {
     if (this.gate) await this.gate;
     if (this.failNext) {

@@ -1,5 +1,5 @@
-import { type Item, type VaultSession } from '@blindvault/vault';
-import { useState } from 'react';
+import { type Item, type VaultSession, type VersionView } from '@blindvault/vault';
+import { useEffect, useState } from 'react';
 
 import { hex } from '../app/ids';
 import { type Navigation } from '../app/nav';
@@ -59,11 +59,26 @@ export function ItemHistory({
   const { messages: m, language } = useLanguage();
   const [error, setError] = useState<string>();
   const [working, setWorking] = useState(false);
+  // Read again from storage once the versions are verified after unlock (D277).
+  const [versions, setVersions] = useState<VersionView[]>();
+  useEffect(() => {
+    let current = true;
+    session.versions(id).then(
+      (read) => {
+        if (current) setVersions(read);
+      },
+      (e: unknown) => {
+        if (current) setError(writeError(e, m));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [session, id, m]);
   const view = session.item(id);
   if (!view) return null;
   const restorable = view.item !== undefined && view.readOnly === undefined && !view.inTrash;
   const when = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
-  const versions = session.versions(id);
 
   return (
     <article className="flex w-full max-w-2xl flex-col gap-4 p-4">
@@ -71,9 +86,13 @@ export function ItemHistory({
         {format(m.items.historyTitle, { title: view.item?.title ?? m.items.newerTitle })}
       </h1>
       <Notice>{m.items.historyNote}</Notice>
-      {versions.length === 0 ? <p className="text-sm text-muted">{m.items.noHistory}</p> : null}
+      {versions === undefined ? (
+        <p className="text-sm text-muted">{m.items.historyLoading}</p>
+      ) : versions.length === 0 ? (
+        <p className="text-sm text-muted">{m.items.noHistory}</p>
+      ) : null}
       <ol className="flex flex-col gap-4">
-        {versions.map((v) => (
+        {(versions ?? []).map((v) => (
           <li
             key={hex(v.versionId)}
             className="flex flex-col gap-3 rounded-control border border-line p-3"

@@ -138,6 +138,7 @@ async function created(factory: IDBFactory) {
   let vaultId: Uint8Array | undefined;
   const store: RecordStore = {
     records: () => Promise.resolve([]),
+    record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     commit: async (commit) => {
       if (!db) {
         vaultId = parseLocalConfig(commit.localConfig).vaultId;
