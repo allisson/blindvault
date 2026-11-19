@@ -152,7 +152,7 @@ will refine them.
 | --- | --- | --- | --- | --- |
 | A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK requires a BiometricPrompt on every use, is invalidated when the enrolled biometrics change, and is bound to `localConfigId`; setting it up needs the local password (D271) | overview D271 |
 | A1 | Reads a removed stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268) | overview D268 |
-| A3 | Sends a substituted or oversized attachment blob | Planned | Each received blob checked against the hash in its item's `attachment` field; blobs above 10 MB rejected (D273) | overview D273 |
+| A3 | Sends a substituted or oversized attachment blob | Planned | Each received blob checked against the hash in its item's `attachment` field; blobs above 10 MiB rejected (D273, D278) | overview D278 |
 | A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust; the version lock opens no vault until the user confirms the new version and manifest hash (D270) | overview D270 |
 | A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; reproducible APK with published SHA-256 and rebuild instructions (D270) | overview D270 |
 | A6 | Blocks new Android installs by terminating the Play Console account that registers the package | Planned, accepted | The account is a root of trust for installs, not for integrity; installed apps keep working, ADB and the advanced flow still install (D274) | overview D274 |

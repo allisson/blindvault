@@ -491,11 +491,19 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ## Phase 9 — Attachments
 
-**Goal:** Attachments in items, synced and backed up, before the extension and the Android app start from the final formats (D273, D275).
+**Goal:** Attachments in items, synced and backed up, before the extension and the Android app start from the final formats, with less memory held by an unlocked vault (D273, D275, D277, D278).
 
 ### Tasks
 
-- [ ] `docs/attachments.md`, then attachments: `attachment` field type, blobs of up to 10 MB under `secretstream`, blob phase after the record sync, collection when no record cites a blob, `.bvault` format version carrying the blobs, download only
+- [ ] Memory of the unlocked vault (D277): benchmark in `tests/` with the budget recorded, then Item Versions held as summaries
+- [ ] Items held as summaries and decrypted when opened, if the benchmark still calls for it (D277)
+- [ ] `docs/attachments.md` (D278), with `record-content.md`, `sync-protocol.md` and `backup-format.md` version 2 updated
+- [ ] `packages/crypto`: the blob stream
+- [ ] `packages/vault`: the `attachment` field type and blob collection
+- [ ] `packages/storage`: the `blobs` object store
+- [ ] `packages/sync`: protocol version 2 and the blob phase
+- [ ] `packages/backup`: format version 2, export in parts, restore in two passes
+- [ ] UI: add, view and download attachments
 
 ### Attachments Gate
 
