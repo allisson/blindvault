@@ -137,7 +137,7 @@ async function devices() {
       kek: kek(restoring, n),
       salt: new Uint8Array(16).fill(n),
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(restoring, parseBackup(file.bytes), phrase.words),
+      backup: await restoreWithPhrase(restoring, await parseBackup(file.bytes), phrase.words),
       now,
     });
     sessions.push(device);

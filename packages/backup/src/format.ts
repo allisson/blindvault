@@ -1,8 +1,11 @@
-// The `.bvault` v1 file (backup-format.md, D3, D78, D95, D178): the cleartext header and its
-// keyslots, around the stream and payload that `@blindvault/crypto` seals and opens.
+// The `.bvault` file (backup-format.md, D3, D78, D95, D178, D278): the cleartext header and its
+// keyslots, around the stream and payload that `@blindvault/crypto` writes in parts and reads in
+// two passes. Version 2 is written; versions 1 and 2 are read.
 
 import {
+  type BackupBlobReader,
   type BackupMeta,
+  type BackupSource,
   BackupStreamWriter,
   type CborMap,
   type CborValue,
@@ -12,7 +15,6 @@ import {
   KEY_LENGTH,
   type Keyring,
   NONCE_LENGTH,
-  type OpenedBackupPayload,
   SALT_LENGTH,
   STREAM_HEADER_LENGTH,
   type Sealed,
@@ -20,13 +22,14 @@ import {
   TAG_LENGTH,
   decodeCbor,
   encodeCbor,
-  openBackupStream,
+  readBackupStream,
+  scanBackupStream,
 } from '@blindvault/crypto';
 
 import { BackupRejectedError } from './errors';
 
 export const BACKUP_MAGIC = new Uint8Array([0x89, 0x42, 0x56, 0x41, 0x55, 0x4c, 0x54, 0x0a]);
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 export const MAX_HEADER_LENGTH = 4096;
 const PREFIX_LENGTH = BACKUP_MAGIC.length + 2 + 4;
 /** `crypto_box_seal` of a 32-byte key: ephemeral public key, key and tag. */
@@ -66,11 +69,33 @@ export interface BackupHeader {
 }
 
 export interface ParsedBackup {
+  readonly version: 1 | 2;
   /** Not authenticated until `openBackup` succeeds: show `phraseId` and its date as unverified. */
   readonly header: BackupHeader;
   /** The header bytes as read, the first chunk's additional data. */
   readonly headerBytes: Uint8Array;
-  readonly body: Uint8Array;
+  /** The whole file, which each pass of `openBackup` reads again. */
+  readonly source: BackupSource;
+}
+
+/** The payload of an opened file: `meta`, every envelope, and the blobs to read in order (§6). */
+export interface OpenedBackup extends BackupMeta {
+  /** In the keyring passed to `openBackup`. */
+  readonly masterKey: SymmetricKey;
+  /** Every record envelope exactly as stored, not yet verified (crypto-spec.md §9.5). */
+  readonly records: Uint8Array[];
+  /** The BLAKE2b-256 of every blob, in the file's order; none in version 1. */
+  readonly blobIds: readonly Uint8Array[];
+  /** The blobs in that order; a file changed since the first pass throws `corrupt`. */
+  readonly blobs: BackupBlobReader;
+}
+
+/** A file already in memory, read by ranges like any other. */
+export function bytesSource(bytes: Uint8Array): BackupSource {
+  return {
+    size: bytes.length,
+    read: (offset, length) => Promise.resolve(bytes.slice(offset, offset + length)),
+  };
 }
 
 function malformed(): BackupRejectedError {
@@ -175,27 +200,38 @@ function parseKeyslot(value: CborValue, index: number): RecoveryKeyslot | Passwo
   throw malformed();
 }
 
+/** `length` bytes from `offset`, or `malformed` when the source gives fewer or more. */
+async function readExactly(source: BackupSource, offset: number, length: number) {
+  const bytes = await source.read(offset, length);
+  if (bytes.length !== length) throw malformed();
+  return bytes;
+}
+
 /**
- * Splits a file into its header, checked against §2, §3 and §7, and the stream body. Nothing here
- * is authenticated yet. Throws `BackupRejectedError`.
+ * Reads a file's header, checked against §2, §3 and §7; the stream after it is left in the source
+ * for `openBackup`. Nothing here is authenticated yet. Throws `BackupRejectedError`.
  */
-export function parseBackup(file: Uint8Array): ParsedBackup {
+export async function parseBackup(file: Uint8Array | BackupSource): Promise<ParsedBackup> {
+  const source = file instanceof Uint8Array ? bytesSource(file) : file;
   const magic = BACKUP_MAGIC.length;
-  if (file.length < magic || BACKUP_MAGIC.some((b, i) => file[i] !== b)) {
+  const prefix = await readExactly(source, 0, Math.min(source.size, PREFIX_LENGTH));
+  if (prefix.length < magic || BACKUP_MAGIC.some((b, i) => prefix[i] !== b)) {
     throw new BackupRejectedError('not-a-backup');
   }
-  if (file.length < PREFIX_LENGTH) throw malformed();
-  const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
+  if (prefix.length < PREFIX_LENGTH) throw malformed();
+  const view = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength);
   const version = view.getUint16(magic);
   if (version === 0) throw new BackupRejectedError('not-a-backup');
   if (version > BACKUP_FORMAT_VERSION) throw new BackupRejectedError('newer-version');
   const length = view.getUint32(magic + 2);
-  if (length < 1 || length > MAX_HEADER_LENGTH || PREFIX_LENGTH + length > file.length) {
-    throw malformed();
-  }
+  // A header past the end of the file is a short read: `malformed` too.
+  if (length < 1 || length > MAX_HEADER_LENGTH) throw malformed();
+  const headerBytes = new Uint8Array(PREFIX_LENGTH + length);
+  headerBytes.set(prefix);
+  headerBytes.set(await readExactly(source, PREFIX_LENGTH, length), PREFIX_LENGTH);
   let map: CborValue;
   try {
-    map = decodeCbor(file.subarray(PREFIX_LENGTH, PREFIX_LENGTH + length));
+    map = decodeCbor(headerBytes.subarray(PREFIX_LENGTH));
   } catch {
     throw malformed();
   }
@@ -215,14 +251,15 @@ export function parseBackup(file: Uint8Array): ParsedBackup {
   } as unknown as BackupHeader;
   checkHeader(header);
   return {
+    version: version as 1 | 2,
     header: {
       phraseId: header.phraseId.slice(),
       phraseCreatedAt: header.phraseCreatedAt,
       keyslots: header.keyslots.map(copyKeyslot) as unknown as Keyslots,
       stream: header.stream.slice(),
     },
-    headerBytes: file.slice(0, PREFIX_LENGTH + length),
-    body: file.subarray(PREFIX_LENGTH + length),
+    headerBytes,
+    source,
   };
 }
 
@@ -236,51 +273,73 @@ function copyKeyslot(slot: RecoveryKeyslot | PasswordKeyslot): RecoveryKeyslot |
 }
 
 /**
- * Writes a whole file: the header with a new stream header, then the payload under `fileKey`
- * (§1, §5, §6). The keyslots are built by the caller; every record is an envelope as stored.
+ * Writes a version-2 file as the parts of a `Blob` (§1, §5, §6, D278): the header with a new stream
+ * header, then each encrypted chunk as it closes. The keyslots are built by the caller; every
+ * record is an envelope as stored, and each blob is read only when its turn comes, so the file is
+ * never one buffer and at most one blob is held.
  */
-export function sealBackup(
+export async function sealBackup(
   fileKey: SymmetricKey,
   header: Omit<BackupHeader, 'stream'>,
   meta: BackupMeta & { readonly masterKey: SymmetricKey },
   records: readonly Uint8Array[],
-): Uint8Array {
+  blobs: readonly (() => Promise<Uint8Array>)[],
+): Promise<Uint8Array[]> {
   const writer = BackupStreamWriter.create(fileKey);
   const headerBytes = encodeHeader({ ...header, stream: writer.header });
-  let body: Uint8Array;
+  const parts = [headerBytes];
   try {
-    body = writer.seal(headerBytes, meta, records);
+    parts.push(
+      ...writer.begin(headerBytes, {
+        ...meta,
+        recordCount: records.length,
+        blobCount: blobs.length,
+      }),
+    );
+    for (const record of records) parts.push(...writer.add(record));
+    for (const read of blobs) parts.push(...writer.add(await read()));
+    parts.push(...writer.end());
+    return parts;
   } catch (error) {
+    writer.wipe();
     if (error instanceof EncodingError) throw malformed();
     throw error;
   }
-  const file = new Uint8Array(headerBytes.length + body.length);
-  file.set(headerBytes);
-  file.set(body, headerBytes.length);
-  return file;
 }
 
 /**
- * Opens the stream of a parsed file with its file key, which authenticates the header. A stream
- * that does not authenticate in full is `corrupt`; an authenticated payload of the wrong shape is
- * `malformed`. The records are returned unverified (crypto-spec.md §9.5 runs next, §8).
+ * Opens the stream of a parsed file with its file key, in the two passes of §6 and §8 steps 4
+ * and 5; the first chunk authenticates the header. A stream that does not authenticate in full,
+ * or a file that changed between the passes, is `corrupt`; an authenticated payload of the wrong
+ * shape is `malformed`. The records are returned unverified (crypto-spec.md §9.5 runs next, §8);
+ * the Master Key goes to `keyring` only once both passes agree.
  */
-export function openBackup(
+export async function openBackup(
   keyring: Keyring,
   fileKey: SymmetricKey,
   parsed: ParsedBackup,
-): OpenedBackupPayload {
+): Promise<OpenedBackup> {
+  const { version, header, headerBytes, source } = parsed;
   try {
-    return openBackupStream(
-      keyring,
-      fileKey,
-      parsed.header.stream,
-      parsed.headerBytes,
-      parsed.body,
-    );
+    const scan = await scanBackupStream(fileKey, version, header.stream, headerBytes, source);
+    const read = await readBackupStream(keyring, fileKey, scan, header.stream, headerBytes, source);
+    return {
+      vaultId: read.vaultId,
+      exportedAt: read.exportedAt,
+      masterKey: read.masterKey,
+      records: read.records,
+      blobIds: scan.blobIds,
+      blobs: {
+        next: () => read.blobs.next().catch(rejected),
+      },
+    };
   } catch (error) {
-    if (error instanceof DecryptionError) throw new BackupRejectedError('corrupt');
-    if (error instanceof EncodingError) throw malformed();
-    throw error;
+    return rejected(error);
   }
+}
+
+function rejected(error: unknown): never {
+  if (error instanceof DecryptionError) throw new BackupRejectedError('corrupt');
+  if (error instanceof EncodingError) throw malformed();
+  throw error;
 }

@@ -101,10 +101,10 @@ async function exported(session: VaultSession): Promise<Uint8Array> {
   return file.bytes;
 }
 
-function restores(file: Uint8Array, words: string) {
+async function restores(file: Uint8Array, words: string) {
   const keyring = new Keyring();
   try {
-    return restoreWithPhrase(keyring, parseBackup(file), words).records;
+    return (await restoreWithPhrase(keyring, await parseBackup(file), words)).records;
   } finally {
     keyring.wipeAll();
   }
@@ -173,13 +173,17 @@ describe('Recovery Phrase regeneration through IndexedDB (Gate B, D2, D185)', ()
 
     // The new backup restores with the new phrase into a new installation, every record matching.
     const newBackup = await exported(again);
-    expect(hex(parseBackup(newBackup).header.phraseId)).toBe(hex(recovery.phraseId));
-    const records = restores(newBackup, next.words);
+    expect(hex((await parseBackup(newBackup)).header.phraseId)).toBe(hex(recovery.phraseId));
+    const records = await restores(newBackup, next.words);
     expect(records.map((r) => hex(r.envelope)).sort()).toEqual(
       (await database.records()).map((r) => hex(r.envelope)).sort(),
     );
     const restoreKeyring = new Keyring();
-    const backup = restoreWithPhrase(restoreKeyring, parseBackup(newBackup), next.words);
+    const backup = await restoreWithPhrase(
+      restoreKeyring,
+      await parseBackup(newBackup),
+      next.words,
+    );
     const target = lazyStore(new IDBFactory(), backup.vaultId);
     const restored = await VaultSession.restore({
       store: target.store,
@@ -196,9 +200,9 @@ describe('Recovery Phrase regeneration through IndexedDB (Gate B, D2, D185)', ()
     expect(restored.checkRecoveryPhrase(next.words)).toBe('opens');
 
     // The old phrase does not open the new backup; the old backup still opens only with it.
-    expect(() => restores(newBackup, first.words)).toThrow(BackupRejectedError);
-    expect(restores(oldBackup, first.words).length).toBeGreaterThan(0);
-    expect(() => restores(oldBackup, next.words)).toThrow(BackupRejectedError);
+    await expect(restores(newBackup, first.words)).rejects.toThrow(BackupRejectedError);
+    expect((await restores(oldBackup, first.words)).length).toBeGreaterThan(0);
+    await expect(restores(oldBackup, next.words)).rejects.toThrow(BackupRejectedError);
 
     // Neither phrase reaches IndexedDB (CRYPTO-INV-006).
     const stored = [

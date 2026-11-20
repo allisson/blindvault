@@ -90,10 +90,11 @@ every project through the references in the root `tsconfig.json`.
   checked.
 - **Backup payload in `crypto` (Phase 2).** The `.bvault` payload holds the Master Key's bytes, so
   `packages/crypto` builds and reads the stream and payload of `backup-format.md` §5 and §6
-  (`BackupStreamWriter`, `openBackupStream`), as it does the Local Config encrypted part. The file
-  format around it, header and keyslots (§2, §3, §7), lives in `packages/backup`, which depends on
-  `crypto` only. A payload is parsed only once its final chunk authenticates, and the plaintext is
-  wiped either way. The keyslots seal and open the file key in `crypto` too (`sealKeyTo`,
+  (`BackupStreamWriter`, `scanBackupStream`, `readBackupStream`), as it does the Local Config
+  encrypted part. The file format around it, header and keyslots (§2, §3, §7), lives in
+  `packages/backup`, which depends on `crypto` only. `meta` and the envelopes are decoded only once
+  the first pass authenticated the whole stream, and every plaintext byte read is wiped as it is
+  consumed. The keyslots seal and open the file key in `crypto` too (`sealKeyTo`,
   `openSealedKey`, `wrapKey`); the export password KEK comes from the Argon2id worker at the fixed
   export parameters (`derivePasswordKek`) and lives in a keyring of its own, wiped once the file key
   is wrapped or unwrapped.
@@ -106,8 +107,17 @@ every project through the references in the root `tsconfig.json`.
   that fails to authenticate still wins over a payload of the wrong shape. The second pass,
   `readBackupStream`, reads the file again, refuses one of another size or whose envelopes differ
   from the first pass, gives the Master Key to the caller's keyring, and hands the blobs one at a
-  time through a reader that holds only the stream's state. Version 1 is read by both passes; the
-  version-1 `seal` and `openBackupStream` stay until `packages/backup` moves to version 2.
+  time through a reader that holds only the stream's state. Version 1 is read by both passes and is
+  no longer written.
+- **Backup file in parts (Phase 9, D278).** `packages/backup` writes version 2 and reads versions 1
+  and 2. `sealBackup` returns the file as parts, the header then each chunk as it closes, and calls
+  each blob's read only when its turn comes, so at most one blob is held. `parseBackup` reads the
+  header from a `BackupSource` (`bytesSource` for a file already in memory) and leaves the stream
+  there; `openBackup` runs both passes, a stream that fails or changes being `corrupt` and a payload
+  of the wrong shape `malformed`, and returns the `blobId`s and a blob reader whose failure is
+  `corrupt` too. `restoreWithPhrase` and `restoreWithPassword` are asynchronous and hand both to the
+  caller in `ValidatedBackup` for step 11. Until the export reads the blob store,
+  `VaultSession.exportBackup` writes no blob and joins the parts into one file.
 - **Backup export (Phase 2, D181).** `packages/vault` depends on `packages/backup`, which depends
   on `crypto` only: `VaultSession.exportBackup` opens the Master Key wrap with the KEK the caller
   derived again, verifies every stored record as `load` does, and builds the file with the backup

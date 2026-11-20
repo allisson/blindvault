@@ -159,7 +159,7 @@ async function restored(source: Device & { words: string }, name: string, seed: 
     kek: kek(keyring, seed),
     salt: new Uint8Array(16).fill(8),
     kdfParams: PARAMS,
-    backup: restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+    backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
     now: () => T0,
   });
   sessions.push(session);

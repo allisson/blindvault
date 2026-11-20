@@ -35,7 +35,7 @@ test('writes the load vault as a .bvault file that its export password opens', a
   const restored = await restoreWithPassword(
     keyring,
     await workerPort(),
-    parseBackup(bytes),
+    await parseBackup(bytes),
     normalizePassword(exportPassword),
   );
   keyring.wipeAll();

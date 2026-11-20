@@ -766,11 +766,13 @@ export class VaultController {
   }
 
   /** Reads a `.bvault` file for a restore (backup-format.md §8 steps 1 and 2). */
-  openBackupFile(bytes: Uint8Array): BackupFileCheck {
+  async openBackupFile(bytes: Uint8Array): Promise<BackupFileCheck> {
     if (!this.#restoring()) return { kind: 'unavailable' };
     this.#dropRestore();
+    const epoch = this.#epoch;
     try {
-      const parsed = parseBackup(bytes.slice());
+      const parsed = await parseBackup(bytes.slice());
+      if (epoch !== this.#epoch || !this.#restoring()) return { kind: 'unavailable' };
       this.#restore = { parsed };
       this.#set({ ...this.#status });
       const { header } = parsed;
@@ -808,7 +810,7 @@ export class VaultController {
     try {
       const backup =
         secret.kind === 'phrase'
-          ? restoreWithPhrase(keyring, held.parsed, secret.words)
+          ? await restoreWithPhrase(keyring, held.parsed, secret.words)
           : await restoreWithPassword(
               keyring,
               this.#deps.kdf(),

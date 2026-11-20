@@ -588,7 +588,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const factory = new IDBFactory();
     const c = await empty(factory);
     expect(c.pendingCommit).toBe(false);
-    const opened = c.openBackupFile(source.bytes);
+    const opened = await c.openBackupFile(source.bytes);
     if (opened.kind !== 'ok') throw new Error(opened.kind);
     // Held until the commit: the locks run with the default preferences (D263).
     expect(c.pendingCommit).toBe(true);
@@ -623,7 +623,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   it('restores by the export password and then recommends Check Recovery Phrase (D43)', async () => {
     const source = await backup(EXPORT_PASSWORD);
     const c = await empty();
-    const opened = c.openBackupFile(source.bytes);
+    const opened = await c.openBackupFile(source.bytes);
     expect(opened).toMatchObject({ kind: 'ok', header: { hasExportPassword: true } });
     expect(await c.openBackup({ kind: 'password', password: 'not the export password' })).toEqual({
       kind: 'wrong-secret',
@@ -642,7 +642,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   it('keeps the file when the export password cannot be read or derived here (R-10)', async () => {
     const source = await backup(EXPORT_PASSWORD);
     const c = await empty();
-    c.openBackupFile(source.bytes);
+    await c.openBackupFile(source.bytes);
     // A control character is no export password: it could not have made one.
     expect(await c.openBackup({ kind: 'password', password: 'tab\there' })).toEqual({
       kind: 'wrong-secret',
@@ -660,7 +660,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   /** Restores `bytes` by the phrase into a new installation. */
   async function restored(bytes: Uint8Array, words: string) {
     const c = await empty();
-    if (c.openBackupFile(bytes).kind !== 'ok') throw new Error('not a backup');
+    if ((await c.openBackupFile(bytes)).kind !== 'ok') throw new Error('not a backup');
     await c.openBackup({ kind: 'phrase', words });
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
     return c;
@@ -702,7 +702,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const source = await backup(EXPORT_PASSWORD);
     const c = await empty();
     expect(c.ready).toBeUndefined();
-    c.openBackupFile(source.bytes);
+    await c.openBackupFile(source.bytes);
     await c.openBackup({ kind: 'password', password: EXPORT_PASSWORD });
     expect(c.ready).toBeUndefined();
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'ok' });
@@ -761,13 +761,13 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   it('reports a file that is not a backup, a phrase that is not one, and a wrong phrase', async () => {
     const source = await backup();
     const c = await empty();
-    expect(c.openBackupFile(new TextEncoder().encode('{"items":[]}'))).toEqual({
+    expect(await c.openBackupFile(new TextEncoder().encode('{"items":[]}'))).toEqual({
       kind: 'not-a-backup',
     });
     expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
       kind: 'no-file',
     });
-    c.openBackupFile(source.bytes);
+    await c.openBackupFile(source.bytes);
     const words = source.words.split(' ');
     words[2] = 'notaword';
     expect(await c.openBackup({ kind: 'phrase', words: words.join(' ') })).toEqual({
@@ -791,14 +791,14 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const source = await backup();
     const c = await empty();
     const newer = source.bytes.slice();
-    newer[9] = 2;
-    expect(c.openBackupFile(newer)).toEqual({ kind: 'newer-version' });
+    newer[9] = 3;
+    expect(await c.openBackupFile(newer)).toEqual({ kind: 'newer-version' });
     const changed = source.bytes.slice();
     // The last header byte, in the cleartext stream header: read unverified, refused once a
     // keyslot opens and the first chunk does not authenticate.
     const date = new DataView(changed.buffer).getUint32(10) + 14 - 1;
     changed[date] = (changed[date] ?? 0) ^ 1;
-    expect(c.openBackupFile(changed).kind).toBe('ok');
+    expect((await c.openBackupFile(changed)).kind).toBe('ok');
     expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
       kind: 'corrupt',
     });
@@ -807,7 +807,9 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   it('rejects a truncated file once a keyslot opens, and drops it', async () => {
     const source = await backup();
     const c = await empty();
-    expect(c.openBackupFile(source.bytes.subarray(0, source.bytes.length - 1)).kind).toBe('ok');
+    expect((await c.openBackupFile(source.bytes.subarray(0, source.bytes.length - 1))).kind).toBe(
+      'ok',
+    );
     expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
       kind: 'corrupt',
     });
@@ -821,7 +823,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const source = await backup();
     const factory = new IDBFactory();
     const c = await empty(factory);
-    c.openBackupFile(source.bytes);
+    await c.openBackupFile(source.bytes);
     await c.openBackup({ kind: 'phrase', words: source.words });
     const pending = c.restore(NEW_PASSWORD);
     expect(c.status.kind).toBe('restoring');
@@ -832,7 +834,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     // The validated backup went with the lock: the file must be opened again.
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
 
-    c.openBackupFile(source.bytes);
+    await c.openBackupFile(source.bytes);
     await c.openBackup({ kind: 'phrase', words: source.words });
     c.lock();
     expect(await c.restore(NEW_PASSWORD)).toEqual({ kind: 'no-backup' });
@@ -842,7 +844,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
   it('keeps nothing when locked during the export password derivation', async () => {
     const source = await backup(EXPORT_PASSWORD);
     const c = await empty();
-    c.openBackupFile(source.bytes);
+    await c.openBackupFile(source.bytes);
     const pending = c.openBackup({ kind: 'password', password: EXPORT_PASSWORD });
     c.lock();
     expect(await pending).toEqual({ kind: 'locked' });
@@ -853,7 +855,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     const source = await backup();
     const c = await created();
     // Unlocked, a backup opens for a merge (D182), never for a fresh restore.
-    expect(c.openBackupFile(source.bytes).kind).toBe('ok');
+    expect((await c.openBackupFile(source.bytes)).kind).toBe('ok');
     expect(await c.openBackup({ kind: 'phrase', words: source.words })).toEqual({
       kind: 'different-vault',
     });
@@ -861,7 +863,7 @@ describe('fresh restore (§10, D33, D43, D95, D104)', () => {
     expect(await c.restore(NEW_PASSWORD, { replace: true })).toEqual({ kind: 'no-backup' });
     // Locked, a backup opens to replace the vault, and only an explicit replacement restores it.
     c.lock();
-    expect(c.openBackupFile(source.bytes).kind).toBe('ok');
+    expect((await c.openBackupFile(source.bytes)).kind).toBe('ok');
     expect(await c.openBackup({ kind: 'phrase', words: source.words })).toMatchObject({
       kind: 'ok',
     });
@@ -996,7 +998,7 @@ describe('replacing the vault by a backup (§10, D89, D96, D120, D153, D154, D18
   }
 
   async function open(c: VaultController, file: { bytes: Uint8Array; words: string }) {
-    expect(c.openBackupFile(file.bytes).kind).toBe('ok');
+    expect((await c.openBackupFile(file.bytes)).kind).toBe('ok');
     expect(await c.openBackup({ kind: 'phrase', words: file.words })).toMatchObject({
       kind: 'ok',
     });
@@ -1317,7 +1319,7 @@ describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
 
     const b = controller(new IDBFactory(), undefined, undefined, () => options.bNow ?? T0 + 1000);
     await b.start();
-    b.openBackupFile(first.bytes);
+    await b.openBackupFile(first.bytes);
     await b.openBackup({ kind: 'phrase', words });
     await b.restore(NEW_PASSWORD);
     const fromB = await session(b).createItem(login('From B'));
@@ -1336,7 +1338,7 @@ describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
 
   it('merges a backup of the same vault by the Recovery Phrase, in one commit', async () => {
     const { a, words, bytes, fromB } = await twoInstallations();
-    expect(a.openBackupFile(bytes).kind).toBe('ok');
+    expect((await a.openBackupFile(bytes)).kind).toBe('ok');
     expect(await a.openBackup({ kind: 'phrase', words })).toMatchObject({ kind: 'ok' });
     const merged = await a.mergeBackup();
     if (merged.kind !== 'ok') throw new Error(merged.kind);
@@ -1353,7 +1355,7 @@ describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
 
   it('recommends Check Recovery Phrase after a merge opened with an export password (D43)', async () => {
     const { a, bytes } = await twoInstallations({ exportPassword: EXPORT_PASSWORD });
-    a.openBackupFile(bytes);
+    await a.openBackupFile(bytes);
     await a.openBackup({ kind: 'password', password: EXPORT_PASSWORD });
     expect((await a.mergeBackup()).kind).toBe('ok');
     expect(a.afterRestore).toBe('check-phrase');
@@ -1367,14 +1369,14 @@ describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
     await other.create(PASSWORD, 'Other');
     const made = await other.exportBackup({ kind: 'password', password: PASSWORD });
     if (made.kind !== 'ok') throw new Error(made.kind);
-    a.openBackupFile(made.bytes);
+    await a.openBackupFile(made.bytes);
     expect(await a.openBackup({ kind: 'phrase', words })).toEqual({ kind: 'different-vault' });
     expect(await a.mergeBackup()).toEqual({ kind: 'no-backup' });
   });
 
   it('refuses a backup with records beyond the future-clock bound, saying when to retry (D64)', async () => {
     const { a, words, bytes, fromB } = await twoInstallations({ bNow: T0 + 3 * DAY });
-    a.openBackupFile(bytes);
+    await a.openBackupFile(bytes);
     await a.openBackup({ kind: 'phrase', words });
     const merged = await a.mergeBackup();
     expect(merged.kind).toBe('future-clock');
@@ -1385,7 +1387,7 @@ describe('backup merge (§10, sync-protocol.md §1, D13, D43, D182)', () => {
 
   it('merges nothing once locked: the opened backup goes with the lock', async () => {
     const { a, words, bytes } = await twoInstallations();
-    a.openBackupFile(bytes);
+    await a.openBackupFile(bytes);
     await a.openBackup({ kind: 'phrase', words });
     a.lock();
     expect(await a.mergeBackup()).toEqual({ kind: 'no-backup' });
@@ -2180,13 +2182,13 @@ describe('asset update offered only between flows (D152, D191)', () => {
     if (made.kind !== 'ok') throw new Error(made.kind);
     const seen: boolean[] = [];
     c.subscribe(() => seen.push(c.updateAllowed));
-    expect(c.openBackupFile(made.bytes).kind).toBe('ok');
+    expect((await c.openBackupFile(made.bytes)).kind).toBe('ok');
     expect(c.updateAllowed).toBe(false);
     c.cancelRestore();
     expect(c.updateAllowed).toBe(true);
     expect(seen).toEqual([false, true]);
     c.lock();
-    expect(c.openBackupFile(made.bytes).kind).toBe('ok');
+    expect((await c.openBackupFile(made.bytes)).kind).toBe('ok');
     expect(c.updateAllowed).toBe(false);
     c.lock();
     expect(c.updateAllowed).toBe(true);
