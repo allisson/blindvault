@@ -992,6 +992,22 @@ phase adds them here with a justification; the spike measures the QR pair the pr
 (`docs/spikes/README.md`). Phase 4 added `qrcode-generator` and `zxing-wasm`, not `barcode-detector`
 (D208).
 
+### Phase 10 spike (`spikes/`, throwaway, D281)
+
+The spike workspace comes back for the Phase 10 spike and is deleted after its last result, as
+after Phase 0. Its dependencies are of the throwaway workspace only, outside lint and CI, each
+pinned to an exact version at least 14 days old when the spike code lands, Maven artifacts checked
+by hand against the same rule:
+
+- `spikes/extension/`: Vite, already in the workspace, builds the MV3 extension and embeds the
+  `apps/web` build unmodified; no other dependency.
+- `spikes/android/`: the Gradle wrapper with `distributionSha256Sum`, the Android Gradle Plugin
+  and Kotlin to build the debug APK; `androidx.webkit` for `WebViewAssetLoader`, which serves the
+  `apps/web` build from the APK on an `https:` origin; `androidx.biometric` for the BiometricPrompt
+  that guards the Keystore key. No Capacitor (D281).
+
+None becomes a product dependency unless a later task adds it here with a justification.
+
 ### Chosen for later phases (Phase 0 selection, Gate 0)
 
 **Noise: copied `noise-protocol` state machine, no runtime dependency (D1, D157).** Evaluated on
