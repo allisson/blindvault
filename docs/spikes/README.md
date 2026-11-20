@@ -76,14 +76,23 @@ Per browser of the matrix (installed app too on the phones):
 
 ## 6. Phase 10 spike — extension (D272, D281) — `spikes/extension/`
 
-Not run yet. An unpacked MV3 extension built on the Mac (`pnpm --filter @blindvault/spikes build`),
-holding no vault data, with the `apps/web` build embedded unmodified. Each extension page ends with
-a JSON result and a **Copy result** button, as in Phase 0; results go to `docs/spikes/extension.md`.
-Nothing is published: Windows gets `spikes/extension/dist` by a USB drive or a shared folder.
+Not run yet. An unpacked MV3 extension built on the Mac with
+`pnpm --filter @blindvault/spikes build:extension`, into `spikes/extension/dist/chrome` and
+`spikes/extension/dist/firefox`. It holds no vault data. The root of each is the `apps/web` build,
+unmodified except that `_headers` is left out: it is a Cloudflare file, and Chrome refuses a file
+whose name starts with `_` in an extension. The spike pages are under `spike/`. The extension page
+`spike/spike.html` (also linked from the popup) ends with a JSON result and a **Copy result**
+button, as in Phase 0; so does the local relying-party page. Results go to
+`docs/spikes/extension.md`. Nothing is published: Windows gets `spikes/extension/dist` by a USB
+drive or a shared folder.
 
-Load it in developer mode on Chrome (`chrome://extensions` → Load unpacked) and as a temporary
-add-on on Firefox (`about:debugging` → Load Temporary Add-on). Devices: MacBook Air M1 and the
-Windows laptop, Chrome and Firefox on each.
+Load `dist/chrome` in developer mode on Chrome (`chrome://extensions` → Load unpacked), and
+`dist/firefox/manifest.json` as a temporary add-on on Firefox (`about:debugging` → Load Temporary
+Add-on); on Firefox, check in `about:addons` that the add-on may run on `localhost` and
+`webauthn.io`. The local relying party (measure 3) runs with `node rp/serve.mjs` from either dist
+folder, Node and no dependency, at `http://localhost:5310/` with its iframe on port 5311. Every
+interception opens a confirm window: **Use spike passkey**, **Another authenticator** or
+**Cancel**. Devices: MacBook Air M1 and the Windows laptop, Chrome and Firefox on each.
 
 | # | Measure | Pass |
 | --- | --- | --- |

@@ -195,6 +195,16 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.5(@types/node@26.6.5)(jiti@2.7.0))
 
+  spikes:
+    dependencies:
+      '@blindvault/crypto':
+        specifier: workspace:*
+        version: link:../packages/crypto
+    devDependencies:
+      vite:
+        specifier: 8.3.5
+        version: 8.3.5(@types/node@26.6.5)(jiti@2.7.0)
+
   tests:
     dependencies:
       '@blindvault/backup':

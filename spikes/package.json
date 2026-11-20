@@ -1,0 +1,17 @@
+{
+  "name": "@blindvault/spikes",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Phase 10 spike (throwaway, outside CI, D281). See docs/spikes/README.md.",
+  "type": "module",
+  "scripts": {
+    "build:extension": "pnpm --filter @blindvault/web build && node extension/build.mjs",
+    "rp": "node extension/rp/serve.mjs"
+  },
+  "dependencies": {
+    "@blindvault/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "8.3.5"
+  }
+}
