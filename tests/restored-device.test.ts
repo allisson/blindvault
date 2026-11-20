@@ -16,6 +16,8 @@ import { type RecordStore, VaultSession, parseLocalConfig } from '@blindvault/va
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { joined } from './backup-file';
+
 beforeAll(initCrypto);
 
 const T0 = 1_760_000_000_000;
@@ -95,7 +97,7 @@ describe('restored device through IndexedDB (§10, D30, D41, D186)', () => {
     const file = await a.exportBackup({ kek: kek(keyringA, 1), method: 'password' });
 
     const keyring = new Keyring();
-    const backup = await restoreWithPhrase(keyring, await parseBackup(file.bytes), phrase.words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(joined(file)), phrase.words);
     const factory = new IDBFactory();
     const { store, db } = lazyStore(factory, backup.vaultId);
     const b = await VaultSession.restore({

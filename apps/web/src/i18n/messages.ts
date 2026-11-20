@@ -492,6 +492,10 @@ const en = {
     readmit:
       'This device was restored from a backup and is not registered: until another device of the vault re-admits it, it exchanges data with them only through backups. Settings lists those devices.',
     openSettings: 'Open Settings',
+    blobsStopped:
+      'The backup file changed or could not be read while its attachments were copied. The records are saved; the attachments not copied wait for a sync with a device that holds them.',
+    blobsMissing:
+      'The backup lacks the attachments of: {titles}. They wait for a sync with a device that holds them.',
   },
   reset: {
     steps: { phrase: 'Type the Recovery Phrase', password: 'Choose the new password' },
@@ -1012,6 +1016,8 @@ const en = {
     backupNone:
       'This vault has no Recovery Phrase: the preview build created it, so no backup of it could be opened. Create a new vault to get one.',
     backupProtect: 'Also protect it with an export password',
+    backupMissing:
+      'This backup lacks the attachments of: {titles}. Their files are not on this device yet: sync with a device that holds them, then make a new backup.',
     backupMasterKey:
       "Whoever opens this backup with its export password holds the vault's Master Key for good. If the export password and a copy of the backup are ever exposed together, the vault must be re-founded.",
     exportPassword: 'Export password',
@@ -1675,6 +1681,10 @@ const ptBR: Messages = {
     readmit:
       'Este dispositivo foi restaurado de um backup e não está registrado: até que outro dispositivo do cofre o readmita, ele troca dados com eles só por backups. Configurações lista esses dispositivos.',
     openSettings: 'Abrir Configurações',
+    blobsStopped:
+      'O arquivo de backup mudou ou não pôde ser lido enquanto os anexos eram copiados. Os registros foram salvos; os anexos não copiados esperam uma sincronização com um dispositivo que os tenha.',
+    blobsMissing:
+      'O backup não tem os anexos de: {titles}. Eles esperam uma sincronização com um dispositivo que os tenha.',
   },
   reset: {
     steps: { phrase: 'Digitar a Frase de Recuperação', password: 'Escolher a nova senha' },
@@ -2201,6 +2211,8 @@ const ptBR: Messages = {
     backupNone:
       'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, então nenhum backup dele poderia ser aberto. Crie um novo cofre para ter uma.',
     backupProtect: 'Proteger também com uma senha de exportação',
+    backupMissing:
+      'Este backup não tem os anexos de: {titles}. Os arquivos deles ainda não estão neste dispositivo: sincronize com um dispositivo que os tenha e faça um novo backup.',
     backupMasterKey:
       'Quem abrir este backup com a senha de exportação passa a ter a Chave Mestra do cofre para sempre. Se a senha de exportação e uma cópia do backup forem expostas juntas, o cofre precisará ser refundado.',
     exportPassword: 'Senha de exportação',

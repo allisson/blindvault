@@ -1,3 +1,4 @@
+import { type BlobRestore, type VaultSession } from '@blindvault/vault';
 import { useCallback, useState } from 'react';
 
 import { phraseLabel } from '../app/backup-file';
@@ -12,7 +13,7 @@ import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Card, Field, Notice, TARGET, TextArea } from './components';
 import { NewPassword } from './NewPassword';
-import { recordTypeName } from './Settings';
+import { itemTitles, recordTypeName } from './Settings';
 import { FileDrop, Wizard, WizardActions } from './Wizard';
 
 // Restore from a backup (overview §10, backup-format.md §8): file → secret → local password. The
@@ -134,13 +135,10 @@ export function ChooseFile({
           onClick={() => {
             if (!file) return;
             setReading(true);
-            void file
-              .arrayBuffer()
-              .then((buffer) => controller.openBackupFile(new Uint8Array(buffer)))
-              .then((check) => {
-                setReading(false);
-                onFile(check);
-              });
+            void controller.openBackupFile(file).then((check) => {
+              setReading(false);
+              onFile(check);
+            });
           }}
         >
           {m.wizard.continue}
@@ -409,4 +407,31 @@ export function restoreError(m: Messages, outcome: RestoreOutcome): string | und
         id: outcome.recordId,
       });
   }
+}
+
+/** What step 11 of a restore or a merge did with the backup's blobs (backup-format.md §8, D279). */
+export function BlobNotices({
+  session,
+  blobs,
+}: {
+  readonly session: VaultSession;
+  readonly blobs: BlobRestore;
+}) {
+  const m = useLanguage().messages;
+  return (
+    <>
+      {blobs.stopped ? (
+        <Notice>
+          <span data-testid="blobs-stopped">{m.restore.blobsStopped}</span>
+        </Notice>
+      ) : null}
+      {blobs.missing.length > 0 ? (
+        <Notice>
+          <span data-testid="blobs-missing">
+            {format(m.restore.blobsMissing, { titles: itemTitles(m, session, blobs.missing) })}
+          </span>
+        </Notice>
+      ) : null}
+    </>
+  );
 }

@@ -21,6 +21,8 @@ import {
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { joined } from './backup-file';
+
 beforeAll(initCrypto);
 
 const T0 = 1_760_000_000_000;
@@ -98,7 +100,7 @@ async function exported(session: VaultSession): Promise<Uint8Array> {
   const keyring = new Keyring();
   const file = await session.exportBackup({ kek: kek(keyring, 1), method: 'password' });
   keyring.wipeAll();
-  return file.bytes;
+  return joined(file);
 }
 
 async function restores(file: Uint8Array, words: string) {

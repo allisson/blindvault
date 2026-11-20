@@ -235,9 +235,12 @@ export interface BackupOptions {
 
 /** A `.bvault` file (backup-format.md), ready to hand to the browser. */
 export interface BackupFile {
-  readonly bytes: Uint8Array;
+  /** The file as the parts of a `Blob`: the header, then each encrypted chunk (§6, D278). */
+  readonly parts: readonly Uint8Array[];
   /** Unix ms, as in the payload and the Local Config's last backup date. */
   readonly exportedAt: number;
+  /** The Items citing a blob this device does not hold, which the file lacks (§8 step 5, D279). */
+  readonly missing: readonly RecordKey[];
 }
 
 export interface RegenerateOptions {
@@ -304,6 +307,24 @@ export interface BackupRecords {
   /** In the caller's keyring, which the caller wipes. */
   readonly masterKey: SymmetricKey;
   readonly records: readonly StoredRecord[];
+}
+
+/** The blobs of a validated backup, for backup-format.md §8 step 11 (D278). */
+export interface BackupBlobs {
+  /** The `blobId` of every blob in the file, in its order. */
+  readonly blobIds: readonly Uint8Array[];
+  /** The blobs in that order; a call that throws ends the reading. */
+  readonly blobs: {
+    next(): Promise<{ readonly blobId: Uint8Array; readonly blob: Uint8Array } | undefined>;
+  };
+}
+
+/** What step 11 of a restore or a merge did with the backup's blobs (backup-format.md §8, D279). */
+export interface BlobRestore {
+  /** A blob read failed, the file having changed: the blobs not yet written wait for a sync. */
+  readonly stopped: boolean;
+  /** The Items citing a blob neither held nor in the file. */
+  readonly missing: readonly RecordKey[];
 }
 
 /** What a backup merge did and the notices it calls for, shown once (sync-protocol.md §1.6, D182). */
@@ -1830,9 +1851,11 @@ export class VaultSession {
    * Makes a `.bvault` file (backup-format.md §8, D181). `kek` must open the Master Key wrap of
    * `method` (`UnlockRejectedError` otherwise), since the session holds no Master Key. Every stored
    * record is read again and verified as on receipt; one that fails, or one kept aside at unlock,
-   * throws `ExportRejectedError` naming it (D64). The Master Key, the file key and the export KEK
-   * live in a keyring of their own, wiped before this returns. Records the date of the last backup
-   * in Local Config; writes no record and issues no HLC.
+   * throws `ExportRejectedError` naming it (D64). Waits for the Item Versions to be verified
+   * (D277), then streams every held blob after the records, read from storage one at a time, and
+   * names the Items citing a blob not held (§8 step 5, D279). The Master Key, the file key and the
+   * export KEK live in a keyring of their own, wiped before this returns. Records the date of the
+   * last backup in Local Config; writes no record and issues no HLC.
    */
   exportBackup(options: BackupOptions): Promise<BackupFile> {
     const { kek, method, exportPassword } = options;
@@ -1861,21 +1884,29 @@ export class VaultSession {
         }
         this.#unlocked();
         const exportedAt = Math.floor(this.#now());
-        // A version-2 file without blobs: the export reads them from storage next (§8 step 5).
+        // Inside the queue: no collection deletes a blob between this list and its read.
+        const blobIds = await this.#store.blobIds();
+        this.#unlocked();
+        const held = new Set(blobIds.map(idKey));
+        const missing = this.#citing([...this.#cited().keys()].filter((k) => !held.has(k)));
         const parts = await sealBackup(
           fileKey,
           { phraseId: recovery.phraseId, phraseCreatedAt: recovery.phraseCreatedAt, keyslots },
           { vaultId: this.#cleartext.vaultId, exportedAt, masterKey },
           stored.map((s) => s.envelope),
-          [],
+          blobIds.map((id) => async () => {
+            this.#unlocked();
+            const blob = await this.#store.blob(id);
+            if (!blob) throw new Error('a blob was deleted during the export');
+            return blob;
+          }),
         );
-        const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-        let at = 0;
-        for (const p of parts) {
-          bytes.set(p, at);
-          at += p.length;
-        }
-        return { writes: [], deletes: [], result: { bytes, exportedAt }, lastBackupAt: exportedAt };
+        return {
+          writes: [],
+          deletes: [],
+          result: { parts, exportedAt, missing },
+          lastBackupAt: exportedAt,
+        };
       } finally {
         scratch.wipeAll();
         this.#grants.delete(scratch);
@@ -1942,6 +1973,35 @@ export class VaultSession {
    */
   mergeBackup(backup: BackupRecords): Promise<MergeResult> {
     return this.#run(() => this.#merge(backup));
+  }
+
+  /**
+   * backup-format.md §8 step 11 (D278, D279), once a fresh restore or a backup merge committed:
+   * reads the backup's blobs in order and writes each one a held record cites and storage lacks, in
+   * its own transaction; any other is dropped. A read that fails, the file having changed after the
+   * first pass, stops the reading: what was written stays, and the rest waits for a sync. Names the
+   * Items citing a blob neither held nor in the file. `VaultLockedError` once the vault is locked.
+   */
+  async restoreBlobs(backup: BackupBlobs): Promise<BlobRestore> {
+    const lacking = new Set((await this.blobGrant().lacking()).map(idKey));
+    let stopped = false;
+    for (;;) {
+      let next: Awaited<ReturnType<BackupBlobs['blobs']['next']>>;
+      try {
+        next = await backup.blobs.next();
+      } catch {
+        stopped = true;
+        break;
+      }
+      if (!next) break;
+      const key = idKey(next.blobId);
+      if (!lacking.has(key)) continue;
+      this.#unlocked();
+      await this.#store.putBlob({ blobId: next.blobId.slice(), blob: next.blob });
+    }
+    this.#unlocked();
+    const inFile = new Set(backup.blobIds.map(idKey));
+    return { stopped, missing: this.#citing([...lacking].filter((k) => !inFile.has(k))) };
   }
 
   #merge(backup: BackupRecords): Plan<MergeResult> {
@@ -3727,24 +3787,26 @@ export class VaultSession {
       },
       citing: (blobId) => {
         this.#unlocked();
-        const key = idKey(blobId);
-        const items = new Map<string, Uint8Array>();
-        for (const [itemKey, item] of this.#state.items) {
-          if (citedBlobIds(item.content).some((id) => idKey(id) === key)) {
-            items.set(itemKey, item.header.recordId);
-          }
-        }
-        for (const versions of this.#state.versions.values()) {
-          for (const v of versions.values()) {
-            if (v.blobIds.some((id) => idKey(id) === key)) items.set(idKey(v.itemId), v.itemId);
-          }
-        }
-        return [...items.values()].map((id) => ({
-          recordType: RecordType.item,
-          recordId: id.slice(),
-        }));
+        return this.#citing([idKey(blobId)]);
       },
     };
+  }
+
+  /** The Items that cite a blob of `keys`, themselves or through an Item Version, each once. */
+  #citing(keys: readonly string[]): RecordKey[] {
+    if (keys.length === 0) return [];
+    const wanted = new Set(keys);
+    const cites = (ids: readonly Uint8Array[]) => ids.some((id) => wanted.has(idKey(id)));
+    const items = new Map<string, Uint8Array>();
+    for (const [itemKey, item] of this.#state.items) {
+      if (cites(citedBlobIds(item.content))) items.set(itemKey, item.header.recordId);
+    }
+    for (const versions of this.#state.versions.values()) {
+      for (const v of versions.values()) {
+        if (cites(v.blobIds)) items.set(idKey(v.itemId), v.itemId);
+      }
+    }
+    return [...items.values()].map((id) => ({ recordType: RecordType.item, recordId: id.slice() }));
   }
 
   #apply(w: Write): void {

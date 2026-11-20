@@ -576,7 +576,7 @@ describe('pairing through the controller (§8.4, D202, D203)', () => {
     if (file.kind !== 'ok' || !words) throw new Error('no backup');
     const { a, b } = await toSas(true, async (restored) => {
       await restored.start();
-      expect((await restored.openBackupFile(file.bytes)).kind).toBe('ok');
+      expect((await restored.openBackupFile(file.file)).kind).toBe('ok');
       expect((await restored.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
       expect((await restored.restore(PASSWORD_A)).kind).toBe('ok');
       expect(session(restored).registered).toBe(false);
@@ -847,7 +847,7 @@ describe('re-admission through the controller (§9, D206, D207)', () => {
     if (file.kind !== 'ok' || !words) throw new Error('no backup');
     const restored = controller('r', new IDBFactory(), restoredInitiates ? net.a : net.b);
     await restored.start();
-    expect((await restored.openBackupFile(file.bytes)).kind).toBe('ok');
+    expect((await restored.openBackupFile(file.file)).kind).toBe('ok');
     expect((await restored.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
     expect((await restored.restore(PASSWORD_B)).kind).toBe('ok');
     expect(session(restored).registered).toBe(false);
@@ -1322,7 +1322,7 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     if (file.kind !== 'ok') throw new Error(file.kind);
     const c = controller('c', new IDBFactory());
     await c.start();
-    expect((await c.openBackupFile(file.bytes)).kind).toBe('ok');
+    expect((await c.openBackupFile(file.file)).kind).toBe('ok');
     expect((await c.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
     expect((await c.restore(PASSWORD_A)).kind).toBe('ok');
     expect(await c.retireDevice(idB)).toBe('ok');
@@ -1330,7 +1330,7 @@ describe('sync through the controller (§9.1, sync-protocol.md §3 to §5, D216)
     if (retiring.kind !== 'ok') throw new Error(retiring.kind);
 
     await connected(a, b, idA, idB);
-    expect((await a.openBackupFile(retiring.bytes)).kind).toBe('ok');
+    expect((await a.openBackupFile(retiring.file)).kind).toBe('ok');
     expect((await a.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
     expect((await a.mergeBackup()).kind).toBe('ok');
     expect(await syncStage(a, 'failed')).toEqual({ kind: 'failed', reason: 'retired-peer' });

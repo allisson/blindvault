@@ -44,6 +44,7 @@ import {
   requestPersistence,
 } from '@blindvault/storage';
 import {
+  type BlobRestore,
   ContentInvalidError,
   ExportRejectedError,
   HlcReadOnlyError,
@@ -57,6 +58,7 @@ import {
   type Preferences,
   RecordBlockedError,
   RecordNotFoundError,
+  type RecordKey,
   type RecordStore,
   type RecoveryView,
   type RegenerationBlock,
@@ -76,7 +78,7 @@ import {
   parseLocalConfig,
 } from '@blindvault/vault';
 
-import { backupFileName, recordIdPrefix } from './backup-file';
+import { backupFileName, fileSource, recordIdPrefix } from './backup-file';
 import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { type ClockNotice, WritableTimer, clockNoticeOf } from './clock';
 import { type EraseAdvice, devicesOf, eraseAdvice } from './devices';
@@ -184,9 +186,17 @@ export type RefoundingStart = 'ok' | ReauthFailure;
 export type Refounding =
   { readonly kind: 'ok' } | { readonly kind: 'not-started' | 'no-phrase' | 'busy' | 'locked' };
 
-/** A backup export (backup-format.md §8, D64, D179, D181). */
+/**
+ * A backup export (backup-format.md §8, D64, D179, D181). `missing` names the Items citing a blob
+ * this device does not hold, which the file lacks (D279).
+ */
 export type BackupExport =
-  | { readonly kind: 'ok'; readonly bytes: Uint8Array; readonly name: string }
+  | {
+      readonly kind: 'ok';
+      readonly file: Blob;
+      readonly name: string;
+      readonly missing: readonly RecordKey[];
+    }
   | {
       readonly kind:
         | 'wrong-password'
@@ -277,9 +287,12 @@ export type RestoreOutcome =
   | { readonly kind: 'ok' | 'locked' | 'no-backup' | 'busy' }
   | { readonly kind: 'corrupt-record'; readonly recordType: number; readonly recordId: string };
 
-/** A backup merge (sync-protocol.md §1, D182): `no-backup` when none was opened. */
+/**
+ * A backup merge (sync-protocol.md §1, D182): `no-backup` when none was opened. `blobs` is what
+ * step 11 did with the backup's blobs once the merge committed (backup-format.md §8, D279).
+ */
 export type MergeOutcome =
-  | { readonly kind: 'ok'; readonly result: MergeResult }
+  | { readonly kind: 'ok'; readonly result: MergeResult; readonly blobs: BlobRestore }
   | { readonly kind: 'no-backup' | 'locked' | 'different-vault' | 'master-key-mismatch' }
   /** The merge can be retried from `retryAt` (Unix ms, D64). */
   | { readonly kind: 'future-clock'; readonly retryAt: number }
@@ -765,13 +778,16 @@ export class VaultController {
     return kind === 'no-vault' || kind === 'locked' || kind === 'unlocked';
   }
 
-  /** Reads a `.bvault` file for a restore (backup-format.md §8 steps 1 and 2). */
-  async openBackupFile(bytes: Uint8Array): Promise<BackupFileCheck> {
+  /**
+   * Reads a `.bvault` file for a restore (backup-format.md §8 steps 1 and 2): only its header. The
+   * file is read again by ranges when it opens and in step 11, never whole (D278).
+   */
+  async openBackupFile(file: Blob): Promise<BackupFileCheck> {
     if (!this.#restoring()) return { kind: 'unavailable' };
     this.#dropRestore();
     const epoch = this.#epoch;
     try {
-      const parsed = await parseBackup(bytes.slice());
+      const parsed = await parseBackup(fileSource(file));
       if (epoch !== this.#epoch || !this.#restoring()) return { kind: 'unavailable' };
       this.#restore = { parsed };
       this.#set({ ...this.#status });
@@ -963,9 +979,17 @@ export class VaultController {
       }
       this.#afterRestore = backup.openedWith === 'password' ? 'check-phrase' : undefined;
       this.#readmission = devicesOf(session).advice === 'readmit';
-      this.#ready = { start: 'restored', openedWith: backup.openedWith };
+      const ready = { start: 'restored', openedWith: backup.openedWith } as const;
+      this.#ready = ready;
       this.#set({ kind: 'unlocked', session });
       void this.#requestPersistence();
+      // Step 11 once the vault is open, so a lock meanwhile locks it; "Vault ready" then says how
+      // it ended, unless closed or locked by then.
+      const blobs = await this.#restoreBlobs(session, backup);
+      if (this.#ready === ready) {
+        this.#ready = { ...ready, blobs };
+        this.#set({ ...this.#status });
+      }
       return { kind: 'ok' };
     } catch (error) {
       keyring.wipeAll();
@@ -1010,7 +1034,8 @@ export class VaultController {
       // The backup may hold the sync's peer retired (D69, D220).
       this.#sync?.flow.recheck();
       this.#set({ ...status });
-      return { kind: 'ok', result };
+      const blobs = await this.#restoreBlobs(status.session, backup);
+      return { kind: 'ok', result, blobs };
     } catch (error) {
       if (error instanceof VaultLockedError) return { kind: 'locked' };
       if (!(error instanceof MergeRejectedError)) throw error;
@@ -1042,6 +1067,19 @@ export class VaultController {
     const epoch = this.#epoch;
     const read = await readImport(source, bytes, passphrase, () => this.#deps.kdf());
     return epoch === this.#epoch ? read : { kind: 'locked' };
+  }
+
+  /**
+   * backup-format.md §8 step 11 once the records committed (D278, D279). The vault holds them
+   * whatever happens here: a lock or a failed write stops it like a read that fails, and the blobs
+   * not written wait for a sync.
+   */
+  async #restoreBlobs(session: VaultSession, backup: ValidatedBackup): Promise<BlobRestore> {
+    try {
+      return await session.restoreBlobs(backup);
+    } catch {
+      return { stopped: true, missing: [] };
+    }
   }
 
   /** Drops the backup being restored, wiping its Master Key. */
@@ -1639,7 +1677,15 @@ export class VaultController {
           : {}),
       });
       this.#set({ ...status });
-      return { kind: 'ok', bytes: file.bytes, name: backupFileName(file.exportedAt) };
+      return {
+        kind: 'ok',
+        // Parts the export allocated itself, each on an `ArrayBuffer` of its own.
+        file: new Blob([...file.parts] as Uint8Array<ArrayBuffer>[], {
+          type: 'application/octet-stream',
+        }),
+        name: backupFileName(file.exportedAt),
+        missing: file.missing,
+      };
     } catch (error) {
       const failure = reauthFailure(error, auth);
       if (failure) return { kind: failure };

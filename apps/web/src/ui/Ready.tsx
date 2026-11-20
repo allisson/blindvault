@@ -7,6 +7,7 @@ import { type Navigation, type SettingsFocus } from '../app/nav';
 import { type Ready as ReadyState, type ReadyAdvice, readyAdvice } from '../app/ready';
 import { useMessages } from '../i18n/context';
 import { Badge, Button } from './components';
+import { BlobNotices } from './RestoreVault';
 
 // "Vault ready" after a creation, a restore or a pairing (overview §13.3, D198, D203): the
 // recommendations in order, each opening Settings at its section, the pairing and the re-admission
@@ -69,6 +70,9 @@ export function Ready({
         {m.ready.title}
       </h1>
       <p className="text-sm">{m.ready.intro}</p>
+      {ready.start === 'restored' && ready.blobs ? (
+        <BlobNotices session={session} blobs={ready.blobs} />
+      ) : null}
       <ol className="flex flex-col gap-4">
         {advice.map((a) => {
           const act = action[a];
