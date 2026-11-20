@@ -29,6 +29,7 @@ encrypted backups and synchronized records (§3).
 | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- |
 | Reads vault content | Protected | Every record encrypted; keys wrapped under the Device KEK or PRF KEK | `crypto-spec.md` §8–§12 |
+| Reads an attachment | Protected | Each blob encrypted under a random key of its own, held only inside its item's encrypted content (D278) | `attachments.md` §2, §9 |
 | Guesses the local password offline | Partially protected | Argon2id calibrated to about 1 s, 64 MiB floor; zxcvbn score 4 required (D9, D71) | `crypto-spec.md` §6 |
 | Reads the local password saved by the browser | Partially protected | Depends on how the browser protects saved passwords; the UI warns against saving it wherever a local password is set (D175) | overview §5.3 |
 | Tampers with a record header (LWW, deletion, replay) | Protected | Whole header bound through AAD (D21) | `crypto-spec.md` §8, §9.5 |
@@ -39,6 +40,7 @@ encrypted backups and synchronized records (§3).
 | Rolls the storage back to an earlier copy | Limited, accepted | Undetectable; peers restore newer records at the next sync (D77) | overview §3 |
 | Clones the storage into a second running installation, or copies another device's whole Local Config into this one, opened with the same local password or a synced passkey | Limited, accepted | Undetectable; documented: replace the clone by pairing (D87, D153, D265) | overview §3 |
 | Reads metadata | Accepted | Header, counts, HLCs (editing times and `deviceId`), size buckets, cleartext Local Config fields (§3, D92, D96, D121) | overview §3 |
+| Learns the size of each attached file | Accepted | A blob's length gives its file's size to 17 bytes per 65,536; the number of blobs shows too (D278) | `attachments.md` §9 |
 | Unlocks with a synced passkey's platform account | Partially protected | Shown at setup when the credential is backup-eligible (D84) | overview §5.5 |
 | Holds the device while unlocked | Out of scope | OS and device security; auto-lock and hidden-app lock (D88, D54, D151), kept by the wall clock and running before a creation or a restore commits (D263); changing the local password or setting up a passkey needs the current password (D168, D172); exporting a backup, which yields the Master Key, needs the local password or the passkey again (D181) | overview §5.5, §7, §10 |
 
@@ -63,6 +65,8 @@ encrypted backups and synchronized records (§3).
 | Sends corrupted, oversized or foreign records | Protected | Verification on receipt before merge (D57, D64, D66, D129, D144, D260) | `crypto-spec.md` §9.5 |
 | Sends records from the future to win LWW | Protected | 24-hour future-clock bound (D76), applied to a purged tombstone at its purge date (D262) | `sync-protocol.md` |
 | Resurrects deleted data from a stale device | Protected | Persistent tombstones (D27) | `sync-protocol.md` |
+| Sends a substituted, oversized or truncated attachment blob | Protected | A blob is written only whole and when its BLAKE2b-256 equals a `blobId` this device asked for, checked before anything is written; one outside 42 to 10,488,521 bytes, unasked, out of order or past its length aborts the session (D278, D279, CRYPTO-INV-025) | `attachments.md` §9, `sync-protocol.md` §10.1 |
+| Withholds a blob | Limited | The item and its other fields stay usable; the attachment shows as waiting for sync and is asked for at the next sync (D278) | `attachments.md` §6, §7 |
 | Floods the link before the SAS or the sync handshake | Protected | At most 2,098,388 bytes unread until the peer is authenticated, then the link closes (D264) | `pairing-protocol.md` §4 |
 
 ### A4. Holder of a `.bvault` file
@@ -72,6 +76,7 @@ encrypted backups and synchronized records (§3).
 | Opens it with a guessed export password | Partially protected | Argon2id at the D9 floor; 10^14 estimated guesses required (D134) | `backup-format.md` |
 | Truncates or alters it | Protected | Authenticated header; `secretstream` final tag required (D95) | `backup-format.md` |
 | Exhausts memory with tampered parameters | Protected | Accepted range checked before Argon2id (D78) | `backup-format.md` |
+| Substitutes a blob in the file | Protected | The file is authenticated whole before the commit; a blob is written only when it matches a `blobId` a committed record cites, any other dropped; a file changed after the first pass stops the blobs, which wait for sync (D279, CRYPTO-INV-025) | `backup-format.md` §8 step 11 |
 | Reads metadata | Accepted | `phraseId`, phrase date, format version, keyslot presence, file size (§3) | overview §10 |
 | Holds an old Recovery Phrase | Accepted | An exposed phrase is a Master Key compromise; regeneration is for a lost phrase (§5.4) | overview §14 |
 
@@ -102,6 +107,7 @@ encrypted backups and synchronized records (§3).
 | Script injection | Protected | Strict CSP, Trusted Types, text-only rendering, `http:`/`https:` URLs only (D83) | overview §11 |
 | Reverse tabnabbing, Referer leak | Protected | `noopener`, `noreferrer`, `no-referrer` (D147) | overview §13 |
 | Clickjacking | Limited | The app does not open inside a frame (D83, D193) | overview §11 |
+| Runs a hostile attachment in the app's origin | Protected | No preview: an attachment is only downloaded, as `application/octet-stream` whatever its `mediaType`, under a sanitized name, through an object URL revoked after the click (D273, CRYPTO-INV-025) | `attachments.md` §7, §9 |
 
 ### A8. Author or holder of an import file
 
@@ -118,17 +124,18 @@ encrypted backups and synchronized records (§3).
 
 | Risk | Status | Mitigation |
 | --- | --- | --- |
-| Browser storage eviction | Partially protected | Persistent storage request, backups, replication; the persistence status and storage warnings: Safari in a plain tab, not kept on the only device, nearly full (D55, D103, D119, D196) |
+| Browser storage eviction | Partially protected | Persistent storage request, backups, replication; the persistence status and storage warnings: Safari in a plain tab, not kept on the only device, nearly full (D55, D103, D119, D196); an attachment whose blob would not fit refused when picked (`attachments.md` §7) |
 | Accidental deletion | Protected | Trash with 30-day purge, item history (D6, D7) |
 | Sync conflict | Protected (items), limited (folders) | HLC, LWW, item history; folders without history (D14) |
 | Device clock wrong | Limited | Future-clock bound, read-only rules (D73, D74, D76, D149) |
 
 ## Before v1.0 (planned)
 
-Threats of the attachments, the browser extension, stored passkeys and the Android app, which come
-before v1.0 (D275). Their direction is fixed (overview §20) and their specifications are not
-written yet. Every entry is planned; the specifications in `docs/attachments.md`, `docs/extension.md` and `docs/android.md`
-will refine them.
+Threats of the browser extension, stored passkeys and the Android app, which come before v1.0
+(D275). Their direction is fixed (overview §20) and their specifications are not written yet.
+Every entry is planned; the specifications in `docs/extension.md` and `docs/android.md` will
+refine them. The attachments' entries moved to their attackers above once `docs/attachments.md`
+specified them (D278, D279).
 
 ### A9. Malicious website (extension and Android autofill)
 
@@ -152,11 +159,9 @@ will refine them.
 | --- | --- | --- | --- | --- |
 | A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK requires a BiometricPrompt on every use, is invalidated when the enrolled biometrics change, and is bound to `localConfigId`; setting it up needs the local password (D271) | overview D271 |
 | A1 | Reads a removed stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268) | overview D268 |
-| A3 | Sends a substituted or oversized attachment blob | Planned | Each received blob checked against the hash in its item's `attachment` field; blobs above 10 MiB rejected (D273, D278) | overview D278 |
 | A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust; the version lock opens no vault until the user confirms the new version and manifest hash (D270) | overview D270 |
 | A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; reproducible APK with published SHA-256 and rebuild instructions (D270) | overview D270 |
 | A6 | Blocks new Android installs by terminating the Play Console account that registers the package | Planned, accepted | The account is a root of trust for installs, not for integrity; installed apps keep working, ADB and the advanced flow still install (D274) | overview D274 |
-| A7 | Runs a hostile attachment in the app's origin | Planned | Attachments are only downloaded, never previewed (D273) | overview D273 |
 
 ## Out of scope (documented to users)
 
