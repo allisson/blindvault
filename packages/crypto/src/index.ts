@@ -100,13 +100,20 @@ export { PAD_BLOCK, pad, unpad } from './pad';
 export { openLocalConfigPart, sealLocalConfigPart } from './local-config';
 export { PASSWORD_KEYSLOT_AAD, SEALED_KEY_LENGTH, openSealedKey, sealKeyTo } from './keyslot';
 export {
+  type BackupBlobReader,
   type BackupMeta,
+  type BackupPayloadMeta,
+  type BackupScan,
+  type BackupSource,
   BackupStreamWriter,
   CHUNK_LENGTH,
   MAX_META_LENGTH,
   type OpenedBackupPayload,
+  type ReadBackupPayload,
   STREAM_HEADER_LENGTH,
   openBackupStream,
+  readBackupStream,
+  scanBackupStream,
 } from './backup-stream';
 export {
   BLOB_ID_LENGTH,

@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "packages/crypto/test-vectors/crypto-v1.json"
 OUT_CONTENT = ROOT / "packages/vault/test-vectors/content-v1.json"
 OUT_BACKUP = ROOT / "packages/backup/test-vectors/backup-v1.json"
+OUT_BACKUP_V2 = ROOT / "packages/backup/test-vectors/backup-v2.json"
 OUT_PAIRING = ROOT / "packages/sync/test-vectors/pairing-v2.json"
 OUT_SYNC = ROOT / "packages/sync/test-vectors/sync-v2.json"
 OUT_BLOB = ROOT / "packages/crypto/test-vectors/blob-v1.json"
@@ -1010,7 +1011,7 @@ def content_vectors() -> dict:
 # --- backup-format.md vectors ------------------------------------------------------------------
 
 BV_MAGIC = bytes.fromhex("89425641554c540a")  # \x89BVAULT\n
-BV_VERSION = 1
+BV_VERSION = 2  # the latest; 1 is still read
 BV_CHUNK = 65536
 BV_ABYTES = 17
 BV_MAX_HEADER = 4096
@@ -1046,14 +1047,17 @@ def bv_chunks(payload: bytes) -> list:
     return [payload[i * BV_CHUNK:(i + 1) * BV_CHUNK] for i in range(full)] + [payload[full * BV_CHUNK:]]
 
 
-def bv_meta(records, **over) -> bytes:
+def bv_meta(records, blobs=None, **over) -> bytes:
+    """`blobs` None: a version-1 meta, with no blobCount."""
     m = {"exportedAt": BV_EXPORTED_AT, "masterKey": MASTER_KEY, "recordCount": len(records), "vaultId": VAULT_ID}
+    if blobs is not None:
+        m["blobCount"] = len(blobs)
     m.update(over)
     return cbor({k: x for k, x in m.items() if x is not None})
 
 
-def bv_payload(meta: bytes, records) -> bytes:
-    return u32(len(meta)) + meta + b"".join(u32(len(e)) + e for e in records)
+def bv_payload(meta: bytes, records, blobs=()) -> bytes:
+    return u32(len(meta)) + meta + b"".join(u32(len(x)) + x for x in [*records, *blobs])
 
 
 def bv_filler(n: int) -> bytes:
@@ -1112,6 +1116,10 @@ def bv_parse_header(f: bytes):
     return m, f[:14 + n]
 
 
+def bv_version(header: bytes) -> int:
+    return struct.unpack(">H", header[8:10])[0]
+
+
 def bv_read_stream(f: bytes, header: bytes, stream_header: bytes, key: bytes) -> bytes:
     """Reference for backup-format.md section 5; raises BvReject('corrupt')."""
     st = bindings.crypto_secretstream_xchacha20poly1305_state()
@@ -1137,7 +1145,7 @@ def bv_read_stream(f: bytes, header: bytes, stream_header: bytes, key: bytes) ->
             return b"".join(out)
 
 
-def bv_parse_payload(p: bytes):
+def bv_parse_payload(p: bytes, version: int = BV_VERSION):
     """Reference for backup-format.md section 6; raises BvReject('malformed')."""
     pos = 0
 
@@ -1158,19 +1166,28 @@ def bv_parse_payload(p: bytes):
         raise
     except Exception as e:
         raise BvReject("malformed", f"meta CBOR: {e}")
-    if not (isinstance(meta, dict) and set(meta) == {"exportedAt", "masterKey", "recordCount", "vaultId"}
+    keys = {"exportedAt", "masterKey", "recordCount", "vaultId"} | ({"blobCount"} if version >= 2 else set())
+    if not (isinstance(meta, dict) and set(meta) == keys
             and _bv_uint(meta["exportedAt"]) and _bv_bytes(meta["masterKey"], 32)
-            and _bv_uint(meta["recordCount"]) and _bv_bytes(meta["vaultId"], 16)):
+            and _bv_uint(meta["recordCount"]) and _bv_bytes(meta["vaultId"], 16)
+            and (version < 2 or _bv_uint(meta["blobCount"]))):
         raise BvReject("malformed", "meta")
     records = [take(1, MAX_ENVELOPE) for _ in range(meta["recordCount"])]
+    blobs, ids = [], set()
+    for _ in range(meta.get("blobCount", 0)):
+        b = take(MIN_BLOB, MAX_BLOB)
+        if blake2b(b, 32) in ids:
+            raise BvReject("malformed", "the same blob twice")
+        ids.add(blake2b(b, 32))
+        blobs.append(b)
     if pos != len(p):
-        raise BvReject("malformed", "bytes after the last record")
-    return meta, records
+        raise BvReject("malformed", "bytes after the last record or blob")
+    return meta, records, blobs
 
 
 def bv_read(f: bytes, key: bytes = BV_FILE_KEY):
     m, header = bv_parse_header(f)
-    return m, header, bv_parse_payload(bv_read_stream(f, header, m["stream"], key))
+    return m, header, bv_parse_payload(bv_read_stream(f, header, m["stream"], key), bv_version(header))
 
 
 def bv_newer(e: bytes) -> bool:
@@ -1203,7 +1220,7 @@ def bv_restore(f: bytes, via: str, key: bytes = BV_FILE_KEY):
 
     A corrupt-record rejection carries the record it names in `record` (None if it does not decode).
     """
-    m, _, (meta, records) = bv_read(f, key)
+    m, _, (meta, records, _) = bv_read(f, key)
     if any(bv_newer(e) for e in records):
         raise BvReject("newer-record", "unknown recordFormatVersion or recordType")
     k_vkwrap = kdf(meta["masterKey"], 1, "bvmaster")
@@ -1255,7 +1272,16 @@ def bv_restore(f: bytes, via: str, key: bytes = BV_FILE_KEY):
     return meta, records
 
 
-def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int) -> dict:
+def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int, version: int) -> dict:
+    """The vectors of one formatVersion: 1 for backup-v1.json, 2 for backup-v2.json (section 9)."""
+
+    def vh(hmap=None, **kw) -> bytes:
+        kw.setdefault("version", version)
+        return bv_header(hmap, **kw)
+
+    def meta_of(records, blobs=(), **over) -> bytes:
+        return bv_meta(records, list(blobs) if version >= 2 else None, **over)
+
     kek = pwhash.argon2id.kdf(32, normalize_password(BV_EXPORT_PASSWORD), BV_EXPORT_SALT,
                               opslimit=BV_EXPORT_OPS, memlimit=BV_EXPORT_MEM)
     pw_aad = layout(label("bv.bvault.v1.keyslot.password"))
@@ -1274,7 +1300,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     def seal_file(payload: bytes, slots=both, *, tags=None, ad_first=True, ad_later=False, hmap_over=None):
         st = bindings.crypto_secretstream_xchacha20poly1305_state()
         sh = bindings.crypto_secretstream_xchacha20poly1305_init_push(st, BV_FILE_KEY)
-        header = bv_header(hmap(slots, sh, **(hmap_over or {})))
+        header = vh(hmap(slots, sh, **(hmap_over or {})))
         parts = bv_chunks(payload)
         tags = tags or [T_MESSAGE] * (len(parts) - 1) + [T_FINAL]
         body = b""
@@ -1298,10 +1324,18 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     def bid(i: int) -> bytes:
         return blake2b(b"bvault vector item " + u32(i), 16)
 
-    def item_rec(record_id=ITEM_ID, notes=None, hlc=HLC, epoch=KEY_EPOCH, vault_key=VAULT_KEY, version=None):
+    def item_content(notes=None, fields=None) -> dict:
         content = {"templateId": "login", "templateVersion": 1, "title": "Example"}
         if notes is not None:
             content["notes"] = notes
+        if fields is not None:
+            content["fields"] = fields
+            content["tags"] = []
+        return content
+
+    def item_rec(record_id=ITEM_ID, notes=None, hlc=HLC, epoch=KEY_EPOCH, vault_key=VAULT_KEY, version=None,
+                 fields=None):
+        content = item_content(notes, fields)
         aad = record_aad(RT_ITEM, record_id, epoch, hlc, False)
         rk = bkey()
         env = envelope(RT_ITEM, record_id, epoch, hlc, False,
@@ -1310,6 +1344,20 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         if version is not None:
             env.update(version)
         return cbor(env)
+
+    def version_rec(item_id, fields, hlc=(1_760_000_000_500, 0, DEVICE_ID)):
+        """An Item Version of `item_id` (record-content.md), its recordId the versionId of `hlc`."""
+        vid = blake2b(layout(item_id, u64(hlc[0]), u32(hlc[1]), hlc[2]), 16, key=kdf(MASTER_KEY, 2, "bvmaster"))
+        aad = record_aad(RT_ITEM_VERSION, vid, KEY_EPOCH, hlc, False)
+        rk = bkey()
+        content = {"item": item_content(fields=fields), "itemId": item_id}
+        return cbor(envelope(RT_ITEM_VERSION, vid, KEY_EPOCH, hlc, False,
+                             wk=sealed_cbor(seal(VAULT_KEY, aad, rk, bnonce())),
+                             ct=sealed_cbor(seal(rk, aad, pad(cbor(content)), bnonce()))))
+
+    def attachment(blob: bytes, size: int) -> dict:
+        return {"type": "attachment", "value": {"name": "scan.pdf", "size": size, "mediaType": "application/pdf",
+                                                "blobId": blake2b(blob, 32), "key": BLOB_KEY}}
 
     def env_rec(vault=VAULT_ID, master=MASTER_KEY, env_key=k_envelope, hlc=(1_760_000_000_000, 1, DEVICE_ID), **md):
         rid = blake2b(layout(label("bv.v1.recordid.recovery-envelope"), vault), 16)
@@ -1321,8 +1369,8 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
                              wk=sealed_cbor(seal(VAULT_KEY, aad, rk, bnonce())),
                              ct=sealed_cbor(seal(rk, aad, pad(cbor(metadata)), bnonce()))))
 
-    def payload_of(records) -> bytes:
-        return bv_payload(bv_meta(records), records)
+    def payload_of(records, blobs=()) -> bytes:
+        return bv_payload(meta_of(records, blobs), records, blobs)
 
     small_payload = payload_of(real_records)
     two = real_records + [item_rec(bid(1), notes="x" * 70_000)]
@@ -1369,22 +1417,36 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     exact_payload = payload_of(exact)
     assert len(exact_payload) == BV_CHUNK and len(two_payload) > BV_CHUNK
 
-    valid_specs = [
-        ("bothKeyslots", "recovery and password keyslots, one final chunk", small_payload, both, real_records),
-        ("recoveryOnly", "recovery keyslot only", small_payload, [recovery_slot], real_records),
-        ("twoChunks", "a payload longer than one chunk", two_payload, both, two),
-        ("exactMultiple", "a payload of exactly 65,536 bytes: an empty final chunk", exact_payload, both, exact),
+    # Version 2: a blob cited by an Item, one cited only by an Item Version, one no record cites, and one
+    # of more than one chunk, cited by the Item too (attachments.md section 2).
+    blob_item, blob_version, blob_none = blob_seal(bv_filler(3)), blob_seal(bv_filler(5)), blob_seal(bv_filler(7))
+    blob_long = blob_seal(bv_filler(BV_CHUNK + 1000))
+    blob_records = real_records + [
+        item_rec(bid(5), fields=[attachment(blob_item, 3), attachment(blob_long, BV_CHUNK + 1000)]),
+        version_rec(bid(5), [attachment(blob_version, 5)]),
     ]
+    blobs = [blob_item, blob_version, blob_none, blob_long]
+    cited_by = ["item", "itemVersion", None, "item"]
+
+    valid_specs = [
+        ("bothKeyslots", "recovery and password keyslots, one final chunk", small_payload, both, real_records, []),
+        ("recoveryOnly", "recovery keyslot only", small_payload, [recovery_slot], real_records, []),
+        ("twoChunks", "a payload longer than one chunk", two_payload, both, two, []),
+        ("exactMultiple", "a payload of exactly 65,536 bytes: an empty final chunk", exact_payload, both, exact, []),
+    ]
+    if version >= 2:
+        valid_specs.append(("blobs", "blobs cited by an Item and by an Item Version, one cited by no record, one of "
+                            "more than one chunk", payload_of(blob_records, blobs), both, blob_records, blobs))
     files, valid = {}, []
-    for name, case, payload, slots, records in valid_specs:
+    for name, case, payload, slots, records, file_blobs in valid_specs:
         header, body = seal_file(payload, slots)
         f = header + body
         files[name] = (header, body)
-        m, hb, (meta, got) = bv_read(f)
-        assert got == records and meta["masterKey"] == MASTER_KEY
+        m, hb, (meta, got, got_blobs) = bv_read(f)
+        assert got == records and got_blobs == file_blobs and meta["masterKey"] == MASTER_KEY
         bv_restore(f, "phrase")
         bv_restore(f, "password")
-        valid.append({
+        entry = {
             "name": name, "case": case, "file": b64(f), "headerLength": len(hb),
             "header": {"phraseId": h(PHRASE_ID), "phraseCreatedAt": phrase_created_at, "stream": h(m["stream"]),
                        "keyslots": [{k: (h(x) if isinstance(x, bytes) else x) for k, x in s.items()} for s in slots]},
@@ -1392,7 +1454,12 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
                      "exportedAt": BV_EXPORTED_AT},
             "records": [{"length": len(e), "blake2b512": bv_hash(e)} for e in records],
             "payloadLength": len(payload), "chunks": len(bv_chunks(payload)),
-        })
+        }
+        if version >= 2:
+            entry["meta"]["blobCount"] = len(file_blobs)
+            entry["blobs"] = [{"length": len(b), "blobId": h(blake2b(b, 32)),
+                               "citedBy": cited_by[blobs.index(b)] if b in blobs else None} for b in file_blobs]
+        valid.append(entry)
 
     # --- rejected before any key: sections 2, 3 and 7 ---
     sh0 = bytes(24)
@@ -1400,7 +1467,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     tail = bytes(40)
 
     def with_slots(*slots):
-        return bv_header(hmap(list(slots), sh0)) + tail
+        return vh(hmap(list(slots), sh0)) + tail
 
     def slot(base, **over):
         s = {**base, **over}
@@ -1408,27 +1475,27 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
 
     reject_header = [
         ("not-a-backup", "empty file", b""),
-        ("not-a-backup", "magic with one byte changed", b"\x89BVAULT\r" + bv_header(good)[8:] + tail),
+        ("not-a-backup", "magic with one byte changed", b"\x89BVAULT\r" + vh(good)[8:] + tail),
         ("not-a-backup", "a plaintext JSON export", b'{"version":1,"items":[]}'),
-        ("not-a-backup", "formatVersion 0", bv_header(good, version=0) + tail),
+        ("not-a-backup", "formatVersion 0", vh(good, version=0) + tail),
         ("not-a-backup", "wrong magic with formatVersion 2", b"BVAULT\x00\x00" + u16(2) + tail),
-        ("newer-version", "formatVersion 2", bv_header(good, version=2) + tail),
-        ("newer-version", "formatVersion 2 with an unreadable header", BV_MAGIC + u16(2) + b"\xff" * 20),
+        ("newer-version", "formatVersion 3", vh(good, version=3) + tail),
+        ("newer-version", "formatVersion 3 with an unreadable header", BV_MAGIC + u16(3) + b"\xff" * 20),
         ("malformed", "file ends inside formatVersion", BV_MAGIC + b"\x00"),
-        ("malformed", "file ends inside headerLength", BV_MAGIC + u16(1) + b"\x00\x00"),
-        ("malformed", "headerLength 0", bv_header(raw=b"") + tail),
-        ("malformed", "headerLength 4,097", bv_header(raw=cbor({"x": bytes(4091)})) + tail),
-        ("malformed", "headerLength past the end of the file", bv_header(good, length=len(cbor(good)) + 1000) + tail),
-        ("malformed", "header is not a map", bv_header(raw=cbor([1, 2])) + tail),
+        ("malformed", "file ends inside headerLength", BV_MAGIC + u16(version) + b"\x00\x00"),
+        ("malformed", "headerLength 0", vh(raw=b"") + tail),
+        ("malformed", "headerLength 4,097", vh(raw=cbor({"x": bytes(4091)})) + tail),
+        ("malformed", "headerLength past the end of the file", vh(good, length=len(cbor(good)) + 1000) + tail),
+        ("malformed", "header is not a map", vh(raw=cbor([1, 2])) + tail),
         ("malformed", "header CBOR with a non-shortest length",
-         bv_header(raw=cbor(good).replace(cbor("phraseId") + cbor(PHRASE_ID),
+         vh(raw=cbor(good).replace(cbor("phraseId") + cbor(PHRASE_ID),
                                           cbor("phraseId") + b"\x58\x10" + PHRASE_ID)) + tail),
-        ("malformed", "unknown header key", bv_header({**good, "note": "x"}) + tail),
-        ("malformed", "header without phraseId", bv_header({k: x for k, x in good.items() if k != "phraseId"}) + tail),
-        ("malformed", "phraseId of 15 bytes", bv_header({**good, "phraseId": PHRASE_ID[:15]}) + tail),
-        ("malformed", "stream header of 23 bytes", bv_header({**good, "stream": bytes(23)}) + tail),
-        ("malformed", "phraseCreatedAt as text", bv_header({**good, "phraseCreatedAt": "2025"}) + tail),
-        ("malformed", "phraseCreatedAt above 2^53 - 1", bv_header({**good, "phraseCreatedAt": 2**53}) + tail),
+        ("malformed", "unknown header key", vh({**good, "note": "x"}) + tail),
+        ("malformed", "header without phraseId", vh({k: x for k, x in good.items() if k != "phraseId"}) + tail),
+        ("malformed", "phraseId of 15 bytes", vh({**good, "phraseId": PHRASE_ID[:15]}) + tail),
+        ("malformed", "stream header of 23 bytes", vh({**good, "stream": bytes(23)}) + tail),
+        ("malformed", "phraseCreatedAt as text", vh({**good, "phraseCreatedAt": "2025"}) + tail),
+        ("malformed", "phraseCreatedAt above 2^53 - 1", vh({**good, "phraseCreatedAt": 2**53}) + tail),
         ("malformed", "no keyslot", with_slots()),
         ("malformed", "three keyslots", with_slots(recovery_slot, password_slot, password_slot)),
         ("malformed", "password keyslot first", with_slots(password_slot, recovery_slot)),
@@ -1458,7 +1525,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     small_h, small_b = files["bothKeyslots"]
     two_h, two_b = files["twoChunks"]
     small = small_h + small_b
-    changed_date = bv_header(strict_decode(small_h[14:]) | {"phraseCreatedAt": phrase_created_at + 1})
+    changed_date = vh(strict_decode(small_h[14:]) | {"phraseCreatedAt": phrase_created_at + 1})
     assert len(changed_date) == len(small_h)
     slot_byte = small_h.index(recovery_slot["c"]) + 10
     sealed_header = strict_decode(small_h[14:])
@@ -1467,7 +1534,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         """The header of `bothKeyslots` edited after sealing, its stream left as it was (N-13)."""
         rec, pw = sealed_header["keyslots"]
         slots = [rec] if over.get("drop") else [rec, {**pw, **{k: x for k, x in over.items() if k != "drop"}}]
-        return bv_header(sealed_header | {"keyslots": slots}) + small_b
+        return vh(sealed_header | {"keyslots": slots}) + small_b
 
     def edit(base: str, *, keep=None, append=b"", flip=None) -> dict:
         """A rejected file given as an edit of a valid one, so large files are not repeated."""
@@ -1492,7 +1559,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         header, body = seal_file(payload, **kw)
         return header + body
 
-    meta = bv_meta(real_records)
+    meta = meta_of(real_records)
     rr = real_records
     reject_stream = [
         ("corrupt", "phraseCreatedAt changed after sealing", changed_date + small_b),
@@ -1515,25 +1582,47 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         ("corrupt", "first chunk tagged push", payload_file(two_payload, tags=[T_PUSH, T_FINAL])),
         ("corrupt", "first chunk without the header as additional data", payload_file(small_payload, ad_first=False)),
         ("corrupt", "header as additional data of the second chunk too", payload_file(two_payload, ad_later=True)),
-        ("malformed", "meta with an unknown key", payload_file(bv_payload(bv_meta(rr, note="x"), rr))),
-        ("malformed", "meta without exportedAt", payload_file(bv_payload(bv_meta(rr, exportedAt=None), rr))),
-        ("malformed", "meta masterKey of 31 bytes", payload_file(bv_payload(bv_meta(rr, masterKey=MASTER_KEY[:31]), rr))),
-        ("malformed", "meta vaultId of 15 bytes", payload_file(bv_payload(bv_meta(rr, vaultId=VAULT_ID[:15]), rr))),
-        ("malformed", "meta recordCount negative", payload_file(bv_payload(bv_meta(rr, recordCount=-1), rr))),
-        ("malformed", "meta exportedAt above 2^53 - 1", payload_file(bv_payload(bv_meta(rr, exportedAt=2**53), rr))),
+        ("malformed", "meta with an unknown key", payload_file(bv_payload(meta_of(rr, note="x"), rr))),
+        ("malformed", "meta without exportedAt", payload_file(bv_payload(meta_of(rr, exportedAt=None), rr))),
+        ("malformed", "meta masterKey of 31 bytes", payload_file(bv_payload(meta_of(rr, masterKey=MASTER_KEY[:31]), rr))),
+        ("malformed", "meta vaultId of 15 bytes", payload_file(bv_payload(meta_of(rr, vaultId=VAULT_ID[:15]), rr))),
+        ("malformed", "meta recordCount negative", payload_file(bv_payload(meta_of(rr, recordCount=-1), rr))),
+        ("malformed", "meta exportedAt above 2^53 - 1", payload_file(bv_payload(meta_of(rr, exportedAt=2**53), rr))),
         ("malformed", "meta is an array", payload_file(bv_payload(cbor([1]), rr))),
         ("malformed", "meta CBOR with trailing bytes", payload_file(bv_payload(meta + b"\x00", rr))),
         ("malformed", "meta length 0", payload_file(u32(0) + b"".join(u32(len(e)) + e for e in rr))),
         ("malformed", "meta length 257", payload_file(u32(257) + bytes(257) + b"".join(u32(len(e)) + e for e in rr))),
         ("malformed", "payload of 2 bytes", payload_file(b"\x00\x01")),
-        ("malformed", "recordCount one too high", payload_file(bv_payload(bv_meta(rr, recordCount=len(rr) + 1), rr))),
-        ("malformed", "recordCount one too low", payload_file(bv_payload(bv_meta(rr, recordCount=len(rr) - 1), rr))),
+        ("malformed", "recordCount one too high", payload_file(bv_payload(meta_of(rr, recordCount=len(rr) + 1), rr))),
+        ("malformed", "recordCount one too low", payload_file(bv_payload(meta_of(rr, recordCount=len(rr) - 1), rr))),
         ("malformed", "a byte after the last record", payload_file(small_payload + b"\x00")),
-        ("malformed", "record of length 0", payload_file(bv_payload(bv_meta(rr + [b""]), rr + [b""]))),
+        ("malformed", "record of length 0", payload_file(bv_payload(meta_of(rr + [b""]), rr + [b""]))),
         ("malformed", "record length past the payload", payload_file(small_payload[:-1])),
         ("malformed", "record length prefix above the largest envelope",
-         payload_file(bv_payload(bv_meta(rr), rr[:2]) + u32(MAX_ENVELOPE + 1) + rr[2])),
+         payload_file(bv_payload(meta_of(rr), rr[:2]) + u32(MAX_ENVELOPE + 1) + rr[2])),
     ]
+    if version == 1:
+        reject_stream.append(("malformed", "blobCount in a version-1 meta",
+                              payload_file(bv_payload(bv_meta(rr, []), rr))))
+    else:
+        two_blobs = [blob_item, blob_long]
+        reject_stream += [
+            ("malformed", "meta without blobCount", payload_file(bv_payload(bv_meta(rr), rr))),
+            ("malformed", "meta blobCount negative", payload_file(bv_payload(meta_of(rr, blobCount=-1), rr))),
+            ("malformed", "blobCount one too high",
+             payload_file(bv_payload(meta_of(rr, two_blobs, blobCount=3), rr, two_blobs))),
+            ("malformed", "blobCount one too low",
+             payload_file(bv_payload(meta_of(rr, two_blobs, blobCount=1), rr, two_blobs))),
+            ("malformed", "a blob of 41 bytes", payload_file(bv_payload(meta_of(rr, [bytes(41)]), rr, [bytes(41)]))),
+            ("malformed", "a blob length prefix of 10,488,522",
+             payload_file(bv_payload(meta_of(rr, [blob_item]), rr) + u32(MAX_BLOB + 1) + blob_item)),
+            ("malformed", "the same blob twice",
+             payload_file(bv_payload(meta_of(rr, [blob_item] * 2), rr, [blob_item] * 2))),
+            ("malformed", "a byte after the last blob",
+             payload_file(bv_payload(meta_of(rr, two_blobs), rr, two_blobs) + b"\x00")),
+            ("malformed", "blob length past the payload",
+             payload_file(bv_payload(meta_of(rr, two_blobs), rr, two_blobs)[:-1])),
+        ]
     rs = []
     for reason, case, f in reject_stream:
         try:
@@ -1575,7 +1664,7 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
     garbage = b"\xff\x00\x01"
 
     def restore_file(records, *, hmap_over=None, **meta_over) -> bytes:
-        header, body = seal_file(bv_payload(bv_meta(records, **meta_over), records), both, hmap_over=hmap_over)
+        header, body = seal_file(bv_payload(meta_of(records, **meta_over), records), both, hmap_over=hmap_over)
         return header + body
 
     reject_restore = [
@@ -1631,14 +1720,19 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
             entry["record"] = None if record == "none" else {"recordType": record[0], "recordIdPrefix": h(record[1][:4])}
         rr_out.append(entry)
 
-    # the largest record is accepted
+    # the largest record, and in version 2 the largest blob, are accepted
     largest = [bv_filler(MAX_ENVELOPE)]
-    bv_read(payload_file(bv_payload(bv_meta(largest), largest)))
+    bv_read(payload_file(bv_payload(meta_of(largest), largest)))
+    if version >= 2:
+        big = [blob_seal(bytes(BLOB_MAX_SIZE))]
+        assert len(big[0]) == MAX_BLOB
+        bv_read(payload_file(bv_payload(meta_of(rr, big), rr, big)))
 
     return {
         "constants": {
-            "magic": h(BV_MAGIC), "formatVersion": BV_VERSION, "maxHeaderLength": BV_MAX_HEADER,
+            "magic": h(BV_MAGIC), "formatVersion": version, "maxHeaderLength": BV_MAX_HEADER,
             "chunkLength": BV_CHUNK, "maxMetaLength": BV_MAX_META, "maxRecordLength": MAX_ENVELOPE,
+            **({"minBlobLength": MIN_BLOB, "maxBlobLength": MAX_BLOB} if version >= 2 else {}),
             "export": {"memlimit": BV_EXPORT_MEM, "opslimit": BV_EXPORT_OPS},
             "passwordKeyslotAad": h(pw_aad),
         },
@@ -3173,10 +3267,10 @@ def main() -> None:
         ],
     }
 
-    backup = backup_vectors(
-        [cbor(vk_env), cbor(rec_env), cbor(item_env)], keyslot_pk, metadata["phraseCreatedAt"]
-    )
-    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup),
+    real = [cbor(vk_env), cbor(rec_env), cbor(item_env)]
+    backup = backup_vectors(real, keyslot_pk, metadata["phraseCreatedAt"], 1)
+    backup_v2 = backup_vectors(real, keyslot_pk, metadata["phraseCreatedAt"], 2)
+    for path, data in ((OUT, v), (OUT_CONTENT, content_vectors()), (OUT_BACKUP, backup), (OUT_BACKUP_V2, backup_v2),
                        (OUT_PAIRING, pairing_vectors()), (OUT_SYNC, sync), (OUT_BLOB, blob_vectors())):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
