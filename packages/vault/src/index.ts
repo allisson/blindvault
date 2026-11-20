@@ -2,6 +2,7 @@
 // unlocked vault session (D163).
 
 export {
+  AttachmentCorruptError,
   type BlockedReason,
   ContentInvalidError,
   ExportRejectedError,
@@ -43,6 +44,7 @@ export {
   roleOf,
   template,
 } from './templates';
+export { type PickedFile, type SealedAttachment, sealAttachment } from './attachment';
 export {
   ATTACHMENT_NAME_MAX,
   type AttachmentValue,

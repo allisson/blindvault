@@ -132,8 +132,8 @@ restores.
 
 ## 7. UI
 
-- **Adding.** Every template's editor can add an attachment. A file above 10 MiB is refused before
-  it is read; so is one that `navigator.storage.estimate()` says will not fit (usage plus the blob's
+- **Adding.** Every template's editor can add an attachment. An empty file or one above 10 MiB is
+  refused before it is read; so is one that `navigator.storage.estimate()` says will not fit (usage plus the blob's
   size above the quota), with the storage-nearly-full text of D196. The file is read, encrypted and
   written when the item is saved, not when it is picked. Adding is blocked while the vault is
   read-only (D73).

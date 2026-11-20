@@ -373,8 +373,9 @@ function valueToCbor(v: Field['value']): CborValue {
       ['name', v.name],
       ['size', v.size],
       ['mediaType', v.mediaType],
-      ['blobId', v.blobId],
-      ['key', v.key],
+      // Copies: the caller wipes the key of a new attachment once its item is written.
+      ['blobId', v.blobId.slice()],
+      ['key', v.key.slice()],
     ]);
   }
   return totpToCbor(v);

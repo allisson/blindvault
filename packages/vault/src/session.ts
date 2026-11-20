@@ -48,6 +48,7 @@ import {
   isMasterKeyOf,
   itemContentLength,
   localAad,
+  openBlob,
   openLocalConfigPart,
   parseRecoveryPhrase,
   randomId,
@@ -68,6 +69,7 @@ import {
 } from '@blindvault/crypto';
 
 import {
+  AttachmentCorruptError,
   type BlockedRecord,
   ContentInvalidError,
   ExportRejectedError,
@@ -100,6 +102,7 @@ import { FUTURE_CLOCK_BOUND_MS, HlcClock, compareHlc } from './hlc';
 import { idBytes, idKey, sameBytes } from './ids';
 import { type MappedItem } from './import/mapping';
 import {
+  type AttachmentValue,
   type Item,
   type ItemReading,
   type ReadOnlyRule,
@@ -3790,6 +3793,34 @@ export class VaultSession {
         return this.#citing([idKey(blobId)]);
       },
     };
+  }
+
+  /**
+   * Whether storage holds the blob of `blobId`: an attachment whose blob is not held waits for a
+   * sync and cannot be downloaded (attachments.md §4, §7).
+   */
+  async holdsBlob(blobId: Uint8Array): Promise<boolean> {
+    this.#unlocked();
+    const held = await this.#store.blobIds();
+    this.#unlocked();
+    return held.some((id) => sameBytes(id, blobId));
+  }
+
+  /**
+   * The plaintext of an attachment, read from storage and decrypted with its field for a download
+   * (attachments.md §2, §7); `undefined` when its blob is not held. A blob that does not open with
+   * the field throws `AttachmentCorruptError`. The caller wipes the plaintext.
+   */
+  async openAttachment(value: AttachmentValue): Promise<Uint8Array | undefined> {
+    this.#unlocked();
+    const blob = await this.#store.blob(value.blobId);
+    this.#unlocked();
+    if (!blob) return undefined;
+    try {
+      return openBlob(value.key, value.size, blob);
+    } catch {
+      throw new AttachmentCorruptError();
+    }
   }
 
   /** The Items that cite a blob of `keys`, themselves or through an Item Version, each once. */
