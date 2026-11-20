@@ -727,6 +727,15 @@ const en = {
     tagsHint: 'Separate tags with commas.',
     notes: 'Notes',
     addField: 'Add a field',
+    addAttachment: 'Add an attachment',
+    attachmentEmpty: 'This file is empty, and an empty file cannot be attached.',
+    attachmentTooLarge: 'This file is larger than 10 MiB, the most an attachment can hold.',
+    attachmentUnreadable:
+      'A picked file could not be read. Remove its attachment, add the file again, then save.',
+    attachmentWaiting:
+      'This file is not on this device yet. It arrives with a sync with a device that holds it.',
+    attachmentCorrupt: 'This attachment is corrupt and cannot be downloaded.',
+    download: 'Download',
     fieldLabel: 'Label',
     fieldType: 'Field type',
     add: 'Add',
@@ -1922,6 +1931,15 @@ const ptBR: Messages = {
     tagsHint: 'Separe as tags com vírgulas.',
     notes: 'Notas',
     addField: 'Adicionar um campo',
+    addAttachment: 'Adicionar um anexo',
+    attachmentEmpty: 'Este arquivo está vazio, e um arquivo vazio não pode ser anexado.',
+    attachmentTooLarge: 'Este arquivo passa de 10 MiB, o máximo que um anexo comporta.',
+    attachmentUnreadable:
+      'Não foi possível ler um arquivo escolhido. Remova o anexo dele, adicione o arquivo de novo e salve.',
+    attachmentWaiting:
+      'Este arquivo ainda não está neste dispositivo. Ele chega com uma sincronização com um dispositivo que o tenha.',
+    attachmentCorrupt: 'Este anexo está corrompido e não pode ser baixado.',
+    download: 'Baixar',
     fieldLabel: 'Rótulo',
     fieldType: 'Tipo de campo',
     add: 'Adicionar',

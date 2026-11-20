@@ -16,13 +16,16 @@ import { Button, Notice, StorageAlert } from './components';
 
 const KB = 1000;
 
-function bytes(language: string, n: number): string {
+/** `n` bytes in decimal units, as the storage state shows them. */
+export function bytes(language: string, n: number): string {
   const [value, unit] =
     n >= KB ** 3
       ? [n / KB ** 3, 'gigabyte']
       : n >= KB ** 2
         ? [n / KB ** 2, 'megabyte']
-        : [n / KB, 'kilobyte'];
+        : n >= KB
+          ? [n / KB, 'kilobyte']
+          : [n, 'byte'];
   return new Intl.NumberFormat(language, {
     style: 'unit',
     unit,
@@ -30,7 +33,7 @@ function bytes(language: string, n: number): string {
   }).format(value);
 }
 
-function percent(language: string, usage: number, quota: number): string {
+export function percent(language: string, usage: number, quota: number): string {
   return new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(
     usage / quota,
   );

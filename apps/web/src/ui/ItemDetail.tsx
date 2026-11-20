@@ -1,12 +1,15 @@
 import {
+  AttachmentCorruptError,
+  type AttachmentValue,
   ContentInvalidError,
   type Field,
   type Item,
   type VaultSession,
   seedPhraseChecksumValid,
 } from '@blindvault/vault';
-import { type ReactNode, useId, useState } from 'react';
+import { type ReactNode, useEffect, useId, useState } from 'react';
 
+import { saveAttachment } from '../app/attachments';
 import { type Navigation } from '../app/nav';
 import { host } from '../app/row';
 import { useLanguage } from '../i18n/context';
@@ -16,6 +19,7 @@ import { writeError } from './errors';
 import { Icon, type IconName } from './icons';
 import { Avatar, TEMPLATE_ICON, known } from './ItemRow';
 import { SecretView, useCopy } from './Secret';
+import { bytes } from './StorageState';
 import { WeakBadge, rated } from './Strength';
 import { useToast } from './Toast';
 import { TotpView } from './Totp';
@@ -44,21 +48,101 @@ function openable(value: string): boolean {
 /** An icon button of a field that is not secret: named by its action and the field (D254). */
 const ICON_BUTTON = `${TARGET} inline-flex min-w-10 shrink-0 items-center justify-center rounded-control text-fg hover:bg-subtle`;
 
+/**
+ * An attachment as text, with no preview (D273), and its download while this device holds its blob;
+ * read-only does not stop it. Without the blob it says it waits for a sync, and checks again each
+ * time a sync writes a blob (attachments.md §7).
+ */
+function AttachmentView({
+  value,
+  name,
+  session,
+  blobWrites,
+}: {
+  readonly value: AttachmentValue;
+  readonly name: string;
+  readonly session: VaultSession;
+  readonly blobWrites: number;
+}) {
+  const { messages: m, language } = useLanguage();
+  const [held, setHeld] = useState<boolean>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let current = true;
+    session.holdsBlob(value.blobId).then(
+      (holds) => {
+        if (current) setHeld(holds);
+      },
+      // Locked: the vault goes with the screen.
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [session, value, blobWrites]);
+  const download = () => {
+    setError(undefined);
+    session.openAttachment(value).then(
+      (opened) => {
+        if (opened) saveAttachment(opened, value.name);
+        else setHeld(false);
+      },
+      (e: unknown) => {
+        setError(
+          e instanceof AttachmentCorruptError ? m.items.attachmentCorrupt : writeError(e, m),
+        );
+      },
+    );
+  };
+  return (
+    <span className="flex flex-col gap-1">
+      <span className="flex items-center gap-1">
+        <span className="min-w-0 flex-1 break-words" data-testid="attachment-file">
+          {`${value.name} · ${bytes(language, value.size)} · ${value.mediaType}`}
+        </span>
+        {held === true ? (
+          <button
+            type="button"
+            aria-label={`${m.items.download}: ${name}`}
+            title={m.items.download}
+            className={ICON_BUTTON}
+            onClick={download}
+          >
+            <Icon name="download" />
+          </button>
+        ) : null}
+      </span>
+      {held === false ? (
+        <span className="text-sm text-muted">{m.items.attachmentWaiting}</span>
+      ) : null}
+      {error ? (
+        <span role="alert" className="text-sm text-danger">
+          {error}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function FieldValue({
   field,
   name,
   clearSeconds,
+  session,
+  blobWrites,
 }: {
   readonly field: Field;
   readonly name: string;
   readonly clearSeconds: number;
+  readonly session: VaultSession;
+  /** Changes each time a sync writes a blob (attachments.md §7). */
+  readonly blobWrites: number;
 }) {
   const m = useLanguage().messages;
   const { copy, checked } = useCopy(clearSeconds);
   const { value } = field;
   if (typeof value !== 'string' && 'blobId' in value) {
-    // Shown as text only; adding and downloading come with the attachment UI (attachments.md §7).
-    return <span className="min-w-0 break-words">{value.name}</span>;
+    return <AttachmentView value={value} name={name} session={session} blobWrites={blobWrites} />;
   }
   if (typeof value !== 'string') {
     return <TotpView value={value} name={name} clearSeconds={clearSeconds} />;
@@ -150,11 +234,14 @@ export function ItemDetail({
   id,
   nav,
   onChange,
+  blobWrites,
 }: {
   readonly session: VaultSession;
   readonly id: Uint8Array;
   readonly nav: Navigation;
   readonly onChange: () => void;
+  /** Changes each time a sync writes a blob (attachments.md §7). */
+  readonly blobWrites: number;
 }) {
   const { messages: m, language } = useLanguage();
   const [error, setError] = useState<string>();
@@ -228,7 +315,13 @@ export function ItemDetail({
               ) : null}
             </dt>
             <dd className="text-value">
-              <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
+              <FieldValue
+                field={field}
+                name={name}
+                clearSeconds={clearSeconds}
+                session={session}
+                blobWrites={blobWrites}
+              />
             </dd>
           </div>
         );

@@ -138,6 +138,14 @@ every project through the references in the root `tsconfig.json`.
   `undefined` when not held and `AttachmentCorruptError` when it does not open with its field;
   the caller wipes the plaintext. Both read outside the operation queue and throw
   `VaultLockedError` once the vault locks during the read.
+- **Attachments in the app (Phase 9, D278).** The editor keeps a picked `File` in the draft,
+  checked by `checkPick` (`app/attachments.ts`) for its size and `navigator.storage.estimate()`;
+  `sealFiles` (`app/item-draft.ts`) reads and seals it only on Save, and the editor wipes the keys
+  once the write settles. `saveAttachment` downloads an opened attachment as an
+  `application/octet-stream` `Blob` under `downloadName`, revokes the object URL after the click and
+  wipes the plaintext. The sync flow counts the blobs its blob phase wrote, exposed as
+  `VaultController.syncBlobs`: an attachment shown without its blob checks `holdsBlob` again each
+  time it changes.
 - **Backup export (Phase 2, D181).** `packages/vault` depends on `packages/backup`, which depends
   on `crypto` only: `VaultSession.exportBackup` opens the Master Key wrap with the KEK the caller
   derived again, verifies every stored record as `load` does, and builds the file with the backup

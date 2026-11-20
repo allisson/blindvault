@@ -12,9 +12,13 @@ import { FieldValue, fieldName } from './ItemDetail';
 function VersionFields({
   item,
   clearSeconds,
+  session,
+  blobWrites,
 }: {
   readonly item: Item;
   readonly clearSeconds: number;
+  readonly session: VaultSession;
+  readonly blobWrites: number;
 }) {
   const m = useLanguage().messages;
   return (
@@ -26,7 +30,13 @@ function VersionFields({
           <div key={i} className="flex flex-col gap-1">
             <dt className="text-xs font-medium text-muted">{name}</dt>
             <dd>
-              <FieldValue field={field} name={name} clearSeconds={clearSeconds} />
+              <FieldValue
+                field={field}
+                name={name}
+                clearSeconds={clearSeconds}
+                session={session}
+                blobWrites={blobWrites}
+              />
             </dd>
           </div>
         );
@@ -50,11 +60,14 @@ export function ItemHistory({
   id,
   nav,
   onChange,
+  blobWrites,
 }: {
   readonly session: VaultSession;
   readonly id: Uint8Array;
   readonly nav: Navigation;
   readonly onChange: () => void;
+  /** Changes each time a sync writes a blob (attachments.md §7). */
+  readonly blobWrites: number;
 }) {
   const { messages: m, language } = useLanguage();
   const [error, setError] = useState<string>();
@@ -107,6 +120,8 @@ export function ItemHistory({
               <VersionFields
                 item={v.item}
                 clearSeconds={session.preferences.clipboardClearSeconds}
+                session={session}
+                blobWrites={blobWrites}
               />
             ) : null}
             {restorable && v.item && v.readOnly === undefined && session.writable ? (

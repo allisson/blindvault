@@ -1,15 +1,25 @@
-import { initCrypto } from '@blindvault/crypto';
-import { type Item, TITLE_MAX, itemToCbor, readItem, template } from '@blindvault/vault';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { initCrypto, openBlob } from '@blindvault/crypto';
+import {
+  type AttachmentValue,
+  ContentInvalidError,
+  type Item,
+  TITLE_MAX,
+  itemToCbor,
+  readItem,
+  template,
+} from '@blindvault/vault';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   type Draft,
   type DraftField,
+  addAttachment,
   addField,
   draftChanged,
   draftOf,
   inputOf,
   newDraft,
+  sealFiles,
 } from './item-draft';
 
 beforeAll(async () => {
@@ -380,5 +390,112 @@ describe('item drafts (record-content.md §3, §4)', () => {
   it('gives every field its own key', () => {
     const draft = addField(addField(login(), 'text'), 'secret');
     expect(new Set(draft.fields.map((f) => f.key)).size).toBe(draft.fields.length);
+  });
+});
+
+describe('attachments picked in the editor (attachments.md §7, D278)', () => {
+  function note(): Draft {
+    const t = template('secure-note');
+    if (!t) throw new Error('no secure-note template');
+    return { ...newDraft(t), title: 'Lease' };
+  }
+
+  function file(bytes: number[], name = 'scan.pdf', type = 'application/pdf'): File {
+    return new File([new Uint8Array(bytes)], name, { type });
+  }
+
+  it('adds a picked file as an attachment field with its own key, a change to the draft', () => {
+    const draft = note();
+    const picked = file([1, 2, 3]);
+    const next = addAttachment(draft, picked);
+    const added = next.fields.at(-1);
+    expect(added).toMatchObject({ type: 'attachment', label: '', value: '', file: picked });
+    expect(added?.role).toBeUndefined();
+    expect(added?.attachment).toBeUndefined();
+    expect(new Set(next.fields.map((f) => f.key)).size).toBe(next.fields.length);
+    expect(draftChanged(draft, next)).toBe(true);
+    // Another file in the same field is a change.
+    const swapped = {
+      ...next,
+      fields: next.fields.map((f) => (f.key === added?.key ? { ...f, file: file([1, 2, 3]) } : f)),
+    };
+    expect(draftChanged(next, swapped)).toBe(true);
+  });
+
+  it('reads and seals each picked file only when sealed, and the sealed draft writes it', async () => {
+    const draft = addAttachment(addAttachment(note(), file([1, 2, 3])), file([4], 'a.txt', ''));
+    const labeled = {
+      ...draft,
+      fields: draft.fields.map((f, i) =>
+        i === draft.fields.length - 1 ? { ...f, label: 'Key' } : f,
+      ),
+    };
+    const { draft: sealed, blobs, keys } = await sealFiles(labeled);
+    expect(blobs).toHaveLength(2);
+    expect(keys).toHaveLength(2);
+    const fields = ok(sealed).fields.filter((f) => f.type === 'attachment');
+    expect(fields).toHaveLength(2);
+    const [first, second] = fields.map((f) => f.value as AttachmentValue);
+    expect(first).toMatchObject({ name: 'scan.pdf', size: 3, mediaType: 'application/pdf' });
+    expect(second).toMatchObject({ name: 'a.txt', size: 1, mediaType: 'application/octet-stream' });
+    expect(fields[1]?.label).toBe('Key');
+    // Each blob matches its field, and opens to the file's bytes with its key.
+    expect(blobs.map((b) => b.blobId)).toEqual([first?.blobId, second?.blobId]);
+    const [key0] = keys;
+    const [blob0] = blobs;
+    if (!key0 || !blob0) throw new Error('nothing sealed');
+    expect(openBlob(key0, 3, blob0.blob)).toEqual(new Uint8Array([1, 2, 3]));
+    // The keys handed back are the ones in the sealed draft: wiping them wipes its values.
+    for (const k of keys) k.fill(0);
+    expect(first?.key).toEqual(new Uint8Array(32));
+    expect(second?.key).toEqual(new Uint8Array(32));
+    // The draft itself is untouched: a failed save seals its files again.
+    expect(labeled.fields.filter((f) => f.attachment)).toHaveLength(0);
+  });
+
+  it('leaves a draft with no picked file as it is', async () => {
+    const draft = draftOf({
+      templateId: 'secure-note',
+      templateVersion: 1,
+      title: 'Lease',
+      fields: [
+        {
+          type: 'attachment',
+          value: {
+            name: 'scan.pdf',
+            size: 1,
+            mediaType: 'application/pdf',
+            blobId: new Uint8Array(32).fill(1),
+            key: new Uint8Array(32).fill(2),
+          },
+        },
+      ],
+      tags: [],
+    });
+    const sealed = await sealFiles(draft);
+    expect(sealed.draft).toBe(draft);
+    expect(sealed.blobs).toEqual([]);
+    expect(sealed.keys).toEqual([]);
+  });
+
+  it('refuses a picked file that became empty, wiping the keys it sealed before', async () => {
+    const draft = addAttachment(addAttachment(note(), file([1])), file([]));
+    const spy = vi.spyOn(Uint8Array.prototype, 'fill');
+    await expect(sealFiles(draft)).rejects.toThrow(ContentInvalidError);
+    // The first file's key was wiped: fill(0) ran on a 32-byte array.
+    expect(
+      spy.mock.contexts.some(
+        (c) => c instanceof Uint8Array && c.length === 32 && c.every((b) => b === 0),
+      ),
+    ).toBe(true);
+    spy.mockRestore();
+  });
+
+  it('refuses a picked file that can no longer be read', async () => {
+    const unreadable = file([1]);
+    vi.spyOn(unreadable, 'arrayBuffer').mockRejectedValue(
+      new DOMException('gone', 'NotReadableError'),
+    );
+    await expect(sealFiles(addAttachment(note(), unreadable))).rejects.toThrow('gone');
   });
 });
