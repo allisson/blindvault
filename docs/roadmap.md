@@ -503,7 +503,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `packages/vault`: the `attachment` field type
 - [x] `packages/storage`: the `blobs` object store
 - [x] `packages/vault`: blob collection, on the `blobs` object store
-- [ ] `packages/sync`: protocol version 2 and the blob phase, in sync, pairing and re-admission (D279)
+- [x] `packages/sync`: protocol version 2 and the blob phase, in sync, pairing and re-admission (D279)
 - [ ] `packages/backup`: format version 2, export in parts, restore in two passes
 - [ ] UI: add, view and download attachments
 

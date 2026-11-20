@@ -82,6 +82,8 @@ function lazyStore(factory: IDBFactory, vaultId?: Uint8Array) {
     record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
     blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
     deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+    blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+    putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
     commit: async (commit) => {
       if (!db) {
         db = await VaultDatabase.open(
@@ -196,6 +198,8 @@ describe('fresh restore through IndexedDB (Gate B, D33)', () => {
           record: (key) => database.record(key),
           blobIds: () => database.blobIds(),
           deleteBlobs: (ids) => database.deleteBlobs(ids),
+          blob: (id) => database.blob(id),
+          putBlob: (b) => database.putBlob(b),
           commit: (c) => database.commit(c),
         },
         localConfig: parseLocalConfig(config),

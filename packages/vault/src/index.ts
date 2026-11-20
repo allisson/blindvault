@@ -104,6 +104,7 @@ export {
   type BackupFile,
   type BackupOptions,
   type BackupRecords,
+  type BlobGrant,
   type CreateOptions,
   type RestoreOptions,
   type DeviceView,

@@ -37,6 +37,10 @@ export interface RecordStore {
   commit(commit: Commit): Promise<void>;
   /** The `blobId` of every blob held (attachments.md §5). */
   blobIds(): Promise<readonly Uint8Array[]>;
+  /** The blob of `blobId` as stored, or `undefined` when none is held (attachments.md §6). */
+  blob(blobId: Uint8Array): Promise<Uint8Array | undefined>;
+  /** Writes a received blob in its own transaction, unless one is held (attachments.md §4). */
+  putBlob(blob: StoredBlob): Promise<void>;
   /** Deletes the blobs of `blobIds` in one transaction: blob collection (attachments.md §5). */
   deleteBlobs(blobIds: readonly Uint8Array[]): Promise<void>;
 }

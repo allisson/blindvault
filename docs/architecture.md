@@ -31,7 +31,8 @@ every project through the references in the root `tsconfig.json`.
   writes from the held state, and applies them in memory only once the commit succeeds; an
   operation that changes nothing commits nothing. A lock aborts the operation in progress. A
   commit also carries the blobs of new attachments (`putBlobs`), and `blobIds()` and
-  `deleteBlobs()` serve blob collection (D278).
+  `deleteBlobs()` serve blob collection (D278); `blob()` reads one blob and `putBlob()` writes a
+  received one in its own transaction, for the blob phase.
 - **Unlock.** The KEK opens the Master Key wrap (any failure is one `UnlockRejectedError`), the
   Master Key's subkey opens the encrypted part (a failure is a corrupt Local Config), and every
   record is verified as on receipt (`crypto-spec.md` §9.5). A record that fails, an invalid Folder
@@ -59,7 +60,16 @@ every project through the references in the root `tsconfig.json`.
   (`admissionBlobs`) after `committed`, and a phase cut short keeps the committed records and the
   blobs written. The blob messages share one schema (`blob-messages.ts`) between the pairing and
   the sync codecs. `memoryBlobStore` is the in-memory store of the protocol tests, alongside
-  `memoryPair`.
+  `memoryPair`. The vault's side is `VaultSession.blobGrant()`, which each sync, pairing and
+  re-admission grant carries as `blobs`: `lacking()` runs in the operation queue once the Item
+  Versions are verified (D277) and lists every `blobId` a held Item or Item Version cites that
+  storage does not hold; `read`, `write` and `discard` go to storage, each in its own transaction,
+  outside the queue, since a collection meanwhile deletes only a blob it read as held and no
+  record cites; `citing()` names the Items behind a `blobId`. The app's `vaultBlobs`
+  (`apps/web/src/app/blobs.ts`) adapts it to a `BlobStore`: a sync shows a rejected blob with the
+  rejected records, one per citing Item, and runs the check of §6 before each blob leaves; a
+  re-admission adds it to its rejected records; B's pairing reads the grant only once it has
+  committed, and reports nothing, the blob staying lacked until the next sync.
 - **Device identity bytes.** The encrypted part of Local Config holds the identity's private key,
   so `packages/crypto` seals and opens that part (`sealLocalConfigPart`, `openLocalConfigPart`):
   `packages/vault` never reads the private key as bytes, and the opened plaintext is wiped.

@@ -713,6 +713,8 @@ export class VaultController {
         record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
         blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
         deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+        blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+        putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -907,6 +909,8 @@ export class VaultController {
         record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
         blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
         deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+        blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+        putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {
@@ -2058,6 +2062,8 @@ export class VaultController {
       record: (key) => (db && !clear ? db.record(key) : Promise.resolve(undefined)),
       blobIds: () => (db && !clear ? db.blobIds() : Promise.resolve([])),
       deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+      blob: (id) => (db && !clear ? db.blob(id) : Promise.resolve(undefined)),
+      putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
       commit: async (commit) => {
         if (epoch !== this.#epoch) throw new Aborted();
         if (!db) {
@@ -2341,6 +2347,8 @@ export class VaultController {
         record: (key) => (db ? db.record(key) : Promise.resolve(undefined)),
         blobIds: () => (db ? db.blobIds() : Promise.resolve([])),
         deleteBlobs: (ids) => (db ? db.deleteBlobs(ids) : Promise.resolve()),
+        blob: (id) => (db ? db.blob(id) : Promise.resolve(undefined)),
+        putBlob: (b) => (db ? db.putBlob(b) : Promise.resolve()),
         commit: async (commit) => {
           if (epoch !== this.#epoch) throw new Aborted();
           if (!db) {

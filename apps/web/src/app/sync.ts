@@ -48,12 +48,13 @@ import {
 } from '@blindvault/sync';
 import {
   type RecordKey,
+  type RejectedRecord,
   type SyncGrant,
   SyncRejectedError,
   type SyncResult,
 } from '@blindvault/vault';
 
-import { NO_BLOBS } from './blobs';
+import { vaultBlobs } from './blobs';
 import { DISCONNECT_GRACE_MS, iceServers } from './pairing';
 import { type StunSettings } from './stun-settings';
 
@@ -387,7 +388,18 @@ export class Syncing {
       merge: (records) => this.#vault(() => grant.mergeLive(records)),
       merged: (merged) => this.#merged(session, merged),
       retired: (envelope) => this.#ownRetirement(envelope),
-      blobs: { store: NO_BLOBS },
+      blobs: {
+        store: vaultBlobs(
+          () => grant.blobs,
+          (rejected) => {
+            this.#blobsRejected(rejected);
+          },
+        ),
+        // §6 before each blob leaves: a retired peer ends the session, which keeps its own reason.
+        check: async () => {
+          if (await this.#checkPeer(session)) throw new Error('the session ended (§6)');
+        },
+      },
     });
     this.#live = live;
     for (const envelopes of this.#pending.splice(0)) this.#push(live, envelopes);
@@ -441,6 +453,17 @@ export class Syncing {
       ...stage,
       result: addResults(stage.result, merged),
       unseen: stage.unseen || hasNotice(merged),
+    });
+  }
+
+  /** A received blob did not match its `blobId`: shown with the rejected records (D278). */
+  #blobsRejected(rejected: readonly RejectedRecord[]): void {
+    const stage = this.#stage;
+    if (stage.kind !== 'synced') return;
+    this.#set({
+      ...stage,
+      result: { ...stage.result, rejected: [...stage.result.rejected, ...rejected] },
+      unseen: true,
     });
   }
 

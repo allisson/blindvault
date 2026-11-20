@@ -151,6 +151,8 @@ async function build(password: string, params: KdfParams, items: number, edits: 
     // The fixture holds no attachment.
     blobIds: () => Promise.resolve([]),
     deleteBlobs: () => Promise.resolve(),
+    blob: () => Promise.resolve(undefined),
+    putBlob: () => Promise.resolve(),
   };
   const keyring = new Keyring();
   const salt = generateSalt();
@@ -217,6 +219,8 @@ export async function unlockInMemory(fixture: Fixture, password: string): Promis
     commit: () => Promise.reject(new Error('read only')),
     blobIds: () => Promise.resolve([]),
     deleteBlobs: () => Promise.reject(new Error('read only')),
+    blob: () => Promise.resolve(undefined),
+    putBlob: () => Promise.reject(new Error('read only')),
   };
   const start = performance.now();
   const session = await VaultSession.unlock({
