@@ -97,6 +97,17 @@ every project through the references in the root `tsconfig.json`.
   `openSealedKey`, `wrapKey`); the export password KEK comes from the Argon2id worker at the fixed
   export parameters (`derivePasswordKek`) and lives in a keyring of its own, wiped once the file key
   is wrapped or unwrapped.
+- **Backup payload in parts (Phase 9, D278).** Format version 2 is written and read without holding
+  the payload whole. `BackupStreamWriter.begin`, `add` and `end` write `meta`, each envelope and
+  then each blob, and return each chunk as it closes; the chunk being filled, which holds `meta`
+  and its Master Key, is wiped at `end` or `wipe`. The first pass, `scanBackupStream`, pulls a file
+  by ranges through a `BackupSource`, checks the payload's structure as it goes, hashes each blob,
+  and keeps only the `blobId`s and a BLAKE2b-256 of the payload up to the last envelope; a stream
+  that fails to authenticate still wins over a payload of the wrong shape. The second pass,
+  `readBackupStream`, reads the file again, refuses one of another size or whose envelopes differ
+  from the first pass, gives the Master Key to the caller's keyring, and hands the blobs one at a
+  time through a reader that holds only the stream's state. Version 1 is read by both passes; the
+  version-1 `seal` and `openBackupStream` stay until `packages/backup` moves to version 2.
 - **Backup export (Phase 2, D181).** `packages/vault` depends on `packages/backup`, which depends
   on `crypto` only: `VaultSession.exportBackup` opens the Master Key wrap with the KEK the caller
   derived again, verifies every stored record as `load` does, and builds the file with the backup
