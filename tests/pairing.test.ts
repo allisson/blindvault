@@ -412,28 +412,33 @@ async function databases(factory: IDBFactory): Promise<number> {
 }
 
 describe('pairing end to end (pairing-protocol.md §8, Gate C)', () => {
-  it('B ends holding every blob A holds; one A lacks waits for sync on both (§8 step 8, D279)', async () => {
-    const a = await vaultA();
-    // One blob of more than one chunk of the wire (sync-protocol.md §10.1).
-    const scan = attachment('Passport', 1, 1_500_000);
-    const card = attachment('Card', 2);
-    const lost = attachment('Visa', 3);
-    await a.session.createItem(scan.item, [scan.stored]);
-    await a.session.createItem(card.item, [card.stored]);
-    // Cited, never held: A answers it with blob-missing.
-    await a.session.createItem(lost.item);
-    const { outA, outB } = await pairing({ a });
-    expect(reasonOf(outA)).toBe('completed');
-    if (outB.status !== 'fulfilled') throw outB.reason;
-    const b = outB.value;
-    expect(await b.blobGrant().read(scan.blobId)).toEqual(scan.blob);
-    expect(await b.blobGrant().read(card.blobId)).toEqual(card.blob);
-    for (const session of [a.session, b]) {
-      expect((await session.blobGrant().lacking()).map((id) => [...id])).toEqual([
-        [...lost.blobId],
-      ]);
-    }
-  });
+  // A blob over one chunk of the wire takes seconds under coverage instrumentation.
+  it(
+    'B ends holding every blob A holds; one A lacks waits for sync on both (§8 step 8, D279)',
+    { timeout: 30_000 },
+    async () => {
+      const a = await vaultA();
+      // One blob of more than one chunk of the wire (sync-protocol.md §10.1).
+      const scan = attachment('Passport', 1, 1_500_000);
+      const card = attachment('Card', 2);
+      const lost = attachment('Visa', 3);
+      await a.session.createItem(scan.item, [scan.stored]);
+      await a.session.createItem(card.item, [card.stored]);
+      // Cited, never held: A answers it with blob-missing.
+      await a.session.createItem(lost.item);
+      const { outA, outB } = await pairing({ a });
+      expect(reasonOf(outA)).toBe('completed');
+      if (outB.status !== 'fulfilled') throw outB.reason;
+      const b = outB.value;
+      expect(await b.blobGrant().read(scan.blobId)).toEqual(scan.blob);
+      expect(await b.blobGrant().read(card.blobId)).toEqual(card.blob);
+      for (const session of [a.session, b]) {
+        expect((await session.blobGrant().lacking()).map((id) => [...id])).toEqual([
+          [...lost.blobId],
+        ]);
+      }
+    },
+  );
 
   it('B holds the whole vault, committed in IndexedDB, and both record the sync (D33, D34)', async () => {
     const { a, factoryB, identityB, outA, outB } = await pairing();

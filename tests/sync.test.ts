@@ -869,38 +869,43 @@ describe('attachments over a sync (attachments.md §6, sync-protocol.md §10.1, 
     return session.blobGrant().read(blobId);
   }
 
-  it('ends with both devices holding the same blobs, and drops a blob no record cites', async () => {
-    const { clock, x, y } = await peers();
-    // One blob of more than one chunk of the wire (§10.1).
-    const a = attachment('Passport', 1, 1_500_000);
-    const b = attachment('Visa', 2);
-    const stray = attachment('Nothing cites it', 3);
-    await x.createItem(a.item, [a.stored]);
-    await y.createItem(b.item, [b.stored]);
-    await y.blobGrant().write(stray.blobId, stray.blob);
-    const live = await liveSync(x, y);
-    // Polled on the IDs lacked: reading the large blob back on each poll would slow the transfer.
-    await vi.waitFor(async () => {
-      expect(await y.blobGrant().lacking()).toEqual([]);
-      expect(await x.blobGrant().lacking()).toEqual([]);
-    });
-    expect(await stored(y, a.blobId)).toEqual(a.blob);
-    expect(await stored(x, b.blobId)).toEqual(b.blob);
-    // The merge on Y collected it; X never held it, nor asked for it.
-    expect(await stored(y, stray.blobId)).toBeUndefined();
-    expect(await stored(x, stray.blobId)).toBeUndefined();
+  // A blob over one chunk of the wire takes seconds under coverage instrumentation.
+  it(
+    'ends with both devices holding the same blobs, and drops a blob no record cites',
+    { timeout: 30_000 },
+    async () => {
+      const { clock, x, y } = await peers();
+      // One blob of more than one chunk of the wire (§10.1).
+      const a = attachment('Passport', 1, 1_500_000);
+      const b = attachment('Visa', 2);
+      const stray = attachment('Nothing cites it', 3);
+      await x.createItem(a.item, [a.stored]);
+      await y.createItem(b.item, [b.stored]);
+      await y.blobGrant().write(stray.blobId, stray.blob);
+      const live = await liveSync(x, y);
+      // Polled on the IDs lacked: reading the large blob back on each poll would slow the transfer.
+      await vi.waitFor(async () => {
+        expect(await y.blobGrant().lacking()).toEqual([]);
+        expect(await x.blobGrant().lacking()).toEqual([]);
+      });
+      expect(await stored(y, a.blobId)).toEqual(a.blob);
+      expect(await stored(x, b.blobId)).toEqual(b.blob);
+      // The merge on Y collected it; X never held it, nor asked for it.
+      expect(await stored(y, stray.blobId)).toBeUndefined();
+      expect(await stored(x, stray.blobId)).toBeUndefined();
 
-    // A blob added once live comes with its item's transfer.
-    clock.t = T0 + MINUTE;
-    const c = attachment('Licence', 4);
-    await y.createItem(c.item, [c.stored]);
-    await vi.waitFor(async () => {
-      expect(await stored(x, c.blobId)).toEqual(c.blob);
-    });
-    for (const session of [x, y]) expect(await session.blobGrant().lacking()).toEqual([]);
-    expect(live.rejected).toEqual({ x: [], y: [] });
-    await live.end();
-  });
+      // A blob added once live comes with its item's transfer.
+      clock.t = T0 + MINUTE;
+      const c = attachment('Licence', 4);
+      await y.createItem(c.item, [c.stored]);
+      await vi.waitFor(async () => {
+        expect(await stored(x, c.blobId)).toEqual(c.blob);
+      });
+      for (const session of [x, y]) expect(await session.blobGrant().lacking()).toEqual([]);
+      expect(live.rejected).toEqual({ x: [], y: [] });
+      await live.end();
+    },
+  );
 
   it('refuses a blob that does not match its blobId, reports its item, and goes on', async () => {
     const { clock, x, y } = await peers();
