@@ -450,6 +450,8 @@ export function ItemEditor({
             ref={picker}
             type="file"
             hidden
+            autoComplete="off"
+            spellCheck={false}
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = '';

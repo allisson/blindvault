@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
+import { formAlert } from './alerts';
 import { createVault } from './create';
 import { storedPlaintext } from './stored';
 
@@ -76,18 +77,18 @@ test('refuses an empty file and one above 10 MiB when picked, and removes an att
 }) => {
   await newNote(page, 'Scans');
   await attach(page, 'empty.txt', '', 'text/plain');
-  await expect(page.getByRole('alert')).toHaveText(
+  await expect(formAlert(page)).toHaveText(
     'This file is empty, and an empty file cannot be attached.',
   );
   await attach(page, 'big.bin', Buffer.alloc(10 * 1024 * 1024 + 1, 1), 'application/octet-stream');
-  await expect(page.getByRole('alert')).toHaveText(
+  await expect(formAlert(page)).toHaveText(
     'This file is larger than 10 MiB, the most an attachment can hold.',
   );
   await expect(page.getByTestId('attachment-file')).toHaveCount(0);
 
   // Taken, then removed before saving: nothing is attached.
   await attach(page, 'scan.png', 'png bytes', 'image/png');
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(formAlert(page)).toHaveCount(0);
   await expect(page.getByTestId('attachment-file')).toHaveCount(1);
   await button(page, 'Remove').click();
   await expect(page.getByTestId('attachment-file')).toHaveCount(0);
