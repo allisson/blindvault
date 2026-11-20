@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - tests
+  - spikes
 
 # Supply-chain hygiene: never resolve a version published less than 14 days ago.
 minimumReleaseAge: 20160

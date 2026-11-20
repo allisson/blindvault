@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>BlindVault spike — extension</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <h1>BlindVault spike — extension (D281)</h1>
+    <p>Throwaway measurements, no vault data. Protocol: <code>docs/spikes/README.md</code> §6.</p>
+    <p>
+      Session host:
+      <select id="host">
+        <option value="offscreen">offscreen document (Chrome)</option>
+        <option value="background">event page (Firefox)</option>
+        <option value="tab">extension tab (fallback)</option>
+      </select>
+    </p>
+
+    <section>
+      <h2>1. Session host lifetime</h2>
+      <button id="host-start">Start host (new key)</button>
+      <button id="host-check">Check host</button>
+      <input id="host-note" type="text" placeholder="Note: what happened in between (closed tab, sleep, minimized)" />
+    </section>
+
+    <section>
+      <h2>2. The apps/web build</h2>
+      <button id="app-open">Open the app in a tab</button>
+      <button id="app-inspect">Inspect the app tab</button>
+      <button id="argon-page">Argon2id in this tab</button>
+      <button id="argon-host">Argon2id in the host</button>
+      <textarea id="app-errors" rows="4" placeholder="Paste the app tab's console errors here, then press Inspect"></textarea>
+    </section>
+
+    <section>
+      <h2>3–4. Interception</h2>
+      <button id="log-read">Read interception log</button>
+      <button id="log-clear">Clear log</button>
+      <p>
+        webauthn.io:
+        <label><input id="wio-register" type="checkbox" /> registered</label>
+        <label><input id="wio-signin" type="checkbox" /> signed in</label>
+        <input id="wio-note" type="text" placeholder="Note (error shown by the site, if any)" />
+        <button id="webauthnio-result">Record webauthn.io</button>
+      </p>
+    </section>
+
+    <section>
+      <h2>5. WebAuthn PRF from the extension origin</h2>
+      <button id="prf-create">Create PRF passkey</button>
+      <button id="prf-get1">Get #1</button>
+      <button id="prf-get2">Get #2</button>
+      <button id="prf-get3">Get after browser restart</button>
+    </section>
+
+    <section>
+      <h2>6. Storage, locks, DataChannel, clipboard</h2>
+      <button id="marker-write">Write marker (host)</button>
+      <button id="marker-read">Read marker (host)</button>
+      <button id="persist">persist() (host)</button>
+      <button id="locks">Web Locks (host)</button>
+      <button id="reload">Reload extension (update)</button>
+      <button id="rtc">DataChannel tab ↔ host</button>
+      <button id="clipboard-read">Read clipboard</button>
+    </section>
+
+    <section>
+      <h2>Result</h2>
+      <button id="copy">Copy result</button>
+      <button id="reset">Reset results</button>
+      <pre id="results"></pre>
+    </section>
+    <script type="module" src="./spike.ts"></script>
+  </body>
+</html>
