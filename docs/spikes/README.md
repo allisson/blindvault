@@ -1,6 +1,8 @@
-# Phase 0 spikes — protocol
+# Spikes — protocol
 
-**Ended.** The spike code and its workflow were deleted after the last Phase 0 item (D105); they
+Sections 1 to 5 are the Phase 0 spikes; sections 6 and 7 are the Phase 10 spike (D281).
+
+**Phase 0, ended.** The spike code and its workflow were deleted after the last Phase 0 item (D105); they
 remain in the history at commit `3f29c12`. The text below describes the protocol as it was run.
 
 Throwaway measurement pages in `spikes/`, published to `https://allisson.github.io/blindvault/` by
@@ -71,3 +73,45 @@ Per browser of the matrix (installed app too on the phones):
    result. It records whether `updatefound` fired and when, whether the new worker's install ran
    while the page was open, and whether `controllerchange` shows a takeover.
 4. Optionally repeat with `swTakeover = false` to see when the new worker activates on its own.
+
+## 6. Phase 10 spike — extension (D272, D281) — `spikes/extension/`
+
+Not run yet. An unpacked MV3 extension built on the Mac (`pnpm --filter @blindvault/spikes build`),
+holding no vault data, with the `apps/web` build embedded unmodified. Each extension page ends with
+a JSON result and a **Copy result** button, as in Phase 0; results go to `docs/spikes/extension.md`.
+Nothing is published: Windows gets `spikes/extension/dist` by a USB drive or a shared folder.
+
+Load it in developer mode on Chrome (`chrome://extensions` → Load unpacked) and as a temporary
+add-on on Firefox (`about:debugging` → Load Temporary Add-on). Devices: MacBook Air M1 and the
+Windows laptop, Chrome and Firefox on each.
+
+| # | Measure | Pass |
+| --- | --- | --- |
+| 1 | Session host: on Chrome the offscreen document, on Firefox whether `chrome.offscreen` exists, then the MV3 event page, then an extension tab as fallback. Unlock a throwaway key, close the popup, leave the machine untouched, read the result after 60 minutes. Record also a sleeping machine and a minimized browser. | The key is still held at 60 minutes, with the extension's service worker stopped |
+| 2 | The `apps/web` build, unmodified, in an extension tab and in the offscreen document: libsodium init, Argon2id time with the real parameters, `indexedDB.databases()`, and every error (service worker, frame check, `github.io` warning) | libsodium loads under the MV3 CSP with `'wasm-unsafe-eval'`; the errors are listed as ports |
+| 3 | Interception on the local relying-party page (`localhost`, a cross-origin iframe on a second port): override before the page's code, origin and frame from `MessageSender` in the top frame and the iframe, a forged page message, "another authenticator" | The override runs first, the origin is never taken from the page, the forged message is ignored, the hand-back reaches the browser's own prompt |
+| 4 | A throwaway in-memory ES256 credential registered and used on `webauthn.io`; record `instanceof PublicKeyCredential`, `getClientExtensionResults()` and `toJSON()` on the returned object | `webauthn.io` registers and signs in, on both browsers |
+| 5 | WebAuthn PRF from an extension tab or popup: create with `prf.enabled`, two `get`s, a browser restart, a third `get`; record the `rpId` used | The same PRF output all three times; a failure means password-only unlock in the extension |
+| 6 | In the session host: an `RTCPeerConnection` DataChannel to an extension tab, IndexedDB, `navigator.storage.persist()`, Web Locks, data surviving a reload of the extension as an update; in the popup or side panel, copying to the clipboard and clearing it | Recorded per browser; a failure reopens the matching part of D267 |
+
+Delete the `webauthn.io` credentials and the PRF credential afterwards.
+
+## 7. Phase 10 spike — Android (D272, D281) — `spikes/android/`
+
+Not run yet. A debug APK, under a package other than the release's (D274), built on the Mac with
+the Gradle wrapper and installed on the Samsung A54 with `adb install`. A hand-written Kotlin
+WebView serves the unmodified `apps/web` build through `WebViewAssetLoader` at
+`https://appassets.androidplatform.net`. The A54 is the only Android device, a limit
+`docs/spikes/android.md` records. The page ends with a JSON result and a **Copy result** button;
+results go to `docs/spikes/android.md`.
+
+| # | Measure | Pass |
+| --- | --- | --- |
+| 1 | The build in the WebView: libsodium, Argon2id time against the same build in Chrome on the A54, every error | The app reaches its first screen; the errors are listed as ports |
+| 2 | IndexedDB, `navigator.storage.persist()` and Web Locks; a marker written, then the app restarted, then the APK updated with `adb install -r` | The marker survives both |
+| 3 | An `RTCPeerConnection` DataChannel to the Mac, and the camera reading a QR code (`onPermissionRequest`) | Both work |
+| 4 | A Keystore key (StrongBox where present) requiring a BiometricPrompt on every use: wrap and unwrap 32 bytes over the JS bridge; then enroll a new fingerprint and try again | Each use asks for the biometric; after the new enrollment the key is invalidated |
+| 5 | One WebAuthn PRF create and `get` in the WebView | Recorded: a working PRF reopens D271 |
+| 6 | Copying to the clipboard and clearing it | Recorded |
+
+Uninstall the APK and remove the test fingerprint afterwards.
