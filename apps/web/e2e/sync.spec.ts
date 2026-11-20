@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
@@ -7,6 +9,7 @@ import {
   checkSameNetwork,
   createVault,
   openSettingsPage,
+  openVault,
   startScreen,
   switchSettingsPage,
 } from './create';
@@ -58,11 +61,15 @@ async function device(browser: Browser): Promise<Page> {
   return page;
 }
 
-/** A creates a vault and pairs B by copy/paste; both end in Settings › Devices. */
-async function paired(browser: Browser) {
+/**
+ * A creates a vault, runs `before` on it, and pairs B by copy/paste; both end in Settings ›
+ * Devices. Returns both and the Recovery Phrase.
+ */
+async function paired(browser: Browser, before?: (a: Page) => Promise<void>) {
   const a = await device(browser);
   const b = await device(browser);
-  await createVault(a, PASSWORD_A);
+  const words = await createVault(a, PASSWORD_A);
+  if (before) await before(a);
   await openSettingsPage(a, 'devices');
   await button(a, 'Pair a device…').click();
   await checkSameNetwork(a);
@@ -90,7 +97,7 @@ async function paired(browser: Browser) {
   await expect(a.getByTestId('pairing-done')).toBeVisible({ timeout: 60_000 });
   await button(a, 'Close').click();
   await openSettingsPage(b, 'devices');
-  return { a, b };
+  return { a, b, words };
 }
 
 test('two paired devices connect from their sync codes, each with the other picked (D216)', async ({
@@ -340,6 +347,81 @@ test('an item created on A reaches B through a sync, and B shows the merge (D222
   // B still shows "Vault ready" from its pairing (D198).
   await button(b, 'Open the vault').click();
   await expect(button(b, 'ACME')).toBeVisible();
+});
+
+/** A secure note titled `title` holding the file `name` of `content`; waits for its detail. */
+async function attached(page: Page, title: string, name: string, content: string) {
+  await button(page, 'New item').click();
+  await button(page, 'Secure note').click();
+  await page.getByTestId('item-title').fill(title);
+  await page.getByTestId('attachment-input').setInputFiles({
+    name,
+    mimeType: 'application/pdf',
+    buffer: Buffer.from(content),
+  });
+  await button(page, 'Save').click();
+  await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+}
+
+/** The content of the attachment `name` of the item `title`, downloaded on `page`. */
+async function downloaded(page: Page, title: string, name: string): Promise<string> {
+  await button(page, title).click();
+  const download = page.waitForEvent('download');
+  // Offered once the blob is held: a blob still on its way shows the field waiting for a sync.
+  await button(page, `Download: ${name}`).click({ timeout: 60_000 });
+  return readFile(await (await download).path(), 'utf8');
+}
+
+const LEASE = 'Lease of flat 7731, signed by both parties';
+const DEED = 'Deed of the cabin by the lake, page 1 of 3';
+
+test('an attachment reaches B in its pairing and another reaches A in a sync, and a backup restores both (D278, D279, Attachments Gate)', async ({
+  browser,
+}) => {
+  test.setTimeout(360_000);
+  const { a, b, words } = await paired(browser, (page) =>
+    attached(page, 'Lease', 'lease.pdf', LEASE),
+  );
+  // The pairing's blob phase: B holds the blob of A's attachment when the pairing ends.
+  await button(b, 'Back').click();
+  await button(b, 'Back').click();
+  await button(b, 'Open the vault').click();
+  expect(await downloaded(b, 'Lease', 'lease.pdf')).toBe(LEASE);
+
+  // A sync's blob phase: A gets the blob of B's attachment.
+  await attached(b, 'Deed', 'deed.pdf', DEED);
+  await openSettingsPage(b, 'devices');
+  await synced(a, b);
+  await expect(a.getByTestId('merge-result')).toContainText('Merged: 1 added, 0 replaced.');
+  await closed(a, b);
+  expect(await downloaded(a, 'Deed', 'deed.pdf')).toBe(DEED);
+  expect(await downloaded(a, 'Lease', 'lease.pdf')).toBe(LEASE);
+
+  // B's backup holds both blobs, and a new installation restores them with the Recovery Phrase.
+  await openSettingsPage(b, 'backup');
+  await b.getByTestId('backup-password').fill(PASSWORD_B);
+  const [file] = await Promise.all([
+    b.waitForEvent('download', { timeout: 60_000 }),
+    button(b, 'Export').click(),
+  ]);
+  const backup = await readFile(await file.path());
+  const c = await device(browser);
+  await startScreen(c);
+  await button(c, 'Restore from a backup').click();
+  await c.getByTestId('restore-file').setInputFiles({
+    name: 'blindvault-backup.bvault',
+    mimeType: 'application/octet-stream',
+    buffer: backup,
+  });
+  await c.getByTestId('file-continue').click();
+  await c.getByTestId('restore-phrase').fill(words.join(' '));
+  await button(c, 'Open the backup').click();
+  await fillPassword(c.getByTestId('new-password'), PASSWORD_A);
+  await fillPassword(c.getByTestId('confirm-password'), PASSWORD_A);
+  await button(c, 'Restore').click();
+  await openVault(c);
+  expect(await downloaded(c, 'Lease', 'lease.pdf')).toBe(LEASE);
+  expect(await downloaded(c, 'Deed', 'deed.pdf')).toBe(DEED);
 });
 
 test('a record of A that fails verification stops the sync before it is sent: A names it, B is told, nothing merges (§8, D181, CRYPTO-INV-018)', async ({

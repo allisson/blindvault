@@ -509,9 +509,9 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Attachments Gate
 
-- [ ] A blob that does not match the hash in its field is refused, on sync and on restore
-- [ ] Two devices end a sync, and a pairing, holding the same blobs, and a blob no record cites is removed
-- [ ] A `.bvault` with blobs restores them, and a `.bvault` of the previous format version still restores
+- [x] A blob that does not match the hash in its field is refused, on sync and on restore
+- [x] Two devices end a sync, and a pairing, holding the same blobs, and a blob no record cites is removed
+- [x] A `.bvault` with blobs restores them, and a `.bvault` of the previous format version still restores
 - [ ] `security-invariants.md` and `threat-model.md` updated for attachments
 
 ---

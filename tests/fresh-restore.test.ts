@@ -9,13 +9,14 @@ import {
   type KdfPort,
   Keyring,
   MEMLIMIT,
+  blobId,
   type SymmetricKey,
   derivePrfKek,
   generateRecoveryPhrase,
   initCrypto,
   normalizePassword,
 } from '@blindvault/crypto';
-import { VaultDatabase } from '@blindvault/storage';
+import { StorageRejectedError, VaultDatabase } from '@blindvault/storage';
 import {
   FUTURE_CLOCK_BOUND_MS,
   type ItemInput,
@@ -264,9 +265,9 @@ describe('fresh restore through IndexedDB (Gate B, D33)', () => {
 });
 
 describe('the blobs of a backup through IndexedDB (Attachments Gate, D278, D279)', () => {
-  it('restores each cited blob after the records commit, and drops a blob no record cites', async () => {
-    const factory = new IDBFactory();
-    const { store, db } = lazyStore(factory);
+  /** A new vault through IndexedDB, with its phrase and its database. */
+  async function blobVault() {
+    const { store, db } = lazyStore(new IDBFactory());
     const keyring = new Keyring();
     const phrase = generateRecoveryPhrase(keyring);
     const session = await VaultSession.create({
@@ -280,6 +281,11 @@ describe('the blobs of a backup through IndexedDB (Attachments Gate, D278, D279)
       now: () => T0,
     });
     sessions.push(session);
+    return { session, keyring, phrase, database: () => must(db()) };
+  }
+
+  it('restores each cited blob after the records commit, and drops a blob no record cites', async () => {
+    const { session, keyring, phrase, database } = await blobVault();
     // `large` spans several chunks of the stream; `stray` is held but cited by nothing.
     const [passport, large, stray] = [
       attachment('Passport', 1),
@@ -288,7 +294,7 @@ describe('the blobs of a backup through IndexedDB (Attachments Gate, D278, D279)
     ];
     await session.createItem(passport.item, [passport.stored]);
     await session.createItem(large.item, [large.stored]);
-    await must(db()).putBlob(stray.stored);
+    await database().putBlob(stray.stored);
     const file = await session.exportBackup({ kek: kek(keyring, 1), method: 'password' });
     expect(file.missing).toEqual([]);
 
@@ -311,6 +317,53 @@ describe('the blobs of a backup through IndexedDB (Attachments Gate, D278, D279)
     const again = await unlocked(restored.database, T0 + DAY);
     expect(await again.blobGrant().lacking()).toEqual([]);
     expect(await again.blobGrant().read(passport.blobId)).toEqual(passport.blob);
+  });
+
+  it('drops a blob in the file that does not match the hash its field cites, and names the item waiting for sync', async () => {
+    const { session, keyring, phrase, database } = await blobVault();
+    const passport = attachment('Passport', 1);
+    // The blob held is the field's with one byte changed: another hash, so another blobId.
+    const changed = passport.blob.slice();
+    changed[changed.length - 1] = (changed[changed.length - 1] ?? 0) ^ 1;
+    const other = { blobId: blobId(changed), blob: changed };
+    const itemId = await session.createItem(passport.item);
+    await database().putBlob(other);
+    const file = await session.exportBackup({ kek: kek(keyring, 1), method: 'password' });
+    expect(file.missing.map((k) => hex(k.recordId))).toEqual([hex(itemId)]);
+
+    const restored = await restoreOnto(joined(file), 'phrase', phrase.words, T0 + DAY);
+    expect(restored.backup.blobIds.map(hex)).toEqual([hex(other.blobId)]);
+    const result = await restored.session.restoreBlobs(restored.backup);
+    expect(result.stopped).toBe(false);
+    expect(result.missing.map((k) => hex(k.recordId))).toEqual([hex(itemId)]);
+    expect(await restored.database.blobIds()).toEqual([]);
+    expect((await restored.session.blobGrant().lacking()).map(hex)).toEqual([hex(passport.blobId)]);
+    // The item itself is restored, its attachment waiting for a sync.
+    expect(restored.session.items().map((i) => i.item?.title)).toEqual(['Passport']);
+  });
+
+  it('writes nothing for a blob read from the file that does not match its blobId', async () => {
+    const { session, keyring, phrase } = await blobVault();
+    const passport = attachment('Passport', 1);
+    await session.createItem(passport.item, [passport.stored]);
+    const file = await session.exportBackup({ kek: kek(keyring, 1), method: 'password' });
+    const restored = await restoreOnto(joined(file), 'phrase', phrase.words, T0 + DAY);
+    const changed = passport.blob.slice();
+    changed[0] = (changed[0] ?? 0) ^ 1;
+    let read = false;
+    const lying = {
+      ...restored.backup,
+      blobs: {
+        next: () => {
+          if (read) return Promise.resolve(undefined);
+          read = true;
+          return Promise.resolve({ blobId: passport.blobId, blob: changed });
+        },
+      },
+    };
+    await expect(restored.session.restoreBlobs(lying)).rejects.toBeInstanceOf(StorageRejectedError);
+    expect(await restored.database.blobIds()).toEqual([]);
+    expect(restored.session.items().map((i) => i.item?.title)).toEqual(['Passport']);
   });
 
   it('restores a backup of format version 1, which holds no blob', async () => {
