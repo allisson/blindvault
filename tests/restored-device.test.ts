@@ -95,7 +95,7 @@ describe('restored device through IndexedDB (§10, D30, D41, D186)', () => {
     const file = await a.exportBackup({ kek: kek(keyringA, 1), method: 'password' });
 
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(file.bytes), phrase.words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(file.bytes), phrase.words);
     const factory = new IDBFactory();
     const { store, db } = lazyStore(factory, backup.vaultId);
     const b = await VaultSession.restore({

@@ -122,7 +122,7 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
 
     // The new vault commits in a database of its own, recording the one it replaces (D96)...
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(other.file), other.words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(other.file), other.words);
     const db = await database(factory, backup.vaultId);
     const session = await VaultSession.restore({
       store: {
@@ -168,7 +168,7 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
     const other = await vault(new IDBFactory(), 'Other');
     // The new database was created, as its first commit does, then nothing was committed in it.
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(other.file), other.words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(other.file), other.words);
     keyring.wipeAll();
     (await database(factory, backup.vaultId)).close();
 
@@ -186,7 +186,7 @@ describe('replacing the vault by a backup through IndexedDB (D89, D96, D153)', (
     held.session.lock();
 
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(held.file), held.words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(held.file), held.words);
     let clear = true;
     const session = await VaultSession.restore({
       store: {

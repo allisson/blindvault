@@ -134,10 +134,13 @@ export function ChooseFile({
           onClick={() => {
             if (!file) return;
             setReading(true);
-            void file.arrayBuffer().then((buffer) => {
-              setReading(false);
-              onFile(controller.openBackupFile(new Uint8Array(buffer)));
-            });
+            void file
+              .arrayBuffer()
+              .then((buffer) => controller.openBackupFile(new Uint8Array(buffer)))
+              .then((check) => {
+                setReading(false);
+                onFile(check);
+              });
           }}
         >
           {m.wizard.continue}

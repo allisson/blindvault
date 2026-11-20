@@ -153,10 +153,10 @@ async function restoreOnto(
 ) {
   const factory = new IDBFactory();
   const keyring = new Keyring();
-  const parsed = parseBackup(file);
+  const parsed = await parseBackup(file);
   const backup =
     open === 'phrase'
-      ? restoreWithPhrase(keyring, parsed, words)
+      ? await restoreWithPhrase(keyring, parsed, words)
       : await restoreWithPassword(keyring, kdf(), parsed, normalizePassword(EXPORT_PASSWORD));
   const { store, db } = lazyStore(factory, backup.vaultId);
   const session = await VaultSession.restore({

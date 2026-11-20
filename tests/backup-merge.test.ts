@@ -132,7 +132,7 @@ async function deviceA() {
 async function deviceB(a: Awaited<ReturnType<typeof deviceA>>) {
   const file = await a.session.exportBackup({ kek: kek(a.keyring, 1), method: 'password' });
   const keyring = new Keyring();
-  const backup = restoreWithPhrase(keyring, parseBackup(file.bytes), a.words);
+  const backup = await restoreWithPhrase(keyring, await parseBackup(file.bytes), a.words);
   const { store } = lazyStore(new IDBFactory(), backup.vaultId);
   const clock = { t: T0 };
   const session = await VaultSession.restore({
@@ -198,10 +198,10 @@ describe('backup merge through IndexedDB (Gate B, D13, D182)', () => {
       const file = await exported(b.session, 2, via === 'password' ? EXPORT_PASSWORD : undefined);
 
       const keyring = new Keyring();
-      const parsed = parseBackup(file);
+      const parsed = await parseBackup(file);
       const backup =
         via === 'phrase'
-          ? restoreWithPhrase(keyring, parsed, a.words)
+          ? await restoreWithPhrase(keyring, parsed, a.words)
           : await restoreWithPassword(keyring, kdf(), parsed, normalizePassword(EXPORT_PASSWORD));
       await a.session.mergeBackup(backup);
       keyring.wipeAll();
@@ -229,7 +229,7 @@ describe('backup merge through IndexedDB (Gate B, D13, D182)', () => {
     const config = await a.database().localConfig();
 
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(file), other.words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(file), other.words);
     const error = await a.session.mergeBackup(backup).catch((e: unknown) => e);
     keyring.wipeAll();
     expect(error).toBeInstanceOf(MergeRejectedError);

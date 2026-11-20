@@ -778,13 +778,13 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
   }
 
   /** Opens a backup with the typed phrase, as a restore would (backup-format.md §8, steps 1–5). */
-  function openWithPhrase(file: Uint8Array, words: string) {
+  async function openWithPhrase(file: Uint8Array, words: string) {
     const keyring = new Keyring();
-    const parsed = parseBackup(file);
+    const parsed = await parseBackup(file);
     const phrase = typed(words);
     const fileKey = openRecoveryKeyslot(keyring, parsed.header, phrase);
     phrase.keyring.wipeAll();
-    return { parsed, payload: openBackup(keyring, fileKey, parsed), keyring };
+    return { parsed, payload: await openBackup(keyring, fileKey, parsed), keyring };
   }
 
   /** Whether `masterKey` is this vault's: it opens the Vault Key record of `store`. */
@@ -820,7 +820,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
 
     expect(file.exportedAt).toBe(T0 + 5000);
-    const { parsed, payload, keyring: opened } = openWithPhrase(file.bytes, words);
+    const { parsed, payload, keyring: opened } = await openWithPhrase(file.bytes, words);
     expect(parsed.header.keyslots.map((k) => k.type)).toEqual(['recovery']);
     expect(parsed.header.phraseId).toEqual(session.recovery?.phraseId);
     expect(parsed.header.phraseCreatedAt).toBe(session.recovery?.phraseCreatedAt);
@@ -832,7 +832,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
     // Another vault's phrase does not open it.
     const other = (await create()).words;
-    expect(() => openWithPhrase(file.bytes, other)).toThrow(
+    await expect(openWithPhrase(file.bytes, other)).rejects.toThrow(
       expect.objectContaining({ reason: 'wrong-secret' }),
     );
     opened.wipeAll();
@@ -851,7 +851,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(password.every((b) => b === 0)).toBe(true);
     expect(kdf.terminated()).toBe(1);
 
-    const parsed = parseBackup(file.bytes);
+    const parsed = await parseBackup(file.bytes);
     expect(parsed.header.keyslots.map((k) => k.type)).toEqual(['recovery', 'password']);
     const opened = new Keyring();
     const fileKey = await openPasswordKeyslot(
@@ -860,13 +860,13 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
       parsed.header,
       normalizePassword(EXPORT_PASSWORD),
     );
-    const payload = openBackup(opened, fileKey, parsed);
+    const payload = await openBackup(opened, fileKey, parsed);
     expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
     await expect(
       openPasswordKeyslot(opened, fakeKdf().port(), parsed.header, normalizePassword('other')),
     ).rejects.toThrow(expect.objectContaining({ reason: 'wrong-secret' }));
     // The phrase still opens it.
-    expect(sorted(openWithPhrase(file.bytes, words).payload.records)).toEqual(
+    expect(sorted((await openWithPhrase(file.bytes, words)).payload.records)).toEqual(
       sorted(payload.records),
     );
     opened.wipeAll();
@@ -881,7 +881,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
       prfInput: new Uint8Array(32).fill(4),
     });
     const file = await session.exportBackup({ kek: kek(keyring, 3), method: 'passkey' });
-    const { payload, keyring: opened } = openWithPhrase(file.bytes, words);
+    const { payload, keyring: opened } = await openWithPhrase(file.bytes, words);
     expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
     opened.wipeAll();
   });
@@ -1038,7 +1038,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(behind.writable).toBe(false);
     const caller = new Keyring();
     const file = await behind.exportBackup({ kek: kek(caller), method: 'password' });
-    expect(openWithPhrase(file.bytes, words).payload.records).toHaveLength(3);
+    expect((await openWithPhrase(file.bytes, words)).payload.records).toHaveLength(3);
     expect(behind.lastBackupAt).toBe(clock.t);
     caller.wipeAll();
   });
@@ -1106,10 +1106,13 @@ describe('Recovery Phrase regeneration (§5.4, D2, D73, D74, D98, D185)', () => 
   }
 
   /** Whether `words` open the backup `file` to this vault (backup-format.md §8, steps 1 to 8). */
-  function restores(file: Uint8Array, words: string, vaultId: Uint8Array): boolean {
+  async function restores(file: Uint8Array, words: string, vaultId: Uint8Array): Promise<boolean> {
     const keyring = new Keyring();
     try {
-      return sameId(restoreWithPhrase(keyring, parseBackup(file), words).vaultId, vaultId);
+      return sameId(
+        (await restoreWithPhrase(keyring, await parseBackup(file), words)).vaultId,
+        vaultId,
+      );
     } catch {
       return false;
     } finally {
@@ -1163,12 +1166,12 @@ describe('Recovery Phrase regeneration (§5.4, D2, D73, D74, D98, D185)', () => 
     const old = await session.exportBackup({ kek: kek(keyring), method: 'password' });
     const { recovery, words: next } = await regenerate(session);
     const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
-    expect(parseBackup(file.bytes).header.phraseId).toEqual(recovery.phraseId);
-    expect(restores(file.bytes, next, session.vaultId)).toBe(true);
-    expect(restores(file.bytes, words, session.vaultId)).toBe(false);
+    expect((await parseBackup(file.bytes)).header.phraseId).toEqual(recovery.phraseId);
+    expect(await restores(file.bytes, next, session.vaultId)).toBe(true);
+    expect(await restores(file.bytes, words, session.vaultId)).toBe(false);
     // An earlier backup still opens with the old phrase only (§5.4, documented limitation).
-    expect(restores(old.bytes, words, session.vaultId)).toBe(true);
-    expect(restores(old.bytes, next, session.vaultId)).toBe(false);
+    expect(await restores(old.bytes, words, session.vaultId)).toBe(true);
+    expect(await restores(old.bytes, next, session.vaultId)).toBe(false);
   });
 
   it('opens the Master Key with a passkey KEK as well (D181, D185)', async () => {
@@ -1328,7 +1331,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     kdfParams = PARAMS,
   ) {
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(file), words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(file), words);
     const session = await VaultSession.restore({
       store,
       keyring,
@@ -1483,7 +1486,11 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     const store = new MemoryStore();
     store.failNext = true;
     const keyring = new Keyring();
-    const backup = restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words);
+    const backup = await restoreWithPhrase(
+      keyring,
+      await parseBackup(source.file.bytes),
+      source.words,
+    );
     await expect(
       VaultSession.restore({
         store,
@@ -1511,7 +1518,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(source.file.bytes), source.words),
       replacesVaultId: replaced,
       now: new Clock().now,
     });
@@ -1544,7 +1551,11 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
         kek: kek(keyring, 2),
         salt: SALT,
         kdfParams: PARAMS,
-        backup: restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words),
+        backup: await restoreWithPhrase(
+          keyring,
+          await parseBackup(source.file.bytes),
+          source.words,
+        ),
         replacesVaultId: new Uint8Array(15),
       }),
     ).rejects.toThrow(RangeError);
@@ -1563,7 +1574,11 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
         kek: kek(keyring, 2),
         salt: SALT,
         kdfParams: PARAMS,
-        backup: restoreWithPhrase(keyring, parseBackup(source.file.bytes), source.words),
+        backup: await restoreWithPhrase(
+          keyring,
+          await parseBackup(source.file.bytes),
+          source.words,
+        ),
         replacesVaultId: source.session.vaultId,
       }),
     ).rejects.toThrow(RangeError);
@@ -1819,7 +1834,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), a.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), a.words),
       now: clockB.now,
     });
     open.push(session);
@@ -1830,7 +1845,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
   async function backupOf(session: VaultSession, seed: number, words: string) {
     const keyring = new Keyring();
     const file = await session.exportBackup({ kek: kek(keyring, seed), method: 'password' });
-    return restoreWithPhrase(keyring, parseBackup(file.bytes), words);
+    return restoreWithPhrase(keyring, await parseBackup(file.bytes), words);
   }
 
   /** The records of `store` as a validated backup would hold them, with the vault's Master Key. */
@@ -2788,7 +2803,7 @@ describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
       now: clock.now,
     });
     open.push(session);
@@ -2847,7 +2862,7 @@ describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
     const file = await a.exportBackup({ kek: kek(source.keyring), method: 'password' });
     const keyring = new Keyring();
     const result = await b.session.mergeBackup(
-      restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+      await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
     );
     expect(result.retiredDevices).toEqual([]);
     expect(result.newDevices).toEqual([]);
@@ -4796,7 +4811,7 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
         kek: kek(keyring, 2),
         salt: SALT,
         kdfParams: PARAMS,
-        backup: restoreWithPhrase(keyring, parseBackup(file.bytes), source.words),
+        backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
         now: new Clock().now,
       });
       open.push(restored);
@@ -5102,7 +5117,7 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
       now: clock.now,
     });
     open.push(y);
@@ -5499,7 +5514,7 @@ describe('sync (sync-protocol.md §3, D113, D216)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
       now: x.clock.now,
     });
     open.push(restored);
@@ -5709,7 +5724,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
       now: clock.now,
     });
     open.push(y);
@@ -5919,7 +5934,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       kek: kek(keyring, 3),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: restoreWithPhrase(keyring, parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
       now: clock.now,
     });
     open.push(z);

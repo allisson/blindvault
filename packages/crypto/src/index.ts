@@ -108,10 +108,8 @@ export {
   BackupStreamWriter,
   CHUNK_LENGTH,
   MAX_META_LENGTH,
-  type OpenedBackupPayload,
   type ReadBackupPayload,
   STREAM_HEADER_LENGTH,
-  openBackupStream,
   readBackupStream,
   scanBackupStream,
 } from './backup-stream';

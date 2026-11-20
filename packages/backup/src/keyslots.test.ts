@@ -18,7 +18,7 @@ import {
   openPasswordKeyslot,
   openRecoveryKeyslot,
 } from './keyslots';
-import { fromBase64, fromHex, validFile, vectorKdf, vectors } from './test-helpers';
+import { concat, fromBase64, fromHex, validFile, vectorKdf, vectors } from './test-helpers';
 
 beforeAll(initCrypto);
 
@@ -41,17 +41,17 @@ async function reason(fn: () => unknown): Promise<string> {
 describe('recovery keyslot (backup-format.md §3, D16)', () => {
   it.each(vectors.valid.map((v) => [v.case, v] as const))(
     'opens the vector file with %s by the Recovery Phrase',
-    (_, v) => {
+    async (_, v) => {
       const keyring = new Keyring();
-      const parsed = parseBackup(fromBase64(v.file));
+      const parsed = await parseBackup(fromBase64(v.file));
       const fileKey = openRecoveryKeyslot(keyring, parsed.header, vectorPhrase(keyring));
-      expect(openBackup(keyring, fileKey, parsed).records).toHaveLength(v.meta.recordCount);
+      expect((await openBackup(keyring, fileKey, parsed)).records).toHaveLength(v.meta.recordCount);
     },
   );
 
   it('fails with one error for another phrase and for a changed keyslot byte', async () => {
     const keyring = new Keyring();
-    const parsed = parseBackup(validFile('bothKeyslots'));
+    const parsed = await parseBackup(validFile('bothKeyslots'));
     const other = deriveRecoveryKeys(keyring, generateRecoveryPhrase(keyring).entropy);
     expect(await reason(() => openRecoveryKeyslot(keyring, parsed.header, other))).toBe(
       'wrong-secret',
@@ -67,15 +67,15 @@ describe('recovery keyslot (backup-format.md §3, D16)', () => {
     );
   });
 
-  it('reports a released keyslot private key as such, not as a wrong phrase', () => {
+  it('reports a released keyslot private key as such, not as a wrong phrase', async () => {
     const keyring = new Keyring();
-    const parsed = parseBackup(validFile('bothKeyslots'));
+    const parsed = await parseBackup(validFile('bothKeyslots'));
     const keys = vectorPhrase(keyring);
     keyring.release(keys.keyslotPrivateKey);
     expect(() => openRecoveryKeyslot(keyring, parsed.header, keys)).toThrow(KeyWipedError);
   });
 
-  it('is made from the public key alone, and opens with the phrase', () => {
+  it('is made from the public key alone, and opens with the phrase', async () => {
     const keyring = new Keyring();
     const phrase = generateRecoveryPhrase(keyring);
     const keys = deriveRecoveryKeys(keyring, phrase.entropy);
@@ -90,13 +90,15 @@ describe('recovery keyslot (backup-format.md §3, D16)', () => {
       stream: new Uint8Array(24),
     };
     const opened = openRecoveryKeyslot(keyring, header, keys);
-    const file = sealBackup(
+    const parts = await sealBackup(
       fileKey,
       header,
       { vaultId: randomBytes(16), exportedAt: 1, masterKey: generateKey(keyring) },
       [],
+      [],
     );
-    expect(() => openBackup(keyring, opened, parseBackup(file))).not.toThrow();
+    const parsed = await parseBackup(concat(parts));
+    expect((await openBackup(keyring, opened, parsed)).records).toEqual([]);
   });
 });
 
@@ -104,12 +106,12 @@ describe('password keyslot (backup-format.md §3, §4, D36, D78)', () => {
   it('opens the vector file by the export password, at the export parameters', async () => {
     const keyring = new Keyring();
     const kdf = vectorKdf();
-    const parsed = parseBackup(validFile('bothKeyslots'));
+    const parsed = await parseBackup(validFile('bothKeyslots'));
     const password = normalizePassword(PASSWORD);
     const fileKey = await openPasswordKeyslot(keyring, kdf.port(), parsed.header, password);
     // Only the file key is left: the KEK is released once the file key is out.
     expect(keyring.size).toBe(1);
-    expect(openBackup(keyring, fileKey, parsed).records).toHaveLength(3);
+    expect((await openBackup(keyring, fileKey, parsed)).records).toHaveLength(3);
     expect(password.every((b) => b === 0)).toBe(true);
     expect(kdf.requests).toHaveLength(1);
     expect(kdf.requests[0]).toMatchObject({ op: 'derive', params: EXPORT_KDF });
@@ -117,7 +119,7 @@ describe('password keyslot (backup-format.md §3, §4, D36, D78)', () => {
 
   it('fails with one error for a wrong password', async () => {
     const keyring = new Keyring();
-    const parsed = parseBackup(validFile('bothKeyslots'));
+    const parsed = await parseBackup(validFile('bothKeyslots'));
     const password = normalizePassword('another password entirely');
     expect(
       await reason(() => openPasswordKeyslot(keyring, vectorKdf().port(), parsed.header, password)),
@@ -127,7 +129,7 @@ describe('password keyslot (backup-format.md §3, §4, D36, D78)', () => {
 
   it('keeps no file key when the vault locks during the derivation', async () => {
     const keyring = new Keyring();
-    const parsed = parseBackup(validFile('bothKeyslots'));
+    const parsed = await parseBackup(validFile('bothKeyslots'));
     const kdf = vectorKdf(() => {
       keyring.wipeAll();
     });
@@ -140,7 +142,7 @@ describe('password keyslot (backup-format.md §3, §4, D36, D78)', () => {
   it('says when the file has no password keyslot, deriving nothing', async () => {
     const keyring = new Keyring();
     const kdf = vectorKdf();
-    const parsed = parseBackup(validFile('recoveryOnly'));
+    const parsed = await parseBackup(validFile('recoveryOnly'));
     const password = normalizePassword(PASSWORD);
     expect(
       await reason(() => openPasswordKeyslot(keyring, kdf.port(), parsed.header, password)),
@@ -154,7 +156,7 @@ describe('password keyslot (backup-format.md §3, §4, D36, D78)', () => {
     async (_, v) => {
       const keyring = new Keyring();
       const kdf = vectorKdf();
-      const parsed = parseBackup(fromBase64(v.file));
+      const parsed = await parseBackup(fromBase64(v.file));
       const password = normalizePassword(PASSWORD);
       expect(
         await reason(() => openPasswordKeyslot(keyring, kdf.port(), parsed.header, password)),
@@ -195,20 +197,21 @@ describe('password keyslot (backup-format.md §3, §4, D36, D78)', () => {
       phraseCreatedAt: 1,
       keyslots: [createRecoveryKeyslot(fileKey, keys.keyslotPublicKey), a] as const,
     };
-    const file = sealBackup(
+    const parts = await sealBackup(
       fileKey,
       header,
       { vaultId: randomBytes(16), exportedAt: 1, masterKey: generateKey(keyring) },
       [randomBytes(10)],
+      [],
     );
-    const parsed = parseBackup(file);
+    const parsed = await parseBackup(concat(parts));
     const opened = await openPasswordKeyslot(
       keyring,
       kdf.port(),
       parsed.header,
       normalizePassword('pw one'),
     );
-    expect(openBackup(keyring, opened, parsed).records).toHaveLength(1);
+    expect((await openBackup(keyring, opened, parsed)).records).toHaveLength(1);
     expect(
       await reason(() =>
         openPasswordKeyslot(keyring, kdf.port(), parsed.header, normalizePassword('pw two')),

@@ -210,7 +210,7 @@ describe('re-founding through IndexedDB (Gate B, D28, D89, D96, D187)', () => {
     const fresh = await refound(old, factory);
 
     const keyring = new Keyring();
-    const oldBackup = restoreWithPhrase(keyring, parseBackup(old.file), old.words);
+    const oldBackup = await restoreWithPhrase(keyring, await parseBackup(old.file), old.words);
     const error = await fresh.session.mergeBackup(oldBackup).catch((e: unknown) => e);
     keyring.wipeAll();
     expect(error).toBeInstanceOf(MergeRejectedError);
@@ -218,11 +218,11 @@ describe('re-founding through IndexedDB (Gate B, D28, D89, D96, D187)', () => {
 
     const caller = new Keyring();
     const file = await fresh.session.exportBackup({ kek: kek(caller, 3), method: 'password' });
-    expect(() => restoreWithPhrase(new Keyring(), parseBackup(file.bytes), old.words)).toThrow(
-      BackupRejectedError,
-    );
-    expect(restoreWithPhrase(new Keyring(), parseBackup(file.bytes), fresh.words).vaultId).toEqual(
-      fresh.session.vaultId,
-    );
+    await expect(
+      restoreWithPhrase(new Keyring(), await parseBackup(file.bytes), old.words),
+    ).rejects.toThrow(BackupRejectedError);
+    expect(
+      (await restoreWithPhrase(new Keyring(), await parseBackup(file.bytes), fresh.words)).vaultId,
+    ).toEqual(fresh.session.vaultId);
   });
 });

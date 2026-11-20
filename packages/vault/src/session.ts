@@ -1861,12 +1861,20 @@ export class VaultSession {
         }
         this.#unlocked();
         const exportedAt = Math.floor(this.#now());
-        const bytes = sealBackup(
+        // A version-2 file without blobs: the export reads them from storage next (§8 step 5).
+        const parts = await sealBackup(
           fileKey,
           { phraseId: recovery.phraseId, phraseCreatedAt: recovery.phraseCreatedAt, keyslots },
           { vaultId: this.#cleartext.vaultId, exportedAt, masterKey },
           stored.map((s) => s.envelope),
+          [],
         );
+        const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+        let at = 0;
+        for (const p of parts) {
+          bytes.set(p, at);
+          at += p.length;
+        }
         return { writes: [], deletes: [], result: { bytes, exportedAt }, lastBackupAt: exportedAt };
       } finally {
         scratch.wipeAll();

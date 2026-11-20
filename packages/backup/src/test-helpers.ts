@@ -4,11 +4,21 @@ import { createHash } from 'node:crypto';
 
 import { type KdfPort, type KdfRequest, normalizePassword } from '@blindvault/crypto';
 
-import vectors from '../test-vectors/backup-v1.json' with { type: 'json' };
+import vectorsV1 from '../test-vectors/backup-v1.json' with { type: 'json' };
+import vectors from '../test-vectors/backup-v2.json' with { type: 'json' };
 
 import { EXPORT_KDF } from './format';
 
-export { vectors };
+/** The version-2 vectors, written by this app; `vectorsV1` are still read. */
+export { vectors, vectorsV1 };
+
+/** Each format version's vectors, for the tests that run on both. */
+export const VECTOR_SETS = [
+  ['version 1', vectorsV1],
+  ['version 2', vectors],
+] as const;
+
+export type Vectors = (typeof VECTOR_SETS)[number][1];
 
 export function fromHex(hex: string): Uint8Array {
   if (hex.length % 2 !== 0 || !/^[0-9a-f]*$/.test(hex)) throw new Error(`bad hex: ${hex}`);
@@ -25,11 +35,9 @@ export function blake2b512(bytes: Uint8Array): string {
   return createHash('blake2b512').update(bytes).digest('hex');
 }
 
-type Valid = (typeof vectors.valid)[number];
-
 /** A valid vector file by name. */
-export function validFile(name: string): Uint8Array {
-  const v = vectors.valid.find((x: Valid) => x.name === name);
+export function validFile(name: string, set: Vectors = vectors): Uint8Array {
+  const v = (set.valid as readonly { name: string; file: string }[]).find((x) => x.name === name);
   if (!v) throw new Error(`no valid vector ${name}`);
   return fromBase64(v.file);
 }
@@ -42,16 +50,29 @@ export interface Edit {
 }
 
 /** A rejected file, given whole or as an edit of a valid one (tests/vectors/generate.py). */
-export function rejectedFile(v: { file?: string; edit?: Edit }): Uint8Array {
+export function rejectedFile(
+  v: { file?: string; edit?: Edit },
+  set: Vectors = vectors,
+): Uint8Array {
   if (v.file !== undefined) return fromBase64(v.file);
   if (!v.edit) throw new Error('vector without a file');
-  let f = validFile(v.edit.base).slice();
+  let f = validFile(v.edit.base, set).slice();
   if (v.edit.flip !== undefined) f[v.edit.flip] = (f[v.edit.flip] ?? 0) ^ 1;
   if (v.edit.keep !== undefined) f = f.slice(0, v.edit.keep);
   const tail = fromHex(v.edit.append ?? '');
   const out = new Uint8Array(f.length + tail.length);
   out.set(f);
   out.set(tail, f.length);
+  return out;
+}
+
+export function concat(parts: readonly Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+  let pos = 0;
+  for (const p of parts) {
+    out.set(p, pos);
+    pos += p.length;
+  }
   return out;
 }
 

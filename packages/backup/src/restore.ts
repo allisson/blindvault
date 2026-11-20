@@ -1,7 +1,9 @@
-// Restore validation (backup-format.md §8 steps 3 to 8, D43, D61, D64, D81, D178): a file opened by
-// one of its keyslots is checked in full before anything is written. Applying it is the caller's.
+// Restore validation (backup-format.md §8 steps 3 to 8, D43, D61, D64, D81, D178, D278): a file
+// opened by one of its keyslots is checked in full before anything is written. Applying it, and
+// writing its blobs once the records commit (step 11), is the caller's.
 
 import {
+  type BackupBlobReader,
   type CborMap,
   type EncryptedRecord,
   type Envelope,
@@ -9,7 +11,6 @@ import {
   KeyWipedError,
   Keyring,
   NewerRecordError,
-  type OpenedBackupPayload,
   RecordRejectedError,
   RecordType,
   type RecoveryKeys,
@@ -25,7 +26,7 @@ import {
 } from '@blindvault/crypto';
 
 import { BackupRejectedError, type RejectedRecord } from './errors';
-import { type ParsedBackup, openBackup } from './format';
+import { type OpenedBackup, type ParsedBackup, openBackup } from './format';
 import { openPasswordKeyslot, openRecoveryKeyslot } from './keyslots';
 
 /** A backup that passed every check of §8 up to step 8, ready to apply (step 9). */
@@ -38,6 +39,13 @@ export interface ValidatedBackup {
   readonly records: readonly EncryptedRecord[];
   /** `password`: the restore ends by recommending Check Recovery Phrase (D43). */
   readonly openedWith: 'phrase' | 'password';
+  /** The BLAKE2b-256 of every blob in the file, in its order; none in version 1. */
+  readonly blobIds: readonly Uint8Array[];
+  /**
+   * The blobs in that order, for step 11 once the records commit. A file changed since the first
+   * pass throws `BackupRejectedError` `corrupt`, then on every later call.
+   */
+  readonly blobs: BackupBlobReader;
 }
 
 /**
@@ -45,18 +53,18 @@ export interface ValidatedBackup {
  * the position of the first unknown word; anything else that fails throws `BackupRejectedError`.
  * The phrase-derived keys and the file key are wiped before returning.
  */
-export function restoreWithPhrase(
+export async function restoreWithPhrase(
   keyring: Keyring,
   parsed: ParsedBackup,
   phrase: string,
-): ValidatedBackup {
+): Promise<ValidatedBackup> {
   if (keyring.wiped) throw new KeyWipedError();
   const scratch = new Keyring();
   try {
     const recovery = deriveRecoveryKeys(scratch, parseRecoveryPhrase(scratch, phrase));
     const fileKey = openRecoveryKeyslot(scratch, parsed.header, recovery);
     scratch.release(recovery.keyslotPrivateKey);
-    return validate(keyring, parsed, fileKey, recovery);
+    return await validate(keyring, parsed, fileKey, recovery);
   } finally {
     scratch.wipeAll();
   }
@@ -80,20 +88,20 @@ export async function restoreWithPassword(
   const scratch = new Keyring();
   try {
     const fileKey = await openPasswordKeyslot(scratch, port, parsed.header, password);
-    return validate(keyring, parsed, fileKey);
+    return await validate(keyring, parsed, fileKey);
   } finally {
     scratch.wipeAll();
   }
 }
 
-/** Steps 4 to 8. The Master Key goes to `keyring` only if every check passes. */
-function validate(
+/** Steps 4 to 8. The Master Key stays in `keyring` only if every check passes. */
+async function validate(
   keyring: Keyring,
   parsed: ParsedBackup,
   fileKey: SymmetricKey,
   recovery?: RecoveryKeys,
-): ValidatedBackup {
-  const opened = openBackup(keyring, fileKey, parsed);
+): Promise<ValidatedBackup> {
+  const opened = await openBackup(keyring, fileKey, parsed);
   try {
     const { records, envelope } = verifyAll(opened);
 
@@ -126,6 +134,8 @@ function validate(
       masterKey: opened.masterKey,
       records,
       openedWith: recovery ? 'phrase' : 'password',
+      blobIds: opened.blobIds,
+      blobs: opened.blobs,
     };
   } catch (error) {
     keyring.release(opened.masterKey);
@@ -144,7 +154,7 @@ interface Verified {
  * first record that fails, or repeats an identity, is named. The Vault Keys and subkeys live in a
  * keyring of their own, wiped before returning.
  */
-function verifyAll(opened: OpenedBackupPayload): Verified {
+function verifyAll(opened: OpenedBackup): Verified {
   const decoded = opened.records.map((bytes): Envelope | undefined => {
     try {
       return decodeEnvelope(bytes);
