@@ -95,6 +95,8 @@ import {
 } from './local-config';
 import { MemoryStore } from './memory-store';
 import {
+  type BackupBlobs,
+  type BackupFile,
   HISTORY_LIMIT,
   type ItemInput,
   MAINTENANCE_INTERVAL_MS,
@@ -102,6 +104,7 @@ import {
   type UnlockMethod,
   VaultSession,
 } from './session';
+import { type RecordKey } from './store';
 
 beforeAll(initCrypto);
 
@@ -293,6 +296,17 @@ function sortedHex(ids: readonly Uint8Array[]): Uint8Array[] {
   return [...ids].sort((x, y) =>
     Buffer.from(x).toString('hex').localeCompare(Buffer.from(y).toString('hex')),
   );
+}
+
+/** A backup file's parts as the one file the browser makes of them. */
+function joined(file: BackupFile): Uint8Array {
+  const bytes = new Uint8Array(file.parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of file.parts) {
+    bytes.set(p, at);
+    at += p.length;
+  }
+  return bytes;
 }
 
 function contains(haystack: Uint8Array, needle: Uint8Array): boolean {
@@ -820,7 +834,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
 
     expect(file.exportedAt).toBe(T0 + 5000);
-    const { parsed, payload, keyring: opened } = await openWithPhrase(file.bytes, words);
+    const { parsed, payload, keyring: opened } = await openWithPhrase(joined(file), words);
     expect(parsed.header.keyslots.map((k) => k.type)).toEqual(['recovery']);
     expect(parsed.header.phraseId).toEqual(session.recovery?.phraseId);
     expect(parsed.header.phraseCreatedAt).toBe(session.recovery?.phraseCreatedAt);
@@ -832,7 +846,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
     // Another vault's phrase does not open it.
     const other = (await create()).words;
-    await expect(openWithPhrase(file.bytes, other)).rejects.toThrow(
+    await expect(openWithPhrase(joined(file), other)).rejects.toThrow(
       expect.objectContaining({ reason: 'wrong-secret' }),
     );
     opened.wipeAll();
@@ -851,7 +865,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(password.every((b) => b === 0)).toBe(true);
     expect(kdf.terminated()).toBe(1);
 
-    const parsed = await parseBackup(file.bytes);
+    const parsed = await parseBackup(joined(file));
     expect(parsed.header.keyslots.map((k) => k.type)).toEqual(['recovery', 'password']);
     const opened = new Keyring();
     const fileKey = await openPasswordKeyslot(
@@ -866,7 +880,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
       openPasswordKeyslot(opened, fakeKdf().port(), parsed.header, normalizePassword('other')),
     ).rejects.toThrow(expect.objectContaining({ reason: 'wrong-secret' }));
     // The phrase still opens it.
-    expect(sorted((await openWithPhrase(file.bytes, words)).payload.records)).toEqual(
+    expect(sorted((await openWithPhrase(joined(file), words)).payload.records)).toEqual(
       sorted(payload.records),
     );
     opened.wipeAll();
@@ -881,7 +895,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
       prfInput: new Uint8Array(32).fill(4),
     });
     const file = await session.exportBackup({ kek: kek(keyring, 3), method: 'passkey' });
-    const { payload, keyring: opened } = await openWithPhrase(file.bytes, words);
+    const { payload, keyring: opened } = await openWithPhrase(joined(file), words);
     expect(opensVaultKey(opened, payload.masterKey, store)).toBe(true);
     opened.wipeAll();
   });
@@ -1038,7 +1052,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     expect(behind.writable).toBe(false);
     const caller = new Keyring();
     const file = await behind.exportBackup({ kek: kek(caller), method: 'password' });
-    expect((await openWithPhrase(file.bytes, words)).payload.records).toHaveLength(3);
+    expect((await openWithPhrase(joined(file), words)).payload.records).toHaveLength(3);
     expect(behind.lastBackupAt).toBe(clock.t);
     caller.wipeAll();
   });
@@ -1166,12 +1180,12 @@ describe('Recovery Phrase regeneration (§5.4, D2, D73, D74, D98, D185)', () => 
     const old = await session.exportBackup({ kek: kek(keyring), method: 'password' });
     const { recovery, words: next } = await regenerate(session);
     const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
-    expect((await parseBackup(file.bytes)).header.phraseId).toEqual(recovery.phraseId);
-    expect(await restores(file.bytes, next, session.vaultId)).toBe(true);
-    expect(await restores(file.bytes, words, session.vaultId)).toBe(false);
+    expect((await parseBackup(joined(file))).header.phraseId).toEqual(recovery.phraseId);
+    expect(await restores(joined(file), next, session.vaultId)).toBe(true);
+    expect(await restores(joined(file), words, session.vaultId)).toBe(false);
     // An earlier backup still opens with the old phrase only (§5.4, documented limitation).
-    expect(await restores(old.bytes, words, session.vaultId)).toBe(true);
-    expect(await restores(old.bytes, next, session.vaultId)).toBe(false);
+    expect(await restores(joined(old), words, session.vaultId)).toBe(true);
+    expect(await restores(joined(old), next, session.vaultId)).toBe(false);
   });
 
   it('opens the Master Key with a passkey KEK as well (D181, D185)', async () => {
@@ -1351,7 +1365,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
 
   it('writes every record of the backup and the Local Config in one commit (D33)', async () => {
     const source = await backedUp();
-    const restored = await restore(source.file.bytes, source.words);
+    const restored = await restore(joined(source.file), source.words);
     expect(restored.store.commits).toHaveLength(1);
     const [commit] = restored.store.commits;
     expect(commit?.delete).toEqual([]);
@@ -1361,7 +1375,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
 
   it('opens the same vault, readable by the new local password only', async () => {
     const source = await backedUp();
-    const { session, store } = await restore(source.file.bytes, source.words);
+    const { session, store } = await restore(joined(source.file), source.words);
     expect(session.vaultId).toEqual(source.session.vaultId);
     expect(session.items().map((i) => i.item?.title)).toEqual(['Renamed']);
     expect(await session.versions(source.id)).toHaveLength(
@@ -1377,7 +1391,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
 
   it('is a new, unregistered device: new identity and Local Config, no Device record (D30)', async () => {
     const source = await backedUp();
-    const { session, store } = await restore(source.file.bytes, source.words);
+    const { session, store } = await restore(joined(source.file), source.words);
     expect(session.deviceId).not.toEqual(source.session.deviceId);
     expect(session.devices().map((d) => d.deviceId)).toEqual([source.session.deviceId]);
     expect(store.ofType(RecordType.device)).toHaveLength(1);
@@ -1393,7 +1407,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
   it('keeps the default preferences, no backup date and the restored phrase as the last seen (§13.4)', async () => {
     const source = await backedUp();
     await source.session.setPreferences({ ...DEFAULT_PREFERENCES, autoLockMinutes: 1 });
-    const { session } = await restore(source.file.bytes, source.words);
+    const { session } = await restore(joined(source.file), source.words);
     expect(session.preferences).toEqual(DEFAULT_PREFERENCES);
     expect(session.lastBackupAt).toBeUndefined();
     expect(source.session.lastBackupAt).toBe(T0);
@@ -1420,7 +1434,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     });
 
     const restoredClock = new Clock();
-    const { session, store } = await restore(file.bytes, source.words, restoredClock);
+    const { session, store } = await restore(joined(file), source.words, restoredClock);
     expect(session.item(ahead)?.readOnly).toBe('future-clock');
     expect(session.item(ahead)?.item?.title).toBe('Ahead');
     await expect(session.updateItem(ahead, login('Edited'))).rejects.toThrow(
@@ -1488,7 +1502,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     const keyring = new Keyring();
     const backup = await restoreWithPhrase(
       keyring,
-      await parseBackup(source.file.bytes),
+      await parseBackup(joined(source.file)),
       source.words,
     );
     await expect(
@@ -1518,7 +1532,11 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(source.file.bytes), source.words),
+      backup: await restoreWithPhrase(
+        keyring,
+        await parseBackup(joined(source.file)),
+        source.words,
+      ),
       replacesVaultId: replaced,
       now: new Clock().now,
     });
@@ -1553,7 +1571,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
         kdfParams: PARAMS,
         backup: await restoreWithPhrase(
           keyring,
-          await parseBackup(source.file.bytes),
+          await parseBackup(joined(source.file)),
           source.words,
         ),
         replacesVaultId: new Uint8Array(15),
@@ -1576,7 +1594,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
         kdfParams: PARAMS,
         backup: await restoreWithPhrase(
           keyring,
-          await parseBackup(source.file.bytes),
+          await parseBackup(joined(source.file)),
           source.words,
         ),
         replacesVaultId: source.session.vaultId,
@@ -1588,7 +1606,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
   it('refuses KDF parameters outside the accepted range before deriving anything', async () => {
     const source = await backedUp();
     await expect(
-      restore(source.file.bytes, source.words, new Clock(), new MemoryStore(), {
+      restore(joined(source.file), source.words, new Clock(), new MemoryStore(), {
         opslimit: 1,
         memlimit: MEMLIMIT,
       }),
@@ -1597,7 +1615,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
 
   it('persists no plaintext and no phrase (CRYPTO-INV-001, CRYPTO-INV-006)', async () => {
     const source = await backedUp();
-    const { store } = await restore(source.file.bytes, source.words);
+    const { store } = await restore(joined(source.file), source.words);
     const bytes = [store.localConfig, ...(await store.records()).map((r) => r.envelope)];
     for (const needle of [
       'Renamed',
@@ -1834,7 +1852,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), a.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), a.words),
       now: clockB.now,
     });
     open.push(session);
@@ -1845,7 +1863,7 @@ describe('backup merge (§10, D13, D57, D64, D182)', () => {
   async function backupOf(session: VaultSession, seed: number, words: string) {
     const keyring = new Keyring();
     const file = await session.exportBackup({ kek: kek(keyring, seed), method: 'password' });
-    return restoreWithPhrase(keyring, await parseBackup(file.bytes), words);
+    return restoreWithPhrase(keyring, await parseBackup(joined(file)), words);
   }
 
   /** The records of `store` as a validated backup would hold them, with the vault's Master Key. */
@@ -2803,7 +2821,7 @@ describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), source.words),
       now: clock.now,
     });
     open.push(session);
@@ -2862,7 +2880,7 @@ describe('devices and retirement (§8.4, D30, D41, D74, D85, D186)', () => {
     const file = await a.exportBackup({ kek: kek(source.keyring), method: 'password' });
     const keyring = new Keyring();
     const result = await b.session.mergeBackup(
-      await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
+      await restoreWithPhrase(keyring, await parseBackup(joined(file)), source.words),
     );
     expect(result.retiredDevices).toEqual([]);
     expect(result.newDevices).toEqual([]);
@@ -4160,6 +4178,8 @@ describe('lock (CRYPTO-INV-010)', () => {
       restoreFolder: () => session.restoreFolder(folderId),
       mergeBackup: () =>
         session.mergeBackup({ vaultId: new Uint8Array(16), masterKey: kek(caller), records: [] }),
+      restoreBlobs: () =>
+        session.restoreBlobs({ blobIds: [], blobs: { next: () => Promise.resolve(undefined) } }),
       retired: () => session.retired,
       registered: () => session.registered,
       retireDevice: () => session.retireDevice(new Uint8Array(16)),
@@ -4811,7 +4831,7 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
         kek: kek(keyring, 2),
         salt: SALT,
         kdfParams: PARAMS,
-        backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
+        backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), source.words),
         now: new Clock().now,
       });
       open.push(restored);
@@ -5117,7 +5137,7 @@ describe('re-admission (pairing-protocol.md §9, sync-protocol.md §2.3, D22, D2
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), x.words),
       now: clock.now,
     });
     open.push(y);
@@ -5514,7 +5534,7 @@ describe('sync (sync-protocol.md §3, D113, D216)', () => {
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), x.words),
       now: x.clock.now,
     });
     open.push(restored);
@@ -5724,7 +5744,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       kek: kek(keyring, 2),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), x.words),
       now: clock.now,
     });
     open.push(y);
@@ -5934,7 +5954,7 @@ describe('sync transfer (sync-protocol.md §7 to §9, D69, D73, D109, D222)', ()
       kek: kek(keyring, 3),
       salt: SALT,
       kdfParams: PARAMS,
-      backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), x.words),
+      backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), x.words),
       now: clock.now,
     });
     open.push(z);
@@ -6635,6 +6655,207 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
       await expect(grant.discard(a.blobId)).rejects.toThrow(VaultLockedError);
       await expect(grant.write(a.blobId, a.stored.blob)).rejects.toThrow(VaultLockedError);
       expect(() => grant.citing(a.blobId)).toThrow(VaultLockedError);
+    });
+  });
+
+  describe('the blobs of a backup (backup-format.md §6, §8 steps 5 and 11, D278, D279)', () => {
+    /** The file validated with the phrase, as `packages/backup` does. */
+    async function validated(file: BackupFile, words: string) {
+      const keyring = new Keyring();
+      return {
+        keyring,
+        backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), words),
+      };
+    }
+
+    async function blobsOf(backup: BackupBlobs) {
+      const read: { blobId: string; blob: Uint8Array }[] = [];
+      for (let b = await backup.blobs.next(); b; b = await backup.blobs.next()) {
+        read.push({ blobId: idKey(b.blobId), blob: b.blob });
+      }
+      return read;
+    }
+
+    /** A fresh restore of `file` into an empty store, its records committed (step 9). */
+    async function restored(file: BackupFile, words: string) {
+      const { keyring, backup } = await validated(file, words);
+      const store = new MemoryStore();
+      const session = await VaultSession.restore({
+        store,
+        keyring,
+        kek: kek(keyring, 2),
+        salt: SALT,
+        kdfParams: PARAMS,
+        backup,
+        now: new Clock().now,
+      });
+      open.push(session);
+      return { session, store, backup };
+    }
+
+    function items(keys: readonly RecordKey[]): string[] {
+      expect(keys.every((k) => k.recordType === RecordType.item)).toBe(true);
+      return keys.map((k) => idKey(k.recordId)).sort();
+    }
+
+    it('exports every held blob after the records, an uncited one included', async () => {
+      const { session, store, keyring, words } = await create();
+      const [a, b, stray] = [sealed(1), sealed(2), sealed(3)];
+      const id = await session.createItem(attached('Passport', a, b), [a.stored, b.stored]);
+      // `a` is cited only by the version once its field is removed.
+      await session.updateItem(id, attached('Passport', b));
+      await store.putBlob(stray.stored);
+      const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
+      expect(file.missing).toEqual([]);
+      const { backup, keyring: opened } = await validated(file, words);
+      const read = await blobsOf(backup);
+      expect(read.map((r) => r.blobId).sort()).toEqual(held(store));
+      for (const r of read) expect(r.blob).toEqual(store.blobs.get(r.blobId));
+      expect(backup.blobIds.map(idKey)).toEqual(read.map((r) => r.blobId));
+      opened.wipeAll();
+    });
+
+    it('exports without a blob not held, naming each item that cites it (D279)', async () => {
+      const { session, store, keyring, words } = await create();
+      const [a, b] = [sealed(1), sealed(2)];
+      const passport = await session.createItem(attached('Passport', a), [a.stored]);
+      const visa = await session.createItem(attached('Visa', a, b), [b.stored]);
+      await session.createItem(attached('Card', b));
+      store.blobs.delete(idKey(a.blobId));
+      const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
+      expect(items(file.missing)).toEqual([idKey(passport), idKey(visa)].sort());
+      const { backup, keyring: opened } = await validated(file, words);
+      expect(backup.blobIds.map(idKey)).toEqual([idKey(b.blobId)]);
+      opened.wipeAll();
+    });
+
+    it('waits for the Item Versions to be verified before it starts (D277)', async () => {
+      const { session, store } = await create();
+      const a = sealed(1);
+      const id = await session.createItem(attached('Passport', a), [a.stored]);
+      await session.updateItem(id, login('Passport'));
+      store.blobs.clear();
+      session.lock();
+      const again = await unlock(store);
+      // Only the version cites `a`: named only once the versions are read.
+      const file = await again.exportBackup({ kek: kek(new Keyring()), method: 'password' });
+      expect(items(file.missing)).toEqual([idKey(id)]);
+    });
+
+    it('stops an export when the vault locks while a blob is read', async () => {
+      const { session, store, keyring } = await create();
+      const a = sealed(1);
+      await session.createItem(attached('Passport', a), [a.stored]);
+      const read = store.blob.bind(store);
+      vi.spyOn(store, 'blob').mockImplementation((id) => {
+        session.lock();
+        return read(id);
+      });
+      await expect(session.exportBackup({ kek: kek(keyring), method: 'password' })).rejects.toThrow(
+        VaultLockedError,
+      );
+    });
+
+    it('stops an export whose blob was deleted after it was listed', async () => {
+      const { session, store, keyring } = await create();
+      const a = sealed(1);
+      await session.createItem(attached('Passport', a), [a.stored]);
+      vi.spyOn(store, 'blob').mockResolvedValue(undefined);
+      await expect(session.exportBackup({ kek: kek(keyring), method: 'password' })).rejects.toThrow(
+        'a blob was deleted during the export',
+      );
+      expect(session.lastBackupAt).toBeUndefined();
+    });
+
+    it('writes after a fresh restore each cited blob it lacks, and drops the others (step 11)', async () => {
+      const source = await create();
+      const [a, b, stray, gone] = [sealed(1), sealed(2), sealed(3), sealed(4)];
+      const id = await source.session.createItem(attached('Passport', a, b), [a.stored, b.stored]);
+      await source.session.updateItem(id, attached('Passport', b));
+      const visa = await source.session.createItem(attached('Visa', gone), [gone.stored]);
+      await source.store.putBlob(stray.stored);
+      source.store.blobs.delete(idKey(gone.blobId));
+      const file = await source.session.exportBackup({
+        kek: kek(source.keyring),
+        method: 'password',
+      });
+      const { session, store, backup } = await restored(file, source.words);
+      // The records committed with no blob (§8: no blob before the records commit).
+      expect(held(store)).toEqual([]);
+      const put = vi.spyOn(store, 'putBlob');
+      const result = await session.restoreBlobs(backup);
+      expect(result.stopped).toBe(false);
+      expect(items(result.missing)).toEqual([idKey(visa)]);
+      expect(held(store)).toEqual([idKey(a.blobId), idKey(b.blobId)].sort());
+      // Each in its own transaction, none in a commit of records.
+      expect(put).toHaveBeenCalledTimes(2);
+      expect(store.commits.every((c) => c.putBlobs === undefined)).toBe(true);
+      expect(store.blobs.get(idKey(a.blobId))).toEqual(a.stored.blob);
+    });
+
+    it('writes after a merge only the blobs this device lacks', async () => {
+      const source = await create();
+      const [a, b] = [sealed(1), sealed(2)];
+      await source.session.createItem(attached('Passport', a), [a.stored]);
+      const first = await source.session.exportBackup({
+        kek: kek(source.keyring),
+        method: 'password',
+      });
+      const device = await restored(first, source.words);
+      await device.session.restoreBlobs(device.backup);
+      await source.session.createItem(attached('Visa', b), [b.stored]);
+      const second = await source.session.exportBackup({
+        kek: kek(source.keyring),
+        method: 'password',
+      });
+      const { keyring, backup } = await validated(second, source.words);
+      await device.session.mergeBackup(backup);
+      keyring.wipeAll();
+      const put = vi.spyOn(device.store, 'putBlob');
+      expect(await device.session.restoreBlobs(backup)).toEqual({ stopped: false, missing: [] });
+      expect(put.mock.calls.map(([s]) => idKey(s.blobId))).toEqual([idKey(b.blobId)]);
+      expect(held(device.store)).toEqual([idKey(a.blobId), idKey(b.blobId)].sort());
+    });
+
+    it('stops at a read that fails, keeping what it wrote; the rest waits for a sync', async () => {
+      const { session, store } = await create();
+      const [a, b, c] = [sealed(1), sealed(2), sealed(3)];
+      await session.createItem(attached('Passport', a, b), [a.stored, b.stored]);
+      const card = await session.createItem(attached('Card', c), [c.stored]);
+      store.blobs.clear();
+      const next = vi
+        .fn<BackupBlobs['blobs']['next']>()
+        .mockResolvedValueOnce({ blobId: a.blobId, blob: a.stored.blob })
+        .mockRejectedValueOnce(new Error('the file changed'));
+      const result = await session.restoreBlobs({ blobIds: [a.blobId, b.blobId], blobs: { next } });
+      expect(next).toHaveBeenCalledTimes(2);
+      // `b` was in the file: not named, it waits for a sync; `c` was not.
+      expect(result.stopped).toBe(true);
+      expect(items(result.missing)).toEqual([idKey(card)]);
+      expect(held(store)).toEqual([idKey(a.blobId)]);
+      expect((await session.blobGrant().lacking()).map(idKey).sort()).toEqual(
+        [idKey(b.blobId), idKey(c.blobId)].sort(),
+      );
+    });
+
+    it('writes nothing once the vault is locked', async () => {
+      const { session, store } = await create();
+      const [a, b] = [sealed(1), sealed(2)];
+      await session.createItem(attached('Passport', a, b), [a.stored, b.stored]);
+      store.blobs.clear();
+      const blobs = [a, b].map((x) => ({ blobId: x.blobId, blob: x.stored.blob }));
+      const next = vi.fn(() => {
+        session.lock();
+        return Promise.resolve(blobs.shift());
+      });
+      await expect(
+        session.restoreBlobs({ blobIds: [a.blobId, b.blobId], blobs: { next } }),
+      ).rejects.toThrow(VaultLockedError);
+      expect(held(store)).toEqual([]);
+      session.lock();
+      await expect(session.restoreBlobs({ blobIds: [], blobs: { next } })).rejects.toThrow(
+        VaultLockedError,
+      );
     });
   });
 });

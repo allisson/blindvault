@@ -116,8 +116,19 @@ every project through the references in the root `tsconfig.json`.
   there; `openBackup` runs both passes, a stream that fails or changes being `corrupt` and a payload
   of the wrong shape `malformed`, and returns the `blobId`s and a blob reader whose failure is
   `corrupt` too. `restoreWithPhrase` and `restoreWithPassword` are asynchronous and hand both to the
-  caller in `ValidatedBackup` for step 11. Until the export reads the blob store,
-  `VaultSession.exportBackup` writes no blob and joins the parts into one file.
+  caller in `ValidatedBackup` for step 11.
+- **Backup blobs in the vault and the app (Phase 9, D278, D279).** `VaultSession.exportBackup`
+  runs in the operation queue, so it starts after the Item Version pass and no collection deletes a
+  blob meanwhile; it hands `sealBackup` a read of each held blob from storage, returns the file as
+  `parts`, and names in `missing` the Items citing a blob not held. `apps/web` makes one `Blob` of
+  the parts for the download. A restore reads the picked `File` by ranges through `fileSource`,
+  never whole; a file that can no longer be read is `corrupt`. Step 11 is
+  `VaultSession.restoreBlobs`, which the controller calls once the records of a fresh restore or a
+  merge committed: it writes each cited blob storage lacks with `putBlob`, in its own transaction,
+  drops the others, stops at a read that fails, and names the Items citing a blob neither held nor
+  in the file. A fresh restore runs it once the vault is open, so a lock locks it as any session,
+  and "Vault ready" shows the result; a merge shows it with its own. The secretstream state the
+  blob reader holds is not wiped, as libsodium-wrappers exposes no way to, like the blob stream's.
 - **Backup export (Phase 2, D181).** `packages/vault` depends on `packages/backup`, which depends
   on `crypto` only: `VaultSession.exportBackup` opens the Master Key wrap with the KEK the caller
   derived again, verifies every stored record as `load` does, and builds the file with the backup

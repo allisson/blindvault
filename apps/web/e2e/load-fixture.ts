@@ -125,7 +125,8 @@ export async function buildBackup(
       method: 'password',
       exportPassword: { password: normalizePassword(exportPassword), port: await workerPort() },
     });
-    return file.bytes;
+    // The parts joined only here, to write the file and read it back in the test.
+    return Buffer.concat(file.parts);
   } finally {
     keyring.wipeAll();
     built.session.lock();

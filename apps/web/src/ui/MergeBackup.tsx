@@ -1,4 +1,9 @@
-import { type MergeResult, type RecoveryView, type VaultSession } from '@blindvault/vault';
+import {
+  type BlobRestore,
+  type MergeResult,
+  type RecoveryView,
+  type VaultSession,
+} from '@blindvault/vault';
 import { useState } from 'react';
 
 import { phraseLabel } from '../app/backup-file';
@@ -7,7 +12,7 @@ import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { Button, Notice } from './components';
 import { useOpenBackup } from './RegeneratePhrase';
-import { ChooseFile, OpenBackup, fileError } from './RestoreVault';
+import { BlobNotices, ChooseFile, OpenBackup, fileError } from './RestoreVault';
 import { recordTypeName } from './Settings';
 import { Wizard, WizardActions } from './Wizard';
 
@@ -20,7 +25,7 @@ type Step =
   | { readonly kind: 'file' }
   | { readonly kind: 'secret'; readonly header: BackupHeaderInfo }
   | { readonly kind: 'confirm'; readonly exportedAt: number }
-  | { readonly kind: 'done'; readonly result: MergeResult };
+  | { readonly kind: 'done'; readonly result: MergeResult; readonly blobs: BlobRestore };
 
 export function MergeBackup({
   controller,
@@ -96,7 +101,7 @@ export function MergeBackup({
                     void controller.mergeBackup().then((outcome) => {
                       setMerging(false);
                       if (outcome.kind === 'ok') {
-                        setStep({ kind: 'done', result: outcome.result });
+                        setStep({ kind: 'done', result: outcome.result, blobs: outcome.blobs });
                       } else {
                         back(mergeError(m, outcome, (at) => date(at, true)));
                       }
@@ -115,6 +120,7 @@ export function MergeBackup({
                 recovery={session.recovery}
                 date={(at) => date(at, false)}
               />
+              <BlobNotices session={session} blobs={step.blobs} />
               <WizardActions>
                 <Button
                   onClick={() => {

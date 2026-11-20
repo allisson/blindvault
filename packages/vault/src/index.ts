@@ -101,10 +101,12 @@ export {
   type StoredRecord,
 } from './store';
 export {
+  type BackupBlobs,
   type BackupFile,
   type BackupOptions,
   type BackupRecords,
   type BlobGrant,
+  type BlobRestore,
   type CreateOptions,
   type RestoreOptions,
   type DeviceView,

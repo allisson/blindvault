@@ -57,6 +57,7 @@ import {
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { joined } from './backup-file';
 import { attachment, vaultBlobs } from './blobs';
 
 beforeAll(initCrypto);
@@ -144,7 +145,7 @@ async function peers() {
     kek: kek(restoring, 2),
     salt: new Uint8Array(16).fill(8),
     kdfParams: PARAMS,
-    backup: await restoreWithPhrase(restoring, await parseBackup(file.bytes), phrase.words),
+    backup: await restoreWithPhrase(restoring, await parseBackup(joined(file)), phrase.words),
     now: () => clock.t + clock.y,
   });
   sessions.push(y);
@@ -622,7 +623,7 @@ async function opensWith(session: VaultSession, seed: number, words: string): Pr
   const file = await session.exportBackup({ kek: kek(caller, seed), method: 'password' });
   caller.wipeAll();
   try {
-    await restoreWithPhrase(new Keyring(), await parseBackup(file.bytes), words);
+    await restoreWithPhrase(new Keyring(), await parseBackup(joined(file)), words);
     return true;
   } catch (error) {
     if (error instanceof BackupRejectedError) return false;
@@ -1419,7 +1420,7 @@ describe('the Master Key over a sync (overview §17, CRYPTO-INV-002, Gate D)', (
     const caller = new Keyring();
     const file = await x.exportBackup({ kek: kek(caller, 1), method: 'password' });
     caller.wipeAll();
-    const backup = await restoreWithPhrase(keyring, await parseBackup(file.bytes), words);
+    const backup = await restoreWithPhrase(keyring, await parseBackup(joined(file)), words);
     const masterKey = exportTransferKey(backup.masterKey);
     keyring.wipeAll();
 
@@ -1460,7 +1461,7 @@ async function withTablet() {
   const caller = new Keyring();
   const file = await x.exportBackup({ kek: kek(caller, 1), method: 'password' });
   caller.wipeAll();
-  const backup = await restoreWithPhrase(keyring, await parseBackup(file.bytes), words);
+  const backup = await restoreWithPhrase(keyring, await parseBackup(joined(file)), words);
   const subkeys = deriveMasterSubkeys(keyring, backup.masterKey);
   const wrapped = backup.records.find((r) => r.recordType === RecordType.vaultKey);
   const { vaultKey } = verifyRecord(keyring, wrapped?.envelope ?? new Uint8Array(0), {

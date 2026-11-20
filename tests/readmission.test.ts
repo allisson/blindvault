@@ -42,6 +42,7 @@ import {
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { joined } from './backup-file';
 import { attachment, vaultBlobs } from './blobs';
 
 beforeAll(initCrypto);
@@ -159,7 +160,7 @@ async function restored(source: Device & { words: string }, name: string, seed: 
     kek: kek(keyring, seed),
     salt: new Uint8Array(16).fill(8),
     kdfParams: PARAMS,
-    backup: await restoreWithPhrase(keyring, await parseBackup(file.bytes), source.words),
+    backup: await restoreWithPhrase(keyring, await parseBackup(joined(file)), source.words),
     now: () => T0,
   });
   sessions.push(session);

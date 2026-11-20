@@ -3,6 +3,7 @@ import {
   DISPLAY_NAME_MAX,
   type Preferences,
   type SyncPurpose,
+  type RecordKey,
   type VaultSession,
 } from '@blindvault/vault';
 import {
@@ -1100,6 +1101,11 @@ function DeviceSettings({
   );
 }
 
+/** The title of each Item of `keys`, as the vault holds it (D279). */
+export function itemTitles(m: Messages, session: VaultSession, keys: readonly RecordKey[]): string {
+  return keys.map((k) => session.item(k.recordId)?.item?.title ?? m.items.newerTitle).join(', ');
+}
+
 /** The name of a record type for the UI, by its registry number (crypto-spec.md §9.1). */
 export function recordTypeName(m: Messages, recordType: number): string {
   const names = m.settings.recordTypes;
@@ -1244,7 +1250,7 @@ function BackupSettings({
         setWorking(false);
         setOutcome(result);
         if (result.kind === 'ok') {
-          download(result.bytes, result.name);
+          download(result.file, result.name);
           setProtect(false);
           setExportPassword(null);
           setForm((f) => f + 1);
@@ -1332,6 +1338,15 @@ function BackupSettings({
             date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(phraseCreatedAt),
           })}
         </p>
+      ) : null}
+      {outcome?.kind === 'ok' && outcome.missing.length > 0 ? (
+        <Notice>
+          <span data-testid="backup-missing">
+            {format(m.settings.backupMissing, {
+              titles: itemTitles(m, session, outcome.missing),
+            })}
+          </span>
+        </Notice>
       ) : null}
       {error ? (
         <p role="alert" className="text-sm text-danger">

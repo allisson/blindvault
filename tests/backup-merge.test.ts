@@ -23,6 +23,8 @@ import {
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { joined } from './backup-file';
+
 beforeAll(initCrypto);
 
 const T0 = 1_760_000_000_000;
@@ -132,7 +134,7 @@ async function deviceA() {
 async function deviceB(a: Awaited<ReturnType<typeof deviceA>>) {
   const file = await a.session.exportBackup({ kek: kek(a.keyring, 1), method: 'password' });
   const keyring = new Keyring();
-  const backup = await restoreWithPhrase(keyring, await parseBackup(file.bytes), a.words);
+  const backup = await restoreWithPhrase(keyring, await parseBackup(joined(file)), a.words);
   const { store } = lazyStore(new IDBFactory(), backup.vaultId);
   const clock = { t: T0 };
   const session = await VaultSession.restore({
@@ -158,7 +160,7 @@ async function exported(session: VaultSession, seed: number, exportPassword?: st
       : {}),
   });
   keyring.wipeAll();
-  return file.bytes;
+  return joined(file);
 }
 
 /** Unlocks A again from what IndexedDB holds. */

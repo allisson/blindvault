@@ -1,5 +1,8 @@
 // Gate B (Phase 2): a vault backed up, its storage lost, and restored onto another installation
-// through the IndexedDB store, with the phrase and with the export password (D33, D39).
+// through the IndexedDB store, with the phrase and with the export password (D33, D39). Attachments
+// Gate (Phase 9): a backup's blobs restored after its records, and a version-1 file (D278).
+
+import { readFileSync } from 'node:fs';
 
 import { parseBackup, restoreWithPassword, restoreWithPhrase } from '@blindvault/backup';
 import {
@@ -22,6 +25,9 @@ import {
 } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
+import { joined } from './backup-file';
+import { attachment } from './blobs';
 
 beforeAll(initCrypto);
 
@@ -128,8 +134,8 @@ async function source(at: number) {
   const records = await must(db()).records();
   return {
     words: phrase.words,
-    plain: plain.bytes,
-    protectedFile: protectedFile.bytes,
+    plain: joined(plain),
+    protectedFile: joined(protectedFile),
     records,
     session,
   };
@@ -169,7 +175,34 @@ async function restoreOnto(
     now: () => at,
   });
   sessions.push(session);
-  return { session, factory, database: must(db()) };
+  return { session, backup, factory, database: must(db()) };
+}
+
+/** The session of `database` unlocked again with the restored device's KEK. */
+async function unlocked(database: VaultDatabase, at: number) {
+  const keyring = new Keyring();
+  const session = await VaultSession.unlock({
+    store: {
+      records: () => database.records(),
+      record: (key) => database.record(key),
+      blobIds: () => database.blobIds(),
+      deleteBlobs: (ids) => database.deleteBlobs(ids),
+      blob: (id) => database.blob(id),
+      putBlob: (b) => database.putBlob(b),
+      commit: (c) => database.commit(c),
+    },
+    localConfig: parseLocalConfig(must(await database.localConfig())),
+    keyring,
+    kek: kek(keyring, 2),
+    method: 'password',
+    now: () => at,
+  });
+  sessions.push(session);
+  return session;
+}
+
+function hex(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('hex');
 }
 
 describe('fresh restore through IndexedDB (Gate B, D33)', () => {
@@ -227,5 +260,81 @@ describe('fresh restore through IndexedDB (Gate B, D33)', () => {
     // The restored records do not advance this device's HLC (D109): the vault stays writable.
     expect(session.writable).toBe(true);
     await session.createItem(login('Written here'));
+  });
+});
+
+describe('the blobs of a backup through IndexedDB (Attachments Gate, D278, D279)', () => {
+  it('restores each cited blob after the records commit, and drops a blob no record cites', async () => {
+    const factory = new IDBFactory();
+    const { store, db } = lazyStore(factory);
+    const keyring = new Keyring();
+    const phrase = generateRecoveryPhrase(keyring);
+    const session = await VaultSession.create({
+      store,
+      keyring,
+      kek: kek(keyring, 1),
+      recoveryEntropy: phrase.entropy,
+      salt: new Uint8Array(16).fill(7),
+      kdfParams: PARAMS,
+      displayName: 'Chrome on macOS',
+      now: () => T0,
+    });
+    sessions.push(session);
+    // `large` spans several chunks of the stream; `stray` is held but cited by nothing.
+    const [passport, large, stray] = [
+      attachment('Passport', 1),
+      attachment('Scan', 2, 200_000),
+      attachment('Stray', 3),
+    ];
+    await session.createItem(passport.item, [passport.stored]);
+    await session.createItem(large.item, [large.stored]);
+    await must(db()).putBlob(stray.stored);
+    const file = await session.exportBackup({ kek: kek(keyring, 1), method: 'password' });
+    expect(file.missing).toEqual([]);
+
+    const restored = await restoreOnto(joined(file), 'phrase', phrase.words, T0 + DAY);
+    expect(restored.backup.blobIds.map(hex).sort()).toEqual(
+      [passport, large, stray].map((a) => hex(a.blobId)).sort(),
+    );
+    // Nothing of a blob before step 11.
+    expect(await restored.database.blobIds()).toEqual([]);
+    expect(await restored.session.restoreBlobs(restored.backup)).toEqual({
+      stopped: false,
+      missing: [],
+    });
+    expect((await restored.database.blobIds()).map(hex).sort()).toEqual(
+      [passport, large].map((a) => hex(a.blobId)).sort(),
+    );
+    expect(await restored.database.blob(large.blobId)).toEqual(large.blob);
+
+    restored.session.lock();
+    const again = await unlocked(restored.database, T0 + DAY);
+    expect(await again.blobGrant().lacking()).toEqual([]);
+    expect(await again.blobGrant().read(passport.blobId)).toEqual(passport.blob);
+  });
+
+  it('restores a backup of format version 1, which holds no blob', async () => {
+    const vectors = JSON.parse(
+      readFileSync(
+        new URL('../packages/backup/test-vectors/backup-v1.json', import.meta.url),
+        'utf8',
+      ),
+    ) as {
+      readonly inputs: { readonly phrase: string };
+      readonly valid: readonly { readonly name: string; readonly file: string }[];
+    };
+    const v1 = must(vectors.valid.find((v) => v.name === 'recoveryOnly'));
+    const bytes = new Uint8Array(Buffer.from(v1.file, 'base64'));
+    expect(new DataView(bytes.buffer).getUint16(8)).toBe(1);
+    const { session, backup, database } = await restoreOnto(
+      bytes,
+      'phrase',
+      vectors.inputs.phrase,
+      T0,
+    );
+    expect(backup.blobIds).toEqual([]);
+    expect(await session.restoreBlobs(backup)).toEqual({ stopped: false, missing: [] });
+    expect(hexes(await database.records())).toEqual(hexes(backup.records));
+    expect(await database.blobIds()).toEqual([]);
   });
 });

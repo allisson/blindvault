@@ -1,12 +1,19 @@
 // The "Vault ready" screen after a creation, a restore or a pairing (overview §13.3, D198): which
 // recommendations it lists, in the order of section 13.3.
 
+import { type BlobRestore } from '@blindvault/vault';
+
 import { type DeviceAdvice } from './devices';
 
 /** How the vault came to this device, set by the controller until the screen is closed. */
 export type Ready =
   | { readonly start: 'created' }
-  | { readonly start: 'restored'; readonly openedWith: 'phrase' | 'password' }
+  | {
+      readonly start: 'restored';
+      readonly openedWith: 'phrase' | 'password';
+      /** What step 11 did with the backup's blobs, once it ends (backup-format.md §8, D279). */
+      readonly blobs?: BlobRestore;
+    }
   /** Joined a pairing (§13.3, D203). */
   | { readonly start: 'paired' };
 

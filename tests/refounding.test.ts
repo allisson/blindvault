@@ -27,6 +27,8 @@ import {
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { joined } from './backup-file';
+
 beforeAll(initCrypto);
 
 const T0 = 1_760_000_000_000;
@@ -95,7 +97,7 @@ async function vault(factory: IDBFactory, title: string) {
   sessions.push(session);
   await session.createItem(login(title));
   const file = await session.exportBackup({ kek: kek(keyring, 1), method: 'password' });
-  return { session, db: must(db), words: phrase.words, file: file.bytes };
+  return { session, db: must(db), words: phrase.words, file: joined(file) };
 }
 
 const reader = {
@@ -219,10 +221,11 @@ describe('re-founding through IndexedDB (Gate B, D28, D89, D96, D187)', () => {
     const caller = new Keyring();
     const file = await fresh.session.exportBackup({ kek: kek(caller, 3), method: 'password' });
     await expect(
-      restoreWithPhrase(new Keyring(), await parseBackup(file.bytes), old.words),
+      restoreWithPhrase(new Keyring(), await parseBackup(joined(file)), old.words),
     ).rejects.toThrow(BackupRejectedError);
     expect(
-      (await restoreWithPhrase(new Keyring(), await parseBackup(file.bytes), fresh.words)).vaultId,
+      (await restoreWithPhrase(new Keyring(), await parseBackup(joined(file)), fresh.words))
+        .vaultId,
     ).toEqual(fresh.session.vaultId);
   });
 });
