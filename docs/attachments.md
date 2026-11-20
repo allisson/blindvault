@@ -159,9 +159,10 @@ named in the item's notes.
 - The blob key is random, used once, and travels only inside the encrypted item; the blob carries
   no additional data and no identity of its own (D278).
 - A received blob is accepted only when its BLAKE2b-256 equals a `blobId` this device asked for
-  (threat A3). The hash is computed on the bytes received, before anything is written.
+  (threat A3). The hash is computed on the bytes received, before anything is written
+  (CRYPTO-INV-025).
 - A blob never reaches the DOM decrypted except as the download's `Blob`; no preview, no
-  `mediaType` used to render it.
+  `mediaType` used to render it (CRYPTO-INV-025).
 - Blobs are never loaded at unlock (D277).
 - A blob's length reveals its file's size, to 17 bytes per 65,536, to anyone who reads storage;
   inside a `.bvault` and on the wire it is under the stream and the Noise channel, and only the
