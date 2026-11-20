@@ -1001,10 +1001,12 @@ by hand against the same rule:
 
 - `spikes/extension/`: Vite, already in the workspace, builds the MV3 extension and embeds the
   `apps/web` build unmodified; no other dependency.
-- `spikes/android/`: the Gradle wrapper with `distributionSha256Sum`, the Android Gradle Plugin
-  and Kotlin to build the debug APK; `androidx.webkit` for `WebViewAssetLoader`, which serves the
-  `apps/web` build from the APK on an `https:` origin; `androidx.biometric` for the BiometricPrompt
-  that guards the Keystore key. No Capacitor (D281).
+- `spikes/android/`: the Gradle wrapper 9.8.2 with `distributionSha256Sum`, and the Android Gradle
+  Plugin 9.5.1, which compiles Kotlin itself (Kotlin 2.2.10), to build the debug APK;
+  `androidx.webkit` 1.18.0 for `WebViewAssetLoader`, which serves the `apps/web` build from the APK
+  on an `https:` origin, and for the origin-checked message bridge. The BiometricPrompt that guards
+  the Keystore key is the platform's (API 30 and up), not `androidx.biometric`, whose only stable
+  release dates from 2021. No Capacitor (D281).
 
 None becomes a product dependency unless a later task adds it here with a justification.
 

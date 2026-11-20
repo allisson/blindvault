@@ -107,12 +107,28 @@ Delete the `webauthn.io` credentials and the PRF credential afterwards.
 
 ## 7. Phase 10 spike — Android (D272, D281) — `spikes/android/`
 
-Not run yet. A debug APK, under a package other than the release's (D274), built on the Mac with
-the Gradle wrapper and installed on the Samsung A54 with `adb install`. A hand-written Kotlin
+Not run yet. A debug APK, package `io.github.allisson.blindvault.spike`, not the release's (D274),
+built on the Mac with `pnpm --filter @blindvault/spikes build:android` (the `apps/web` build, the
+assets into `spikes/android/dist/assets`, then `./gradlew assembleDebug`; it needs
+`spikes/android/local.properties` with `sdk.dir=<Android SDK>`) and installed on the Samsung A54
+with `adb install spikes/android/app/build/outputs/apk/debug/app-debug.apk`. A hand-written Kotlin
 WebView serves the unmodified `apps/web` build through `WebViewAssetLoader` at
-`https://appassets.androidplatform.net`. The A54 is the only Android device, a limit
-`docs/spikes/android.md` records. The page ends with a JSON result and a **Copy result** button;
-results go to `docs/spikes/android.md`.
+`https://appassets.androidplatform.net`, adding to every response the headers its `_headers` sets
+on `/*`, so the app runs under its real CSP and Trusted Types. The spike page `spike/spike.html`
+opens first; the **App** button above the WebView opens the app, **Spike** comes back. The page
+talks to the shell through a message listener open to that origin only. The A54 is the only Android
+device, a limit `docs/spikes/android.md` records. The page ends with a JSON result and a **Copy
+result** button; results go to `docs/spikes/android.md`.
+
+On the Mac, `pnpm --filter @blindvault/spikes android:serve` serves the same assets at
+`http://localhost:5320` and relays the DataChannel signaling; with `adb reverse tcp:5320 tcp:5320`
+the phone reaches it, the shell over cleartext to `127.0.0.1` only. Chrome on the A54 opens
+`http://localhost:5320/spike/spike.html` for measure 1's comparison (no bridge there: Argon2id and
+storage only), and Chrome on the Mac opens `http://localhost:5320/spike/peer.html`, the DataChannel
+peer and the QR code of measure 3. The update of measure 2 is
+`./gradlew assembleDebug -PspikeVersion=2` in `spikes/android`, then `adb install -r`. Measure 5
+switches the WebView's WebAuthn mode (app, browser, none) before each attempt. WebView debugging is
+on: `chrome://inspect` on the Mac shows the page.
 
 | # | Measure | Pass |
 | --- | --- | --- |
