@@ -13,6 +13,7 @@ import {
   type Item,
   type ItemInput,
   LABEL_MAX,
+  type StoredBlob,
   TAGS_MAX,
   TAG_MAX,
   TITLE_MAX,
@@ -23,6 +24,7 @@ import {
   normalizeSeedPhrase,
   normalizeTags,
   roleOf,
+  sealAttachment,
   template,
 } from '@blindvault/vault';
 
@@ -43,6 +45,8 @@ export interface DraftField {
   readonly totp?: TotpValue;
   /** An attachment field's value, kept as it is: the editor never rewrites it (D278). */
   readonly attachment?: AttachmentValue;
+  /** A file picked for a new attachment, read and sealed only when the item is saved (§7). */
+  readonly file?: File;
 }
 
 export interface Draft {
@@ -126,7 +130,8 @@ export function draftChanged(initial: Draft, draft: Draft): boolean {
         f.label !== g.label ||
         f.value !== g.value ||
         f.totp !== g.totp ||
-        f.attachment !== g.attachment
+        f.attachment !== g.attachment ||
+        f.file !== g.file
       );
     })
   );
@@ -165,6 +170,52 @@ export function draftOf(item: Item): Draft {
 /** A field the user adds, of a v1 field type, with no role. */
 export function addField(draft: Draft, type: FieldType): Draft {
   return { ...draft, fields: [...draft.fields, { key: key(), type, label: '', value: '' }] };
+}
+
+/** A picked file as a new attachment field, with no role and no label (attachments.md §7). */
+export function addAttachment(draft: Draft, file: File): Draft {
+  return {
+    ...draft,
+    fields: [...draft.fields, { key: key(), type: 'attachment', label: '', value: '', file }],
+  };
+}
+
+export interface SealedDraft {
+  /** `draft` with each picked file's field holding its sealed value. */
+  readonly draft: Draft;
+  /** The blobs the session writes with the item. */
+  readonly blobs: readonly StoredBlob[];
+  /** The content keys in `draft`, which the caller wipes once the write settles. */
+  readonly keys: readonly Uint8Array[];
+}
+
+/**
+ * Reads and seals each picked file of `draft`, when the item is saved (attachments.md §7, D278). The
+ * file's bytes are wiped once sealed. A file that can no longer be read, or is now empty or above
+ * 10 MiB, is refused, and the keys sealed before it are wiped.
+ */
+export async function sealFiles(draft: Draft): Promise<SealedDraft> {
+  if (!draft.fields.some((f) => f.file)) return { draft, blobs: [], keys: [] };
+  const blobs: StoredBlob[] = [];
+  const keys: Uint8Array[] = [];
+  const fields: DraftField[] = [];
+  try {
+    for (const f of draft.fields) {
+      if (!f.file) {
+        fields.push(f);
+        continue;
+      }
+      const bytes = new Uint8Array(await f.file.arrayBuffer());
+      const sealed = sealAttachment({ name: f.file.name, type: f.file.type, bytes });
+      blobs.push(sealed.blob);
+      keys.push(sealed.value.key);
+      fields.push({ ...f, attachment: sealed.value });
+    }
+  } catch (error) {
+    for (const k of keys) k.fill(0);
+    throw error;
+  }
+  return { draft: { ...draft, fields }, blobs, keys };
 }
 
 const TRIMMED: ReadonlySet<FieldType> = new Set([

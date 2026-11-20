@@ -159,6 +159,7 @@ export class Syncing {
   /** The local writes committed before this device's `committed`, sent right after it (D225). */
   #pending: (readonly Uint8Array[])[] = [];
   #live: LiveSession | undefined;
+  #blobs = 0;
 
   constructor(options: SyncFlowOptions) {
     this.#options = options;
@@ -171,6 +172,11 @@ export class Syncing {
 
   get stage(): SyncStage {
     return this.#stage;
+  }
+
+  /** The blobs this session wrote in its blob phase (§10.1). */
+  get blobs(): number {
+    return this.#blobs;
   }
 
   get role(): Role {
@@ -393,6 +399,10 @@ export class Syncing {
           () => grant.blobs,
           (rejected) => {
             this.#blobsRejected(rejected);
+          },
+          () => {
+            this.#blobs++;
+            this.#options.onChange();
           },
         ),
         // §6 before each blob leaves: a retired peer ends the session, which keeps its own reason.

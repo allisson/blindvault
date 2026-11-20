@@ -8,6 +8,7 @@ import {
 } from '@blindvault/vault';
 import { useEffect, useRef, useState } from 'react';
 
+import { checkPick } from '../app/attachments';
 import { folderRows } from '../app/folders';
 import { hex } from '../app/ids';
 
@@ -15,21 +16,25 @@ import {
   type Draft,
   type DraftErrors,
   type DraftField,
+  type SealedDraft,
+  addAttachment,
   addField,
   draftChanged,
   draftOf,
   inputOf,
   newDraft,
+  sealFiles,
 } from '../app/item-draft';
 import { type Navigation } from '../app/nav';
 import { saveShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
-import { type Messages, roleName } from '../i18n/messages';
+import { type Messages, format, roleName } from '../i18n/messages';
 import { Button, ConfirmDialog, Field, INPUT, Modal, Notice, TextArea } from './components';
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { Icon } from './icons';
 import { SecretInput } from './Secret';
+import { bytes, percent } from './StorageState';
 import { rated, useMeter } from './Strength';
 import { useToast } from './Toast';
 
@@ -52,7 +57,7 @@ function FieldEditor({
   readonly onChange: (field: DraftField) => void;
   readonly onRemove: () => void;
 }) {
-  const m = useMessages();
+  const { messages: m, language } = useLanguage();
   const [generating, setGenerating] = useState(false);
   const [shown, setShown] = useState(false);
   const custom = field.role === undefined;
@@ -73,7 +78,12 @@ function FieldEditor({
   let input;
   if (field.type === 'attachment') {
     // The file is fixed; only its label is edited (attachments.md §7).
-    input = <p className="text-value break-words">{field.attachment?.name}</p>;
+    const file = field.attachment ?? field.file;
+    input = (
+      <p className="text-value break-words" data-testid="attachment-file">
+        {file ? `${file.name} · ${bytes(language, file.size)}` : null}
+      </p>
+    );
   } else if (field.type === 'totp') {
     // Masked like a secret: an otpauth:// URI holds the TOTP secret (D127).
     input = (
@@ -242,6 +252,8 @@ export function ItemEditor({
   const [adding, setAdding] = useState<FieldType>('text');
   const [leaving, setLeaving] = useState<() => void>();
   const form = useRef<HTMLFormElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const [refused, setRefused] = useState<string>();
   const changed = useRef(false);
   changed.current = draft !== undefined && initial !== undefined && draftChanged(initial, draft);
   // Set in the submit itself: a navigation in the same moment as Save is not held (D210).
@@ -280,6 +292,29 @@ export function ItemEditor({
     setDraft(next);
     setFailure(undefined);
   };
+  const pick = (file: File) => {
+    setRefused(undefined);
+    void checkPick(file.size, navigator.storage as StorageManager | undefined).then((check) => {
+      switch (check.kind) {
+        case 'ok':
+          setDraft((d) => d && addAttachment(d, file));
+          setFailure(undefined);
+          return;
+        case 'empty':
+          setRefused(m.items.attachmentEmpty);
+          return;
+        case 'too-large':
+          setRefused(m.items.attachmentTooLarge);
+          return;
+        case 'no-room':
+          setRefused(
+            format(m.storage.nearlyFull, {
+              percent: percent(language, check.usage, check.quota),
+            }),
+          );
+      }
+    });
+  };
 
   return (
     <form
@@ -295,36 +330,57 @@ export function ItemEditor({
       }}
       onSubmit={(e) => {
         e.preventDefault();
-        const result = inputOf(draft);
-        if (!result.ok) {
-          setErrors(result.errors);
-          setFailure(m.items.invalid);
-          return;
-        }
-        setErrors(undefined);
-        setSaving(true);
-        submitted.current = true;
-        const from = nav.current();
-        const write = id
-          ? session.updateItem(id, result.input).then(() => id)
-          : session.createItem(result.input);
-        write.then(
-          (saved) => {
-            onChange();
-            toast(m.items.saved);
-            // An edit goes back to its item; a new item replaces the editor. Unless the user went
-            // elsewhere meanwhile (D210).
-            nav.follow(from, () => {
-              if (id) nav.back();
-              else nav.replace({ name: 'item', id: saved });
-            });
-          },
-          (error: unknown) => {
+        const save = ({ draft: sealed, blobs, keys }: SealedDraft) => {
+          // The session copies each key it writes: these copies go once the write settles (D278).
+          const wipe = () => {
+            for (const k of keys) k.fill(0);
+          };
+          const result = inputOf(sealed);
+          if (!result.ok) {
+            wipe();
             submitted.current = false;
             setSaving(false);
-            setFailure(writeError(error, m));
-          },
-        );
+            setErrors(result.errors);
+            setFailure(m.items.invalid);
+            return;
+          }
+          setErrors(undefined);
+          setSaving(true);
+          submitted.current = true;
+          const from = nav.current();
+          const write = id
+            ? session.updateItem(id, result.input, blobs).then(() => id)
+            : session.createItem(result.input, blobs);
+          write.finally(wipe).then(
+            (saved) => {
+              onChange();
+              toast(m.items.saved);
+              // An edit goes back to its item; a new item replaces the editor. Unless the user went
+              // elsewhere meanwhile (D210).
+              nav.follow(from, () => {
+                if (id) nav.back();
+                else nav.replace({ name: 'item', id: saved });
+              });
+            },
+            (error: unknown) => {
+              submitted.current = false;
+              setSaving(false);
+              setFailure(writeError(error, m));
+            },
+          );
+        };
+        if (!draft.fields.some((f) => f.file)) {
+          save({ draft, blobs: [], keys: [] });
+          return;
+        }
+        // Picked files are read and sealed now, not when picked (attachments.md §7).
+        setSaving(true);
+        submitted.current = true;
+        sealFiles(draft).then(save, () => {
+          submitted.current = false;
+          setSaving(false);
+          setFailure(m.items.attachmentUnreadable);
+        });
       }}
     >
       <h1 className="text-title">{m.templates[draft.templateId as keyof Messages['templates']]}</h1>
@@ -387,6 +443,37 @@ export function ItemEditor({
           {m.items.add}
         </Button>
       </div>
+      {session.writable ? (
+        // One file at a time, checked when picked and read only when saved (attachments.md §7).
+        <div className="flex flex-col gap-1">
+          <input
+            ref={picker}
+            type="file"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) pick(file);
+            }}
+            data-testid="attachment-input"
+          />
+          <Button
+            variant="quiet"
+            className="self-start"
+            onClick={() => {
+              picker.current?.click();
+            }}
+          >
+            <Icon name="upload" className="me-2" />
+            {m.items.addAttachment}
+          </Button>
+          {refused ? (
+            <p role="alert" className="text-sm text-danger">
+              {refused}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <label className="flex flex-col gap-1 text-sm font-medium">
         {m.folders.folder}
         <select

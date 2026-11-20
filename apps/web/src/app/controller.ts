@@ -2217,6 +2217,14 @@ export class VaultController {
     return this.#sync?.flow.stage;
   }
 
+  /**
+   * The blobs the sync in progress wrote, 0 without one: an attachment waiting for its blob checks
+   * again when it changes (attachments.md §7).
+   */
+  get syncBlobs(): number {
+    return this.#sync?.flow.blobs ?? 0;
+  }
+
   /** The peer of the sync in progress. */
   get syncPeer(): SyncPeer | undefined {
     return this.#sync?.peer;

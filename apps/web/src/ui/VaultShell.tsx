@@ -36,15 +36,19 @@ import { ToastRegion } from './Toast';
 // vault or security logic.
 
 function DetailPane({
+  controller,
   session,
   nav,
   onChange,
 }: {
+  readonly controller: VaultController;
   readonly session: VaultSession;
   readonly nav: Navigation;
   readonly onChange: () => void;
 }) {
   const m = useMessages();
+  // An attachment waiting for its blob checks again each time a sync writes one (attachments.md §7).
+  const blobWrites = useSyncExternalStore(controller.subscribe, () => controller.syncBlobs);
   // On a phone the whole screen scrolls, so the editor's bar sticks to it (D254).
   const scrolls = useLayout() !== 'mobile';
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
@@ -67,9 +71,23 @@ function DetailPane({
       className={`flex min-w-0 flex-1 justify-center ${scrolls ? 'overflow-y-auto' : ''}`}
     >
       {screen.name === 'item' ? (
-        <ItemDetail key={key} session={session} id={screen.id} nav={nav} onChange={onChange} />
+        <ItemDetail
+          key={key}
+          session={session}
+          id={screen.id}
+          nav={nav}
+          onChange={onChange}
+          blobWrites={blobWrites}
+        />
       ) : screen.name === 'history' ? (
-        <ItemHistory key={key} session={session} id={screen.id} nav={nav} onChange={onChange} />
+        <ItemHistory
+          key={key}
+          session={session}
+          id={screen.id}
+          nav={nav}
+          onChange={onChange}
+          blobWrites={blobWrites}
+        />
       ) : (
         <ItemEditor
           key={key}
@@ -267,7 +285,9 @@ export function VaultShell({
   const ready = controller.ready;
   const reminder = ready ? undefined : controller.backupReminder;
   const clock = controller.clockNotice;
-  const detail = <DetailPane session={session} nav={nav} onChange={refresh} />;
+  const detail = (
+    <DetailPane controller={controller} session={session} nav={nav} onChange={refresh} />
+  );
   // The search index and query live in memory only, and go with the shell on lock (D132).
   const index = useMemo(() => new SearchIndex(), []);
   const [query, setQuery] = useState('');

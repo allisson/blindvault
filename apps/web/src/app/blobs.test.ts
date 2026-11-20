@@ -51,6 +51,25 @@ describe('vaultBlobs (attachments.md §6, D278)', () => {
     expect(taken).toBe(4);
   });
 
+  it('tells `written` once a write resolved, never for a failed one', async () => {
+    const { g } = grant([]);
+    const told: string[] = [];
+    const store = vaultBlobs(
+      () => g,
+      () => undefined,
+      () => told.push('written'),
+    );
+    await store.write(id, blob);
+    expect(told).toEqual(['written']);
+    const failing = vaultBlobs(
+      () => ({ ...g, write: () => Promise.reject(new Error('quota')) }),
+      () => undefined,
+      () => told.push('written'),
+    );
+    await expect(failing.write(id, blob)).rejects.toThrow('quota');
+    expect(told).toEqual(['written']);
+  });
+
   it('reports a rejected blob as a rejected record of each item citing it, or not at all', async () => {
     const item: RecordKey = { recordType: RecordType.item, recordId: new Uint8Array(16).fill(3) };
     const reported: (readonly RejectedRecord[])[] = [];

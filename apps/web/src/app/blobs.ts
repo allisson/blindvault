@@ -8,16 +8,21 @@ import type { BlobGrant, RejectedRecord } from '@blindvault/vault';
 /**
  * The blobs of `grant`, read when each call runs: B's pairing has a vault only once it committed.
  * `rejected` is told the items a mismatched blob would have served; none when no item cites it.
+ * `written` is told each blob written, so an attachment waiting for it checks again (§7).
  */
 export function vaultBlobs(
   grant: () => BlobGrant,
   rejected: (records: readonly RejectedRecord[]) => void,
+  written: () => void = () => undefined,
 ): BlobStore {
   return {
     lacking: () => grant().lacking(),
     read: (id) => grant().read(id),
     discard: (id) => grant().discard(id),
-    write: (id, blob) => grant().write(id, blob),
+    write: async (id, blob) => {
+      await grant().write(id, blob);
+      written();
+    },
     rejected: (id) => {
       const items = grant().citing(id);
       if (items.length > 0) {

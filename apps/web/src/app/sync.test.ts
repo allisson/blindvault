@@ -1207,12 +1207,17 @@ describe('blob phase of the live session (sync-protocol.md §10.1, D278)', () =>
         return Promise.resolve(undefined);
       },
     };
-    await synced({ ...grant('i', 'r'), blobs: iv.blobs }, r);
+    const { fi, fr } = await synced({ ...grant('i', 'r'), blobs: iv.blobs }, r);
     await vi.waitFor(() => {
       expect(iv.held.get(iv.hex(a.blobId))).toEqual(a.blob);
     });
     // After Noise_KK, before `committed`, then before the blob leaves (§6).
     expect(log).toEqual(['check', 'check', 'check', 'read']);
+    // Counted once written, so an attachment waiting for it checks again (attachments.md §7).
+    await vi.waitFor(() => {
+      expect(fi.blobs).toBe(1);
+    });
+    expect(fr.blobs).toBe(0);
   });
 
   it('discards a held blob that fails its check and answers it missing, reporting nothing', async () => {
