@@ -129,6 +129,15 @@ every project through the references in the root `tsconfig.json`.
   in the file. A fresh restore runs it once the vault is open, so a lock locks it as any session,
   and "Vault ready" shows the result; a merge shows it with its own. The secretstream state the
   blob reader holds is not wiped, as libsodium-wrappers exposes no way to, like the blob stream's.
+- **Attachments for the UI (Phase 9, D278).** `sealAttachment` seals a picked file under a new
+  key, sets its name and media type as stored (`attachments.md` §3) and wipes the plaintext,
+  refusing an empty file or one above 10 MiB; its value and blob go to `createItem` or `updateItem`,
+  which copy the `blobId` and `key` into the content, so the caller wipes its own key once the item
+  is written. `VaultSession.holdsBlob` tells whether an attachment waits for a sync, and
+  `VaultSession.openAttachment` reads a blob from storage and decrypts it for a download,
+  `undefined` when not held and `AttachmentCorruptError` when it does not open with its field;
+  the caller wipes the plaintext. Both read outside the operation queue and throw
+  `VaultLockedError` once the vault locks during the read.
 - **Backup export (Phase 2, D181).** `packages/vault` depends on `packages/backup`, which depends
   on `crypto` only: `VaultSession.exportBackup` opens the Master Key wrap with the KEK the caller
   derived again, verifies every stored record as `load` does, and builds the file with the backup

@@ -45,6 +45,9 @@ import {
   sealRecoveryEnvelope,
   sameKey,
   sealBlob,
+  blobMatches,
+  openBlob,
+  MAX_ATTACHMENT_SIZE,
   sealVaultKeyRecord,
   unwrapKey,
   vaultKeyRecordId,
@@ -64,7 +67,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import vectors from '../test-vectors/content-v1.json' with { type: 'json' };
 
+import { sealAttachment } from './attachment';
 import {
+  AttachmentCorruptError,
   ContentInvalidError,
   ExportRejectedError,
   HlcReadOnlyError,
@@ -85,7 +90,7 @@ import {
 import { DISPLAY_NAME_MAX, deviceToCbor } from './folder';
 import { FUTURE_CLOCK_BOUND_MS, compareHlc } from './hlc';
 import { idKey } from './ids';
-import { TITLE_MAX, itemToCbor } from './item';
+import { type AttachmentValue, TITLE_MAX, itemToCbor } from './item';
 import {
   DEFAULT_PREFERENCES,
   localConfigStateToCbor,
@@ -99,6 +104,7 @@ import {
   type BackupFile,
   HISTORY_LIMIT,
   type ItemInput,
+  type ItemView,
   MAINTENANCE_INTERVAL_MS,
   PURGE_DELAY_MS,
   type UnlockMethod,
@@ -4189,6 +4195,15 @@ describe('lock (CRYPTO-INV-010)', () => {
       openReadmission: () => session.openReadmission(),
       openSync: () => session.openSync(new Uint8Array(16)),
       blobGrant: () => session.blobGrant(),
+      holdsBlob: () => session.holdsBlob(new Uint8Array(32)),
+      openAttachment: () =>
+        session.openAttachment({
+          name: 'a',
+          size: 1,
+          mediaType: 'text/plain',
+          blobId: new Uint8Array(32),
+          key: new Uint8Array(32),
+        }),
       confirmUser: () => {
         session.confirmUser({ kek: kek(caller), method: 'password' });
       },
@@ -6857,5 +6872,107 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
         VaultLockedError,
       );
     });
+  });
+});
+
+describe('attachments in the UI (attachments.md §2, §3, §7, D278)', () => {
+  const bytes = (n: number, byte = 7) => new Uint8Array(n).fill(byte);
+
+  /** A login holding `value` as an attachment field. */
+  function holding(title: string, value: AttachmentValue): ItemInput {
+    const base = login(title);
+    return { ...base, fields: [...base.fields, { type: 'attachment', value }] };
+  }
+
+  function attachmentOf(view: ItemView | undefined): AttachmentValue {
+    const field = must(view?.item?.fields.find((f) => f.type === 'attachment'));
+    if (typeof field.value === 'string' || !('blobId' in field.value)) throw new Error('no blob');
+    return field.value;
+  }
+
+  it('seals a picked file under a new key, its name and media type as stored', () => {
+    const plaintext = bytes(70_000);
+    const sealed = sealAttachment({ name: 'a\nb.pdf', type: '', bytes: plaintext });
+    expect(sealed.value).toMatchObject({
+      name: 'a b.pdf',
+      size: 70_000,
+      mediaType: 'application/octet-stream',
+    });
+    expect(sealed.blob.blobId).toEqual(sealed.value.blobId);
+    expect(blobMatches(sealed.blob.blob, sealed.value.blobId)).toBe(true);
+    expect(openBlob(sealed.value.key, 70_000, sealed.blob.blob)).toEqual(bytes(70_000));
+    // The plaintext is wiped once sealed.
+    expect(plaintext.every((b) => b === 0)).toBe(true);
+    const other = sealAttachment({ name: 'a.pdf', type: 'application/pdf', bytes: bytes(70_000) });
+    expect(other.value.mediaType).toBe('application/pdf');
+    expect(other.value.key).not.toEqual(sealed.value.key);
+  });
+
+  it('refuses an empty file and one above 10 MiB, wiping it', () => {
+    for (const size of [0, MAX_ATTACHMENT_SIZE + 1]) {
+      const plaintext = bytes(size);
+      expect(() => sealAttachment({ name: 'a', type: '', bytes: plaintext })).toThrow(
+        ContentInvalidError,
+      );
+      expect(plaintext.every((b) => b === 0)).toBe(true);
+    }
+    expect(sealAttachment({ name: 'a', type: '', bytes: bytes(1) }).value.size).toBe(1);
+  });
+
+  it('opens a saved attachment after the caller wiped its own key', async () => {
+    const { session, store } = await create();
+    const sealed = sealAttachment({ name: 'scan.pdf', type: 'application/pdf', bytes: bytes(3) });
+    const id = await session.createItem(holding('Passport', sealed.value), [sealed.blob]);
+    sealed.value.key.fill(0);
+    sealed.value.blobId.fill(0);
+    const value = attachmentOf(session.item(id));
+    expect(await session.holdsBlob(value.blobId)).toBe(true);
+    expect(await session.openAttachment(value)).toEqual(bytes(3));
+    // Read again from storage after a new unlock.
+    session.lock();
+    const again = await unlock(store);
+    expect(await again.openAttachment(attachmentOf(again.item(id)))).toEqual(bytes(3));
+  });
+
+  it('reports a blob not held, with nothing to open', async () => {
+    const { session, store } = await create();
+    const sealed = sealAttachment({ name: 'scan.pdf', type: '', bytes: bytes(3) });
+    const id = await session.createItem(holding('Passport', sealed.value), [sealed.blob]);
+    store.blobs.clear();
+    const value = attachmentOf(session.item(id));
+    expect(await session.holdsBlob(value.blobId)).toBe(false);
+    expect(await session.openAttachment(value)).toBeUndefined();
+  });
+
+  it('refuses a tampered blob, a wrong key and a wrong size as corrupt', async () => {
+    const { session, store } = await create();
+    const sealed = sealAttachment({ name: 'scan.pdf', type: '', bytes: bytes(3) });
+    const id = await session.createItem(holding('Passport', sealed.value), [sealed.blob]);
+    const value = attachmentOf(session.item(id));
+    await expect(
+      session.openAttachment({ ...value, key: new Uint8Array(32).fill(9) }),
+    ).rejects.toThrow(AttachmentCorruptError);
+    await expect(session.openAttachment({ ...value, size: 2 })).rejects.toThrow(
+      AttachmentCorruptError,
+    );
+    await expect(session.openAttachment({ ...value, key: new Uint8Array(31) })).rejects.toThrow(
+      AttachmentCorruptError,
+    );
+    const tampered = must(store.blobs.get(idKey(value.blobId))).slice();
+    tampered[30] = (must(tampered[30]) + 1) % 256;
+    store.blobs.set(idKey(value.blobId), tampered);
+    await expect(session.openAttachment(value)).rejects.toThrow(AttachmentCorruptError);
+  });
+
+  it('returns nothing once the vault locks during a read', async () => {
+    const { session } = await create();
+    const sealed = sealAttachment({ name: 'scan.pdf', type: '', bytes: bytes(3) });
+    const id = await session.createItem(holding('Passport', sealed.value), [sealed.blob]);
+    const value = attachmentOf(session.item(id));
+    const opening = session.openAttachment(value);
+    const holding_ = session.holdsBlob(value.blobId);
+    session.lock();
+    await expect(opening).rejects.toThrow(VaultLockedError);
+    await expect(holding_).rejects.toThrow(VaultLockedError);
   });
 });

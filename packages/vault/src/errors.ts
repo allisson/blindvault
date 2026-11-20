@@ -14,6 +14,17 @@ export class ContentInvalidError extends VaultError {
   }
 }
 
+/**
+ * An attachment's blob does not open with its field (attachments.md §2): a chunk fails to
+ * authenticate, the layout breaks the stream's rules, or the plaintext is not the field's `size`.
+ */
+export class AttachmentCorruptError extends VaultError {
+  override name = 'AttachmentCorruptError';
+  constructor() {
+    super('the attachment is corrupt');
+  }
+}
+
 /** No HLC can be issued: the HLC state is beyond the future-clock cap (D73). */
 export class HlcReadOnlyError extends VaultError {
   override name = 'HlcReadOnlyError';
