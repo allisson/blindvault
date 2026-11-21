@@ -37,7 +37,9 @@ jobs:
           node-version-file: .nvmrc
       - run: pnpm install --frozen-lockfile
       - name: Build
-        run: SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/web build
+        run: |
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/web build
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/extension build
       - name: Compare sw.js with the previous release
         id: worker
         run: |
@@ -66,6 +68,12 @@ jobs:
           tar --sort=name --mtime="@$(git log -1 --format=%ct)" --owner=0 --group=0 --numeric-owner \
             --mode=u=rwX,go=rX \
             -C apps/web/dist -cf - . | gzip -n > "$RUNNER_TEMP/release/blindvault-${GITHUB_REF_NAME}.tar.gz"
+          # The extension's packages, as the stores get them, and each one's asset manifest
+          # (extension.md §2, §8.2).
+          for browser in chrome firefox; do
+            cp apps/extension/dist/blindvault-$browser-*.zip "$RUNNER_TEMP/release/"
+            cp apps/extension/dist/$browser/asset-manifest.txt "$RUNNER_TEMP/release/asset-manifest-$browser.txt"
+          done
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ runner.temp }}/release/*
