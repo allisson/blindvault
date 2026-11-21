@@ -29,7 +29,7 @@ import { type Navigation } from '../app/nav';
 import { saveShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format, roleName } from '../i18n/messages';
-import { Button, ConfirmDialog, Field, INPUT, Modal, Notice, TextArea } from './components';
+import { Button, ConfirmDialog, Field, INPUT, Modal, Notice, TARGET, TextArea } from './components';
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { Icon } from './icons';
@@ -173,6 +173,24 @@ function FieldEditor({
         </div>
       ) : null}
       {input}
+      {field.type === 'url' ? (
+        // Off by default: the extension fills on the exact origin only (extension.md §5.3, §5.4).
+        <label className={`${TARGET} flex items-start gap-2 text-sm`}>
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={field.matchDomain === true}
+            onChange={(e) => {
+              onChange({ ...field, matchDomain: e.target.checked });
+            }}
+            data-testid="match-domain"
+          />
+          <span className="flex flex-col">
+            {m.items.matchDomain}
+            <span className="text-muted">{m.items.matchDomainHint}</span>
+          </span>
+        </label>
+      ) : null}
       {meter}
       {generating ? (
         // A dialog, or a bottom sheet on a phone (D254).

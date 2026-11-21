@@ -8,11 +8,11 @@ import { VaultController } from './app/controller';
 import { framed } from './app/frame';
 import { startKdfWorker } from './app/kdf';
 import { browserPasskeys } from './app/passkey';
-import { registerServiceWorker } from './app/service-worker';
 import { loadStunSettings } from './app/stun-settings';
 import { preloadStrength } from './app/strength';
 import { UpdateMonitor } from './app/updates';
 import { LanguageProvider } from './i18n/context';
+import { platform } from './platform';
 import { Framed } from './ui/Framed';
 import './index.css';
 
@@ -71,23 +71,8 @@ function start(root: HTMLElement): void {
     allowed: () => controller.updateAllowed,
   });
 
-  // The production build only: the dev server serves modules that no asset manifest lists (D190).
-  // The registration starts before the first render, so the monitor watches it as early as it can
-  // (D191).
-  if (import.meta.env.PROD) {
-    void registerServiceWorker(
-      'serviceWorker' in navigator ? navigator.serviceWorker : undefined,
-      (globalThis as { trustedTypes?: Parameters<typeof registerServiceWorker>[1] }).trustedTypes,
-    ).then((registration) => {
-      if (!registration) return;
-      monitor.watch(registration);
-      monitor.look();
-    });
-    // No browser looks for a changed sw.js on its own while a page stays open (D162).
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') monitor.look();
-    });
-  }
+  // Before the first render, so the monitor watches the update flow as early as it can (D191).
+  platform.startUpdates(monitor);
 
   createRoot(root).render(
     <StrictMode>

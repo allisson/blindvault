@@ -179,3 +179,36 @@ test('IndexedDB and localStorage hold no item plaintext (CRYPTO-INV-001)', async
   expect(found.chunks).toBeGreaterThan(0);
   expect(found.found).toEqual([]);
 });
+
+test('keeps "Match the whole domain" on a website through edits (extension.md §5.4)', async ({
+  page,
+}) => {
+  await create(page);
+  await page.getByRole('button', { name: 'New item', exact: true }).click();
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await page.getByTestId('item-title').fill(TITLE);
+  await page.getByTestId('input-Website').fill('https://harbor.example');
+  const flag = page.getByTestId('match-domain');
+  // One switch per website field, off by default.
+  await expect(flag).toHaveCount(1);
+  await expect(flag).not.toBeChecked();
+  await flag.check();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: TITLE })).toBeVisible();
+
+  // An edit of another field keeps it.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(flag).toBeChecked();
+  await page.getByTestId('input-Username').fill(USERNAME);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: TITLE })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(flag).toBeChecked();
+
+  // Turning it off is a change, saved.
+  await flag.uncheck();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: TITLE })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(flag).not.toBeChecked();
+});
