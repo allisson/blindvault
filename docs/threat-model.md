@@ -133,7 +133,7 @@ encrypted backups and synchronized records (§3).
 
 Threats of the browser extension, stored passkeys and the Android app, which come before v1.0
 (D275). Their direction is fixed (overview §20). `docs/extension.md` specifies the extension's
-entries (D283 to D285); `docs/android.md` is not written yet. Every entry stays planned until it is
+entries (D283 to D285), `docs/android.md` the Android app's (D290). Every entry stays planned until it is
 implemented and tested. The attachments' entries moved to their attackers above once `docs/attachments.md`
 specified them (D278, D279).
 
@@ -154,17 +154,24 @@ specified them (D278, D279).
 
 | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- |
-| Asks the credential provider for another app's or site's passkey or password | Planned | A native app's package is bound to the `rpId` or the item's domain through the site's `assetlinks.json`; a browser's origin is trusted only from a shipped allowlist of privileged browsers (D269) | overview D269 |
-| Learns that the user has the app of a site | Planned, accepted | Fetching `assetlinks.json` tells the site that its app is used; it carries no vault data (D269) | overview D269 |
+| Asks the credential provider for another app's or site's passkey or password | Planned | A native app's package and every signing certificate are bound to the `rpId`, or to the host of the login the user picked, through that domain's `assetlinks.json` `get_login_creds` statement; a browser's origin is trusted only when its package and certificate are in the shipped allowlist of privileged browsers (D269, D290) | `android.md` §7.3, §7.4 |
+| Sets a site's origin in its Credential Manager request, as `CREDENTIAL_MANAGER_SET_ORIGIN` is a normal permission | Planned | A caller outside the allowlist that sets an origin gets nothing (D290) | `android.md` §7.3 |
+| Reports a web domain to the autofill service | Planned | A web domain is read only from an allowlisted browser; any other app is treated as itself and needs the `assetlinks.json` binding (D290) | `android.md` §8 |
+| Gets a passkey response or a password without the user knowing | Planned | Each request opens the provider window, which unlocks (UV) and waits for the user's tap (UP); the services answer only an entry that opens it (D290) | `android.md` §7.1, §7.2 |
+| Reads the clipboard after a copy | Planned, limited | Written as sensitive, hidden from the clipboard preview, cleared by the shell's timer and on lock; a process Android ends first leaves it to Android's expiry (D290) | `android.md` §6.1 |
+| Captures the screen, or reads the app's thumbnail in Recents | Planned | `FLAG_SECURE` on every activity (D290) | `android.md` §3 |
+| Calls the bridge from a page loaded in the WebView | Planned | The WebView loads only the app's origin; the bridge answers that origin's main frame only, with strictly validated messages, and there is no `addJavascriptInterface` (D290) | `android.md` §3, §9 |
+| Learns that the user has the app of a site | Planned, accepted | Fetching `assetlinks.json` tells the site that its app is used; it carries no vault data, and is made only for the domain of the request or of the login the user picked (D269, D290) | `android.md` §7.4 |
 
 ### Other planned entries
 
 | Attacker | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- | --- |
-| A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK requires a BiometricPrompt on every use, is invalidated when the enrolled biometrics change, and is bound to `localConfigId`; setting it up needs the local password (D271) | overview D271 |
+| A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK comes from a secret the Keystore releases only behind a strong-biometric prompt, under a key invalidated when the enrolled biometrics change, and wraps the Master Key bound to `localConfigId`; setting it up needs the local password (D271, D290) | `android.md` §5 |
+| A1 | Copies the Android app's data through Android's backup or device transfer | Planned | `allowBackup` off and every domain excluded from cloud backup and device transfer (D290) | `android.md` §3 |
 | A1 | Reads a removed or replaced stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268, D288) | `extension.md` §7.5 |
 | A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust. `runtime.onUpdateAvailable` keeps the running code and its session until the vault locks; the confirmation of version and manifest hash is transparency only, since the new code shows it and a malicious one can skip it; the store's package can be checked against the release's `asset-manifest.txt` (D270, D285) | `extension.md` §8 |
-| A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; reproducible APK with published SHA-256 and rebuild instructions (D270) | overview D270 |
+| A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; Android installs an update only under the same key; reproducible APK with published SHA-256, signing certificate and rebuild instructions; About shows the asset-manifest hash and the certificate (D270, D290) | `android.md` §2, §10 |
 | A6 | Blocks new Android installs by terminating the Play Console account that registers the package | Planned, accepted | The account is a root of trust for installs, not for integrity; installed apps keep working, ADB and the advanced flow still install (D274) | overview D274 |
 
 ## Out of scope (documented to users)

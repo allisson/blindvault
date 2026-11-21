@@ -189,7 +189,7 @@ _pt-BR_: passkey de desbloqueio
 _Avoid_: passkey (alone, in this sense), biometric unlock
 
 **Keystore KEK**:
-A device-local key, held by the Android Keystore behind biometric confirmation, that unlocks the vault on that device as an alternative to the local password.
+A device-local key, derived from a secret that only the Android Keystore releases behind biometric confirmation, that unlocks the vault on that device as an alternative to the local password.
 _Avoid_: biometric key, fingerprint unlock key
 
 **Recovery Phrase**:
@@ -325,6 +325,11 @@ _Avoid_: instance, tab (as the general term)
 The app window of a browser-extension installation that holds the unlocked vault; the popup and the scripts in web pages reach the vault only through it, and closing it locks the vault.
 _Avoid_: background page, offscreen document, vault tab
 
+**Provider window**:
+The app window of the Android app that a passkey or password request from another app or a browser opens; it takes the vault over, unlocks, waits for the user's confirmation, answers that one request and locks.
+_pt-BR_: janela do provedor
+_Avoid_: credential activity, autofill screen
+
 **Installation guard**:
 The exclusive claim one app window holds on an installation while it creates, replaces or deletes a vault there.
 _Avoid_: installation lock, global lock
@@ -391,7 +396,7 @@ _Avoid_: local-network-only mode, offline mode
 ## Filling
 
 **Fill**:
-Writing a login item's user name and password into a web page's sign-in fields, only on the user's own gesture and never submitting the form.
+Writing a login item's user name and password into the sign-in fields of a web page or an Android app, only on the user's own gesture and never submitting the form.
 _pt-BR_: preencher
 _Avoid_: autofill (for the action), auto-login, inject
 
@@ -399,6 +404,11 @@ _Avoid_: autofill (for the action), auto-login, inject
 A login item whose URL field has the page's exact origin, or the page's registrable domain when that field allows the whole domain.
 _pt-BR_: item correspondente
 _Avoid_: suggested item, domain match, URI match
+
+**Privileged browser**:
+An Android browser whose package and signing certificate are in the allowlist the app ships, the only caller whose claim of a website's origin the app believes.
+_pt-BR_: navegador privilegiado
+_Avoid_: trusted browser, system browser
 
 ## Vaults and Members
 

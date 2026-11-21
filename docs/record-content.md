@@ -232,12 +232,13 @@ exactly the keys below, which CRYPTO-INV-019 allows:
 | `localConfigId` | ID | new with each Local Config |
 | `kek` | map | `salt` (bytes 16), `opslimit` (uint), `memlimit` (uint), `mkWrap` (`{n, c}`, `crypto-spec.md` §12) |
 | `prf` | map, optional | `credentialId` (bytes, at least 1), `prfInput` (bytes 32), `mkWrap` (`{n, c}`) |
+| `keystore` | map, optional | `iv` (bytes 12), `sealed` (bytes 48), `mkWrap` (`{n, c}`): the Keystore KEK state, written only by the Android app (`android.md` §5, D290) |
 | `replacesVaultId` | ID, optional | the vault this database replaces, until its database is deleted (D96) |
 | `encrypted` | map | `{n, c}`: the encrypted part, sealed as in `crypto-spec.md` §12 |
 
 Every `{n, c}` map is exactly those two keys: `n` 24 bytes, and `c` 48 bytes in an `mkWrap` (a
-sealed 32-byte key) or at least 16 bytes in `encrypted`. The `kek` and `prf` maps hold exactly the
-keys listed; `opslimit` and `memlimit` are checked against the accepted range at unlock
+sealed 32-byte key) or at least 16 bytes in `encrypted`. The `kek`, `prf` and `keystore` maps hold
+exactly the keys listed; `opslimit` and `memlimit` are checked against the accepted range at unlock
 (`crypto-spec.md` §6), not here.
 
 The **encrypted part** holds the v1 keys below. Keys a later phase uses are defined now and stay

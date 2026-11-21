@@ -980,6 +980,23 @@ Each is pinned to an exact version at least 14 days old when its phase adds it. 
 cryptographic, serialization and protocol dependencies of later phases are added with their phase.
 The ones already chosen are below.
 
+### Android app (Phase 10, chosen, D290)
+
+Chosen with `docs/android.md`; each lands in `apps/android` with the code, at a version at least 14
+days old then, Maven artifacts checked by hand against the same rule and recorded with their SHA-256
+in Gradle's dependency verification. Their transitive dependencies are listed here when they land.
+
+| Dependency | Justification |
+| --- | --- |
+| Gradle wrapper 9.8.2, with `distributionSha256Sum` | Builds the APK; the wrapper pins Gradle and checks its download. Used in the Phase 10 spike. |
+| Android Gradle Plugin 9.5.1 | Google's build of an APK; compiles Kotlin itself (Kotlin 2.2.10), with no separate Kotlin plugin. Used in the spike. |
+| `androidx.webkit` 1.18.0 | `WebViewAssetLoader`, which serves the `apps/web` build on an `https:` origin, and `addWebMessageListener`, the origin-checked bridge (`android.md` §3, §9). The platform has neither. Used in the spike. |
+| `androidx.credentials` 1.6.0 (2026-04-08) | The credential provider's request and response types and `CallingAppInfo.getOrigin(allowlist)`, the check of a privileged browser (`android.md` §7.3). The platform API alone carries passkeys as untyped bundles whose keys are this library's conventions, so the provider would copy them, and the origin check, by hand. Security-sensitive: approved by the maintainer for D290. `credentials-play-services-auth` is not used. |
+| JUnit 4.13.2 | The Kotlin unit tests on the JVM (`android.md` §13). Test only, never in the APK. |
+
+The BiometricPrompt and the Keystore are the platform's (API 30 and up), not `androidx.biometric`. No
+Capacitor (D282).
+
 ### Phase 0 spikes (`spikes/`, throwaway, deleted)
 
 The spike workspace was deleted after Phase 0 (last version at commit `3f29c12`). What follows

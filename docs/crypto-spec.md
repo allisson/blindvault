@@ -114,9 +114,10 @@ a derivation takes a new context, not a new ID.
 | `bvrckek_` | Recovery KEK | 1 | `K_envelope` | wraps the Master Key in the Recovery Envelope |
 | `bvrckek_` | Recovery KEK | 2 | keyslot seed | `crypto_box_seed_keypair` → recovery keyslot key pair (D16) |
 | `bvprfkek` | PRF output | 1 | PRF KEK | wraps the Master Key locally (section 12) |
+| `bvkskek_` | Keystore secret | 1 | Keystore KEK | wraps the Master Key locally on Android (section 12, D290) |
 
 The Master Key is never used directly as an encryption key, and neither are the phrase entropy, the
-Recovery KEK or the PRF output.
+Recovery KEK, the PRF output or the Keystore secret.
 
 ### 5.1 Recovery Phrase (§5.4, D2)
 
@@ -134,6 +135,17 @@ At setup the app generates a random 32-byte PRF input, stored in the cleartext p
 with the credential ID (the "PRF KEK state"), and requests `prf.eval.first = PRF input` with
 `userVerification: "required"`. The 32-byte `prf.results.first` is the PRF output. An assertion whose
 authenticator data does not have the UV flag set is rejected before any derivation (CRYPTO-INV-021).
+
+### 5.3 Keystore KEK (§5.5, D271, D290)
+
+At setup the Android app generates a random 32-byte Keystore secret and has the shell encrypt it
+with an AES-256-GCM key of the Android Keystore that requires a strong-biometric BiometricPrompt on
+every use and is invalidated by a new enrolled biometric (`android.md` §5). The GCM IV (12 bytes)
+and the ciphertext (48 bytes) are the "Keystore KEK state", with `mkWrap.keystoreKek`. At unlock
+the shell decrypts the secret behind the prompt, and the app derives the Keystore KEK from it,
+then wipes the secret. The Master Key is never sent to the shell, and the secret is never
+persisted in cleartext (CRYPTO-INV-028). The Keystore's AES-GCM is Android's, not this
+specification's: it only stores the secret behind the biometric.
 
 ## 6. Passwords and Argon2id (D9, D71, D134)
 
@@ -207,6 +219,7 @@ AAD_local(purpose) = layout(purpose, vaultId, localConfigId)
 | --- | --- |
 | `bv.v1.mk-wrap.device-kek` | Master Key under the Device KEK |
 | `bv.v1.mk-wrap.prf-kek` | Master Key under the PRF KEK |
+| `bv.v1.mk-wrap.keystore-kek` | Master Key under the Keystore KEK (D290) |
 | `bv.v1.local-config` | encrypted part of Local Config under `K_localConfig` |
 
 Record AAD has no purpose label: its parts are encrypted under different keys (a Vault Key, a
@@ -375,6 +388,7 @@ received, so a holder of the Master Key can push every device to epoch 2³² −
 ```
 mkWrap.deviceKek = seal(Device KEK,    AAD_local("bv.v1.mk-wrap.device-kek"), MasterKey)
 mkWrap.prfKek    = seal(PRF KEK,       AAD_local("bv.v1.mk-wrap.prf-kek"),    MasterKey)
+mkWrap.keystoreKek = seal(Keystore KEK, AAD_local("bv.v1.mk-wrap.keystore-kek"), MasterKey)
 encryptedPart    = seal(K_localConfig, AAD_local("bv.v1.local-config"),       sodium_pad(CBOR(encrypted part), 256))
 ```
 
@@ -383,7 +397,8 @@ The encrypted part is padded like record content (D159):
 
 The cleartext part holds only what CRYPTO-INV-019 allows: `localConfigFormatVersion` (D164),
 `vaultId`, `localConfigId`, Argon2id salt and parameters, `mkWrap.deviceKek`, the PRF KEK state
-(credential ID, PRF input, `mkWrap.prfKek`), and the replaced `vaultId` while it exists (D96). Both
+(credential ID, PRF input, `mkWrap.prfKek`), the Keystore KEK state (IV, encrypted Keystore secret,
+`mkWrap.keystoreKek`, D290), and the replaced `vaultId` while it exists (D96). Both
 parts, as CBOR maps, are in `record-content.md` §9.
 
 ## 13. Transcripts and MACs (§8, §9.1, D1, D17, D29)
