@@ -1,7 +1,7 @@
 # BlindVault — Browser extension
 
 > Normative for the browser extension; `overview.md` prevails on design. Implements D267, D268,
-> D270, D282, D283, D284, D285, D286 and D287. Measurements behind it are in `docs/spikes/extension.md`.
+> D270, D282, D283, D284, D285, D286, D287 and D288. Measurements behind it are in `docs/spikes/extension.md`.
 > Terms follow `GLOSSARY.md` (session host, fill, matching item, passkey, unlock passkey).
 
 ## 1. Model
@@ -290,13 +290,18 @@ session host's views when the switch is off: they are fields of items.
   1. the origin is `https:`, or `http://localhost`;
   2. `rpId` (absent: the origin's host) equals the origin's host, or is a registrable suffix of it
      that is not itself a public suffix (§5.5);
-  3. for `create`, `pubKeyCredParams` lists ES256 (`-7`) or EdDSA (`-8`).
+  3. for `create`, `pubKeyCredParams` lists ES256 (`-7`) or EdDSA (`-8`);
+  4. for `create`, `authenticatorSelection.authenticatorAttachment` is not `cross-platform` (D288).
 - Handing back means the isolated script tells the MAIN-world script to call the original with the
   page's options. The spike saw Firefox refuse a hand-back under automation when the confirmation
   window had taken the focus (`docs/spikes/extension.md` §3); the implementation tests it by hand.
 - The answer travels back the same way. The MAIN-world script builds the `PublicKeyCredential` the
   page receives, as the spike measured: `instanceof PublicKeyCredential` true,
   `getClientExtensionResults()` with `credProps.rk: true` on create, `toJSON()` complete.
+- The credential reports `authenticatorAttachment: "platform"`, and on create `getTransports()`
+  answers `["internal", "hybrid"]`. Of the extensions the page asks for, only `credProps` is
+  answered; the others, `prf` included, are left out, as by an authenticator without them.
+  `userVerification: "required"` is met, since the vault is unlocked (D288).
 
 ### 7.3 Credentials
 
@@ -306,10 +311,16 @@ session host's views when the switch is off: they are fields of items.
   on create, attested credential data with a zero AAGUID, a random 16-byte `credentialId` and the
   COSE public key. Attestation is `none` (`fmt: "none"`, empty `attStmt`).
 - ES256 is preferred when the site lists both; keys and signatures follow D268: ES256 through
-  WebCrypto with the private key imported non-extractable only to sign, EdDSA through libsodium.
-- The `passkey` field holds the private key in PKCS#8, `credentialId`, `rpId`, `userHandle`, the
-  user name and the creation date (D268); its exact encoding is added to `record-content.md` with
-  the passkey task.
+  WebCrypto with the private key imported non-extractable only to sign, its `r ‖ s` written as a
+  DER `Ecdsa-Sig-Value`, EdDSA through libsodium.
+- A new ES256 key is generated extractable, exported once as PKCS#8 and rewritten in the fixed
+  layout of `record-content.md` §4, the exported bytes wiped; a new EdDSA key is a random 32-byte
+  seed. The session host keeps no imported key after the signature.
+- The `passkey` field (`record-content.md` §4, D288) holds the private key in PKCS#8,
+  `credentialId`, `rpId`, `userHandle`, the user name and the creation date.
+- `packages/crypto` holds the key generation, the PKCS#8 layouts, the signatures, the
+  authenticator data and the `attestationObject`; `apps/web` the checks of §7.2, the choice of
+  passkey and `clientDataJSON`.
 
 ### 7.4 Confirmation window
 
@@ -320,9 +331,13 @@ details (`confirm-details`) and shows:
 - the origin, and the top frame's origin when they differ;
 - the `rpId` and, for create, the user name and display name the site sent;
 - for get, the passkeys that can answer: those of the `rpId` whose `credentialId` is in
-  `allowCredentials`, or every one of the `rpId` when the list is empty; the user picks one;
+  `allowCredentials`, or every one of the `rpId` when the list is empty, each `credentialId` once,
+  since a duplicated item holds the same key (D288); the user picks one;
 - for create, where to save it: a matching Login item (§5) chosen from a list, or a new Login
-  item titled with `rp.name` and with the URL `https://<rpId>`;
+  item titled with `rp.name`, with the URL `https://<rpId>` and `user.name` as its user name
+  (D288). When the vault already holds a passkey of that `rpId` and `userHandle`, the window says
+  it will be replaced, and Confirm replaces it in every item holding it, as an authenticator
+  overwrites a credential of the same account;
 - "Use another authenticator", which hands the call back to the browser;
 - Cancel, which answers `NotAllowedError`.
 
@@ -344,7 +359,22 @@ A get writes nothing, since `signCount` is always 0 (D268), and so works on a re
 ### 7.5 History
 
 Removing a passkey makes an Item Version that keeps its private key until history is purged; the
-remove dialog says so and tells the user to remove the passkey on the site too (D268).
+remove dialog says so and tells the user to remove the passkey on the site too (D268). Replacing
+one keeps the replaced key the same way.
+
+Duplicate keeps the `passkey` fields in the copy, since duplicating and then trashing the original
+is how old values leave history (D135), and the original's passkey must not leave with it (D288).
+
+### 7.6 In the app
+
+On every platform, the PWA included (D288):
+
+- the viewer shows each passkey's `rpId`, user name and creation date, under its `label` when it
+  has one; never its private key or `userHandle`, and no copy of them;
+- the editor can remove a passkey, with the notice of §7.5, and cannot add or edit one: passkeys
+  are created only by a site, through the extension;
+- search reads `rpId` and `userName`, never `privateKey` or `userHandle` (D132);
+- an app older than the `passkey` field type shows the item read-only (D52).
 
 ## 8. Updates and the version lock (D270, D285)
 
@@ -443,7 +473,10 @@ Negative tests, each named in `security-invariants.md` (CRYPTO-INV-026 for filli
 - **Passkeys.** A forged origin in the message is ignored; an `rpId` of another site, a public
   suffix, or on `http:` goes to the browser; `excludeCredentials` answers only after the click;
   `signCount` 0 and the flags; create on a read-only vault goes to the browser; conditional
-  mediation goes to the browser.
+  mediation goes to the browser; a create asking for `cross-platform` goes to the browser; a create
+  for a held `rpId` and `userHandle` replaces it in every item; a malformed PKCS#8 layout makes the
+  item read-only (`record-content.md` §2); search never matches a private key or `userHandle`.
+  Each named in `security-invariants.md` under CRYPTO-INV-027.
 - **Version lock.** A changed hash shows the confirmation before unlock; `onUpdateAvailable` with
   the vault unlocked does not reload.
 

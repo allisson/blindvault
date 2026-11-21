@@ -162,7 +162,7 @@ specified them (D278, D279).
 | Attacker | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- | --- |
 | A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK requires a BiometricPrompt on every use, is invalidated when the enrolled biometrics change, and is bound to `localConfigId`; setting it up needs the local password (D271) | overview D271 |
-| A1 | Reads a removed stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268) | overview D268 |
+| A1 | Reads a removed or replaced stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268, D288) | `extension.md` §7.5 |
 | A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust. `runtime.onUpdateAvailable` keeps the running code and its session until the vault locks; the confirmation of version and manifest hash is transparency only, since the new code shows it and a malicious one can skip it; the store's package can be checked against the release's `asset-manifest.txt` (D270, D285) | `extension.md` §8 |
 | A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; reproducible APK with published SHA-256 and rebuild instructions (D270) | overview D270 |
 | A6 | Blocks new Android installs by terminating the Play Console account that registers the package | Planned, accepted | The account is a root of trust for installs, not for integrity; installed apps keep working, ADB and the advanced flow still install (D274) | overview D274 |
