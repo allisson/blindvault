@@ -165,6 +165,18 @@ describe('item writes', () => {
     };
     expect(() => itemToCbor(invalid as Item, false)).toThrow(ContentInvalidError);
   });
+
+  it('writes `match` on a url field and reads it back, refusing it elsewhere (§4, D283)', () => {
+    const url: Item = {
+      ...login,
+      fields: [{ type: 'url', role: 'url', value: 'https://example.com', match: 'domain' }],
+    };
+    const content = itemToCbor(url, false);
+    expect((content.get('fields') as CborMap[])[0]?.get('match')).toBe('domain');
+    expect(readItem(content, false)).toEqual({ readOnly: false, item: url });
+    const text = { ...login, fields: [{ type: 'text', label: 'x', value: 'y', match: 'domain' }] };
+    expect(() => itemToCbor(text as Item, false)).toThrow(ContentInvalidError);
+  });
 });
 
 describe('cited blobs (attachments.md §5)', () => {

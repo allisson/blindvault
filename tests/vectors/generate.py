@@ -431,7 +431,7 @@ MONTH_PRECISION_ROLES = {("card", "expiry")}
 FIELD_TYPES = {"text", "long-text", "secret", "url", "email", "phone", "date", "number", "totp", "seed-phrase",
                "attachment"}
 ITEM_KEYS = {"templateId", "templateVersion", "title", "fields", "tags", "notes", "folderId", "trashOperationId"}
-FIELD_KEYS = {"type", "value", "role", "label"}
+FIELD_KEYS = {"type", "value", "role", "label", "match"}
 TOTP_KEYS = {"secret", "algorithm", "digits", "period", "issuer", "accountName"}
 ATTACHMENT_KEYS = {"name", "size", "mediaType", "blobId", "key"}
 BIP39_WORDS = set(Mnemonic("english").wordlist)
@@ -576,6 +576,8 @@ def check_item(item, deleted: bool | None) -> None:
             seen_roles.add(role)
         if "label" in f and not bounded_line(f["label"], 128):
             raise ReadOnly(6, "label")
+        if "match" in f and (f["type"] != "url" or f["match"] != "domain"):
+            raise ReadOnly(6, "match only as domain on a url field")
         if "role" not in f and "label" not in f and f["type"] != "attachment":
             raise ReadOnly(6, "user field without a label")
         if "value" not in f:
@@ -791,6 +793,8 @@ VALID_ITEMS = [
         _user_field("date", "1999-12"), _user_field("number", "-007.50"),
         _user_field("totp", {**TOTP, "issuer": "GitHub", "accountName": "alice@example.com"}),
         _user_field("seed-phrase", SEED_12)]), False),
+    ("url field matching the whole domain", _with_field({"type": "url", "role": "url", "value": "https://example.com",
+                                                        "match": "domain"}), False),
     ("attachment without a label, of 1 byte", _with_field(_attachment()), False),
     ("attachment with a label, of 10,485,760 bytes", _with_field({**_attachment(size=10_485_760),
                                                                   "label": "Contract"}), False),
@@ -812,6 +816,9 @@ READ_ONLY_ITEMS = [
     (5, "unknown templateId", _login(templateId="passkey"), False),
     (5, "newer templateVersion", _login(templateVersion=2), False),
     (6, "templateVersion 0", _login(templateVersion=0), False),
+    (6, "match on a text field", _with_field({**_user_field("text", "x"), "match": "domain"}), False),
+    (6, "match other than domain", _with_field({"type": "url", "role": "url", "value": "https://example.com",
+                                                "match": "host"}), False),
     (6, "missing title", _login(title=None), False),
     (6, "empty title", _login(title=""), False),
     (6, "title with a trailing space", _login(title="Example "), False),

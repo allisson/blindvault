@@ -48,6 +48,8 @@ export interface Field {
   readonly value: string | TotpValue | AttachmentValue;
   readonly role?: string;
   readonly label?: string;
+  /** Only on a `url` field: fill matches the page's whole registrable domain (D283). */
+  readonly match?: 'domain';
 }
 
 export interface Item {
@@ -84,7 +86,7 @@ const ITEM_KEYS = new Set([
   'folderId',
   'trashOperationId',
 ]);
-const FIELD_KEYS = new Set(['type', 'value', 'role', 'label']);
+const FIELD_KEYS = new Set(['type', 'value', 'role', 'label', 'match']);
 const TOTP_KEYS = new Set(['secret', 'algorithm', 'digits', 'period', 'issuer', 'accountName']);
 const ATTACHMENT_KEYS = new Set(['name', 'size', 'mediaType', 'blobId', 'key']);
 export const ATTACHMENT_NAME_MAX = 255;
@@ -294,6 +296,7 @@ function readFields(raw: CborValue | undefined, t: Template): Field[] {
       roles.add(r);
     }
     if (map.has('label')) require(isBoundedLine(label, LABEL_MAX));
+    if (map.has('match')) require(type === 'url' && map.get('match') === 'domain');
     // An attachment is shown by its name when it has no label (D278).
     require(map.has('role') || map.has('label') || type === 'attachment');
     require(map.has('value'));
@@ -303,6 +306,7 @@ function readFields(raw: CborValue | undefined, t: Template): Field[] {
       value,
       ...(typeof r === 'string' ? { role: r } : {}),
       ...(typeof label === 'string' ? { label } : {}),
+      ...(map.has('match') ? { match: 'domain' as const } : {}),
     };
   });
 }
@@ -405,6 +409,7 @@ export function itemToCbor(item: Item, deleted: boolean): CborMap {
     ]);
     if (f.role !== undefined) map.set('role', f.role);
     if (f.label !== undefined) map.set('label', f.label);
+    if (f.match !== undefined) map.set('match', f.match);
     return map;
   });
   const map: CborMap = new Map<CborValue, CborValue>([

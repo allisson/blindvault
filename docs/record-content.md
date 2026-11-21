@@ -240,7 +240,7 @@ Every case is the CBOR of one content map with its expected result:
 
 | Section | Cases | Expected |
 | --- | --- | --- |
-| `items` | each template, every field type, length limits counted in code points (astral characters), and one case per violation, tagged with its section 2 rule; `attachment` with and without `label`, at `size` 1 and 10,485,760, and refused at `size` 0 and 10,485,761, with a 31-byte `blobId`, an extra key, a `role`, a line break in `name` and a `mediaType` outside U+0021 to U+007E | `valid`, or `read-only` with `rule` |
+| `items` | each template, every field type, length limits counted in code points (astral characters), and one case per violation, tagged with its section 2 rule; `attachment` with and without `label`, at `size` 1 and 10,485,760, and refused at `size` 0 and 10,485,761, with a 31-byte `blobId`, an extra key, a `role`, a line break in `name` and a `mediaType` outside U+0021 to U+007E; `url` with `match: "domain"`, and `match` refused on another type or with another value | `valid`, or `read-only` with `rule` |
 | `itemVersions` | `{item, itemId}` of a live and a trashed state, and of a newer template | `valid` or `read-only` |
 | `folders`, `devices` | valid records, unknown keys to keep (`unknownKeys`), invalid known values | `valid` or `invalid` |
 | `localConfig` | cleartext part, with and without PRF state and `replacesVaultId` | `valid`, `corrupt` or `unsupported-version` |

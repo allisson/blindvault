@@ -66,6 +66,8 @@ export {
   readItem,
   seedPhraseChecksumValid,
 } from './item';
+export { fieldUrl, fillablePage, itemMatches } from './match';
+export { isPublicSuffix, registrableDomain } from './psl/psl';
 export {
   DISPLAY_NAME_MAX,
   type Device,
