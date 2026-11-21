@@ -87,9 +87,10 @@ The extension's capabilities (`extension.md` §10, §12, D287), on its Chromium 
 | User name alone, two-step sign-in | auto (page) | auto (page); by hand 1.0.0-rc.2 |
 | Never fills a cross-origin iframe | auto (test copy) | auto (page) |
 | Changed build stopped until confirmed (§8.2) | auto | not checked |
-| Passkey create and get, each confirmed in the window (§7) | auto (test copy) | not checked |
+| Passkey create and get, each confirmed in the window (§7) | auto (test copy) | by hand 1.0.0-rc.2, passkeys |
 | Passkey from a cross-origin frame names the top origin; Cancel, a second request, a lock | auto (test copy) | not checked |
-| Passkeys on `webauthn.io`, the switch of Settings › Passkeys | not checked | not checked |
+| Passkeys on `webauthn.io`, the switch of Settings › Passkeys | by hand 1.0.0-rc.2, passkeys (test copy) | by hand 1.0.0-rc.2, passkeys |
+| "Use another authenticator" hands the call to the browser | not checked | not checked |
 
 Edge and Brave install the Chrome package from the Chrome Web Store: not checked (`extension.md` §10).
 
@@ -108,6 +109,15 @@ What each source covers:
   page served from `http://localhost`. `action.openPopup()` opened the popup after the session
   host's answer. The run found the popup opening scrolled past its header and with a horizontal
   scrollbar, fixed in `d9da4ba`.
+- **by hand 1.0.0-rc.2, passkeys.** On macOS 26.6.2 (MacBook Air M1), on 2026-11-21, at `caf5500`:
+  step 7 below on `https://webauthn.io`, each browser with a random user name. The confirmation
+  window showed `https://webauthn.io` and Confirm saved the passkey; the next window listed it, and
+  Confirm signed in ("You're logged in!"). Firefox 160.0: the Firefox package installed as a
+  temporary add-on in a new profile, the switch of Settings › Passkeys clicked with the system's
+  mouse; Firefox asked for access to all websites, and once granted both content scripts were
+  registered. Chromium 153.0.8010.12 (Playwright's build): the test copy granting `<all_urls>`, so
+  the switch and its prompt were not checked there ("test copy"). "Use another authenticator" was
+  checked in neither: in Firefox it saves a real passkey in the iCloud Keychain.
 
 To check a cell by hand, on a release's package, in each browser:
 
