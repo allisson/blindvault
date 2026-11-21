@@ -42,6 +42,7 @@ Phase 10 — Extension and Android. Update this line when a gate passes.
 
 ```
 apps/web/            PWA, UI (mobile/tablet/desktop layouts), service worker, onboarding (no direct crypto)
+apps/extension/      browser extension: manifests, its service worker, the package around apps/web's build
 packages/crypto/     libsodium wrappers, key hierarchy, AEAD, AAD serialization, copied Noise state machine
 packages/vault/      domain model: items, fields, templates, versions, tombstones
 packages/storage/    IndexedDB schema, encrypted record persistence, migrations
@@ -68,6 +69,7 @@ Node `26.13.0` LTS (`.nvmrc`) and pnpm `10.33.0` (`packageManager`, through core
 pnpm install --frozen-lockfile            # install
 pnpm --filter @blindvault/web dev         # dev server
 pnpm --filter @blindvault/web build       # production build
+pnpm --filter @blindvault/extension build # extension packages (apps/extension/dist)
 pnpm lint                                 # ESLint (strictTypeChecked + package boundaries)
 pnpm typecheck                            # tsc -b over every project
 pnpm format:check                         # Prettier (pnpm format to fix)

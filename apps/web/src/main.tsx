@@ -11,6 +11,7 @@ import { browserPasskeys } from './app/passkey';
 import { loadStunSettings } from './app/stun-settings';
 import { preloadStrength } from './app/strength';
 import { UpdateMonitor } from './app/updates';
+import { VersionLock, vaultExists } from './app/version-lock';
 import { LanguageProvider } from './i18n/context';
 import { platform } from './platform';
 import { Framed } from './ui/Framed';
@@ -72,11 +73,29 @@ function start(root: HTMLElement): void {
   });
 
   // Before the first render, so the monitor watches the update flow as early as it can (D191).
-  platform.startUpdates(monitor);
+  platform.startUpdates(monitor, {
+    idle: () => controller.status.kind !== 'unlocked' && controller.updateAllowed,
+    subscribe: controller.subscribe,
+  });
+
+  // The extension's version lock reads the build this window loaded (extension.md §8.2). The mode
+  // is replaced at build time, so the web build carries none of it.
+  const versionLock =
+    import.meta.env.MODE === 'extension'
+      ? new VersionLock({
+          storage: localStorage,
+          running: async () => {
+            const hash = await manifestHash();
+            return hash === undefined ? undefined : { version: __APP_VERSION__, hash };
+          },
+          vaultExists: () => vaultExists(controller),
+        })
+      : undefined;
+  void versionLock?.start();
 
   createRoot(root).render(
     <StrictMode>
-      <App controller={controller} monitor={monitor} />
+      <App controller={controller} monitor={monitor} versionLock={versionLock} />
     </StrictMode>,
   );
 }

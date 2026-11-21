@@ -8,6 +8,7 @@ export default defineConfig(
     ignores: [
       '**/node_modules/',
       '**/dist/',
+      '**/dist-extension/',
       '**/coverage/',
       '**/.tsbuild/',
       '**/playwright-report/',
@@ -78,7 +79,7 @@ export default defineConfig(
   },
   {
     // CRYPTO-INV-005: the app and the packages write no log, so no key or secret can reach one.
-    files: ['apps/web/src/**', 'packages/*/src/**'],
+    files: ['apps/web/src/**', 'apps/extension/src/**', 'packages/*/src/**'],
     ignores: ['**/*.test.ts', '**/*.test.tsx', '**/test-helpers.ts'],
     rules: { 'no-console': 'error' },
   },

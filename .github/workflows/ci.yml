@@ -57,12 +57,14 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/web build
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/extension build
       - name: Second build, in another environment
         working-directory: second/elsewhere
         run: |
           umask 0077
           pnpm install --frozen-lockfile
           SOURCE_DATE_EPOCH=1 TZ=Pacific/Kiritimati LANG=C LC_ALL=C pnpm --filter @blindvault/web build
+          SOURCE_DATE_EPOCH=1 TZ=Pacific/Kiritimati LANG=C LC_ALL=C pnpm --filter @blindvault/extension build
       - name: Compare the asset manifests
         run: |
           diff first/apps/web/dist/asset-manifest.txt second/elsewhere/apps/web/dist/asset-manifest.txt
@@ -77,6 +79,15 @@ jobs:
             cat first/apps/web/dist/asset-manifest.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare the extension packages
+        # Each archive byte for byte, and its asset manifest against its files (extension.md §2, D285).
+        run: |
+          for browser in chrome firefox; do
+            cmp first/apps/extension/dist/blindvault-$browser-*.zip second/elsewhere/apps/extension/dist/blindvault-$browser-*.zip
+            (cd first/apps/extension/dist/$browser && sha256sum -c --quiet asset-manifest.txt)
+            hash=$(sha256sum first/apps/extension/dist/$browser/asset-manifest.txt | cut -d' ' -f1)
+            echo "Extension ($browser) asset manifest sha256: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
+          done
 
   self-hosting:
     # The configurations of deploy/ served by nginx and Caddy in Docker, images pinned by digest in
@@ -128,6 +139,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - if: matrix.shard == 1
         run: pnpm --filter @blindvault/sync test:e2e
+      # The unpacked extension in Chromium, built first (apps/extension).
+      - if: matrix.shard == 1
+        run: pnpm --filter @blindvault/extension test:e2e
       - run: pnpm --filter @blindvault/web test:e2e --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
@@ -135,5 +149,6 @@ jobs:
           name: playwright-report-${{ matrix.shard }}
           path: |
             apps/web/playwright-report/
+            apps/extension/playwright-report/
             packages/sync/playwright-report/
           retention-days: 7

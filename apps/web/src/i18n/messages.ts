@@ -27,6 +27,18 @@ const en = {
       'Verify a release outside the app: compare this hash with the one published in the release, then check the served files against its manifest with',
     releases: 'Releases on GitHub',
   },
+  versionLock: {
+    title: 'The extension changed',
+    intro:
+      'This is not the version you last confirmed. No vault opens until you confirm the one that runs now.',
+    previous: 'Last confirmed',
+    running: 'Running now',
+    unknown: 'Unknown: nothing is recorded on this installation.',
+    verify:
+      'Compare this hash with the one published in the release. A changed version can skip this screen, so it shows what changed and protects nothing.',
+    release: 'This version’s release on GitHub',
+    confirm: 'Confirm this version',
+  },
   update: {
     available: 'An update is available: version {current} → {next}.',
     hash: 'SHA-256 of its asset manifest:',
@@ -101,6 +113,8 @@ const en = {
       'This extension is a separate device of your vault, with its own copy, apart from the BlindVault app.',
     extensionPair: 'Pair it with the BlindVault app or another device of your vault.',
     extensionSync: 'It sees items added on your other devices only after a sync.',
+    extensionVersionLock:
+      'Each update of the extension shows its version and the hash of its files, and opens no vault until you confirm them.',
     create: 'Create a new vault',
     pair: 'Pair with an existing device',
     restore: 'Restore from a backup',
@@ -1224,6 +1238,18 @@ const ptBR: Messages = {
       'Verifique uma versão fora do app: compare este hash com o publicado na versão e confira os arquivos servidos contra o manifesto dela com',
     releases: 'Versões no GitHub',
   },
+  versionLock: {
+    title: 'A extensão mudou',
+    intro:
+      'Esta não é a versão que você confirmou por último. Nenhum cofre abre até você confirmar a que roda agora.',
+    previous: 'Última confirmada',
+    running: 'Rodando agora',
+    unknown: 'Desconhecida: nada está registrado nesta instalação.',
+    verify:
+      'Compare este hash com o publicado no release. Uma versão alterada pode pular esta tela, então ela mostra o que mudou e não protege nada.',
+    release: 'O release desta versão no GitHub',
+    confirm: 'Confirmar esta versão',
+  },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',
     hash: 'SHA-256 do manifesto de assets:',
@@ -1301,6 +1327,8 @@ const ptBR: Messages = {
     extensionPair: 'Pareie-a com o app BlindVault ou outro dispositivo do seu cofre.',
     extensionSync:
       'Ela só vê itens criados nos seus outros dispositivos depois de uma sincronização.',
+    extensionVersionLock:
+      'Cada atualização da extensão mostra a versão e o hash dos seus arquivos, e nenhum cofre abre até você confirmá-los.',
     create: 'Criar um cofre novo',
     pair: 'Parear com um dispositivo existente',
     restore: 'Restaurar de um backup',
