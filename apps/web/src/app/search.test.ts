@@ -117,3 +117,62 @@ describe('search in memory (D132)', () => {
     expect(normalizeForSearch('Ｃafé ÅNGSTRÖM')).toBe('cafe angstrom');
   });
 });
+
+describe('search over a passkey (D288, CRYPTO-INV-027)', () => {
+  // An Ed25519 key in the RFC 8410 layout, and a userHandle, both with recognizable bytes.
+  const privateKey = Uint8Array.from([
+    ...[
+      0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04,
+      0x20,
+    ],
+    ...new Uint8Array(32).fill(0xc7),
+  ]);
+  const userHandle = new Uint8Array(16).fill(0xab);
+  const site: Item = {
+    templateId: 'login',
+    templateVersion: 1,
+    title: 'Lantern Mail',
+    fields: [
+      {
+        type: 'passkey',
+        value: {
+          privateKey,
+          credentialId: new Uint8Array(16).fill(0x5e),
+          rpId: 'mail.lantern.example',
+          userHandle,
+          userName: 'rui.costa',
+          createdAt: 1_790_000_000_000,
+        },
+      },
+    ],
+    tags: [],
+  };
+  const index = new SearchIndex();
+  index.build({ folder: null, folders: [], items: [entry(20, site)] });
+
+  it.each([
+    ['its rpId', 'lantern.example'],
+    ['its user name', 'rui.costa'],
+  ])('finds %s', (_name, query) => {
+    expect(ids(index, query)).toEqual([20]);
+  });
+
+  const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+
+  it.each([
+    ['the private key in hex', hex(privateKey)],
+    ['part of the private key in hex', 'c7c7c7c7'],
+    ['the private key in base64', b64(privateKey)],
+    ['the userHandle in hex', hex(userHandle)],
+    ['the userHandle in base64', b64(userHandle)],
+    ['the credentialId in hex', '5e5e5e5e'],
+  ])('never matches %s', (_name, query) => {
+    expect(ids(index, query)).toEqual([]);
+  });
+
+  it('holds neither the private key nor the userHandle in its text', () => {
+    const [text = ''] = index.text();
+    expect(text).toBe('lantern mail\nmail.lantern.example\nrui.costa');
+  });
+});

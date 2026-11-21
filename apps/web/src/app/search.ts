@@ -1,7 +1,8 @@
 // Search over decrypted state in memory only (D132). The index reads titles, tags, folder names,
 // notes and the values of non-secret fields; it never reads `secret`, TOTP or seed-phrase values,
-// so it holds no secret and a search cannot confirm a guessed password. Nothing of it is persisted,
-// and the shell clears it on lock.
+// so it holds no secret and a search cannot confirm a guessed password. Of a passkey it reads the
+// `rpId` and the user name, never the private key or `userHandle` (D288). Nothing of it is
+// persisted, and the shell clears it on lock.
 
 import { type FieldType, type FolderTree } from '@blindvault/vault';
 
@@ -36,6 +37,10 @@ export class SearchIndex {
           if (t.item.notes !== undefined) parts.push(t.item.notes);
           for (const f of t.item.fields) {
             if (!NEVER_READ.has(f.type) && typeof f.value === 'string') parts.push(f.value);
+            if (typeof f.value !== 'string' && 'privateKey' in f.value) {
+              parts.push(f.value.rpId);
+              if (f.value.userName !== undefined) parts.push(f.value.userName);
+            }
           }
         }
         entries.push({ id: t.id, text: normalizeForSearch(parts.join('\n')) });

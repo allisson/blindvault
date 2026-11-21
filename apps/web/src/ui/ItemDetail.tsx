@@ -4,6 +4,7 @@ import {
   ContentInvalidError,
   type Field,
   type Item,
+  type PasskeyValue,
   type VaultSession,
   seedPhraseChecksumValid,
 } from '@blindvault/vault';
@@ -30,8 +31,14 @@ export function fieldName(m: Messages, item: Pick<Item, 'templateId'>, field: Fi
     field.label ??
     (field.role !== undefined ? roleName(m, item.templateId, field.role) : undefined) ??
     field.role ??
-    // An attachment without a label is shown by its name (D278).
-    (typeof field.value !== 'string' && 'blobId' in field.value ? field.value.name : '')
+    // An attachment without a label is shown by its name (D278), a passkey by its type (D288).
+    (typeof field.value === 'string'
+      ? ''
+      : 'blobId' in field.value
+        ? field.value.name
+        : 'privateKey' in field.value
+          ? m.fieldTypes.passkey
+          : '')
   );
 }
 
@@ -124,6 +131,31 @@ function AttachmentView({
   );
 }
 
+/** When a passkey was created, `undefined` beyond the dates the browser can show. */
+export function passkeyDate(language: string, value: PasskeyValue): string | undefined {
+  const date = new Date(Number(value.createdAt));
+  if (Number.isNaN(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date);
+}
+
+/**
+ * A passkey (extension.md §7.6, D288): its site, user name and creation date. Never its private key
+ * or `userHandle`, and no copy of them.
+ */
+function PasskeyView({ value }: { readonly value: PasskeyValue }) {
+  const { messages: m, language } = useLanguage();
+  const date = passkeyDate(language, value);
+  return (
+    <span className="flex flex-col gap-1" data-testid="passkey">
+      <span className="break-words">{value.rpId}</span>
+      {value.userName !== undefined ? <span className="break-words">{value.userName}</span> : null}
+      {date !== undefined ? (
+        <span className="text-sm text-muted">{format(m.items.passkeyCreated, { date })}</span>
+      ) : null}
+    </span>
+  );
+}
+
 export function FieldValue({
   field,
   name,
@@ -144,8 +176,7 @@ export function FieldValue({
   if (typeof value !== 'string' && 'blobId' in value) {
     return <AttachmentView value={value} name={name} session={session} blobWrites={blobWrites} />;
   }
-  // Shown in the next change (extension.md §7.6); never its private key or userHandle.
-  if (typeof value !== 'string' && 'privateKey' in value) return null;
+  if (typeof value !== 'string' && 'privateKey' in value) return <PasskeyView value={value} />;
   if (typeof value !== 'string') {
     return <TotpView value={value} name={name} clearSeconds={clearSeconds} />;
   }
