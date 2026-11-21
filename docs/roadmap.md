@@ -522,7 +522,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 
 ### Tasks
 
-- [ ] Spike (D272, D281): WebAuthn interception from the MAIN world up to a signature a site accepts (Chrome, Firefox), the session host's lifetime (offscreen document, Firefox's event page), WebAuthn PRF from an extension origin, libsodium WASM under the MV3 CSP, the unmodified `apps/web` build in the extension and in an Android WebView, WebRTC, storage and the clipboard in both, the Keystore with BiometricPrompt; results recorded as decisions
+- [x] Spike (D272, D281): WebAuthn interception from the MAIN world up to a signature a site accepts (Chrome, Firefox), the session host's lifetime (offscreen document, Firefox's event page), WebAuthn PRF from an extension origin, libsodium WASM under the MV3 CSP, the unmodified `apps/web` build in the extension and in an Android WebView, WebRTC, storage and the clipboard in both, the Keystore with BiometricPrompt; results recorded as decisions
 - [ ] `docs/extension.md`, then the extension (Chromium, Firefox) with password autofill and the version lock (D267, D270)
 - [ ] Stored passkeys in the extension: `passkey` field type, ES256 and EdDSA, flags, history notice (D268)
 - [ ] `docs/android.md`, then the Android app: WebView shell, Keystore KEK, pairing and sync, reproducible APK off the Play Store, `io.github.allisson.blindvault` registered for Google's developer verification (D269, D270, D271, D274)

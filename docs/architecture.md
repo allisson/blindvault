@@ -992,9 +992,12 @@ phase adds them here with a justification; the spike measures the QR pair the pr
 (`docs/spikes/README.md`). Phase 4 added `qrcode-generator` and `zxing-wasm`, not `barcode-detector`
 (D208).
 
-### Phase 10 spike (`spikes/`, throwaway, D281)
+### Phase 10 spike (`spikes/`, throwaway, D281, deleted)
 
-The spike workspace comes back for the Phase 10 spike and is deleted after its last result, as
+The spike workspace was deleted after its results were recorded (D282; last version at commit
+`5551ffd`). What follows records how it was built.
+
+The spike workspace came back for the Phase 10 spike and was deleted after its last result, as
 after Phase 0. Its dependencies are of the throwaway workspace only, outside lint and CI, each
 pinned to an exact version at least 14 days old when the spike code lands, Maven artifacts checked
 by hand against the same rule:
