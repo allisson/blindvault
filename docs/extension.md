@@ -74,9 +74,11 @@ SHA-256, `manifest.json` included and the manifest itself excluded (D285).
 - `vite build --mode extension` writes `apps/web/dist-extension`: no `public/` (its `sw.js`,
   `404.html` and web manifest are the web's), no `_headers`, the page without its links to the web
   manifest and the Apple icon, and the three icons the extension uses.
-- `vite build --mode extension` has two entries, `index.html` (the session host) and `popup.html`.
-- `apps/extension/build/package.ts` adds the browser's `manifest.json`, `background.js` and, on
-  Chrome, `offscreen.html` and `offscreen.js` (§6.3), writes the package's `asset-manifest.txt`
+- `vite build --mode extension` has three entries, `index.html` (the session host), `popup.html`
+  and `confirm.html`.
+- `apps/extension/build/package.ts` adds the browser's `manifest.json`, `background.js`, the
+  content scripts `passkey-main.js` and `passkey-isolated.js` (§7.1) and, on Chrome, `offscreen.html`
+  and `offscreen.js` (§6.3), writes the package's `asset-manifest.txt`
   with the web build's format and code, and prints its hash per browser. It writes
   `dist/<browser>/`, to load unpacked, and `dist/blindvault-<browser>-<version>.zip`.
 - The archive is written by `apps/extension/build/zip.ts`: files only, in byte order of their UTF-8
@@ -288,7 +290,9 @@ session host's views when the switch is off: they are fields of items.
   `runtime.sendMessage`.
 - The service worker takes the origin, `frameId` and top frame's origin only from `MessageSender`
   (`sender.origin`, `sender.frameId`, `sender.tab.url`), never from the message, and forwards the
-  request to the session host. A message whose sender has no tab is dropped.
+  request to the session host. Where the browser gives no `sender.origin`, the origin of
+  `sender.url`, also the browser's, stands for it; a frame of an opaque origin then reports `null`,
+  which the session host hands to the browser. A message whose sender has no tab is dropped.
 - The session host checks, in order, and hands the call back to the browser on the first failure:
   1. the origin is `https:`, or `http://localhost`;
   2. `rpId` (absent: the origin's host) equals the origin's host, or is a registrable suffix of it
@@ -298,8 +302,10 @@ session host's views when the switch is off: they are fields of items.
 - Handing back means the isolated script tells the MAIN-world script to call the original with the
   page's options. The spike saw Firefox refuse a hand-back under automation when the confirmation
   window had taken the focus (`docs/spikes/extension.md` §3); the implementation tests it by hand.
-- The answer travels back the same way. The MAIN-world script builds the `PublicKeyCredential` the
-  page receives, as the spike measured: `instanceof PublicKeyCredential` true,
+- The answer travels back the same way. A call whose answer never comes (the session host closed)
+  ends with `NotAllowedError` 5 s after its bounded timeout (§7.4); the page's `signal` aborts the
+  call with its reason, and a later answer is ignored. The MAIN-world script builds the
+  `PublicKeyCredential` the page receives, as the spike measured: `instanceof PublicKeyCredential` true,
   `getClientExtensionResults()` with `credProps.rk: true` on create, `toJSON()` complete.
 - The credential reports `authenticatorAttachment: "platform"`, and on create `getTransports()`
   answers `["internal", "hybrid"]`. Of the extensions the page asks for, only `credProps` is
@@ -527,6 +533,9 @@ passkeys (D287):
   Chromium tests of filling load a test copy of the package whose manifest grants the test sites as
   host permissions, and send the popup's and the service worker's messages from those pages; the
   released package has no host permission.
+- Nor can it answer the permission prompt of Settings › Passkeys. The Chromium tests of passkeys
+  (`apps/extension/e2e/passkey.spec.ts`) load a test copy granting `<all_urls>`, so the session host
+  registers the content scripts at start (§7.1), and click the confirmation window.
 
 Negative tests, each named in `security-invariants.md` (CRYPTO-INV-026 for filling):
 

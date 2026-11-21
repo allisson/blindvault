@@ -64,9 +64,15 @@ describe('versionOf', () => {
   });
 });
 
-describe('SOURCES (extension.md §6.3)', () => {
-  it('gives Chrome the offscreen document that clears the clipboard, and Firefox none', () => {
-    expect(SOURCES.chrome).toEqual(['background.js', 'offscreen.html', 'offscreen.js']);
-    expect(SOURCES.firefox).toEqual(['background.js']);
+describe('SOURCES (extension.md §6.3, §7.1)', () => {
+  it('gives both the passkey content scripts, Chrome the offscreen document, and Firefox none', () => {
+    expect(SOURCES.chrome).toEqual([
+      'background.js',
+      'passkey-main.js',
+      'passkey-isolated.js',
+      'offscreen.html',
+      'offscreen.js',
+    ]);
+    expect(SOURCES.firefox).toEqual(['background.js', 'passkey-main.js', 'passkey-isolated.js']);
   });
 });
