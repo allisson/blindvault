@@ -24,7 +24,15 @@ describe('manifestFor (extension.md §2)', () => {
       version: '1.0.0',
       version_name: '1.0.0-rc.2',
       minimum_chrome_version: '127',
-      permissions: ['activeTab', 'scripting', 'idle', 'offscreen', 'unlimitedStorage'],
+      permissions: [
+        'activeTab',
+        'scripting',
+        'idle',
+        'clipboardWrite',
+        'offscreen',
+        'unlimitedStorage',
+      ],
+      action: { default_popup: 'popup.html' },
       optional_host_permissions: ['<all_urls>'],
       background: { service_worker: 'background.js', type: 'module' },
     });
@@ -40,7 +48,8 @@ describe('manifestFor (extension.md §2)', () => {
     const m = manifestFor('firefox', '1.0.0-rc.2');
     expect(m).toMatchObject({
       version: '1.0.0',
-      permissions: ['activeTab', 'scripting', 'idle'],
+      permissions: ['activeTab', 'scripting', 'idle', 'clipboardWrite'],
+      action: { default_popup: 'popup.html' },
       optional_host_permissions: ['<all_urls>'],
       background: { scripts: ['background.js'], type: 'module' },
       browser_specific_settings: {

@@ -39,6 +39,18 @@ const en = {
     release: 'This version’s release on GitHub',
     confirm: 'Confirm this version',
   },
+  popup: {
+    locked: 'BlindVault is locked.',
+    open: 'Open BlindVault',
+    search: 'Search logins',
+    none: 'No login found.',
+    copyUsername: 'Copy user name',
+    copyPassword: 'Copy password',
+    copyCode: 'Copy code',
+    copied:
+      'Copied. BlindVault tries to clear the clipboard in {seconds} s; clearing is not guaranteed.',
+    failed: 'BlindVault did not answer. Open it and try again.',
+  },
   update: {
     available: 'An update is available: version {current} → {next}.',
     hash: 'SHA-256 of its asset manifest:',
@@ -1249,6 +1261,18 @@ const ptBR: Messages = {
       'Compare este hash com o publicado no release. Uma versão alterada pode pular esta tela, então ela mostra o que mudou e não protege nada.',
     release: 'O release desta versão no GitHub',
     confirm: 'Confirmar esta versão',
+  },
+  popup: {
+    locked: 'O BlindVault está bloqueado.',
+    open: 'Abrir o BlindVault',
+    search: 'Buscar logins',
+    none: 'Nenhum login encontrado.',
+    copyUsername: 'Copiar nome de usuário',
+    copyPassword: 'Copiar senha',
+    copyCode: 'Copiar código',
+    copied:
+      'Copiado. O BlindVault tenta limpar a área de transferência em {seconds} s; a limpeza não é garantida.',
+    failed: 'O BlindVault não respondeu. Abra-o e tente de novo.',
   },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',

@@ -40,7 +40,7 @@ export function manifestFor(browser: Browser, version: string): Record<string, u
     version: numbers,
     description: 'A local-first, end-to-end encrypted personal vault.',
     icons,
-    action: { default_title: 'BlindVault', default_icon: icons },
+    action: { default_title: 'BlindVault', default_icon: icons, default_popup: 'popup.html' },
     optional_host_permissions: ['<all_urls>'],
     content_security_policy: { extension_pages: EXTENSION_CSP },
     commands: {
@@ -55,14 +55,22 @@ export function manifestFor(browser: Browser, version: string): Record<string, u
       ...common,
       ...(numbers === version ? {} : { version_name: version }),
       minimum_chrome_version: MINIMUM_CHROME,
-      // unlimitedStorage: Chrome refuses persist() to an extension (D282).
-      permissions: ['activeTab', 'scripting', 'idle', 'offscreen', 'unlimitedStorage'],
+      // unlimitedStorage: Chrome refuses persist() to an extension (D282). clipboardWrite: the
+      // clipboard's clear without the focus (D286).
+      permissions: [
+        'activeTab',
+        'scripting',
+        'idle',
+        'clipboardWrite',
+        'offscreen',
+        'unlimitedStorage',
+      ],
       background: { service_worker: 'background.js', type: 'module' },
     };
   }
   return {
     ...common,
-    permissions: ['activeTab', 'scripting', 'idle'],
+    permissions: ['activeTab', 'scripting', 'idle', 'clipboardWrite'],
     background: { scripts: ['background.js'], type: 'module' },
     browser_specific_settings: {
       gecko: {
