@@ -1,7 +1,7 @@
 # BlindVault — Browser extension
 
 > Normative for the browser extension; `overview.md` prevails on design. Implements D267, D268,
-> D270, D282, D283, D284, D285, D286, D287 and D288. Measurements behind it are in `docs/spikes/extension.md`.
+> D270, D282, D283, D284, D285, D286, D287, D288 and D289. Measurements behind it are in `docs/spikes/extension.md`.
 > Terms follow `GLOSSARY.md` (session host, fill, matching item, passkey, unlock passkey).
 
 ## 1. Model
@@ -141,8 +141,9 @@ timer.
 | service worker | `command-fill` `{tabId}` | `filled`, or `popup`: the service worker opens the popup (§6.2) |
 | session host, to the service worker | `clipboard-clear` | done; carries nothing (§6.3) |
 | session host, to the popup | `locked` | none; the popup closes (§3.2) |
-| service worker | `passkey-create`, `passkey-get` | §7 |
-| confirmation window | `confirm-details`, `confirm-choice` | §7.4 |
+| service worker | `passkey-create`, `passkey-get` | accepted at once; the result follows in `passkey-answer` (§7.7, D289) |
+| session host, to the service worker | `passkey-answer` | none; the service worker hands the result to the page's frame (§7.7) |
+| confirmation window | `confirm-details`, `confirm-choice` | §7.4, §7.7 |
 
 The popup sends `tabId` only; the session host reads the tab's URL itself with `tabs.get`, which the
 `activeTab` grant of the user's gesture allows, and trusts no URL or origin a message carries.
@@ -272,7 +273,9 @@ Settings › Passkeys has a switch, off by default. Turning it on calls `permiss
 ['<all_urls>']})` on the user's click; once granted, the session host registers both content scripts
 with `scripting.registerContentScripts`, at `document_start`, in all frames, the MAIN-world one with
 `world: 'MAIN'`. Turning it off unregisters them and calls `permissions.remove`. The switch shows the
-browser's state (`permissions.contains`); nothing is stored. Stored passkeys keep working in the
+browser's state (`permissions.contains`); nothing is stored. At start, the session host
+registers both scripts again when the permission is held, so a registration lost in an update comes
+back (D289). Stored passkeys keep working in the
 session host's views when the switch is off: they are fields of items.
 
 ### 7.2 Interception
@@ -324,8 +327,8 @@ session host's views when the switch is off: they are fields of items.
 
 ### 7.4 Confirmation window
 
-Every create and get opens `confirm.html` with `windows.create({type: 'popup'})`, of the extension's
-origin, so the page can neither cover nor click it. It asks the session host for the request's
+Every create and get opens `confirm.html#<token>` with `windows.create({type: 'popup'})`, of the
+extension's origin, so the page can neither cover nor click it. It asks the session host for the request's
 details (`confirm-details`) and shows:
 
 - the origin, and the top frame's origin when they differ;
@@ -347,8 +350,9 @@ The click on Confirm is the user presence (UP). UV is reported because the vault
 
 | Case | Answer |
 | --- | --- |
-| Vault locked, or no session host | the window says BlindVault is locked and offers "Open and unlock" (focuses or creates the session host, then shows the request) or "Use another authenticator"; the page's call waits until its `timeout` |
-| `timeout` elapses, or the window closes | `NotAllowedError` |
+| Vault locked, or no session host | with no session host, the service worker creates it, pinned and in the background, and forwards the request; the window says BlindVault is locked and offers "Open and unlock" (focuses the session host; once the vault unlocks, the window opens again with the request) or "Use another authenticator"; the page's call waits until its `timeout` (D289) |
+| A second request while one is pending, from any tab | `NotAllowedError` at once, with no window (D289) |
+| `timeout` elapses (the page's, bounded to 30 s to 600 s; 300 s without one), or the window closes | `NotAllowedError`; the window closes |
 | get with no passkey for the `rpId` | the window says so and offers another authenticator |
 | create on a read-only vault (D73) | handed to the browser at once, with no window |
 | create whose `excludeCredentials` lists a held `credentialId` | the window shows the request as usual; after Confirm, `InvalidStateError`, so a page learns it only from the user's click |
@@ -375,6 +379,67 @@ On every platform, the PWA included (D288):
   are created only by a site, through the extension;
 - search reads `rpId` and `userName`, never `privateKey` or `userHandle` (D132);
 - an app older than the `passkey` field type shows the item read-only (D52).
+
+### 7.7 Messages (D289)
+
+The keys of each message, beside `v`, `type` and `id` (§4). Bytes travel as base64url without
+padding. Every key is checked by type and range on receipt, and an unknown key is refused.
+
+**Request.** The MAIN-world script draws `request`, 32 lowercase hexadecimal digits, and copies from
+the page's `publicKey` options only the keys below, so a key WebAuthn adds later breaks no site:
+
+| Call | `options` |
+| --- | --- |
+| create | `rp` `{id?, name}`, `user` `{id, name, displayName}`, `challenge`, `pubKeyCredParams` `[{type, alg}]`, `timeout?`, `excludeCredentials?` `[{type, id}]`, `authenticatorSelection?` `{authenticatorAttachment?}`, `extensions?` `{credProps?}` |
+| get | `challenge`, `rpId?`, `timeout?`, `allowCredentials?` `[{type, id}]` |
+
+Bounds: `challenge` 16 to 1,024 bytes; `user.id` 1 to 64 bytes; each credential `id` 1 to 1,023
+bytes, at most 64 per list, as for `pubKeyCredParams`; `rp.name`, `user.name` and
+`user.displayName` at most 255 code points, without a line break; `rpId` and `rp.id` at most 253
+characters; `timeout` a non-negative integer. A request that fails a check goes to the browser,
+which gives the page its own error.
+
+**Route.**
+
+1. The isolated script sends `passkey-create` or `passkey-get` `{request, options}` to the service
+   worker.
+2. The service worker drops it when its sender has no tab, and otherwise forwards it to the session
+   host as `{request, options, tabId, frameId, origin, topOrigin}`, every value but `request` and
+   `options` taken from `MessageSender` (§7.2). With no session host it creates one (§7.4) and
+   forwards the request once the page listens.
+3. The session host answers at once `{ok: true}`, and the service worker answers the isolated
+   script the same. Any other answer, or none, hands the call to the browser.
+4. When the request ends, the session host sends `passkey-answer` `{tabId, frameId, request,
+   result}` to the service worker, which hands `{request, result}` to that frame with
+   `tabs.sendMessage(tabId, …, {frameId})`. The isolated script takes it only from the extension
+   and passes it to the MAIN-world script that drew `request`.
+
+**Result.**
+
+| `result.kind` | Keys | Page |
+| --- | --- | --- |
+| `browser` | — | the original `create` or `get` with the page's options |
+| `error` | `name`: `NotAllowedError` or `InvalidStateError` | a `DOMException` of that name |
+| `created` | `id`, `clientDataJSON`, `attestationObject`, `authenticatorData`, `publicKey`, `publicKeyAlgorithm` | a `PublicKeyCredential` (§7.2) |
+| `asserted` | `id`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle` | a `PublicKeyCredential` (§7.2) |
+
+**Window.** The session host draws `token`, 32 lowercase hexadecimal digits, per request, and opens
+`confirm.html#<token>`. The window sends:
+
+- `confirm-details` `{token}`, answered with `state`:
+  - `locked`;
+  - `get`: `origin`, `topOrigin` when it differs, `rpId` and `passkeys` `[{credentialId, title,
+    userName?}]`, each `credentialId` (hexadecimal) once (§7.4);
+  - `create`: `origin`, `topOrigin` when it differs, `rpId`, `rpName`, `userName`, `displayName`,
+    `items` `[{itemId, title, username?}]`, the matching Login items (§5), and `replaces`, whether
+    Confirm replaces a held passkey of the `rpId` and `userHandle`.
+- `confirm-choice` `{token, choice}`, with `choice` `use` and `credentialId` (get), `save` and
+  `itemId` (create into that item), `save-new` (create into a new item), `browser` or `cancel`.
+
+A token other than the pending request's is answered `not-found`. The session host closes the
+window when the request ends, on a lock (§3.2), and on unlock, to open it again with the request.
+"Open and unlock" sends `open-host` (§4). The window closed by the user ends the request with
+`NotAllowedError`.
 
 ## 8. Updates and the version lock (D270, D285)
 
