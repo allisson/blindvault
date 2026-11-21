@@ -4,7 +4,8 @@
 > Implements overview §6 and D165, and completes `crypto-spec.md` §9.3 and §12, which fix the
 > envelope, padding, caps and encryption around this content. Record format version 1: changing
 > anything here is a record format change (D32), except a new field type, which an older app reads
-> as content from a newer version (section 2) under the same version, as `attachment` does (D278).
+> as content from a newer version (section 2) under the same version, as `attachment` (D278) and
+> `passkey` (D288) do.
 
 ## 1. Conventions
 
@@ -35,7 +36,7 @@ An Item or Item Version holds **content from a newer app version** when any of t
 
 1. its item map has a key not listed in section 3;
 2. a field has a `type` not listed in section 4;
-3. a field map, or a TOTP or attachment value map, has a key not listed for it;
+3. a field map, or a TOTP, attachment or passkey value map, has a key not listed for it;
 4. a field has a `role` that the item's `templateId` and `templateVersion` do not define;
 5. `templateId` is unknown, or `templateVersion` is greater than the one the app knows;
 6. a value fails the validation of its known key or type.
@@ -84,7 +85,8 @@ receipt. A held record that fails it is shown as corrupt and is not written.
 
 - A field with a `role` has that role's field type, and an item holds each role at most once.
 - A field without a `role`, one the user added, MUST have a `label`, except an `attachment` field,
-  whose `label` is optional: the viewer shows its `name` without one (D278).
+  whose `label` is optional: the viewer shows its `name` without one (D278), and a `passkey` field,
+  whose `label` is optional: the viewer shows its `rpId` and user name (D288).
 - A field with a `role` and no `label` is shown with the role's localized name, so a template
   field reads in the viewer's language. A `label` is always the user's own text.
 - An empty value is never stored: a field the user leaves empty, or clears, is not written.
@@ -102,6 +104,7 @@ receipt. A held record that fails it is shown as corrupt and is not written.
 | `totp` | map | below |
 | `seed-phrase` | text | below |
 | `attachment` | map | below; never has a `role` (D278) |
+| `passkey` | map | below; never has a `role` (D288) |
 
 Every text value is at least 1 code point. `email` and `phone` are not checked further, since
 real values vary too much to reject any.
@@ -141,11 +144,35 @@ is in `attachments.md`.
 The map holds exactly these keys. `name` and `mediaType` are set when the file is added
 (`attachments.md` §3) and never edited; replacing the file adds a new attachment.
 
+**Passkey value (D268, D288).** A WebAuthn credential for a site (`extension.md` §7).
+
+| Key | Type | Rule |
+| --- | --- | --- |
+| `privateKey` | bytes | PKCS#8 in one of the two layouts below |
+| `credentialId` | bytes | 1 to 1,023 bytes |
+| `rpId` | text | single-line, 1 to 253 code points |
+| `userHandle` | bytes | 1 to 64 bytes |
+| `userName` | text, optional | single-line, 1 to 255 code points |
+| `createdAt` | timestamp | |
+
+The map holds exactly these keys. The layout of `privateKey` gives the algorithm:
+
+- **ES256** (P-256), 138 bytes:
+  `308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420`, the private scalar `d` (32 bytes, big-endian, 1 to n − 1 where n is the order of P-256),
+  `a144034200` `04`, then the public point's `x` and `y` (32 bytes each). The point is not checked
+  here: a key that does not sign fails when used.
+- **EdDSA** (Ed25519, RFC 8410), 48 bytes: `302e020100300506032b657004220420`, then the 32-byte seed.
+
+A new passkey takes 16 random bytes as `credentialId`; the range admits the credentials of a later
+import (D268). The app writes `userName` from the site's `user.name` with each line break replaced
+by a space and cut to 255 code points, and leaves it out when that is empty.
+
 ## 5. Factory templates (D20, D165)
 
 Templates are definitions in code. A template sets the fields a new item starts with; the item can
-then hold fields beyond them, each of a v1 field type (D124), attachments included: no template
-defines an `attachment` role (D278). Every template is at `templateVersion` 1.
+then hold fields beyond them, each of a v1 field type (D124), attachments and passkeys included: no
+template defines an `attachment` (D278) or `passkey` (D288) role. Every template is at
+`templateVersion` 1.
 
 | `templateId` | Field roles (field type) |
 | --- | --- |
