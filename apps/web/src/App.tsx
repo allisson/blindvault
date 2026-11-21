@@ -8,14 +8,13 @@ import { LockTimers } from './app/lock-timers';
 import { Navigation } from './app/nav';
 import { type UpdateMonitor } from './app/updates';
 import { LanguageProvider } from './i18n/context';
+import { platform } from './platform';
 import { AboutContext } from './ui/about-context';
 import { ChangedWorker } from './ui/ChangedWorker';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Start } from './ui/Start';
 import { UpdatesContext } from './ui/update-context';
 import { VaultShell } from './ui/VaultShell';
-
-const ACTIVITY = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
 export function supported(): boolean {
   return typeof indexedDB !== 'undefined' && typeof navigator.locks !== 'undefined';
@@ -63,25 +62,28 @@ function Root({ controller, monitor }: RootProps) {
       clipboard.lock();
       return;
     }
-    timers.start(preferences, document.visibilityState === 'hidden');
-    const activity = () => {
+    const signals = platform.lockSignals;
+    timers.start(preferences, signals.hidden());
+    const stopActivity = signals.onActivity(() => {
       timers.activity();
-    };
-    const visibility = () => {
-      timers.visibility(document.visibilityState === 'hidden');
-    };
+    });
+    const stopHidden = signals.onHidden((hidden) => {
+      timers.visibility(hidden);
+    });
+    const stopSystemLock = signals.onSystemLock(() => {
+      controller.lock();
+    });
     const shortcut = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
         controller.lock();
       }
     };
-    for (const type of ACTIVITY) window.addEventListener(type, activity, { passive: true });
-    document.addEventListener('visibilitychange', visibility);
     window.addEventListener('keydown', shortcut);
     return () => {
-      for (const type of ACTIVITY) window.removeEventListener(type, activity);
-      document.removeEventListener('visibilitychange', visibility);
+      stopActivity();
+      stopHidden();
+      stopSystemLock();
       window.removeEventListener('keydown', shortcut);
       timers.stop();
     };
@@ -93,19 +95,19 @@ function Root({ controller, monitor }: RootProps) {
   useEffect(() => {
     if (!joining) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const visibility = () => {
+    const visibility = (hidden: boolean) => {
       clearTimeout(timer);
       timer = undefined;
-      if (document.visibilityState !== 'hidden') return;
+      if (!hidden) return;
       timer = setTimeout(() => {
         controller.lock();
       }, DEFAULT_PREFERENCES.hiddenLockSeconds * 1000);
     };
-    visibility();
-    document.addEventListener('visibilitychange', visibility);
+    visibility(platform.lockSignals.hidden());
+    const stop = platform.lockSignals.onHidden(visibility);
     return () => {
       clearTimeout(timer);
-      document.removeEventListener('visibilitychange', visibility);
+      stop();
     };
   }, [joining, controller]);
 

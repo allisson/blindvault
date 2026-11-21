@@ -206,6 +206,35 @@ describe('item drafts (record-content.md §3, §4)', () => {
     expect(itemToCbor(input, false)).toEqual(itemToCbor(item, false));
   });
 
+  it('keeps "Match the whole domain" on a url field through an edit (extension.md §5.4)', () => {
+    const item: Item = {
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Example',
+      fields: [
+        { type: 'url', role: 'url', value: 'https://example.com', match: 'domain' },
+        { type: 'url', label: 'Other', value: 'https://example.org' },
+      ],
+      tags: [],
+    };
+    const draft = draftOf(item);
+    expect(draft.fields.map((f) => f.matchDomain ?? false)).toEqual([true, false, false, false]);
+    expect(ok(draft)).toEqual(item);
+
+    const off = { ...draft, fields: draft.fields.map((f) => ({ ...f, matchDomain: false })) };
+    expect(draftChanged(draft, off)).toBe(true);
+    expect(ok(off).fields.some((f) => 'match' in f)).toBe(false);
+    const on = { ...draft, fields: draft.fields.map((f) => ({ ...f, matchDomain: true })) };
+    expect(draftChanged(draft, on)).toBe(true);
+    expect(ok(on).fields.map((f) => f.match)).toEqual(['domain', 'domain']);
+  });
+
+  it('writes the match key on a url field only', () => {
+    const draft = { ...set(login(), 'username', 'alice'), title: 'Example' };
+    const flagged = { ...draft, fields: draft.fields.map((f) => ({ ...f, matchDomain: true })) };
+    expect(ok(flagged).fields.some((f) => 'match' in f)).toBe(false);
+  });
+
   it('keeps an attachment field as it is, with or without a label (D278)', () => {
     const value = {
       name: 'scan.pdf',

@@ -97,6 +97,10 @@ const en = {
     noReset:
       'Nobody, BlindVault included, can reset your local password or recover your vault for you.',
     recoveryOnly: 'Your Recovery Phrase and a backup are the only way to get the vault back.',
+    extensionDevice:
+      'This extension is a separate device of your vault, with its own copy, apart from the BlindVault app.',
+    extensionPair: 'Pair it with the BlindVault app or another device of your vault.',
+    extensionSync: 'It sees items added on your other devices only after a sync.',
     create: 'Create a new vault',
     pair: 'Pair with an existing device',
     restore: 'Restore from a backup',
@@ -796,6 +800,9 @@ const en = {
     totpExpires: 'Changes in {seconds} s',
     totpHint: 'Paste an otpauth:// link or the TOTP secret.',
     totpKeep: 'Leave empty to keep the current TOTP secret, or paste a new link or secret.',
+    matchDomain: 'Match the whole domain',
+    matchDomainHint:
+      'The extension also fills this login on the other sites of the domain, such as login.example.com.',
     monthFormat: 'YYYY-MM',
     invalid: 'Fix the fields marked above.',
     tooLarge: 'This item is too large to save.',
@@ -1289,6 +1296,11 @@ const ptBR: Messages = {
     noReset:
       'Ninguém, nem o BlindVault, consegue redefinir sua senha local ou recuperar seu cofre por você.',
     recoveryOnly: 'Sua Frase de Recuperação e um backup são o único jeito de recuperar o cofre.',
+    extensionDevice:
+      'Esta extensão é um dispositivo à parte do seu cofre, com cópia própria, separada do app BlindVault.',
+    extensionPair: 'Pareie-a com o app BlindVault ou outro dispositivo do seu cofre.',
+    extensionSync:
+      'Ela só vê itens criados nos seus outros dispositivos depois de uma sincronização.',
     create: 'Criar um cofre novo',
     pair: 'Parear com um dispositivo existente',
     restore: 'Restaurar de um backup',
@@ -1999,6 +2011,9 @@ const ptBR: Messages = {
     totpExpires: 'Muda em {seconds} s',
     totpHint: 'Cole um link otpauth:// ou o segredo TOTP.',
     totpKeep: 'Deixe vazio para manter o segredo TOTP atual, ou cole um novo link ou segredo.',
+    matchDomain: 'Casar o domínio inteiro',
+    matchDomainHint:
+      'A extensão também preenche este login nos outros sites do domínio, como login.example.com.',
     monthFormat: 'AAAA-MM',
     invalid: 'Corrija os campos marcados acima.',
     tooLarge: 'Este item é grande demais para salvar.',

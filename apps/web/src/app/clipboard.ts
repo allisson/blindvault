@@ -4,6 +4,8 @@
 // on the next focus; a lock clears at once, the same way. Clearing is not guaranteed: a clear the
 // browser refuses is dropped, and the OS clipboard history is out of reach (overview §16).
 
+import { platform } from '../platform';
+
 export interface ClipboardPort {
   write(text: string): Promise<void>;
   hasFocus(): boolean;
@@ -72,16 +74,4 @@ export class ClipboardGuard {
   }
 }
 
-/** The browser's clipboard; looked up on use, so importing this module needs no DOM. */
-export const browserClipboard: ClipboardPort = {
-  write: (text) => navigator.clipboard.writeText(text),
-  hasFocus: () => document.hasFocus(),
-  onFocus: (listener) => {
-    window.addEventListener('focus', listener);
-    return () => {
-      window.removeEventListener('focus', listener);
-    };
-  },
-};
-
-export const clipboard = new ClipboardGuard(browserClipboard);
+export const clipboard = new ClipboardGuard(platform.clipboard);

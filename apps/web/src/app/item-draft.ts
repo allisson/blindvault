@@ -47,6 +47,8 @@ export interface DraftField {
   readonly attachment?: AttachmentValue;
   /** A file picked for a new attachment, read and sealed only when the item is saved (§7). */
   readonly file?: File;
+  /** A `url` field's "Match the whole domain" (`match: "domain"`, extension.md §5.4). */
+  readonly matchDomain?: boolean;
 }
 
 export interface Draft {
@@ -131,7 +133,8 @@ export function draftChanged(initial: Draft, draft: Draft): boolean {
         f.value !== g.value ||
         f.totp !== g.totp ||
         f.attachment !== g.attachment ||
-        f.file !== g.file
+        f.file !== g.file ||
+        (f.matchDomain ?? false) !== (g.matchDomain ?? false)
       );
     })
   );
@@ -149,6 +152,7 @@ export function draftOf(item: Item): Draft {
       : 'blobId' in f.value
         ? { value: '', attachment: f.value }
         : { value: '', totp: f.value }),
+    ...(f.match === 'domain' ? { matchDomain: true } : {}),
   }));
   const held = new Set(item.fields.map((f) => f.role));
   for (const r of template(item.templateId)?.roles ?? []) {
@@ -295,7 +299,12 @@ export function inputOf(draft: Draft): DraftResult {
       fieldErrors.set(f.key, 'label-too-long');
       continue;
     }
-    fields.push({ type: f.type, value: checked.value, ...named(f.role, label) });
+    fields.push({
+      type: f.type,
+      value: checked.value,
+      ...named(f.role, label),
+      ...(f.type === 'url' && f.matchDomain === true ? { match: 'domain' as const } : {}),
+    });
   }
 
   const title = trim(draft.title);

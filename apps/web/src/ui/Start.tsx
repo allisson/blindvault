@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { type PasskeyOutcome, type Status, type VaultController } from '../app/controller';
 import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
+import { platform } from '../platform';
 import { Button, Card, Field, Notice, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
 import { EraseVault, eraseAdviceText, eraseFailureText } from './EraseVault';
@@ -390,6 +391,14 @@ function NoVault({
         <li>{m.start.chooseIntro}</li>
         <li>{m.start.noReset}</li>
         <li>{m.start.recoveryOnly}</li>
+        {platform.kind === 'extension' ? (
+          // The extension is a device of its own (extension.md §9, D267).
+          <>
+            <li>{m.start.extensionDevice}</li>
+            <li>{m.start.extensionPair}</li>
+            <li>{m.start.extensionSync}</li>
+          </>
+        ) : null}
       </ul>
       <div className="flex flex-col gap-2">
         <Button

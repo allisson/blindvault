@@ -38,6 +38,12 @@ entries of its build, and platform differences sit behind its ports (D267).
 - the lock triggers are those of §3.2;
 - the first screen adds the extension's onboarding text (§9).
 
+The build picks the platform: `vite build --mode extension` builds the extension's, any other mode
+the web's, and the mode is replaced at build time, so each build carries only its own code. The
+ports live in `apps/web/src/platform/`, the extension's included: the session host is an
+`apps/web` page, and it calls the `chrome.*` and `browser.*` APIs through interfaces of the
+project's own, with no type package.
+
 **Manifests.** One per browser, Manifest V3, generated from one source:
 
 | Key | Chrome | Firefox |
@@ -152,9 +158,11 @@ domain", off by default. An older app reads an item with the key as newer conten
 
 ### 5.5 Public Suffix List
 
-`packages/vault/src/psl/public_suffix_list.dat` holds the list pinned at a commit of
-`publicsuffix/list`, named with its date and commit hash in a header file. A parser of the project's
-own reads it at build time into a lookup table and applies the list's algorithm: the longest
+`packages/vault/src/psl/public_suffix_list.ts` holds the list pinned at a commit of
+`publicsuffix/list`: the upstream `public_suffix_list.dat` byte for byte inside a `String.raw`
+template, so the package also loads outside Vite, with a test checking its SHA-256 against the one
+the directory's `README.md` names with the commit and its date. A parser of the project's own
+reads it into a lookup table at the first lookup and applies the list's algorithm: the longest
 matching rule, wildcard rules, exception rules, and the implicit `*` rule. It is tested against the
 list's own `tests/test_psl.txt`. Both the ICANN and private sections apply. Updating the list is a
 reviewed change, never a fetch at run time.
