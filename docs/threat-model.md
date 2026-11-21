@@ -132,19 +132,23 @@ encrypted backups and synchronized records (§3).
 ## Before v1.0 (planned)
 
 Threats of the browser extension, stored passkeys and the Android app, which come before v1.0
-(D275). Their direction is fixed (overview §20) and their specifications are not written yet.
-Every entry is planned; the specifications in `docs/extension.md` and `docs/android.md` will
-refine them. The attachments' entries moved to their attackers above once `docs/attachments.md`
+(D275). Their direction is fixed (overview §20). `docs/extension.md` specifies the extension's
+entries (D283 to D285); `docs/android.md` is not written yet. Every entry stays planned until it is
+implemented and tested. The attachments' entries moved to their attackers above once `docs/attachments.md`
 specified them (D278, D279).
 
 ### A9. Malicious website (extension and Android autofill)
 
 | Threat | Status | Mitigation | Specified in |
 | --- | --- | --- | --- |
-| Claims another origin to get a passkey assertion | Planned | The origin and frame come only from the browser's `MessageSender`, never from the page (D267) | overview D267 |
-| Asks for a passkey of another site through its `rpId` | Planned | The `rpId` must equal the origin's host or be a registrable suffix of it, checked against a shipped Public Suffix List (D267) | overview D267 |
-| Signs in with a stored passkey without the user knowing | Planned | A confirming click in the app's UI on every use (UP) (D268) | overview D268 |
-| Gets a password filled into a look-alike or embedded page | Planned | Fill only on a user gesture, only when the item's URL host equals the frame's origin, never into a cross-origin iframe (D267) | overview D267 |
+| Claims another origin to get a passkey assertion | Planned | The origin and frame come only from the browser's `MessageSender`, never from the page (D267) | `extension.md` §7.2 |
+| Asks for a passkey of another site through its `rpId` | Planned | The `rpId` must equal the origin's host or be a registrable suffix of it that is not a public suffix, checked against a Public Suffix List pinned in the repository (D267, D283) | `extension.md` §5.5, §7.2 |
+| Signs in with a stored passkey without the user knowing, or clickjacks the confirmation | Planned | A confirming click on every use (UP), in a `popup`-type window of the extension's origin that the page can neither cover nor click (D268, D283) | `extension.md` §7.4 |
+| Gets a password filled into a look-alike or embedded page | Planned | Fill only on a user gesture (popup or shortcut, no icon in the page), only on `https:` and the item's exact origin unless the field allows the whole registrable domain, never into a frame cross-origin to the top (D267, D283) | `extension.md` §5, §6 |
+| Navigates the frame between the match and the fill to receive the password | Planned | The injected function writes only when `location.origin` still equals the matched origin (D283) | `extension.md` §6.1 |
+| Sends forged requests to the session host from a content script or the page | Planned | The session host acts only on senders of the extension's own pages and its service worker; filling has no channel from the page; the popup sends a tab ID, never a URL (D283) | `extension.md` §4 |
+| Probes which passkeys the vault holds through `excludeCredentials` | Planned | `InvalidStateError` is answered only after the user's confirming click (D283) | `extension.md` §7.4 |
+| Reads every page the user visits through the extension | Planned | Without passkeys the extension has only `activeTab`, granted per gesture; `<all_urls>` is asked only when passkeys are turned on, and removed when they are turned off (D283) | `extension.md` §2, §7.1 |
 
 ### A10. Other app on the Android device
 
@@ -159,7 +163,7 @@ specified them (D278, D279).
 | --- | --- | --- | --- | --- |
 | A1 | Unlocks the Android app on a stolen locked phone | Planned | The Keystore KEK requires a BiometricPrompt on every use, is invalidated when the enrolled biometrics change, and is bound to `localConfigId`; setting it up needs the local password (D271) | overview D271 |
 | A1 | Reads a removed stored passkey from item history | Planned, accepted | Kept until history is purged; the UI says so and tells the user to remove the passkey on the site (D268) | overview D268 |
-| A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust; the version lock opens no vault until the user confirms the new version and manifest hash (D270) | overview D270 |
+| A6 | Pushes a malicious extension version through a store or the publisher account | Planned, limited | The store and the publisher account are roots of trust. `runtime.onUpdateAvailable` keeps the running code and its session until the vault locks; the confirmation of version and manifest hash is transparency only, since the new code shows it and a malicious one can skip it; the store's package can be checked against the release's `asset-manifest.txt` (D270, D285) | `extension.md` §8 |
 | A6 | Ships a modified APK | Planned, limited | Signing key offline and out of CI; reproducible APK with published SHA-256 and rebuild instructions (D270) | overview D270 |
 | A6 | Blocks new Android installs by terminating the Play Console account that registers the package | Planned, accepted | The account is a root of trust for installs, not for integrity; installed apps keep working, ADB and the advanced flow still install (D274) | overview D274 |
 

@@ -321,6 +321,10 @@ One running tab or window of BlindVault on an installation; only one at a time o
 _pt-BR_: janela
 _Avoid_: instance, tab (as the general term)
 
+**Session host**:
+The app window of a browser-extension installation that holds the unlocked vault; the popup and the scripts in web pages reach the vault only through it, and closing it locks the vault.
+_Avoid_: background page, offscreen document, vault tab
+
 **Installation guard**:
 The exclusive claim one app window holds on an installation while it creates, replaces or deletes a vault there.
 _Avoid_: installation lock, global lock
@@ -383,6 +387,18 @@ _Avoid_: live session, connection
 A network setting where devices sync only on the same local network, without contacting any STUN server.
 _pt-BR_: somente na mesma rede
 _Avoid_: local-network-only mode, offline mode
+
+## Filling
+
+**Fill**:
+Writing a login item's user name and password into a web page's sign-in fields, only on the user's own gesture and never submitting the form.
+_pt-BR_: preencher
+_Avoid_: autofill (for the action), auto-login, inject
+
+**Matching item**:
+A login item whose URL field has the page's exact origin, or the page's registrable domain when that field allows the whole domain.
+_pt-BR_: item correspondente
+_Avoid_: suggested item, domain match, URI match
 
 ## Vaults and Members
 
