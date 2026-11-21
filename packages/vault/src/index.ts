@@ -52,6 +52,8 @@ export {
   type Item,
   type ItemReading,
   LABEL_MAX,
+  PASSKEY_USER_NAME_MAX,
+  type PasskeyValue,
   type ReadOnlyRule,
   TAGS_MAX,
   TAG_MAX,
@@ -63,6 +65,7 @@ export {
   itemToCbor,
   normalizeSeedPhrase,
   normalizeTags,
+  passkeyUserName,
   readItem,
   seedPhraseChecksumValid,
 } from './item';

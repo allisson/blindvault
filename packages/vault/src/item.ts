@@ -9,6 +9,7 @@ import {
   MAX_ATTACHMENT_SIZE,
   type TotpValue,
   checkTotpValue,
+  passkeyAlgorithm,
 } from '@blindvault/crypto';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
@@ -42,10 +43,25 @@ export interface AttachmentValue {
   readonly key: Uint8Array;
 }
 
+/** A `passkey` field's value (record-content.md §4, D268, D288): a site's WebAuthn credential. */
+export interface PasskeyValue {
+  /** PKCS#8 in one of the two fixed layouts; never shown, copied or searched. */
+  readonly privateKey: Uint8Array;
+  /** 1 to 1,023 bytes. */
+  readonly credentialId: Uint8Array;
+  /** Single-line, 1 to 253 code points. */
+  readonly rpId: string;
+  /** 1 to 64 bytes; never shown or searched. */
+  readonly userHandle: Uint8Array;
+  /** Single-line, 1 to 255 code points. */
+  readonly userName?: string;
+  readonly createdAt: number | bigint;
+}
+
 export interface Field {
   readonly type: FieldType;
-  /** Text for every type but `totp` and `attachment`. */
-  readonly value: string | TotpValue | AttachmentValue;
+  /** Text for every type but `totp`, `attachment` and `passkey`. */
+  readonly value: string | TotpValue | AttachmentValue | PasskeyValue;
   readonly role?: string;
   readonly label?: string;
   /** Only on a `url` field: fill matches the page's whole registrable domain (D283). */
@@ -89,7 +105,19 @@ const ITEM_KEYS = new Set([
 const FIELD_KEYS = new Set(['type', 'value', 'role', 'label', 'match']);
 const TOTP_KEYS = new Set(['secret', 'algorithm', 'digits', 'period', 'issuer', 'accountName']);
 const ATTACHMENT_KEYS = new Set(['name', 'size', 'mediaType', 'blobId', 'key']);
+const PASSKEY_KEYS = new Set([
+  'privateKey',
+  'credentialId',
+  'rpId',
+  'userHandle',
+  'userName',
+  'createdAt',
+]);
 export const ATTACHMENT_NAME_MAX = 255;
+const CREDENTIAL_ID_MAX = 1023;
+const RP_ID_MAX = 253;
+const USER_HANDLE_MAX = 64;
+export const PASSKEY_USER_NAME_MAX = 255;
 const EXTENSION_MAX = 16;
 const MEDIA_TYPE = /^[\x21-\x7e]{1,255}$/;
 const OCTET_STREAM = 'application/octet-stream';
@@ -201,6 +229,46 @@ function readAttachment(value: CborValue | undefined): AttachmentValue {
   return { name, size, mediaType, blobId, key };
 }
 
+function isBytesIn(value: CborValue | undefined, min: number, max: number): value is Uint8Array {
+  return value instanceof Uint8Array && value.length >= min && value.length <= max;
+}
+
+function readPasskey(value: CborValue | undefined): PasskeyValue {
+  require(isTextKeyed(value));
+  require(!hasUnknownKey(value, PASSKEY_KEYS), 3);
+  const privateKey = value.get('privateKey');
+  const credentialId = value.get('credentialId');
+  const rpId = value.get('rpId');
+  const userHandle = value.get('userHandle');
+  const userName = value.get('userName');
+  const createdAt = value.get('createdAt');
+  require(privateKey instanceof Uint8Array && passkeyAlgorithm(privateKey) !== undefined);
+  require(isBytesIn(credentialId, 1, CREDENTIAL_ID_MAX));
+  require(isSingleLine(rpId) && codePointLength(rpId) <= RP_ID_MAX);
+  require(isBytesIn(userHandle, 1, USER_HANDLE_MAX));
+  if (value.has('userName')) {
+    require(isSingleLine(userName) && codePointLength(userName) <= PASSKEY_USER_NAME_MAX);
+  }
+  require(isUint(createdAt));
+  return {
+    privateKey,
+    credentialId,
+    rpId,
+    userHandle,
+    ...(typeof userName === 'string' ? { userName } : {}),
+    createdAt,
+  };
+}
+
+/**
+ * A site's `user.name` as a passkey stores it (record-content.md §4): line breaks as spaces, cut
+ * to 255 code points, `undefined` when empty.
+ */
+export function passkeyUserName(name: string): string | undefined {
+  const points = Array.from(name.replace(/[\n\r]/g, ' ')).slice(0, PASSKEY_USER_NAME_MAX);
+  return points.length === 0 ? undefined : points.join('');
+}
+
 /**
  * The `blobId`s an item's content cites (attachments.md §5): from every field of type `attachment`
  * whose value is a map with a 32-byte `blobId`, whether or not the rest of the item validates, so
@@ -249,6 +317,7 @@ function readValue(
 ): Field['value'] {
   if (type === 'totp') return readTotp(value);
   if (type === 'attachment') return readAttachment(value);
+  if (type === 'passkey') return readPasskey(value);
   switch (type) {
     case 'long-text':
     case 'secret':
@@ -297,8 +366,8 @@ function readFields(raw: CborValue | undefined, t: Template): Field[] {
     }
     if (map.has('label')) require(isBoundedLine(label, LABEL_MAX));
     if (map.has('match')) require(type === 'url' && map.get('match') === 'domain');
-    // An attachment is shown by its name when it has no label (D278).
-    require(map.has('role') || map.has('label') || type === 'attachment');
+    // An attachment is shown by its name when it has no label (D278), a passkey by its site (D288).
+    require(map.has('role') || map.has('label') || type === 'attachment' || type === 'passkey');
     require(map.has('value'));
     const value = readValue(type, map.get('value'), monthOnly);
     return {
@@ -382,7 +451,21 @@ function valueToCbor(v: Field['value']): CborValue {
       ['key', v.key.slice()],
     ]);
   }
+  if ('privateKey' in v) return passkeyToCbor(v);
   return totpToCbor(v);
+}
+
+function passkeyToCbor(v: PasskeyValue): CborMap {
+  const map: CborMap = new Map<CborValue, CborValue>([
+    // Copies, as for an attachment's key.
+    ['privateKey', v.privateKey.slice()],
+    ['credentialId', v.credentialId.slice()],
+    ['rpId', v.rpId],
+    ['userHandle', v.userHandle.slice()],
+  ]);
+  if (v.userName !== undefined) map.set('userName', v.userName);
+  map.set('createdAt', v.createdAt);
+  return map;
 }
 
 function totpToCbor(v: TotpValue): CborMap {

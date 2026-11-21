@@ -13,6 +13,7 @@ import {
   type Item,
   type ItemInput,
   LABEL_MAX,
+  type PasskeyValue,
   type StoredBlob,
   TAGS_MAX,
   TAG_MAX,
@@ -45,6 +46,8 @@ export interface DraftField {
   readonly totp?: TotpValue;
   /** An attachment field's value, kept as it is: the editor never rewrites it (D278). */
   readonly attachment?: AttachmentValue;
+  /** A passkey field's value, kept as it is: only a site creates one (extension.md §7.6, D288). */
+  readonly passkey?: PasskeyValue;
   /** A file picked for a new attachment, read and sealed only when the item is saved (§7). */
   readonly file?: File;
   /** A `url` field's "Match the whole domain" (`match: "domain"`, extension.md §5.4). */
@@ -133,6 +136,7 @@ export function draftChanged(initial: Draft, draft: Draft): boolean {
         f.value !== g.value ||
         f.totp !== g.totp ||
         f.attachment !== g.attachment ||
+        f.passkey !== g.passkey ||
         f.file !== g.file ||
         (f.matchDomain ?? false) !== (g.matchDomain ?? false)
       );
@@ -151,7 +155,9 @@ export function draftOf(item: Item): Draft {
       ? { value: f.value }
       : 'blobId' in f.value
         ? { value: '', attachment: f.value }
-        : { value: '', totp: f.value }),
+        : 'privateKey' in f.value
+          ? { value: '', passkey: f.value }
+          : { value: '', totp: f.value }),
     ...(f.match === 'domain' ? { matchDomain: true } : {}),
   }));
   const held = new Set(item.fields.map((f) => f.role));
@@ -246,6 +252,7 @@ function parseTotp(typed: string): Checked {
 /** The stored value of `f`, `null` when empty (never written), or why it is refused. */
 function check(f: DraftField, monthOnly: boolean): Checked {
   if (f.type === 'attachment') return f.attachment ? { value: f.attachment } : null;
+  if (f.type === 'passkey') return f.passkey ? { value: f.passkey } : null;
   if (f.type === 'totp') {
     const typed = trim(f.value);
     if (typed !== '') return parseTotp(typed);

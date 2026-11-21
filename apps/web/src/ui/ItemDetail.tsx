@@ -144,6 +144,8 @@ export function FieldValue({
   if (typeof value !== 'string' && 'blobId' in value) {
     return <AttachmentView value={value} name={name} session={session} blobWrites={blobWrites} />;
   }
+  // Shown in the next change (extension.md §7.6); never its private key or userHandle.
+  if (typeof value !== 'string' && 'privateKey' in value) return null;
   if (typeof value !== 'string') {
     return <TotpView value={value} name={name} clearSeconds={clearSeconds} />;
   }
