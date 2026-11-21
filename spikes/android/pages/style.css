@@ -1,7 +1,0 @@
-body { font: 15px/1.4 system-ui, sans-serif; margin: 12px; max-width: 720px; }
-button, select, input { font: inherit; margin: 3px 0; padding: 8px; display: block; width: 100%; box-sizing: border-box; }
-label { display: block; margin: 6px 0; }
-label input { display: inline; width: auto; }
-video { width: 100%; max-height: 240px; background: #000; }
-pre { white-space: pre-wrap; word-break: break-all; background: #f3f3f3; padding: 8px; font-size: 12px; }
-canvas { image-rendering: pixelated; background: #fff; }

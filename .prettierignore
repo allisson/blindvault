@@ -13,6 +13,3 @@ packages/crypto/test-vectors/
 
 packages/vault/test-vectors/
 packages/sync/test-vectors/
-
-# Throwaway Phase 10 spike, outside CI (D281)
-spikes/

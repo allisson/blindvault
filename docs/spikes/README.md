@@ -5,6 +5,9 @@ Sections 1 to 5 are the Phase 0 spikes; sections 6 and 7 are the Phase 10 spike 
 **Phase 0, ended.** The spike code and its workflow were deleted after the last Phase 0 item (D105); they
 remain in the history at commit `3f29c12`. The text below describes the protocol as it was run.
 
+**Phase 10 spike, ended.** Its code was deleted after its results were recorded (D282); it remains
+in the history at commit `5551ffd`. Sections 6 and 7 describe the protocol as it was run.
+
 Throwaway measurement pages in `spikes/`, published to `https://allisson.github.io/blindvault/` by
 the `Spikes (GitHub Pages)` workflow. They hold no vault data and make no network call apart from
 STUN in the pairing spike. Each page ends with a JSON result and a **Copy result** button: paste it
