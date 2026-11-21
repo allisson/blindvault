@@ -889,6 +889,7 @@ const en = {
     totp: 'TOTP',
     'seed-phrase': 'Seed phrase',
     attachment: 'Attachment',
+    passkey: 'Passkey',
   },
   generator: {
     title: 'Password generator',
@@ -2132,6 +2133,7 @@ const ptBR: Messages = {
     totp: 'TOTP',
     'seed-phrase': 'Frase-semente',
     attachment: 'Anexo',
+    passkey: 'Passkey',
   },
   generator: {
     title: 'Gerador de senhas',

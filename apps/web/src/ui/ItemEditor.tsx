@@ -444,8 +444,9 @@ export function ItemEditor({
             }}
             data-testid="add-field-type"
           >
-            {/* An attachment is added from a file, not as an empty field (attachments.md §7). */}
-            {FIELD_TYPES.filter((t) => t !== 'attachment').map((t) => (
+            {/* An attachment is added from a file (attachments.md §7), a passkey only by a site
+                (extension.md §7.6), never as an empty field. */}
+            {FIELD_TYPES.filter((t) => t !== 'attachment' && t !== 'passkey').map((t) => (
               <option key={t} value={t}>
                 {m.fieldTypes[t]}
               </option>

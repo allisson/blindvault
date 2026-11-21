@@ -185,3 +185,13 @@ export {
   passphraseEntropyBits,
   passwordEntropyBits,
 } from './generator';
+export {
+  COSE_ALGORITHM,
+  type CreatedPasskey,
+  PASSKEY_CREDENTIAL_ID_LENGTH,
+  type PasskeyAlgorithm,
+  type PasskeyAssertion,
+  createPasskey,
+  passkeyAlgorithm,
+  signPasskeyAssertion,
+} from './webauthn';

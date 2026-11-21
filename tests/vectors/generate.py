@@ -429,11 +429,17 @@ TEMPLATES = {
 TEMPLATE_VERSION = 1
 MONTH_PRECISION_ROLES = {("card", "expiry")}
 FIELD_TYPES = {"text", "long-text", "secret", "url", "email", "phone", "date", "number", "totp", "seed-phrase",
-               "attachment"}
+               "attachment", "passkey"}
 ITEM_KEYS = {"templateId", "templateVersion", "title", "fields", "tags", "notes", "folderId", "trashOperationId"}
 FIELD_KEYS = {"type", "value", "role", "label", "match"}
 TOTP_KEYS = {"secret", "algorithm", "digits", "period", "issuer", "accountName"}
 ATTACHMENT_KEYS = {"name", "size", "mediaType", "blobId", "key"}
+PASSKEY_KEYS = {"privateKey", "credentialId", "rpId", "userHandle", "userName", "createdAt"}
+# record-content.md section 4: the two fixed PKCS#8 layouts of a passkey's private key.
+ES256_HEAD = bytes.fromhex("308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420")
+ES256_MIDDLE = bytes.fromhex("a14403420004")
+EDDSA_HEAD = bytes.fromhex("302e020100300506032b657004220420")
+P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 BIP39_WORDS = set(Mnemonic("english").wordlist)
 
 
@@ -496,6 +502,14 @@ def valid_seed_phrase(x) -> bool:
             and all(w in BIP39_WORDS for w in words))
 
 
+def passkey_layout(key) -> bool:
+    if not isinstance(key, bytes):
+        return False
+    if len(key) == 138 and key[:36] == ES256_HEAD and key[68:74] == ES256_MIDDLE:
+        return 1 <= int.from_bytes(key[36:68], "big") <= P256_N - 1
+    return len(key) == 48 and key[:16] == EDDSA_HEAD
+
+
 def check_value(ftype: str, value, template_id: str, role) -> None:
     import re
     ok = {
@@ -533,6 +547,20 @@ def check_value(ftype: str, value, template_id: str, role) -> None:
                 and isinstance(media, str) and re.fullmatch(r"[\x21-\x7e]{1,255}", media) is not None
                 and all(isinstance(value[k], bytes) and len(value[k]) == 32 for k in ("blobId", "key"))):
             raise ReadOnly(6, "invalid attachment value")
+        return
+    if ftype == "passkey":
+        if not isinstance(value, dict) or not all(isinstance(k, str) for k in value):
+            raise ReadOnly(6, "passkey value is not a text-keyed map")
+        if set(value) - PASSKEY_KEYS:
+            raise ReadOnly(3, "unknown passkey key")
+        if not (set(value) | {"userName"} == PASSKEY_KEYS
+                and passkey_layout(value["privateKey"])
+                and isinstance(value["credentialId"], bytes) and 1 <= len(value["credentialId"]) <= 1023
+                and single_line(value["rpId"]) and len(value["rpId"]) <= 253
+                and isinstance(value["userHandle"], bytes) and 1 <= len(value["userHandle"]) <= 64
+                and ("userName" not in value or (single_line(value["userName"]) and len(value["userName"]) <= 255))
+                and is_uint(value["createdAt"])):
+            raise ReadOnly(6, "invalid passkey value")
         return
     if not ok[ftype]():
         raise ReadOnly(6, f"invalid {ftype} value")
@@ -578,7 +606,7 @@ def check_item(item, deleted: bool | None) -> None:
             raise ReadOnly(6, "label")
         if "match" in f and (f["type"] != "url" or f["match"] != "domain"):
             raise ReadOnly(6, "match only as domain on a url field")
-        if "role" not in f and "label" not in f and f["type"] != "attachment":
+        if "role" not in f and "label" not in f and f["type"] not in ("attachment", "passkey"):
             raise ReadOnly(6, "user field without a label")
         if "value" not in f:
             raise ReadOnly(6, "field without a value")
@@ -755,6 +783,17 @@ ATTACHMENT = {"name": "scan.pdf", "size": 1, "mediaType": "application/pdf", "bl
 def _attachment(**over) -> dict:
     return {"type": "attachment", "value": {**ATTACHMENT, **over}}
 
+
+# A passkey's key is not checked as a point here (record-content.md section 4): fixed bytes do.
+ES256_KEY = ES256_HEAD + seq(0x01, 32) + ES256_MIDDLE + seq(0x40, 64)
+EDDSA_KEY = EDDSA_HEAD + seq(0x60, 32)
+PASSKEY = {"privateKey": ES256_KEY, "credentialId": seq(0xD0, 16), "rpId": "example.com",
+           "userHandle": seq(0xE0, 16), "userName": "alice@example.com", "createdAt": 1_760_000_000_000}
+
+
+def _passkey(**over) -> dict:
+    return {"type": "passkey", "value": {k: v for k, v in {**PASSKEY, **over}.items() if v is not None}}
+
 VALID_ITEMS = [
     ("login with three role fields", _login(), False),
     ("login with tags, notes and a folder", _login(tags=["Bank", "personal", "Ünïcode"], notes="line 1\nline 2",
@@ -800,6 +839,18 @@ VALID_ITEMS = [
                                                                   "label": "Contract"}), False),
     ("attachment with an untrimmed name of 255 astral code points and a mediaType of 255",
      _with_field(_attachment(name=" " + "\U0001F4C4" * 254, mediaType="x" * 255)), False),
+    ("ES256 passkey without a label", _with_field(_passkey()), False),
+    ("EdDSA passkey with a label and no userName", _with_field({**_passkey(privateKey=EDDSA_KEY, userName=None),
+                                                               "label": "Work"}), False),
+    ("passkey at its limits: d = n - 1, credentialId of 1,023 bytes, userHandle of 64, rpId of 253 and userName "
+     "of 255 astral code points",
+     _with_field(_passkey(privateKey=ES256_HEAD + (P256_N - 1).to_bytes(32, "big") + ES256_MIDDLE + seq(0x40, 64),
+                          credentialId=seq(0x00, 1023), userHandle=seq(0xE0, 64), rpId="a" * 253,
+                          userName="\U0001F511" * 255)), False),
+    ("passkey of d = 1, credentialId and userHandle of 1 byte", _with_field(_passkey(
+        privateKey=ES256_HEAD + (1).to_bytes(32, "big") + ES256_MIDDLE + seq(0x40, 64),
+        credentialId=b"\x01", userHandle=b"\x02")), False),
+    ("passkey in a secure note", _with_field(_passkey(), "secure-note"), False),
     ("title of 512 astral code points", _login(title="\U0001F600" * 512), False),
     ("title starting with U+FEFF, which is not White_Space", _login(title="\ufeffExample"), False),
     ("32 tags of 64 code points", _login(tags=sorted(f"{i:02d}" + "x" * 62 for i in range(32))), False),
@@ -808,10 +859,11 @@ VALID_ITEMS = [
 
 READ_ONLY_ITEMS = [
     (1, "unknown item key", _login(favorite=True), False),
-    (2, "unknown field type", _with_field(_user_field("passkey", "x")), False),
+    (2, "unknown field type", _with_field(_user_field("ssh-key", "x")), False),
     (3, "unknown field key", _with_field({**_user_field("text", "x"), "hidden": True}), False),
     (3, "unknown TOTP key", _with_field(_user_field("totp", {**TOTP, "counter": 0})), False),
     (3, "unknown attachment key", _with_field(_attachment(page=1)), False),
+    (3, "unknown passkey key", _with_field(_passkey(alg=-7)), False),
     (4, "role the template does not define", _with_field({"type": "text", "role": "pin", "value": "1"}), False),
     (5, "unknown templateId", _login(templateId="passkey"), False),
     (5, "newer templateVersion", _login(templateVersion=2), False),
@@ -876,6 +928,32 @@ READ_ONLY_ITEMS = [
     (6, "attachment with a mediaType of 256 characters", _with_field(_attachment(mediaType="x" * 256)), False),
     (6, "attachment as a text value", _with_field({"type": "attachment", "label": "File", "value": "scan.pdf"}),
      False),
+    (6, "passkey with an ES256 key of 137 bytes", _with_field(_passkey(privateKey=ES256_KEY[:137])), False),
+    (6, "passkey with an ES256 key of d = 0", _with_field(_passkey(
+        privateKey=ES256_HEAD + bytes(32) + ES256_MIDDLE + seq(0x40, 64))), False),
+    (6, "passkey with an ES256 key of d = n", _with_field(_passkey(
+        privateKey=ES256_HEAD + P256_N.to_bytes(32, "big") + ES256_MIDDLE + seq(0x40, 64))), False),
+    (6, "passkey with an ES256 key whose public point is compressed", _with_field(_passkey(
+        privateKey=ES256_KEY[:73] + b"\x02" + ES256_KEY[74:])), False),
+    (6, "passkey with an EdDSA key of 49 bytes", _with_field(_passkey(privateKey=EDDSA_KEY + b"\x00")), False),
+    (6, "passkey with an Ed448 key", _with_field(_passkey(
+        privateKey=bytes.fromhex("302e020100300506032b657104220420") + seq(0x60, 32))), False),
+    (6, "passkey with a raw 32-byte seed", _with_field(_passkey(privateKey=seq(0x60, 32))), False),
+    (6, "passkey with an empty credentialId", _with_field(_passkey(credentialId=b"")), False),
+    (6, "passkey with a credentialId of 1,024 bytes", _with_field(_passkey(credentialId=seq(0x00, 1024))), False),
+    (6, "passkey with a userHandle of 65 bytes", _with_field(_passkey(userHandle=seq(0xE0, 65))), False),
+    (6, "passkey with an empty userHandle", _with_field(_passkey(userHandle=b"")), False),
+    (6, "passkey with an rpId of 254 code points", _with_field(_passkey(rpId="a" * 254)), False),
+    (6, "passkey with a multi-line rpId", _with_field(_passkey(rpId="example.com\nevil.com")), False),
+    (6, "passkey with an empty userName", _with_field(_passkey(userName="")), False),
+    (6, "passkey with a userName of 256 code points", _with_field(_passkey(userName="u" * 256)), False),
+    (6, "passkey with a line break in its userName", _with_field(_passkey(userName="alice\nbob")), False),
+    (6, "passkey with a negative createdAt", _with_field(_passkey(createdAt=-1)), False),
+    (6, "passkey without a createdAt", _with_field(_passkey(createdAt=None)), False),
+    (6, "passkey without a userHandle", _with_field(_passkey(userHandle=None)), False),
+    (6, "passkey with a text privateKey", _with_field(_passkey(privateKey="key")), False),
+    (6, "passkey with a role", _with_field({**_passkey(), "role": "password"}), False),
+    (6, "passkey as a text value", _with_field({"type": "passkey", "label": "Key", "value": "x"}), False),
     (6, "seed phrase of 13 words", _with_field(_user_field("seed-phrase", SEED_12 + " zoo")), False),
     (6, "seed phrase with a word outside the list", _with_field(_user_field("seed-phrase",
         " ".join(SEED_12.split(" ")[:-1] + ["blindvault"]))), False),

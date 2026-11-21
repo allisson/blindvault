@@ -12,6 +12,7 @@ export const FIELD_TYPES = [
   'totp',
   'seed-phrase',
   'attachment',
+  'passkey',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];

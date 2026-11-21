@@ -14,6 +14,7 @@ import {
   itemToCbor,
   normalizeSeedPhrase,
   normalizeTags,
+  passkeyUserName,
   readItem,
   seedPhraseChecksumValid,
 } from './item';
@@ -176,6 +177,72 @@ describe('item writes', () => {
     expect(readItem(content, false)).toEqual({ readOnly: false, item: url });
     const text = { ...login, fields: [{ type: 'text', label: 'x', value: 'y', match: 'domain' }] };
     expect(() => itemToCbor(text as Item, false)).toThrow(ContentInvalidError);
+  });
+});
+
+describe('passkey fields (§4, D288)', () => {
+  const hex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (b) => parseInt(b, 16));
+  const eddsa = hex('302e020100300506032b657004220420' + '9d'.repeat(32));
+  const es256 = hex(
+    '308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420' +
+      '01'.repeat(32) +
+      'a14403420004' +
+      '02'.repeat(64),
+  );
+  const passkey = {
+    privateKey: eddsa,
+    credentialId: new Uint8Array(16).fill(3),
+    rpId: 'example.com',
+    userHandle: new Uint8Array(64).fill(4),
+    userName: 'alice@example.com',
+    createdAt: 1_760_000_000_000,
+  };
+
+  it('writes a passkey without a label and reads it back, in either layout', () => {
+    for (const privateKey of [eddsa, es256]) {
+      const item: Item = {
+        ...login,
+        fields: [{ type: 'passkey', value: { ...passkey, privateKey } }],
+      };
+      const content = itemToCbor(item, false);
+      expect((content.get('fields') as CborMap[])[0]?.get('value')).toEqual(
+        map([
+          ['privateKey', privateKey],
+          ['credentialId', passkey.credentialId],
+          ['rpId', passkey.rpId],
+          ['userHandle', passkey.userHandle],
+          ['userName', passkey.userName],
+          ['createdAt', passkey.createdAt],
+        ]),
+      );
+      expect(readItem(content, false)).toEqual({ readOnly: false, item });
+    }
+  });
+
+  it('writes one without a userName, with a label', () => {
+    const { privateKey, credentialId, rpId, userHandle, createdAt } = passkey;
+    const value = { privateKey, credentialId, rpId, userHandle, createdAt };
+    const item: Item = { ...login, fields: [{ type: 'passkey', label: 'Work', value }] };
+    expect(readItem(itemToCbor(item, false), false)).toEqual({ readOnly: false, item });
+  });
+
+  it.each([
+    ['a malformed PKCS#8 layout (CRYPTO-INV-027)', { privateKey: eddsa.subarray(0, 47) }],
+    ['an empty credentialId', { credentialId: new Uint8Array(0) }],
+    ['a credentialId of 1,024 bytes', { credentialId: new Uint8Array(1024) }],
+    ['a userHandle of 65 bytes', { userHandle: new Uint8Array(65) }],
+    ['an rpId of 254 code points', { rpId: 'a'.repeat(254) }],
+    ['a multi-line userName', { userName: 'a\nb' }],
+    ['an empty userName', { userName: '' }],
+  ])('refuses to write %s', (_name, over) => {
+    const item = { ...login, fields: [{ type: 'passkey', value: { ...passkey, ...over } }] };
+    expect(() => itemToCbor(item as Item, false)).toThrow(ContentInvalidError);
+  });
+
+  it("stores the site's user.name on one line, cut to 255 code points, or not at all", () => {
+    expect(passkeyUserName('alice\r\nsmith')).toBe('alice  smith');
+    expect(passkeyUserName('\u{1F600}'.repeat(300))).toBe('\u{1F600}'.repeat(255));
+    expect(passkeyUserName('')).toBeUndefined();
   });
 });
 
