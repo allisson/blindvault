@@ -14,6 +14,7 @@
     "playwright.self-hosting.config.ts",
     "playwright.screenshots.config.ts",
     "e2e",
-    "build"
+    "build",
+    "src/extension/inject.ts"
   ]
 }

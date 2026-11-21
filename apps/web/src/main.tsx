@@ -13,6 +13,7 @@ import { loadStunSettings } from './app/stun-settings';
 import { preloadStrength } from './app/strength';
 import { UpdateMonitor } from './app/updates';
 import { VersionLock, vaultExists } from './app/version-lock';
+import { extensionTabs } from './extension/fill';
 import { hostRuntime, serveHost } from './extension/host';
 import { LanguageProvider } from './i18n/context';
 import { platform } from './platform';
@@ -108,6 +109,7 @@ function start(root: HTMLElement): void {
         clipboard.copied(seconds);
       },
       now: Date.now,
+      tabs: extensionTabs(),
     });
   }
 

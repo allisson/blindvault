@@ -56,18 +56,23 @@ function fieldMatches(value: string, domain: boolean, page: URL): boolean {
 }
 
 /**
- * Whether a login item matches a page (§5.3): a live item, one of whose `url` fields has the page's
- * exact origin, or its registrable domain when the field carries `match: "domain"`.
+ * The value of the first `url` field of a login item that matches a page (§5.3): a live item, one
+ * of whose `url` fields has the page's exact origin, or its registrable domain when the field
+ * carries `match: "domain"`. `null` when the item does not match.
  */
-export function itemMatches(item: Item, pageUrl: string): boolean {
+export function matchingUrl(item: Item, pageUrl: string): string | null {
   const page = fillablePage(pageUrl);
   if (page === null || item.templateId !== 'login' || item.trashOperationId !== undefined) {
-    return false;
+    return null;
   }
-  return item.fields.some(
-    (f) =>
-      f.type === 'url' &&
-      typeof f.value === 'string' &&
-      fieldMatches(f.value, f.match === 'domain', page),
-  );
+  for (const f of item.fields) {
+    if (f.type !== 'url' || typeof f.value !== 'string') continue;
+    if (fieldMatches(f.value, f.match === 'domain', page)) return f.value;
+  }
+  return null;
+}
+
+/** Whether a login item matches a page (§5.3). */
+export function itemMatches(item: Item, pageUrl: string): boolean {
+  return matchingUrl(item, pageUrl) !== null;
 }

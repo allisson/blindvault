@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { type PopupRuntime, copy, onLocked, openHost, search, status } from './popup-client';
+import {
+  type PopupRuntime,
+  copy,
+  fill,
+  matches,
+  onLocked,
+  openHost,
+  search,
+  status,
+} from './popup-client';
 
 type Listener = Parameters<PopupRuntime['onMessage']['addListener']>[0];
 
@@ -68,6 +77,45 @@ describe('the popup’s messages (extension.md §4, D286)', () => {
     });
     const refused = runtime((m) => ({ v: 1, id: m.id, ok: false, error: 'locked' }));
     await expect(copy(refused.r, 'a'.repeat(32), 'password')).resolves.toBe('locked');
+  });
+
+  it('asks the matching items of a tab, and reads why none can match', async () => {
+    const items = [
+      { itemId: 'a'.repeat(32), title: 'Mail', fields: ['password'], url: 'mail.example.com' },
+    ];
+    const { r, sent } = runtime((m) => ok(m, { items }));
+    await expect(matches(r, 12)).resolves.toEqual(items);
+    expect(sent).toHaveBeenCalledWith({
+      v: 1,
+      id: expect.any(Number) as unknown,
+      type: 'matches',
+      tabId: 12,
+    });
+    const page = runtime((m) => ({ v: 1, id: m.id, ok: false, error: 'page' }));
+    await expect(matches(page.r, 12)).resolves.toBe('page');
+  });
+
+  it('refuses a match with no URL', async () => {
+    const bad = [{ itemId: 'a'.repeat(32), title: 'Mail', fields: ['password'] }];
+    await expect(matches(runtime((m) => ok(m, { items: bad })).r, 1)).resolves.toBeUndefined();
+  });
+
+  it('asks a fill, and reads its refusal', async () => {
+    const { r, sent } = runtime((m) => ok(m, {}));
+    await expect(fill(r, 12, 'a'.repeat(32))).resolves.toBe(true);
+    expect(sent).toHaveBeenCalledWith({
+      v: 1,
+      id: expect.any(Number) as unknown,
+      type: 'fill',
+      tabId: 12,
+      itemId: 'a'.repeat(32),
+    });
+    for (const error of ['no-target', 'moved', 'no-match']) {
+      const refused = runtime((m) => ({ v: 1, id: m.id, ok: false, error }));
+      await expect(fill(refused.r, 12, 'a'.repeat(32))).resolves.toBe(error);
+    }
+    const unknown = runtime((m) => ({ v: 1, id: m.id, ok: false, error: 'other' }));
+    await expect(fill(unknown.r, 12, 'a'.repeat(32))).resolves.toBeUndefined();
   });
 
   it('asks the service worker to open the session host', async () => {

@@ -25,6 +25,15 @@ export type Request =
       readonly field: Copyable;
     }
   | { readonly v: 1; readonly type: 'lock'; readonly id: number }
+  | { readonly v: 1; readonly type: 'matches'; readonly id: number; readonly tabId: number }
+  | {
+      readonly v: 1;
+      readonly type: 'fill';
+      readonly id: number;
+      readonly tabId: number;
+      readonly itemId: string;
+    }
+  | { readonly v: 1; readonly type: 'command-fill'; readonly id: number; readonly tabId: number }
   | { readonly v: 1; readonly type: 'open-host'; readonly id: number }
   | { readonly v: 1; readonly type: 'clipboard-clear'; readonly id: number }
   | { readonly v: 1; readonly type: 'locked'; readonly id: number };
@@ -36,7 +45,16 @@ export type RequestType = Request['type'];
  * service worker's (`open-host`, `clipboard-clear`) are checked in `background.js`, which takes no
  * module of the app.
  */
-export const HOST_TYPES = ['status', 'search', 'copy', 'lock'] as const;
+export const HOST_TYPES = [
+  'status',
+  'search',
+  'copy',
+  'lock',
+  'matches',
+  'fill',
+  'command-fill',
+] as const;
+export type HostType = (typeof HOST_TYPES)[number];
 export const POPUP_TYPES = ['locked'] as const;
 
 const TYPES: ReadonlySet<string> = new Set<RequestType>([
@@ -44,6 +62,9 @@ const TYPES: ReadonlySet<string> = new Set<RequestType>([
   'search',
   'copy',
   'lock',
+  'matches',
+  'fill',
+  'command-fill',
   'open-host',
   'clipboard-clear',
   'locked',
@@ -55,6 +76,9 @@ const KEYS: Readonly<Record<RequestType, readonly string[]>> = {
   search: ['query'],
   copy: ['itemId', 'field'],
   lock: [],
+  matches: ['tabId'],
+  fill: ['tabId', 'itemId'],
+  'command-fill': ['tabId'],
   'open-host': [],
   'clipboard-clear': [],
   locked: [],
@@ -71,6 +95,9 @@ function plainObject(value: unknown): value is Record<string, unknown> {
 function requestId(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
+
+/** A browser's tab ID: a non-negative integer, as for a request's. */
+const tabIdOf = requestId;
 
 export type Parsed =
   | { readonly kind: 'request'; readonly request: Request }
@@ -104,6 +131,18 @@ export function parseRequest(value: unknown, accepted: readonly RequestType[]): 
       }
       return { kind: 'request', request: { v: 1, type: t, id, itemId, field: field as Copyable } };
     }
+    case 'matches':
+    case 'command-fill': {
+      const tabId = value.tabId;
+      if (!tabIdOf(tabId)) return invalid;
+      return { kind: 'request', request: { v: 1, type: t, id, tabId } };
+    }
+    case 'fill': {
+      const { tabId, itemId } = value;
+      if (!tabIdOf(tabId)) return invalid;
+      if (typeof itemId !== 'string' || !ITEM_ID.test(itemId)) return invalid;
+      return { kind: 'request', request: { v: 1, type: t, id, tabId, itemId } };
+    }
     default:
       return { kind: 'request', request: { v: 1, type: t, id } };
   }
@@ -118,12 +157,47 @@ export interface Found {
   readonly fields: readonly Copyable[];
 }
 
-export type Refusal = 'invalid' | 'locked' | 'not-found' | 'no-field';
+/** A Login item that matches a tab's page (§5): `Found` and the URL that matched (D287). */
+export interface Matched extends Found {
+  readonly url: string;
+}
+
+export type Refusal =
+  | 'invalid'
+  | 'locked'
+  | 'not-found'
+  | 'no-field'
+  /** The page cannot match (§5.1), or the browser does not give its URL (D287). */
+  | 'page'
+  /** The item does not match the tab's page. */
+  | 'no-match'
+  /** The page has no sign-in field. */
+  | 'no-target'
+  /** The page navigated between the probe and the fill. */
+  | 'moved';
+
+export const REFUSALS: readonly Refusal[] = [
+  'invalid',
+  'locked',
+  'not-found',
+  'no-field',
+  'page',
+  'no-match',
+  'no-target',
+  'moved',
+];
 
 export type Answer =
   | { readonly v: 1; readonly id: number; readonly ok: false; readonly error: Refusal }
   | { readonly v: 1; readonly id: number; readonly ok: true; readonly state: 'locked' | 'unlocked' }
   | { readonly v: 1; readonly id: number; readonly ok: true; readonly items: readonly Found[] }
+  | {
+      readonly v: 1;
+      readonly id: number;
+      readonly ok: true;
+      /** `popup`: the service worker opens the popup (§6.2). */
+      readonly result: 'filled' | 'popup';
+    }
   | {
       readonly v: 1;
       readonly id: number;
@@ -163,6 +237,17 @@ export function fromPage(
 export const POPUP_PAGE = 'popup.html';
 export const HOST_PAGE = 'index.html';
 export const WORKER_PAGES = ['background.js', '_generated_background_page.html'] as const;
+
+/** The pages each of the session host's types may come from (§4). */
+export const HOST_SENDERS: Readonly<Record<HostType, readonly string[]>> = {
+  status: [POPUP_PAGE],
+  search: [POPUP_PAGE],
+  copy: [POPUP_PAGE],
+  matches: [POPUP_PAGE],
+  fill: [POPUP_PAGE],
+  lock: [POPUP_PAGE, ...WORKER_PAGES],
+  'command-fill': WORKER_PAGES,
+};
 
 let next = 0;
 

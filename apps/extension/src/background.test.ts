@@ -90,11 +90,36 @@ describe('the fill command (extension.md §6.2, D286)', () => {
     expect(a.action.openPopup).not.toHaveBeenCalled();
   });
 
-  it('opens the popup on any other tab', async () => {
+  it('hands any other tab to the session host, which fills when one item matches', async () => {
     const a = api([HOST]);
+    a.runtime.sendMessage.mockResolvedValue({ v: 1, id: 0, ok: true, result: 'filled' } as never);
+    await command(a, { id: 9 });
+    expect(a.runtime.sendMessage).toHaveBeenCalledWith({
+      v: 1,
+      type: 'command-fill',
+      id: 0,
+      tabId: 9,
+    });
+    expect(a.action.openPopup).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the session host asks for it', { v: 1, id: 0, ok: true, result: 'popup' }],
+    ['the answer is a refusal', { v: 1, id: 0, ok: false, error: 'invalid' }],
+    ['the answer is not the session host’s', { v: 2, id: 0, ok: true, result: 'filled' }],
+    ['there is no answer', undefined],
+  ])('opens the popup when %s', async (_name, answer) => {
+    const a = api([HOST]);
+    a.runtime.sendMessage.mockResolvedValue(answer as never);
     await command(a, { id: 9 });
     expect(a.action.openPopup).toHaveBeenCalledTimes(1);
-    expect(a.runtime.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('opens the popup when the session host cannot be reached', async () => {
+    const a = api([HOST]);
+    a.runtime.sendMessage.mockRejectedValue(new Error('Receiving end does not exist.'));
+    await command(a, { id: 9 });
+    expect(a.action.openPopup).toHaveBeenCalledTimes(1);
   });
 
   it('opens the popup with no session host', async () => {
@@ -147,6 +172,10 @@ describe('the service worker’s messages (extension.md §4)', () => {
     expect(parseRequest({ v: 1, type: 'status', id: 1 }, POPUP, a)).toBeUndefined();
     expect(parseRequest({ v: 1, type: 'search', id: 1, query: 'x' }, POPUP, a)).toBeUndefined();
     expect(parseRequest({ v: 1, type: 'locked', id: 1 }, HOST_SENDER, a)).toBeUndefined();
+    expect(parseRequest({ v: 1, type: 'matches', id: 1, tabId: 2 }, POPUP, a)).toBeUndefined();
+    expect(
+      parseRequest({ v: 1, type: 'fill', id: 1, tabId: 2, itemId: 'a' }, POPUP, a),
+    ).toBeUndefined();
   });
 
   it('answers open-host by opening the session host', async () => {

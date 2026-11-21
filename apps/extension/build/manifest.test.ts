@@ -73,6 +73,14 @@ describe('manifestFor (extension.md §2)', () => {
     });
   });
 
+  it('grants no host and declares no content script: filling needs the user’s gesture (CRYPTO-INV-026)', () => {
+    for (const browser of ['chrome', 'firefox'] as const) {
+      const m = manifestFor(browser, '1.0.0');
+      expect(m).not.toHaveProperty('host_permissions');
+      expect(m).not.toHaveProperty('content_scripts');
+    }
+  });
+
   it('allows no remote script, eval, plugin, base or form target', () => {
     expect(EXTENSION_CSP.split('; ')).toEqual([
       "script-src 'self' 'wasm-unsafe-eval'",

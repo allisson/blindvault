@@ -1,7 +1,7 @@
 # BlindVault — Browser extension
 
 > Normative for the browser extension; `overview.md` prevails on design. Implements D267, D268,
-> D270, D282, D283, D284, D285 and D286. Measurements behind it are in `docs/spikes/extension.md`.
+> D270, D282, D283, D284, D285, D286 and D287. Measurements behind it are in `docs/spikes/extension.md`.
 > Terms follow `GLOSSARY.md` (session host, fill, matching item, passkey, unlock passkey).
 
 ## 1. Model
@@ -124,19 +124,21 @@ timer.
 - **Senders.** The session host acts on a message only when `sender.id === runtime.id` and
   `sender.url` is a page of the extension's own origin (`popup.html`, `confirm.html`) or its service
   worker. A message from a content script carries a web page's URL as `sender.url` and is ignored.
+  Each type is taken only from the page the table gives as its sender; another page of the
+  extension gets an error answer (D287).
 - **No secret to the popup** beyond what the user asked to see or copy: the match list carries
   titles, user names and item IDs, never a password.
 
 | From | `type` | Answer |
 | --- | --- | --- |
 | popup | `status` | locked or unlocked, read-only, passkeys on or off |
-| popup | `matches` `{tabId}` | the matching items of that tab's top frame (§5), or why none can match |
-| popup | `fill` `{tabId, itemId}` | done, or the reason it was refused (§6) |
+| popup | `matches` `{tabId}` | the matching items of that tab's top frame (§5), each with the URL that matched, or `page` when the page cannot match or the browser gives no URL (D287) |
+| popup | `fill` `{tabId, itemId}` | done, or `locked`, `not-found`, `page`, `no-match`, `no-field`, `no-target` (no sign-in field) or `moved` (§6, D287) |
 | popup | `search` `{query}` | at most 50 Login items outside the trash whose title, user name or URL holds every term: title, user name, item ID (D286) |
 | popup | `copy` `{itemId, field}` | the value, for the popup to write to the clipboard (§6.3) |
 | popup, confirmation window, service worker | `lock` | done |
 | popup, confirmation window | `open-host` | answered by the service worker: the session host focused or created (D286) |
-| service worker | `command-fill` `{tabId}` | done, or open the popup (§6.2) |
+| service worker | `command-fill` `{tabId}` | `filled`, or `popup`: the service worker opens the popup (§6.2) |
 | session host, to the service worker | `clipboard-clear` | done; carries nothing (§6.3) |
 | session host, to the popup | `locked` | none; the popup closes (§3.2) |
 | service worker | `passkey-create`, `passkey-get` | §7 |
@@ -198,24 +200,35 @@ reviewed change, never a fetch at run time.
 1. The popup opens on the user's click, which grants `activeTab` for that tab.
 2. It asks `matches` with the active tab's `tabId`. The session host reads `tabs.get(tabId).url`
    and computes the top frame's origin; on a page that cannot match (§5.1) the popup says why.
-3. The popup lists the matching items: title, user name and the URL that matched; a search box
-   finds any Login item, but filling stays limited to matching items.
+3. The popup lists the matching items: title, user name and the URL that matched, with Fill and the
+   copy buttons, above every Login item. A search box finds any Login item, listed with the copy
+   buttons only: filling stays limited to matching items (D287).
 4. On a click on an item, the popup sends `fill`.
 5. The session host runs `scripting.executeScript({target: {tabId, allFrames: true}, func:
    probe})` in the isolated world. `probe` returns `location.origin`, whether the frame has a
-   visible password field, and whether one has the focus. The browser injects only into frames
-   whose origin `activeTab` grants, the top frame's.
+   usable password field, whether that field has the focus, and whether the focus is on a text,
+   email or telephone field. The browser injects only into frames whose origin `activeTab` grants,
+   the top frame's.
 6. The target frame is the one whose password field has the focus, else the top frame when it has a
-   visible password field, else the first same-origin frame that has one in document order. A
-   frame whose origin differs from the top frame's is never a target. No target: the popup says the
-   page has no sign-in field.
+   usable password field, else the first same-origin frame that has one in the order the browser
+   lists them, else, for a sign-in that asks the user name alone first, the frame whose text, email
+   or telephone field has the focus (D287). A frame whose origin differs from the top frame's is
+   never a target. No target: the popup says the page has no sign-in field.
 7. The session host runs `scripting.executeScript({target: {tabId, frameIds: [frameId]}, func:
    fill, args: [expectedOrigin, username, password]})`, in the isolated world. `fill` returns
    without writing unless `location.origin === expectedOrigin`, which covers a navigation between
-   the probe and the fill. It writes the user name into the text or email field before the password
-   field (when the item has one) and the password into the password field, through the native
-   value setter, then dispatches `input` and `change` on each. It never submits a form, clicks a
-   button or presses a key.
+   the probe and the fill. It writes the item's password into the password field and its user name
+   into the user name's field, each when the item has one, through the native value setter, then
+   dispatches `input` and `change` on each. It never submits a form, clicks a button or presses a
+   key. The fields (D287):
+   - a usable field has a rendered box, and is not `visibility: hidden`, disabled or read-only;
+     open shadow roots are searched, closed ones cannot be;
+   - the password field is the focused one, else the first usable one whose `autocomplete` is not
+     `new-password`, so a sign-up page has none;
+   - the user name's field is the one with `autocomplete="username"`, else the last text, email or
+     telephone field before the password field, within the password field's form when it has one;
+     with no password field, it is the focused text, email or telephone field, and the password is
+     not written.
 8. The popup closes. The fill counts as activity for auto-lock.
 
 The values travel only from the session host to the injected function in the extension's isolated
@@ -229,8 +242,11 @@ worker sends `command-fill` `{tabId}` to the session host:
 
 - no session host, or the vault locked: the service worker opens the popup (`action.openPopup`),
   which shows the locked state;
-- exactly one matching item: the session host fills it as in §6.1 steps 5 to 7;
-- none, or several: the service worker opens the popup, filtered to the tab's origin.
+- exactly one matching item: the session host fills it as in §6.1 steps 5 to 7 and answers
+  `filled`;
+- none, several, or a fill that wrote nothing: the session host answers `popup`, and the service
+  worker opens the popup, which lists the tab's matching items. Any other answer, or none, opens it
+  too.
 
 The browser takes the key before the page. On the session host's own tab the command sends `lock`
 instead, so the app's lock shortcut (D197) keeps its meaning there (D286).
@@ -399,11 +415,20 @@ passkeys from other managers (D268).
 
 ## 12. Tests
 
-Unit and component tests in `apps/extension` and `apps/web`, Playwright with the unpacked extension
-on Chromium and Firefox, and by hand on `webauthn.io` for passkeys. Playwright runs on Chromium
-first (`apps/extension/e2e`); Firefox joins with filling, since loading an extension there needs a
-tool of its own. Negative tests, each named in
-`security-invariants.md` once it exists:
+Unit tests in `apps/extension` and `apps/web`, Playwright, and by hand on `webauthn.io` for
+passkeys (D287):
+
+- Playwright cannot open an extension's page in Firefox, through its own build or WebDriver BiDi.
+  The function the session host injects into a page runs in Chromium, Firefox and WebKit pages in
+  `apps/web/e2e/extension-fill.spec.ts`; the extension's pages run in Chromium only
+  (`apps/extension/e2e`); loading the package in Firefox, the popup and the shortcut there are
+  checked by hand, as `browser-matrix.md` lists.
+- Playwright cannot click the toolbar or press a command, the gestures that grant `activeTab`. The
+  Chromium tests of filling load a test copy of the package whose manifest grants the test sites as
+  host permissions, and send the popup's and the service worker's messages from those pages; the
+  released package has no host permission.
+
+Negative tests, each named in `security-invariants.md` (CRYPTO-INV-026 for filling):
 
 - **Matching.** `http:` page; port differs; `www.` differs without the flag; the flag on an IP or a
   public suffix; a private-section suffix (`github.io`); punycode host; unparsable URL field;
