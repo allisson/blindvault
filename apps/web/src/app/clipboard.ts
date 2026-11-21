@@ -15,6 +15,16 @@ export interface ClipboardPort {
 
 export const CLEAR_SECONDS = { min: 10, max: 120 } as const;
 
+function checkSeconds(seconds: number): void {
+  if (
+    !Number.isSafeInteger(seconds) ||
+    seconds < CLEAR_SECONDS.min ||
+    seconds > CLEAR_SECONDS.max
+  ) {
+    throw new RangeError('clipboard clear timeout out of range');
+  }
+}
+
 export class ClipboardGuard {
   readonly #port: ClipboardPort;
   #timer: ReturnType<typeof setTimeout> | undefined;
@@ -27,15 +37,19 @@ export class ClipboardGuard {
 
   /** Writes `text` and schedules the clear; rejects when the browser refuses the write. */
   async copy(text: string, seconds: number): Promise<void> {
-    if (
-      !Number.isSafeInteger(seconds) ||
-      seconds < CLEAR_SECONDS.min ||
-      seconds > CLEAR_SECONDS.max
-    ) {
-      throw new RangeError('clipboard clear timeout out of range');
-    }
+    checkSeconds(seconds);
     this.#cancel();
     await this.#port.write(text);
+    this.copied(seconds);
+  }
+
+  /**
+   * Another page wrote the clipboard, the extension's popup (extension.md §6.3): schedules the clear
+   * as `copy` does.
+   */
+  copied(seconds: number): void {
+    checkSeconds(seconds);
+    this.#cancel();
     this.#copied = true;
     this.#timer = setTimeout(() => {
       this.#timer = undefined;

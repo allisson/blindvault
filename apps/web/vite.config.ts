@@ -5,7 +5,7 @@ import { type Plugin, defineConfig } from 'vite';
 
 import { assetManifest } from './build/asset-manifest';
 import { META_CSP } from './build/csp';
-import { extensionPage } from './build/extension';
+import { extensionInput, extensionPage } from './build/extension';
 import { pagesHeadersFile } from './build/pages';
 import { versionText } from './build/version';
 
@@ -44,7 +44,15 @@ export default defineConfig(({ mode }) => {
         : [pagesHeadersFile()]),
       assetManifest(new URL('../../.nvmrc', import.meta.url)),
     ],
-    ...(extension ? { publicDir: false as const, build: { outDir: 'dist-extension' } } : {}),
+    ...(extension
+      ? {
+          publicDir: false as const,
+          build: {
+            outDir: 'dist-extension',
+            rollupOptions: { input: extensionInput(new URL('./', import.meta.url)) },
+          },
+        }
+      : {}),
     // The Argon2id worker is built as a module, as the dev server serves it (app/kdf.ts).
     worker: { format: 'es' },
     define: {

@@ -122,4 +122,19 @@ describe('clipboard clear (D54, D127, D151)', () => {
       expect(writes).toEqual([]);
     },
   );
+
+  it('clears what another page copied, after the timeout (extension.md §6.3)', async () => {
+    const { writes, g } = guard();
+    g.copied(10);
+    expect(writes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(writes).toEqual(['']);
+  });
+
+  it('refuses a timeout out of range for another page’s copy', () => {
+    const { g } = guard();
+    expect(() => {
+      g.copied(9);
+    }).toThrow(RangeError);
+  });
 });

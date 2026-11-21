@@ -1,5 +1,5 @@
 // The extension's packages (extension.md §2, D285): `apps/web`'s extension build, the browser's
-// `manifest.json` and the service worker, with the package's own `asset-manifest.txt` listing every
+// `manifest.json`, the service worker and, on Chrome, the offscreen document, with the package's own `asset-manifest.txt` listing every
 // file, `manifest.json` included. For each browser: `dist/<browser>/`, to load unpacked, and
 // `dist/blindvault-<browser>-<version>.zip`, reproducible. `node build/package.ts` runs it after
 // `vite build --mode extension` (`pnpm build`), so it imports nothing but Node's own modules and
@@ -21,16 +21,23 @@ import { zip } from './zip.ts';
 
 export const SERVICE_WORKER = 'background.js';
 
+/** The files of `src/` each package carries, as written: Chrome's offscreen document clears the
+ * clipboard (extension.md §6.3), and Firefox has none. */
+export const SOURCES: Readonly<Record<Browser, readonly string[]>> = {
+  chrome: [SERVICE_WORKER, 'offscreen.html', 'offscreen.js'],
+  firefox: [SERVICE_WORKER],
+};
+
 /** The files of one browser's package, its asset manifest last. */
 export function packageFiles(
   browser: Browser,
   web: readonly BuildFile[],
   version: string,
-  worker: Uint8Array,
+  sources: readonly BuildFile[],
 ): { readonly files: readonly BuildFile[]; readonly hash: string } {
   const own: BuildFile[] = [
     { path: 'manifest.json', bytes: new TextEncoder().encode(manifestJson(browser, version)) },
-    { path: SERVICE_WORKER, bytes: worker },
+    ...sources,
   ];
   // The web build's manifest lists the web build alone; the package gets its own.
   const files = [...web.filter((f) => f.path !== MANIFEST), ...own];
@@ -66,11 +73,16 @@ async function main(): Promise<void> {
   assertNodeVersion(process.version, await readFile(join(root, '../../.nvmrc'), 'utf8'));
   const web = await filesUnder(join(root, '../web/dist-extension'));
   const version = versionOf(web);
-  const worker = await readFile(join(root, 'src', SERVICE_WORKER));
   const dist = join(root, 'dist');
   await rm(dist, { recursive: true, force: true });
   for (const browser of BROWSERS) {
-    const { files, hash } = packageFiles(browser, web, version, worker);
+    const sources = await Promise.all(
+      SOURCES[browser].map(async (path) => ({
+        path,
+        bytes: await readFile(join(root, 'src', path)),
+      })),
+    );
+    const { files, hash } = packageFiles(browser, web, version, sources);
     for (const f of files) {
       const path = join(dist, browser, ...f.path.split('/'));
       await mkdir(dirname(path), { recursive: true });

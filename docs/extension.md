@@ -1,7 +1,7 @@
 # BlindVault — Browser extension
 
 > Normative for the browser extension; `overview.md` prevails on design. Implements D267, D268,
-> D270, D282, D283, D284 and D285. Measurements behind it are in `docs/spikes/extension.md`.
+> D270, D282, D283, D284, D285 and D286. Measurements behind it are in `docs/spikes/extension.md`.
 > Terms follow `GLOSSARY.md` (session host, fill, matching item, passkey, unlock passkey).
 
 ## 1. Model
@@ -48,7 +48,7 @@ project's own, with no type package.
 
 | Key | Chrome | Firefox |
 | --- | --- | --- |
-| `permissions` | `activeTab`, `scripting`, `idle`, `offscreen`, `unlimitedStorage` | `activeTab`, `scripting`, `idle` |
+| `permissions` | `activeTab`, `scripting`, `idle`, `clipboardWrite`, `offscreen`, `unlimitedStorage` | `activeTab`, `scripting`, `idle`, `clipboardWrite` |
 | `optional_host_permissions` | `<all_urls>` | `<all_urls>` |
 | `background` | `service_worker` | `scripts` (event page) |
 | `content_security_policy.extension_pages` | `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; form-action 'none'` | same |
@@ -74,10 +74,11 @@ SHA-256, `manifest.json` included and the manifest itself excluded (D285).
 - `vite build --mode extension` writes `apps/web/dist-extension`: no `public/` (its `sw.js`,
   `404.html` and web manifest are the web's), no `_headers`, the page without its links to the web
   manifest and the Apple icon, and the three icons the extension uses.
-- `apps/extension/build/package.ts` adds the browser's `manifest.json` and `background.js`, writes
-  the package's `asset-manifest.txt` with the web build's format and code, and prints its hash per
-  browser. It writes `dist/<browser>/`, to load unpacked, and
-  `dist/blindvault-<browser>-<version>.zip`.
+- `vite build --mode extension` has two entries, `index.html` (the session host) and `popup.html`.
+- `apps/extension/build/package.ts` adds the browser's `manifest.json`, `background.js` and, on
+  Chrome, `offscreen.html` and `offscreen.js` (§6.3), writes the package's `asset-manifest.txt`
+  with the web build's format and code, and prints its hash per browser. It writes
+  `dist/<browser>/`, to load unpacked, and `dist/blindvault-<browser>-<version>.zip`.
 - The archive is written by `apps/extension/build/zip.ts`: files only, in byte order of their UTF-8
   paths, stored without compression so its bytes depend on no zlib version, each dated
   1980-01-01 00:00 with mode 0644.
@@ -131,10 +132,13 @@ timer.
 | popup | `status` | locked or unlocked, read-only, passkeys on or off |
 | popup | `matches` `{tabId}` | the matching items of that tab's top frame (§5), or why none can match |
 | popup | `fill` `{tabId, itemId}` | done, or the reason it was refused (§6) |
+| popup | `search` `{query}` | at most 50 Login items outside the trash whose title, user name or URL holds every term: title, user name, item ID (D286) |
 | popup | `copy` `{itemId, field}` | the value, for the popup to write to the clipboard (§6.3) |
-| popup, confirmation window | `lock` | done |
-| popup, confirmation window | `open-host` | the session host focused or created |
+| popup, confirmation window, service worker | `lock` | done |
+| popup, confirmation window | `open-host` | answered by the service worker: the session host focused or created (D286) |
 | service worker | `command-fill` `{tabId}` | done, or open the popup (§6.2) |
+| session host, to the service worker | `clipboard-clear` | done; carries nothing (§6.3) |
+| session host, to the popup | `locked` | none; the popup closes (§3.2) |
 | service worker | `passkey-create`, `passkey-get` | §7 |
 | confirmation window | `confirm-details`, `confirm-choice` | §7.4 |
 
@@ -228,16 +232,21 @@ worker sends `command-fill` `{tabId}` to the session host:
 - exactly one matching item: the session host fills it as in §6.1 steps 5 to 7;
 - none, or several: the service worker opens the popup, filtered to the tab's origin.
 
+The browser takes the key before the page. On the session host's own tab the command sends `lock`
+instead, so the app's lock shortcut (D197) keeps its meaning there (D286).
+
 ### 6.3 Copying and the clipboard
 
 The popup copies a user name, a password or the current TOTP code with `navigator.clipboard
-.writeText`, since the popup has the focus. The clear after the set time (D54, D151) is timed by the
-session host and done by a context that can write to the clipboard without the focus, as measured
-(D282): on Chrome, an offscreen document created with reason `CLIPBOARD`, writing an empty string
-through `execCommand('copy')` and closing; on Firefox, the event page through `writeText('')`. That
-context receives no secret. A lock clears the clipboard the same way when the session host can still
-send the request; closing the session host may leave it, and the UI states, as on the web, that
-clearing is not guaranteed.
+.writeText`, since the popup has the focus; the `copy` answer starts the clear's timer in the
+session host. The clear after the set time (D54, D151) is timed by the session host, for the
+popup's copies and its own, and done by a context that can write to the clipboard without the
+focus, as measured (D282): the session host sends `clipboard-clear` to the service worker, which on
+Chrome creates an offscreen document with reason `CLIPBOARD`, writing an empty string through
+`execCommand('copy')`, and closes it, and on Firefox writes `writeText('')` itself. That context
+receives no secret. Both rely on `clipboardWrite` (D286). A lock clears the clipboard the same way
+when the session host can still send the request; closing the session host may leave it, and the
+UI states, as on the web, that clearing is not guaranteed.
 
 ## 7. Stored passkeys (D268)
 

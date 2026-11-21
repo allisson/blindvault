@@ -4,6 +4,7 @@ import { answerLink, offerLink, startInitiator, startResponder } from '@blindvau
 import { App, supported } from './App';
 import { startAppearance } from './app/appearance';
 import { manifestHash } from './app/build-info';
+import { clipboard } from './app/clipboard';
 import { VaultController } from './app/controller';
 import { framed } from './app/frame';
 import { startKdfWorker } from './app/kdf';
@@ -12,8 +13,10 @@ import { loadStunSettings } from './app/stun-settings';
 import { preloadStrength } from './app/strength';
 import { UpdateMonitor } from './app/updates';
 import { VersionLock, vaultExists } from './app/version-lock';
+import { hostRuntime, serveHost } from './extension/host';
 import { LanguageProvider } from './i18n/context';
 import { platform } from './platform';
+import { extensionLocks } from './platform/extension';
 import { Framed } from './ui/Framed';
 import './index.css';
 
@@ -92,6 +95,21 @@ function start(root: HTMLElement): void {
         })
       : undefined;
   void versionLock?.start();
+
+  // The session host answers the popup and the service worker (extension.md §4).
+  const runtime = import.meta.env.MODE === 'extension' ? hostRuntime() : undefined;
+  if (runtime) {
+    serveHost(runtime, {
+      app: controller,
+      activity: () => {
+        extensionLocks.touch();
+      },
+      copied: (seconds) => {
+        clipboard.copied(seconds);
+      },
+      now: Date.now,
+    });
+  }
 
   createRoot(root).render(
     <StrictMode>

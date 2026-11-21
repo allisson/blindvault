@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { manifestOf } from '../../web/build/asset-manifest.ts';
 import { manifestJson } from './manifest';
-import { packageFiles, versionOf } from './package';
+import { SOURCES, packageFiles, versionOf } from './package';
 
 const text = (s: string) => new TextEncoder().encode(s);
 
@@ -17,7 +17,9 @@ const WEB = [
 describe('packageFiles (D285)', () => {
   it('adds manifest.json and the service worker, and lists them in its own asset manifest', () => {
     const worker = text('// worker\n');
-    const { files, hash } = packageFiles('chrome', WEB, '1.0.0-rc.2', worker);
+    const { files, hash } = packageFiles('chrome', WEB, '1.0.0-rc.2', [
+      { path: 'background.js', bytes: worker },
+    ]);
     expect(files.map((f) => f.path)).toEqual([
       'index.html',
       'version.txt',
@@ -41,14 +43,14 @@ describe('packageFiles (D285)', () => {
   });
 
   it('gives each browser its own manifest, and so its own hash', () => {
-    const chrome = packageFiles('chrome', WEB, '1.0.0', text(''));
-    const firefox = packageFiles('firefox', WEB, '1.0.0', text(''));
+    const chrome = packageFiles('chrome', WEB, '1.0.0', []);
+    const firefox = packageFiles('firefox', WEB, '1.0.0', []);
     expect(chrome.hash).not.toBe(firefox.hash);
   });
 
   it('refuses a web build that already holds one of its files', () => {
     const web = [...WEB, { path: 'manifest.json', bytes: text('{}') }];
-    expect(() => packageFiles('firefox', web, '1.0.0', text(''))).toThrow(/duplicate path/);
+    expect(() => packageFiles('firefox', web, '1.0.0', [])).toThrow(/duplicate path/);
   });
 });
 
@@ -59,5 +61,12 @@ describe('versionOf', () => {
 
   it('fails without it', () => {
     expect(() => versionOf([])).toThrow(/no version.txt/);
+  });
+});
+
+describe('SOURCES (extension.md §6.3)', () => {
+  it('gives Chrome the offscreen document that clears the clipboard, and Firefox none', () => {
+    expect(SOURCES.chrome).toEqual(['background.js', 'offscreen.html', 'offscreen.js']);
+    expect(SOURCES.firefox).toEqual(['background.js']);
   });
 });
