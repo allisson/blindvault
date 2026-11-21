@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  FORWARD_TRIES,
   clearClipboard,
   command,
+  deliverAnswer,
   findHost,
+  forwardPasskey,
   openHost,
   parseRequest,
   start,
@@ -32,7 +35,11 @@ function api(contexts: { documentUrl?: string; tabId: number; windowId: number }
     },
     action: { openPopup: vi.fn(() => Promise.resolve()) },
     commands: { onCommand: on('command') },
-    tabs: { create: vi.fn(() => Promise.resolve()), update: vi.fn(() => Promise.resolve()) },
+    tabs: {
+      create: vi.fn(() => Promise.resolve()),
+      update: vi.fn(() => Promise.resolve()),
+      sendMessage: vi.fn(() => Promise.resolve()),
+    },
     windows: { update: vi.fn(() => Promise.resolve()) },
   };
 }
@@ -141,9 +148,12 @@ describe('the service worker’s messages (extension.md §4)', () => {
   const open = { v: 1, type: 'open-host', id: 4 };
   const clear = { v: 1, type: 'clipboard-clear', id: 5 };
 
-  it('takes open-host from the popup and clipboard-clear from the session host', () => {
-    expect(parseRequest(open, POPUP, a)).toBe('open-host');
-    expect(parseRequest(clear, HOST_SENDER, a)).toBe('clipboard-clear');
+  it('takes open-host from the popup and the confirmation window, clipboard-clear from the session host', () => {
+    expect(parseRequest(open, POPUP, a)).toEqual({ type: 'open-host' });
+    expect(parseRequest(open, { id: 'abc', url: `${BASE}confirm.html#00` }, a)).toEqual({
+      type: 'open-host',
+    });
+    expect(parseRequest(clear, HOST_SENDER, a)).toEqual({ type: 'clipboard-clear' });
   });
 
   it.each([
@@ -242,5 +252,159 @@ describe('the clipboard’s clear (extension.md §6.3)', () => {
       expect(respond).toHaveBeenCalledWith({ v: 1, id: 5, ok: true });
     });
     expect(writeText).toHaveBeenCalledWith('');
+  });
+});
+
+const REQUEST = '0123456789abcdef0123456789abcdef';
+const OPTIONS = { challenge: 'AAAAAAAAAAAAAAAAAAAAAA' };
+/** A content script's sender: the browser's origin, frame and tab. */
+const FRAME = {
+  id: 'abc',
+  url: 'https://ads.example/frame',
+  origin: 'https://ads.example',
+  frameId: 4,
+  tab: { id: 9, url: 'https://site.example/login' },
+};
+const GET = { v: 1, type: 'passkey-get', id: 3, request: REQUEST, options: OPTIONS };
+const FORWARDED = {
+  type: 'passkey-get',
+  request: REQUEST,
+  options: OPTIONS,
+  tabId: 9,
+  frameId: 4,
+  origin: 'https://ads.example',
+  topOrigin: 'https://site.example',
+};
+
+describe('passkey requests (extension.md §7.2, §7.7, D289)', () => {
+  const a = api([]);
+
+  it('takes the origin, frame and top origin from the browser, never from the message', () => {
+    expect(parseRequest(GET, FRAME, a)).toEqual(FORWARDED);
+    expect(parseRequest({ ...GET, type: 'passkey-create' }, FRAME, a)).toEqual({
+      ...FORWARDED,
+      type: 'passkey-create',
+    });
+    // Without `sender.origin`, the origin of the frame's URL, also the browser's.
+    expect(parseRequest(GET, { ...FRAME, origin: undefined }, a)).toMatchObject({
+      origin: 'https://ads.example',
+    });
+  });
+
+  it.each([
+    ['a forged origin', { ...GET, origin: 'https://bank.example' }, FRAME],
+    ['a forged tab', { ...GET, tabId: 1 }, FRAME],
+    ['a sender with no tab', GET, { ...FRAME, tab: undefined }],
+    ['a tab with no URL', GET, { ...FRAME, tab: { id: 9 } }],
+    ['no frame', GET, { ...FRAME, frameId: undefined }],
+    ['another extension', GET, { ...FRAME, id: 'xyz' }],
+    ['a request ID not drawn as 32 hexadecimal digits', { ...GET, request: 'ABC' }, FRAME],
+    ['options that are not an object', { ...GET, options: [] }, FRAME],
+    ['a missing ID', { v: 1, type: 'passkey-get', request: REQUEST, options: OPTIONS }, FRAME],
+  ])('refuses %s', (_name, message, sender) => {
+    expect(parseRequest(message, sender, a)).toBeNull();
+  });
+
+  const ANSWER = {
+    v: 1,
+    type: 'passkey-answer',
+    id: 2,
+    tabId: 9,
+    frameId: 4,
+    request: REQUEST,
+    result: { kind: 'browser' },
+  };
+
+  it('takes passkey-answer from the session host only', () => {
+    expect(parseRequest(ANSWER, HOST_SENDER, a)).toEqual({
+      type: 'passkey-answer',
+      tabId: 9,
+      frameId: 4,
+      request: REQUEST,
+      result: { kind: 'browser' },
+    });
+    expect(parseRequest(ANSWER, POPUP, a)).toBeNull();
+    expect(parseRequest(ANSWER, FRAME, a)).toBeNull();
+    expect(parseRequest({ ...ANSWER, result: 'browser' }, HOST_SENDER, a)).toBeNull();
+    expect(parseRequest({ ...ANSWER, frameId: -1 }, HOST_SENDER, a)).toBeNull();
+  });
+
+  it('leaves the confirmation window’s messages to the session host', () => {
+    const confirm = { id: 'abc', url: `${BASE}confirm.html` };
+    expect(
+      parseRequest({ v: 1, type: 'confirm-details', id: 1, token: REQUEST }, confirm, a),
+    ).toBeUndefined();
+  });
+
+  it('forwards a request to the session host, which accepts it', async () => {
+    const b = api([HOST]);
+    b.runtime.sendMessage.mockResolvedValue({ v: 1, id: 0, ok: true } as never);
+    await expect(forwardPasskey(b, FORWARDED as never)).resolves.toBe(true);
+    expect(b.runtime.sendMessage).toHaveBeenCalledWith({ v: 1, id: 0, ...FORWARDED });
+    expect(b.tabs.create).not.toHaveBeenCalled();
+  });
+
+  it('reports a refusal, so the call goes to the browser', async () => {
+    const b = api([HOST]);
+    b.runtime.sendMessage.mockResolvedValue({ v: 1, id: 0, ok: false, error: 'invalid' } as never);
+    await expect(forwardPasskey(b, FORWARDED as never)).resolves.toBe(false);
+  });
+
+  it('creates a session host, pinned and in the background, and forwards once it listens', async () => {
+    const b = api([]);
+    b.runtime.sendMessage
+      .mockRejectedValueOnce(new Error('Receiving end does not exist.'))
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValue({ v: 1, id: 0, ok: true } as never);
+    const wait = vi.fn(() => Promise.resolve());
+    await expect(forwardPasskey(b, FORWARDED as never, wait)).resolves.toBe(true);
+    expect(b.tabs.create).toHaveBeenCalledWith({
+      url: `${BASE}index.html`,
+      pinned: true,
+      active: false,
+    });
+    expect(b.runtime.sendMessage).toHaveBeenCalledTimes(3);
+    expect(wait).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up when no session host ever listens', async () => {
+    const b = api([]);
+    b.runtime.sendMessage.mockRejectedValue(new Error('Receiving end does not exist.'));
+    await expect(forwardPasskey(b, FORWARDED as never, () => Promise.resolve())).resolves.toBe(
+      false,
+    );
+    expect(b.runtime.sendMessage).toHaveBeenCalledTimes(FORWARD_TRIES);
+  });
+
+  it('hands the answer to the frame that asked', async () => {
+    const b = api([]);
+    await deliverAnswer(b, {
+      type: 'passkey-answer',
+      tabId: 9,
+      frameId: 4,
+      request: REQUEST,
+      result: { kind: 'browser' },
+    });
+    expect(b.tabs.sendMessage).toHaveBeenCalledWith(
+      9,
+      { v: 1, type: 'passkey-answer', id: 0, request: REQUEST, result: { kind: 'browser' } },
+      { frameId: 4 },
+    );
+  });
+
+  it('answers the content script once the session host accepted, and refuses a forged message', async () => {
+    const b = api([HOST]);
+    b.runtime.sendMessage.mockResolvedValue({ v: 1, id: 0, ok: true } as never);
+    start(b);
+    const respond = vi.fn();
+    expect(b.listeners.message?.(GET, FRAME, respond)).toBe(true);
+    await vi.waitFor(() => {
+      expect(respond).toHaveBeenCalledWith({ v: 1, id: 3, ok: true });
+    });
+    const forged = vi.fn();
+    expect(b.listeners.message?.({ ...GET, origin: 'https://bank.example' }, FRAME, forged)).toBe(
+      false,
+    );
+    expect(forged).toHaveBeenCalledWith({ v: 1, id: 3, ok: false, error: 'invalid' });
   });
 });

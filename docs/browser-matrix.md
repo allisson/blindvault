@@ -87,6 +87,9 @@ The extension's capabilities (`extension.md` §10, §12, D287), on its Chromium 
 | User name alone, two-step sign-in | auto (page) | auto (page); by hand 1.0.0-rc.2 |
 | Never fills a cross-origin iframe | auto (test copy) | auto (page) |
 | Changed build stopped until confirmed (§8.2) | auto | not checked |
+| Passkey create and get, each confirmed in the window (§7) | auto (test copy) | not checked |
+| Passkey from a cross-origin frame names the top origin; Cancel, a second request, a lock | auto (test copy) | not checked |
+| Passkeys on `webauthn.io`, the switch of Settings › Passkeys | not checked | not checked |
 
 Edge and Brave install the Chrome package from the Chrome Web Store: not checked (`extension.md` §10).
 
@@ -120,5 +123,9 @@ To check a cell by hand, on a release's package, in each browser:
 5. **Two-step:** on a page with only a focused email field, Fill writes the user name alone.
 6. **Version lock:** load a changed build over the installed one; it asks for confirmation before
    any vault.
+7. **Passkeys:** turn on Settings › Passkeys and grant the permission. On `https://webauthn.io`,
+   register a random user name: the confirmation window shows `https://webauthn.io`, and Confirm
+   saves a new Login item holding the passkey. Authenticate with it: the window lists it, and
+   Confirm signs in. "Use another authenticator" hands the call to the browser's own prompt.
 
 Record the browser version and the result in the table above.

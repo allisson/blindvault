@@ -1,5 +1,5 @@
 // The extension's packages (extension.md §2, D285): `apps/web`'s extension build, the browser's
-// `manifest.json`, the service worker and, on Chrome, the offscreen document, with the package's own `asset-manifest.txt` listing every
+// `manifest.json`, the service worker, the passkey content scripts and, on Chrome, the offscreen document, with the package's own `asset-manifest.txt` listing every
 // file, `manifest.json` included. For each browser: `dist/<browser>/`, to load unpacked, and
 // `dist/blindvault-<browser>-<version>.zip`, reproducible. `node build/package.ts` runs it after
 // `vite build --mode extension` (`pnpm build`), so it imports nothing but Node's own modules and
@@ -21,11 +21,14 @@ import { zip } from './zip.ts';
 
 export const SERVICE_WORKER = 'background.js';
 
+/** The content scripts Settings › Passkeys registers (extension.md §7.1). */
+export const PASSKEY_SCRIPTS = ['passkey-main.js', 'passkey-isolated.js'];
+
 /** The files of `src/` each package carries, as written: Chrome's offscreen document clears the
  * clipboard (extension.md §6.3), and Firefox has none. */
 export const SOURCES: Readonly<Record<Browser, readonly string[]>> = {
-  chrome: [SERVICE_WORKER, 'offscreen.html', 'offscreen.js'],
-  firefox: [SERVICE_WORKER],
+  chrome: [SERVICE_WORKER, ...PASSKEY_SCRIPTS, 'offscreen.html', 'offscreen.js'],
+  firefox: [SERVICE_WORKER, ...PASSKEY_SCRIPTS],
 };
 
 /** The files of one browser's package, its asset manifest last. */
