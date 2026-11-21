@@ -3,6 +3,7 @@
 
 pnpm-lock.yaml
 **/dist/
+**/dist-extension/
 **/coverage/
 **/.tsbuild/
 **/playwright-report/

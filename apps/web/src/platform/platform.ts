@@ -16,11 +16,22 @@ export interface LockSignals {
   onSystemLock(listener: () => void): () => void;
 }
 
+/** What the update flow needs of the app, to apply an update without losing anything (D152). */
+export interface UpdateHost {
+  /** Whether the vault is locked or absent, with no operation in progress. */
+  idle(): boolean;
+  /** Calls `listener` on every change that may make `idle()` true; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void;
+}
+
 export interface Platform {
   readonly kind: 'web' | 'extension';
   /** Writes the clipboard: a copy, and its clear after the set time or on lock (D54, §6.3). */
   readonly clipboard: ClipboardPort;
   readonly lockSignals: LockSignals;
-  /** Starts the update flow the monitor follows: the service worker on the web (D190, D191). */
-  startUpdates(monitor: UpdateMonitor): void;
+  /**
+   * Starts the update flow: on the web the service worker's, which the monitor follows (D190,
+   * D191); in the extension the deferred reload of extension.md §8.1, applied once `host` is idle.
+   */
+  startUpdates(monitor: UpdateMonitor, host: UpdateHost): void;
 }

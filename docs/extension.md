@@ -53,7 +53,14 @@ project's own, with no type package.
 | `background` | `service_worker` | `scripts` (event page) |
 | `content_security_policy.extension_pages` | `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; form-action 'none'` | same |
 | `commands` | `fill`: `Ctrl+Shift+L`, `Command+Shift+L` on macOS | same |
-| ID | fixed by the Web Store key | `browser_specific_settings.gecko.id`, fixed, so storage survives updates |
+| ID | fixed by the Web Store key | `browser_specific_settings.gecko.id` = `blindvault@allisson.github.io`, fixed, so storage survives updates |
+| Minimum | `minimum_chrome_version` `127` | `strict_min_version` `149.0` (§10) |
+| Data collection | — | `data_collection_permissions.required` `["none"]` |
+
+`apps/extension/build/manifest.ts` writes both. The `version` key holds the numbers of the package
+version, since browsers take no pre-release; Chrome's `version_name` keeps the full version. A
+pre-release build is for testing, loaded unpacked, and goes to no store, since the release that
+follows has the same numbers.
 
 `unlimitedStorage` exempts the extension's IndexedDB from eviction, since Chrome refuses
 `navigator.storage.persist()` in an extension (D282); Firefox grants `persist()`. The app's own
@@ -62,7 +69,20 @@ project's own, with no type package.
 **Build.** `pnpm --filter @blindvault/extension build` makes one archive per browser,
 reproducibly: entries sorted by path, fixed timestamps and permissions, as D189 asks of the web
 build. Each archive carries an `asset-manifest.txt` listing every file of the package with its
-SHA-256, `manifest.json` included and the manifest itself excluded (D285). The release publishes
+SHA-256, `manifest.json` included and the manifest itself excluded (D285).
+
+- `vite build --mode extension` writes `apps/web/dist-extension`: no `public/` (its `sw.js`,
+  `404.html` and web manifest are the web's), no `_headers`, the page without its links to the web
+  manifest and the Apple icon, and the three icons the extension uses.
+- `apps/extension/build/package.ts` adds the browser's `manifest.json` and `background.js`, writes
+  the package's `asset-manifest.txt` with the web build's format and code, and prints its hash per
+  browser. It writes `dist/<browser>/`, to load unpacked, and
+  `dist/blindvault-<browser>-<version>.zip`.
+- The archive is written by `apps/extension/build/zip.ts`: files only, in byte order of their UTF-8
+  paths, stored without compression so its bytes depend on no zlib version, each dated
+  1980-01-01 00:00 with mode 0644.
+- CI builds both archives twice, as the web build (`docs/build.md`), and compares them byte for
+  byte. The release publishes
 both archives and both manifest hashes; `docs/build.md` describes how to check a store's package
 (§8.2).
 
@@ -307,16 +327,26 @@ remove dialog says so and tells the user to remove the passkey on the site too (
 
 The service worker listens to `runtime.onUpdateAvailable`, so the browser does not reload the
 extension at once. When the vault is locked or no session host exists it calls `runtime.reload()`;
-otherwise the session host reloads the extension when the vault next locks. A browser restart
+otherwise the session host reloads the extension when the vault next locks.
+
+- The service worker finds the session host among `runtime.getContexts({contextTypes: ["TAB"]})`
+  by its URL, and reloads only when there is none.
+- The session host listens too (the platform's update flow): it reloads at once when the vault is
+  locked or absent and no operation runs, the condition of the web's update (D152), and otherwise
+  on the first change of state that meets it. A browser restart
 applies the update anyway; the vault then reopens locked at the new version.
 
 ### 8.2 Confirmation, and what it does not do
 
-The installation keeps the last confirmed version and manifest hash in `localStorage`, an
-installation setting holding no vault data, as the STUN list does (D209). At startup, when the
+The installation keeps the last confirmed version and manifest hash in `localStorage`
+(`blindvault.extension.confirmed`), an installation setting holding no vault data, as the STUN list
+does (D209). The running hash is the one About shows: the SHA-256 of the package's
+`asset-manifest.txt`, read at startup. At startup, when the
 running version or hash differs, the first screen shows both, old and new, and the link to the
 release, and opens no vault until the user confirms. A first installation records them with the
-onboarding's notice, trust on first use as on the web.
+onboarding's notice, trust on first use as on the web. "First" means no record and no vault: a
+vault with no record, or with a record that cannot be read, asks for the confirmation, with the
+previous version shown as unknown.
 
 **Limit.** This confirmation is transparency, not protection. The new code installed by the store
 is the code that shows it, and a malicious version can skip it. What holds is §8.1: the running code
@@ -327,6 +357,11 @@ keeps the session until the vault locks. The store and the publisher account rem
 version, unpack it, remove `_metadata/` (Chrome) or `META-INF/` (Firefox), and run `shasum -a 256 -c
 asset-manifest.txt` in it; the hash of `asset-manifest.txt` must equal the one About shows and the
 release publishes. `docs/build.md` gives the commands.
+
+**To confirm at the first Chrome Web Store upload.** No source found states whether the store
+rewrites `manifest.json` in the package it serves (an `update_url`, the `key`). If it does, the
+`manifest.json` line fails this check on Chrome, and a new decision says how the check treats that
+file.
 
 ## 9. Onboarding, pairing and sync
 
@@ -340,7 +375,7 @@ release publishes. `docs/build.md` gives the commands.
 
 | Browser | Status | Minimum |
 | --- | --- | --- |
-| Chrome | tested | 127, for `action.openPopup`; to be confirmed against Chrome's API reference in the first implementation step |
+| Chrome | tested | 127, where `action.openPopup` left the policy-installed extensions (Chrome's "What's new in Chrome extensions") |
 | Firefox | tested | 149, where `action.openPopup` left its preference (Bugzilla 1799344); MAIN-world scripts need 128 |
 | Edge, Brave | installed from the Chrome Web Store; listed in `browser-matrix.md` as untested | as Chrome |
 | Safari | not in v1 (D267) | — |
@@ -356,7 +391,9 @@ passkeys from other managers (D268).
 ## 12. Tests
 
 Unit and component tests in `apps/extension` and `apps/web`, Playwright with the unpacked extension
-on Chromium and Firefox, and by hand on `webauthn.io` for passkeys. Negative tests, each named in
+on Chromium and Firefox, and by hand on `webauthn.io` for passkeys. Playwright runs on Chromium
+first (`apps/extension/e2e`); Firefox joins with filling, since loading an extension there needs a
+tool of its own. Negative tests, each named in
 `security-invariants.md` once it exists:
 
 - **Matching.** `http:` page; port differs; `www.` differs without the flag; the flag on an IP or a

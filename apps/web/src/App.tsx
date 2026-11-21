@@ -7,6 +7,7 @@ import { type VaultController } from './app/controller';
 import { LockTimers } from './app/lock-timers';
 import { Navigation } from './app/nav';
 import { type UpdateMonitor } from './app/updates';
+import { type VersionLock, type VersionLockState } from './app/version-lock';
 import { LanguageProvider } from './i18n/context';
 import { platform } from './platform';
 import { AboutContext } from './ui/about-context';
@@ -15,6 +16,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Start } from './ui/Start';
 import { UpdatesContext } from './ui/update-context';
 import { VaultShell } from './ui/VaultShell';
+import { VersionLockScreen } from './ui/VersionLock';
 
 export function supported(): boolean {
   return typeof indexedDB !== 'undefined' && typeof navigator.locks !== 'undefined';
@@ -23,9 +25,14 @@ export function supported(): boolean {
 interface RootProps {
   readonly controller: VaultController;
   readonly monitor: UpdateMonitor;
+  /** The extension's (extension.md §8.2); the web has none. */
+  readonly versionLock?: VersionLock | undefined;
 }
 
-function Root({ controller, monitor }: RootProps) {
+const NO_VERSION_LOCK: VersionLockState = { kind: 'confirmed' };
+const noSubscription = () => () => undefined;
+
+function Root({ controller, monitor, versionLock }: RootProps) {
   const nav = useMemo(() => new Navigation(), []);
   const timers = useMemo(
     () =>
@@ -120,10 +127,18 @@ function Root({ controller, monitor }: RootProps) {
 
   // A changed sw.js locked the vault; its warning comes before every screen (D63, D191).
   const updates = useSyncExternalStore(monitor.subscribe, monitor.getState);
+  const version = useSyncExternalStore(
+    versionLock?.subscribe ?? noSubscription,
+    versionLock?.getState ?? (() => NO_VERSION_LOCK),
+  );
   if (updates.warning) return <ChangedWorker monitor={monitor} />;
 
   if (!supported()) {
     return <Start controller={controller} status={{ kind: 'unsupported' }} inTab={inTab} />;
+  }
+  // A changed extension opens no vault until the user confirms it (extension.md §8.2).
+  if (versionLock && version.kind !== 'confirmed') {
+    return <VersionLockScreen versionLock={versionLock} />;
   }
   if (status.kind === 'unlocked') {
     return <VaultShell controller={controller} session={status.session} nav={nav} />;
@@ -132,7 +147,7 @@ function Root({ controller, monitor }: RootProps) {
   return <Start key={drops} controller={controller} status={status} inTab={inTab} />;
 }
 
-export function App({ controller, monitor }: RootProps) {
+export function App({ controller, monitor, versionLock }: RootProps) {
   const updates = useMemo(() => ({ controller, monitor }), [controller, monitor]);
   const about = useState(false);
   const [, setAbout] = about;
@@ -149,7 +164,7 @@ export function App({ controller, monitor }: RootProps) {
       <UpdatesContext.Provider value={updates}>
         <AboutContext.Provider value={about}>
           <ErrorBoundary controller={controller}>
-            <Root controller={controller} monitor={monitor} />
+            <Root controller={controller} monitor={monitor} versionLock={versionLock} />
           </ErrorBoundary>
         </AboutContext.Provider>
       </UpdatesContext.Provider>

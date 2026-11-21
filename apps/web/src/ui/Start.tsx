@@ -397,6 +397,7 @@ function NoVault({
             <li>{m.start.extensionDevice}</li>
             <li>{m.start.extensionPair}</li>
             <li>{m.start.extensionSync}</li>
+            <li>{m.start.extensionVersionLock}</li>
           </>
         ) : null}
       </ul>
