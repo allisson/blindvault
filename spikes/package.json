@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "build:extension": "pnpm --filter @blindvault/web build && node extension/build.mjs",
-    "rp": "node extension/rp/serve.mjs"
+    "rp": "node extension/rp/serve.mjs",
+    "build:android": "pnpm --filter @blindvault/web build && node android/build.mjs && cd android && ./gradlew -q assembleDebug",
+    "android:serve": "node android/serve.mjs"
   },
   "dependencies": {
     "@blindvault/crypto": "workspace:*"
