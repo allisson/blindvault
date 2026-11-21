@@ -87,14 +87,18 @@ function item(i: number, edit: number): ItemInput {
   };
 }
 
-/** A vault of `items` items with `edits` edits each, opened by `password` at `params`. */
+/**
+ * A vault of `items` items with `edits` edits each, then the items of `more`, opened by `password`
+ * at `params`.
+ */
 export async function buildVault(
   password: string,
   params: KdfParams,
   items: number,
   edits: number = HISTORY_LIMIT,
+  more: readonly ItemInput[] = [],
 ): Promise<Fixture> {
-  const built = await build(password, params, items, edits);
+  const built = await build(password, params, items, edits, more);
   built.session.lock();
   return built.fixture();
 }
@@ -134,7 +138,13 @@ export async function buildBackup(
 }
 
 /** The vault, still unlocked, and its stored state. */
-async function build(password: string, params: KdfParams, items: number, edits: number) {
+async function build(
+  password: string,
+  params: KdfParams,
+  items: number,
+  edits: number,
+  more: readonly ItemInput[] = [],
+) {
   await initCrypto();
   const held = new Map<string, StoredRecord>();
   let localConfig = new Uint8Array(0);
@@ -179,6 +189,7 @@ async function build(password: string, params: KdfParams, items: number, edits: 
       const id = await session.createItem(item(i, 0));
       for (let e = 1; e <= edits; e++) await session.updateItem(id, item(i, e));
     }
+    for (const input of more) await session.createItem(input);
   } catch (error) {
     session.lock();
     throw error;

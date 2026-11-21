@@ -33,6 +33,7 @@ import { Button, ConfirmDialog, Field, INPUT, Modal, Notice, TARGET, TextArea } 
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { Icon } from './icons';
+import { passkeyDate } from './ItemDetail';
 import { SecretInput } from './Secret';
 import { bytes, percent } from './StorageState';
 import { rated, useMeter } from './Strength';
@@ -210,6 +211,63 @@ function FieldEditor({
             }}
           />
         </Modal>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A passkey in the editor: shown, and only removed, after the notice that its private key stays in
+ * the item's history (extension.md §7.5, §7.6, D268). Only a site creates or changes one.
+ */
+function PasskeyField({
+  field,
+  onRemove,
+}: {
+  readonly field: DraftField;
+  readonly onRemove: () => void;
+}) {
+  const { messages: m, language } = useLanguage();
+  const [confirming, setConfirming] = useState(false);
+  const passkey = field.passkey;
+  if (!passkey) return null;
+  const label = field.label.trim();
+  const date = passkeyDate(language, passkey);
+  return (
+    <div className="flex items-start gap-2" data-testid="passkey-field">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-sm font-medium">{label !== '' ? label : m.fieldTypes.passkey}</span>
+        <span className="text-value break-words">{passkey.rpId}</span>
+        {passkey.userName !== undefined ? (
+          <span className="break-words">{passkey.userName}</span>
+        ) : null}
+        {date !== undefined ? (
+          <span className="text-sm text-muted">{format(m.items.passkeyCreated, { date })}</span>
+        ) : null}
+      </div>
+      <Button
+        variant="quiet"
+        onClick={() => {
+          setConfirming(true);
+        }}
+      >
+        {m.items.remove}
+      </Button>
+      {confirming ? (
+        <ConfirmDialog
+          data-testid="passkey-remove-confirm"
+          confirm={m.items.passkeyRemove}
+          cancel={m.items.cancel}
+          onConfirm={() => {
+            setConfirming(false);
+            onRemove();
+          }}
+          onCancel={() => {
+            setConfirming(false);
+          }}
+        >
+          <Notice>{format(m.items.passkeyRemoveWarning, { rpId: passkey.rpId })}</Notice>
+        </ConfirmDialog>
       ) : null}
     </div>
   );
@@ -418,20 +476,28 @@ export function ItemEditor({
         autoFocus
         data-testid="item-title"
       />
-      {draft.fields.map((field) => (
-        <FieldEditor
-          key={field.key}
-          draft={draft}
-          field={field}
-          error={fieldError(m, errors, field.key)}
-          onChange={(next) => {
-            update({ ...draft, fields: draft.fields.map((f) => (f.key === next.key ? next : f)) });
-          }}
-          onRemove={() => {
-            update({ ...draft, fields: draft.fields.filter((f) => f.key !== field.key) });
-          }}
-        />
-      ))}
+      {draft.fields.map((field) => {
+        const remove = () => {
+          update({ ...draft, fields: draft.fields.filter((f) => f.key !== field.key) });
+        };
+        return field.type === 'passkey' ? (
+          <PasskeyField key={field.key} field={field} onRemove={remove} />
+        ) : (
+          <FieldEditor
+            key={field.key}
+            draft={draft}
+            field={field}
+            error={fieldError(m, errors, field.key)}
+            onChange={(next) => {
+              update({
+                ...draft,
+                fields: draft.fields.map((f) => (f.key === next.key ? next : f)),
+              });
+            }}
+            onRemove={remove}
+          />
+        );
+      })}
       <div className="flex items-end gap-2">
         <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
           {m.items.addField}

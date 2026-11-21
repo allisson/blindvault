@@ -832,6 +832,10 @@ const en = {
     totpExpires: 'Changes in {seconds} s',
     totpHint: 'Paste an otpauth:// link or the TOTP secret.',
     totpKeep: 'Leave empty to keep the current TOTP secret, or paste a new link or secret.',
+    passkeyCreated: 'Created on {date}',
+    passkeyRemove: 'Remove the passkey',
+    passkeyRemoveWarning:
+      "The passkey for {rpId} leaves this item when you save, but it stays in the item's history, with its private key, until that history is purged. Remove the passkey on {rpId} too, in your account's settings there.",
     matchDomain: 'Match the whole domain',
     matchDomainHint:
       'The extension also fills this login on the other sites of the domain, such as login.example.com.',
@@ -2076,6 +2080,10 @@ const ptBR: Messages = {
     totpExpires: 'Muda em {seconds} s',
     totpHint: 'Cole um link otpauth:// ou o segredo TOTP.',
     totpKeep: 'Deixe vazio para manter o segredo TOTP atual, ou cole um novo link ou segredo.',
+    passkeyCreated: 'Criada em {date}',
+    passkeyRemove: 'Remover a passkey',
+    passkeyRemoveWarning:
+      'A passkey de {rpId} sai deste item quando você salvar, mas continua no histórico do item, com a chave privada, até esse histórico ser apagado. Remova a passkey em {rpId} também, nas configurações da sua conta lá.',
     matchDomain: 'Casar o domínio inteiro',
     matchDomainHint:
       'A extensão também preenche este login nos outros sites do domínio, como login.example.com.',
