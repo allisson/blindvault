@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { asciiHost, isPublicSuffix, registrableDomain } from './psl';
+import list from './public_suffix_list';
 import vectors from './test_psl.txt?raw';
 
 // `checkPublicSuffix('input', 'expected');`, with `null` for either; commented-out lines skipped.
@@ -10,6 +11,14 @@ const CASES = [...vectors.matchAll(/^checkPublicSuffix\((null|'[^']*'), (null|'[
     expected: expected === 'null' ? null : String(expected).slice(1, -1),
   }))
   .filter((c): c is { input: string; expected: string | null } => c.input !== null);
+
+describe('the pinned list', () => {
+  it('is the upstream file, byte for byte (README.md)', async () => {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(list));
+    const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+    expect(hex).toBe('00a0af2ed2379634523b9ca80de3469d1466893915c252a91264e248c92d69d8');
+  });
+});
 
 describe('the list’s own vectors (test_psl.txt)', () => {
   it('reads them all', () => {

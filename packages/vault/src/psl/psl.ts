@@ -2,7 +2,7 @@
 // read by the list's own algorithm (https://publicsuffix.org/list/). Hosts are compared in their
 // ASCII form, as `URL` returns them, so the list's Unicode rules are converted once.
 
-import list from './public_suffix_list.dat?raw';
+import list from './public_suffix_list';
 
 interface Rules {
   readonly normal: ReadonlySet<string>;
