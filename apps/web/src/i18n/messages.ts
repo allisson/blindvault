@@ -57,6 +57,28 @@ const en = {
     noTarget: 'This page has no sign-in field to fill.',
     moved: 'The page changed before the fill. Try again.',
   },
+  confirm: {
+    getTitle: 'Sign in with a passkey',
+    createTitle: 'Save a passkey',
+    site: 'Site',
+    frame: 'Inside a page of {origin}',
+    rpId: 'Passkey for',
+    user: 'Account',
+    choose: 'Passkey',
+    none: 'BlindVault holds no passkey for {rpId}.',
+    saveIn: 'Save in',
+    newItem: 'A new login',
+    replaces:
+      'BlindVault already holds a passkey of this account. Confirm replaces it, in every item that holds it.',
+    confirm: 'Confirm',
+    browser: 'Use another authenticator',
+    cancel: 'Cancel',
+    locked: 'BlindVault is locked. Unlock it to use a passkey.',
+    unlock: 'Open and unlock',
+    ended: 'This request has ended.',
+    close: 'Close',
+    failed: 'BlindVault did not answer. Try again.',
+  },
   update: {
     available: 'An update is available: version {current} → {next}.',
     hash: 'SHA-256 of its asset manifest:',
@@ -926,6 +948,7 @@ const en = {
       locking: 'Locking',
       password: 'Local password',
       passkey: 'Unlock passkey',
+      sitePasskeys: 'Passkeys',
       recovery: 'Recovery Phrase',
       devices: 'Devices',
       backup: 'Backup',
@@ -993,6 +1016,13 @@ const en = {
     passkeyUnavailable:
       'This passkey cannot unlock BlindVault: its authenticator lacks the PRF extension. Nothing was set up.',
     passkeyUnsupported: 'This browser does not support unlock passkeys.',
+    sitePasskeysSwitch: 'Use BlindVault for passkeys',
+    sitePasskeysIntro:
+      'When a site creates a passkey or asks for one, BlindVault offers to save it in your vault, or to sign in with one it holds. Each time, a BlindVault window asks you to confirm.',
+    sitePasskeysPermission:
+      'Turning this on asks the browser to let BlindVault read and change data on every site: it needs that to answer the passkey requests of any site.',
+    sitePasskeysKept: 'Passkeys already saved stay in their items when this is off.',
+    sitePasskeysDenied: 'The browser did not grant the permission. Passkeys stay off.',
     recovery: 'Recovery Phrase',
     recoveryCreated: 'The current Recovery Phrase was created on {date} ({id}).',
     recoveryNoBackup:
@@ -1290,6 +1320,28 @@ const ptBR: Messages = {
     noMatch: 'Nenhum login corresponde a esta página.',
     noTarget: 'Esta página não tem campo de login para preencher.',
     moved: 'A página mudou antes do preenchimento. Tente de novo.',
+  },
+  confirm: {
+    getTitle: 'Entrar com uma passkey',
+    createTitle: 'Salvar uma passkey',
+    site: 'Site',
+    frame: 'Dentro de uma página de {origin}',
+    rpId: 'Passkey de',
+    user: 'Conta',
+    choose: 'Passkey',
+    none: 'O BlindVault não tem passkey de {rpId}.',
+    saveIn: 'Salvar em',
+    newItem: 'Um login novo',
+    replaces:
+      'O BlindVault já tem uma passkey desta conta. Confirmar a substitui, em todos os itens que a têm.',
+    confirm: 'Confirmar',
+    browser: 'Usar outro autenticador',
+    cancel: 'Cancelar',
+    locked: 'O BlindVault está bloqueado. Desbloqueie-o para usar uma passkey.',
+    unlock: 'Abrir e desbloquear',
+    ended: 'Este pedido terminou.',
+    close: 'Fechar',
+    failed: 'O BlindVault não respondeu. Tente de novo.',
   },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',
@@ -2174,6 +2226,7 @@ const ptBR: Messages = {
       locking: 'Bloqueio',
       password: 'Senha local',
       passkey: 'Passkey de desbloqueio',
+      sitePasskeys: 'Passkeys',
       recovery: 'Frase de Recuperação',
       devices: 'Dispositivos',
       backup: 'Backup',
@@ -2242,6 +2295,13 @@ const ptBR: Messages = {
     passkeyUnavailable:
       'Esta passkey não desbloqueia o BlindVault: o autenticador dela não tem a extensão PRF. Nada foi configurado.',
     passkeyUnsupported: 'Este navegador não oferece passkey de desbloqueio.',
+    sitePasskeysSwitch: 'Usar o BlindVault para passkeys',
+    sitePasskeysIntro:
+      'Quando um site cria uma passkey ou pede uma, o BlindVault oferece salvá-la no seu cofre, ou entrar com uma que ele tem. A cada vez, uma janela do BlindVault pede que você confirme.',
+    sitePasskeysPermission:
+      'Ativar pede ao navegador que deixe o BlindVault ler e alterar dados em todos os sites: ele precisa disso para atender os pedidos de passkey de qualquer site.',
+    sitePasskeysKept: 'As passkeys já salvas continuam nos itens quando isto está desativado.',
+    sitePasskeysDenied: 'O navegador não deu a permissão. As passkeys continuam desativadas.',
     recovery: 'Frase de Recuperação',
     recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
     recoveryNoBackup:

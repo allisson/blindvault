@@ -3,6 +3,8 @@
 // checked by type and range. An unknown `v`, `type` or key is refused, never acted on. It is browser
 // IPC within the extension, so it carries no AAD or signature (D283).
 
+import { HEX_32, PASSKEY_KEYS, type PasskeyRequest, parsePasskeyRequest } from './passkey-options';
+
 export const RPC_VERSION = 1;
 
 /** What the popup can copy from a Login item (§6.3). */
@@ -36,7 +38,27 @@ export type Request =
   | { readonly v: 1; readonly type: 'command-fill'; readonly id: number; readonly tabId: number }
   | { readonly v: 1; readonly type: 'open-host'; readonly id: number }
   | { readonly v: 1; readonly type: 'clipboard-clear'; readonly id: number }
-  | { readonly v: 1; readonly type: 'locked'; readonly id: number };
+  | { readonly v: 1; readonly type: 'locked'; readonly id: number }
+  | {
+      readonly v: 1;
+      readonly type: 'passkey-create' | 'passkey-get';
+      readonly id: number;
+      readonly passkey: PasskeyRequest;
+    }
+  | { readonly v: 1; readonly type: 'confirm-details'; readonly id: number; readonly token: string }
+  | {
+      readonly v: 1;
+      readonly type: 'confirm-choice';
+      readonly id: number;
+      readonly token: string;
+      readonly choice: ConfirmChoice;
+    };
+
+/** What the user chose in the confirmation window (§7.7). */
+export type ConfirmChoice =
+  | { readonly choice: 'use'; readonly credentialId: string }
+  | { readonly choice: 'save'; readonly itemId: string }
+  | { readonly choice: 'save-new' | 'browser' | 'cancel' };
 
 export type RequestType = Request['type'];
 
@@ -53,11 +75,15 @@ export const HOST_TYPES = [
   'matches',
   'fill',
   'command-fill',
+  'passkey-create',
+  'passkey-get',
+  'confirm-details',
+  'confirm-choice',
 ] as const;
 export type HostType = (typeof HOST_TYPES)[number];
 export const POPUP_TYPES = ['locked'] as const;
 
-const TYPES: ReadonlySet<string> = new Set<RequestType>([
+const TYPES: ReadonlySet<string> = new Set<RequestType | 'passkey-answer'>([
   'status',
   'search',
   'copy',
@@ -68,10 +94,15 @@ const TYPES: ReadonlySet<string> = new Set<RequestType>([
   'open-host',
   'clipboard-clear',
   'locked',
+  'passkey-create',
+  'passkey-get',
+  'passkey-answer',
+  'confirm-details',
+  'confirm-choice',
 ]);
 
 /** The keys each type takes beside `v`, `type` and `id`. */
-const KEYS: Readonly<Record<RequestType, readonly string[]>> = {
+const KEYS: Readonly<Record<RequestType | 'passkey-answer', readonly string[]>> = {
   status: [],
   search: ['query'],
   copy: ['itemId', 'field'],
@@ -82,9 +113,16 @@ const KEYS: Readonly<Record<RequestType, readonly string[]>> = {
   'open-host': [],
   'clipboard-clear': [],
   locked: [],
+  'passkey-create': PASSKEY_KEYS,
+  'passkey-get': PASSKEY_KEYS,
+  'passkey-answer': ['tabId', 'frameId', 'request', 'result'],
+  'confirm-details': ['token'],
+  'confirm-choice': ['token', 'choice', 'credentialId', 'itemId'],
 };
 
 const ITEM_ID = /^[0-9a-f]{32}$/;
+/** A `credentialId` in hexadecimal: 1 to 1,023 bytes. */
+const CREDENTIAL_HEX = /^(?:[0-9a-f]{2}){1,1023}$/;
 
 function plainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -113,10 +151,10 @@ export function parseRequest(value: unknown, accepted: readonly RequestType[]): 
   if (value.v !== RPC_VERSION || id === undefined) return invalid;
   const type = value.type;
   if (typeof type !== 'string' || !TYPES.has(type)) return invalid;
-  const t = type as RequestType;
+  const t = type as RequestType | 'passkey-answer';
   const allowed = new Set(['v', 'type', 'id', ...KEYS[t]]);
   if (Object.keys(value).some((k) => !allowed.has(k))) return invalid;
-  if (!accepted.includes(t)) return { kind: 'other' };
+  if (t === 'passkey-answer' || !accepted.includes(t)) return { kind: 'other' };
   switch (t) {
     case 'search': {
       const query = value.query;
@@ -143,9 +181,42 @@ export function parseRequest(value: unknown, accepted: readonly RequestType[]): 
       if (typeof itemId !== 'string' || !ITEM_ID.test(itemId)) return invalid;
       return { kind: 'request', request: { v: 1, type: t, id, tabId, itemId } };
     }
+    case 'passkey-create':
+    case 'passkey-get': {
+      const passkey = parsePasskeyRequest(t === 'passkey-create' ? 'create' : 'get', value);
+      return passkey ? { kind: 'request', request: { v: 1, type: t, id, passkey } } : invalid;
+    }
+    case 'confirm-details': {
+      const token = value.token;
+      if (typeof token !== 'string' || !HEX_32.test(token)) return invalid;
+      return { kind: 'request', request: { v: 1, type: t, id, token } };
+    }
+    case 'confirm-choice': {
+      const token = value.token;
+      if (typeof token !== 'string' || !HEX_32.test(token)) return invalid;
+      const choice = confirmChoice(value);
+      return choice ? { kind: 'request', request: { v: 1, type: t, id, token, choice } } : invalid;
+    }
     default:
       return { kind: 'request', request: { v: 1, type: t, id } };
   }
+}
+
+/** A `confirm-choice`'s choice: `credentialId` only with `use`, `itemId` only with `save`. */
+function confirmChoice(value: Record<string, unknown>): ConfirmChoice | undefined {
+  const { choice, credentialId, itemId } = value;
+  if (choice === 'use') {
+    if ('itemId' in value || typeof credentialId !== 'string') return undefined;
+    return CREDENTIAL_HEX.test(credentialId) ? { choice, credentialId } : undefined;
+  }
+  if (choice === 'save') {
+    if ('credentialId' in value || typeof itemId !== 'string') return undefined;
+    return ITEM_ID.test(itemId) ? { choice, itemId } : undefined;
+  }
+  if ('credentialId' in value || 'itemId' in value) return undefined;
+  return choice === 'save-new' || choice === 'browser' || choice === 'cancel'
+    ? { choice }
+    : undefined;
 }
 
 /** One item of a `search` answer: never a secret (D132, D286). */
@@ -206,7 +277,60 @@ export type Answer =
       /** When the session host clears the clipboard, in seconds. */
       readonly clearSeconds: number;
     }
+  | { readonly v: 1; readonly id: number; readonly ok: true; readonly state: ConfirmState }
   | { readonly v: 1; readonly id: number; readonly ok: true };
+
+/** What the confirmation window shows (§7.4, §7.7): never a key or a `userHandle`. */
+export type ConfirmState =
+  | { readonly kind: 'locked' }
+  | {
+      readonly kind: 'get';
+      readonly origin: string;
+      readonly topOrigin?: string;
+      readonly rpId: string;
+      readonly passkeys: readonly {
+        readonly credentialId: string;
+        readonly title: string;
+        readonly userName?: string;
+      }[];
+    }
+  | {
+      readonly kind: 'create';
+      readonly origin: string;
+      readonly topOrigin?: string;
+      readonly rpId: string;
+      readonly rpName: string;
+      readonly userName: string;
+      readonly displayName: string;
+      readonly items: readonly {
+        readonly itemId: string;
+        readonly title: string;
+        readonly username?: string;
+      }[];
+      readonly replaces: boolean;
+    };
+
+/** How a passkey request ends (§7.7 Result): bytes in base64url without padding. */
+export type PasskeyResult =
+  | { readonly kind: 'browser' }
+  | { readonly kind: 'error'; readonly name: 'NotAllowedError' | 'InvalidStateError' }
+  | {
+      readonly kind: 'created';
+      readonly id: string;
+      readonly clientDataJSON: string;
+      readonly attestationObject: string;
+      readonly authenticatorData: string;
+      readonly publicKey: string;
+      readonly publicKeyAlgorithm: number;
+    }
+  | {
+      readonly kind: 'asserted';
+      readonly id: string;
+      readonly clientDataJSON: string;
+      readonly authenticatorData: string;
+      readonly signature: string;
+      readonly userHandle: string;
+    };
 
 export function refusal(id: number | undefined, error: Refusal): Answer {
   return { v: 1, id: id ?? 0, ok: false, error };
@@ -235,6 +359,7 @@ export function fromPage(
 
 /** The pages each receiver hears. Firefox runs the background script in a generated page. */
 export const POPUP_PAGE = 'popup.html';
+export const CONFIRM_PAGE = 'confirm.html';
 export const HOST_PAGE = 'index.html';
 export const WORKER_PAGES = ['background.js', '_generated_background_page.html'] as const;
 
@@ -245,8 +370,12 @@ export const HOST_SENDERS: Readonly<Record<HostType, readonly string[]>> = {
   copy: [POPUP_PAGE],
   matches: [POPUP_PAGE],
   fill: [POPUP_PAGE],
-  lock: [POPUP_PAGE, ...WORKER_PAGES],
+  lock: [POPUP_PAGE, CONFIRM_PAGE, ...WORKER_PAGES],
   'command-fill': WORKER_PAGES,
+  'passkey-create': WORKER_PAGES,
+  'passkey-get': WORKER_PAGES,
+  'confirm-details': [CONFIRM_PAGE],
+  'confirm-choice': [CONFIRM_PAGE],
 };
 
 let next = 0;

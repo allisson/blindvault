@@ -1,7 +1,7 @@
 // The app as a page of the browser extension (extension.md §2): `vite build --mode extension` leaves
 // public/ out, so the page drops its links to the web manifest and the Apple icon, and the build
 // copies only the icons the extension uses (its manifest names the PNGs, the pages the SVG). The
-// popup (`popup.html`) is the build's second entry.
+// popup (`popup.html`) and the passkey confirmation window (`confirm.html`) are its other entries.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,7 @@ export function extensionPage(publicDir: URL): Plugin {
   return {
     name: 'blindvault-extension-page',
     apply: 'build',
-    // The popup's page has no link of the web's to drop.
+    // The popup's and the confirmation window's pages have no link of the web's to drop.
     transformIndexHtml: {
       order: 'pre',
       handler: (html, ctx) => (ctx.filename.endsWith('/index.html') ? extensionHtml(html) : html),
@@ -40,10 +40,14 @@ export function extensionPage(publicDir: URL): Plugin {
   };
 }
 
-/** The extension build's pages: the app, which is the session host, and the popup. */
+/**
+ * The extension build's pages: the app, which is the session host, the popup and the passkey
+ * confirmation window.
+ */
 export function extensionInput(root: URL): Record<string, string> {
   return {
     index: fileURLToPath(new URL('index.html', root)),
     popup: fileURLToPath(new URL('popup.html', root)),
+    confirm: fileURLToPath(new URL('confirm.html', root)),
   };
 }

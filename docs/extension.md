@@ -357,6 +357,7 @@ The click on Confirm is the user presence (UP). UV is reported because the vault
 | create on a read-only vault (D73) | handed to the browser at once, with no window |
 | create whose `excludeCredentials` lists a held `credentialId` | the window shows the request as usual; after Confirm, `InvalidStateError`, so a page learns it only from the user's click |
 | a lock while the window is open | the window closes; `NotAllowedError` |
+| create whose replaced passkey is in a read-only item (D52, D74) | after Confirm, `NotAllowedError`, and nothing is written, since a write touching a read-only record is blocked as a whole |
 
 A get writes nothing, since `signCount` is always 0 (D268), and so works on a read-only vault.
 
@@ -423,10 +424,11 @@ which gives the page its own error.
 | `created` | `id`, `clientDataJSON`, `attestationObject`, `authenticatorData`, `publicKey`, `publicKeyAlgorithm` | a `PublicKeyCredential` (§7.2) |
 | `asserted` | `id`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle` | a `PublicKeyCredential` (§7.2) |
 
-**Window.** The session host draws `token`, 32 lowercase hexadecimal digits, per request, and opens
-`confirm.html#<token>`. The window sends:
+**Window.** The session host draws `token`, 32 lowercase hexadecimal digits, from the CSPRNG, per
+request and again when the window opens again on unlock, and opens `confirm.html#<token>`. The window
+sends:
 
-- `confirm-details` `{token}`, answered with `state`:
+- `confirm-details` `{token}`, answered with `state`, whose `kind` is:
   - `locked`;
   - `get`: `origin`, `topOrigin` when it differs, `rpId` and `passkeys` `[{credentialId, title,
     userName?}]`, each `credentialId` (hexadecimal) once (§7.4);
@@ -434,7 +436,10 @@ which gives the page its own error.
     `items` `[{itemId, title, username?}]`, the matching Login items (§5), and `replaces`, whether
     Confirm replaces a held passkey of the `rpId` and `userHandle`.
 - `confirm-choice` `{token, choice}`, with `choice` `use` and `credentialId` (get), `save` and
-  `itemId` (create into that item), `save-new` (create into a new item), `browser` or `cancel`.
+  `itemId` (create into that item), `save-new` (create into a new item), `browser` or `cancel`;
+  `credentialId` and `itemId` are keys of the message beside `choice`. The session host answers
+  `{ok: true}` once the request ended, `locked` to a `use`, `save` or `save-new` while the vault is
+  locked, and `not-found` to a `credentialId` or `itemId` the window did not list.
 
 A token other than the pending request's is answered `not-found`. The session host closes the
 window when the request ends, on a lock (§3.2), and on unlock, to open it again with the request.

@@ -11,6 +11,8 @@ import {
   serveHost,
 } from './host';
 import { type InPageOrder } from './inject';
+import { PasskeyHost } from './passkey-host';
+import { toBase64url } from './passkey-options';
 import { type Request, SEARCH_MAX } from './rpc';
 
 function id(n: number): Uint8Array {
@@ -375,6 +377,43 @@ function runtime() {
 
 const POPUP = 'chrome-extension://abc/popup.html';
 const WORKER = 'chrome-extension://abc/background.js';
+const CONFIRM = 'chrome-extension://abc/confirm.html#' + 'c'.repeat(32);
+
+/** A `passkey-get` as the service worker forwards it, the origin taken from `MessageSender`. */
+function passkeyGet(origin: string) {
+  return {
+    v: 1,
+    type: 'passkey-get',
+    id: 3,
+    request: 'a'.repeat(32),
+    options: { challenge: toBase64url(new Uint8Array(32)) },
+    tabId: 7,
+    frameId: 0,
+    origin,
+    topOrigin: origin,
+  };
+}
+
+/** A `PasskeyHost` whose window and answers the test sees. */
+function passkeys(a: HostApp = app()) {
+  const answers: unknown[] = [];
+  const opened: string[] = [];
+  const host = new PasskeyHost({
+    app: a,
+    windows: {
+      open: (token) => {
+        opened.push(token);
+        return Promise.resolve(1);
+      },
+      close: () => undefined,
+      onRemoved: () => undefined,
+    },
+    answer: (x) => answers.push(x),
+    token: () => 'c'.repeat(32),
+    now: () => 0,
+  });
+  return { host, answers, opened };
+}
 
 describe('serveHost (extension.md §4)', () => {
   it('answers the popup, and counts it as activity (D284)', async () => {
@@ -486,6 +525,102 @@ describe('serveHost (extension.md §4)', () => {
     const { respond, kept } = send({ v: 1, type: 'status', id: 1 }, POPUP);
     expect(kept).toBe(false);
     expect(respond).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges a passkey request from the service worker at once (§7.7, D289)', async () => {
+    const { r, send } = runtime();
+    const p = passkeys();
+    serveHost(r, { ...deps(), passkeys: p.host });
+    const { respond, kept } = send(passkeyGet('https://mail.example.com'), WORKER);
+    expect(kept).toBe(true);
+    await vi.waitFor(() => {
+      expect(respond).toHaveBeenCalledWith({ v: 1, id: 3, ok: true });
+    });
+    expect(p.opened).toEqual(['c'.repeat(32)]);
+  });
+
+  it('refuses a passkey request from a page other than the service worker, opening nothing', () => {
+    const { r, send } = runtime();
+    const p = passkeys();
+    serveHost(r, { ...deps(), passkeys: p.host });
+    for (const url of [POPUP, CONFIRM]) {
+      const { respond } = send(passkeyGet('https://mail.example.com'), url);
+      expect(respond).toHaveBeenCalledWith({ v: 1, id: 3, ok: false, error: 'invalid' });
+    }
+    const { respond, kept } = send(passkeyGet('https://mail.example.com'), 'https://evil.example/');
+    expect(kept).toBe(false);
+    expect(respond).not.toHaveBeenCalled();
+    expect(p.opened).toEqual([]);
+    expect(p.answers).toEqual([]);
+  });
+
+  it('refuses a passkey request with a forged or opaque origin key, or an unknown key', () => {
+    const { r, send } = runtime();
+    const p = passkeys();
+    serveHost(r, { ...deps(), passkeys: p.host });
+    for (const message of [
+      passkeyGet('null'),
+      { ...passkeyGet('https://mail.example.com'), userVerification: 'required' },
+      {
+        ...passkeyGet('https://mail.example.com'),
+        options: { challenge: toBase64url(new Uint8Array(32)), mediation: 'conditional' },
+      },
+    ]) {
+      const { respond } = send(message, WORKER);
+      expect(respond).toHaveBeenCalledWith({ v: 1, id: 3, ok: false, error: 'invalid' });
+    }
+    expect(p.opened).toEqual([]);
+  });
+
+  it('answers the confirmation window, and only it, with the request’s details', async () => {
+    const { r, send } = runtime();
+    const p = passkeys();
+    serveHost(r, { ...deps(), passkeys: p.host });
+    send(passkeyGet('https://mail.example.com'), WORKER);
+    const details = { v: 1, type: 'confirm-details', id: 5, token: 'c'.repeat(32) };
+    const { respond } = send(details, CONFIRM);
+    await vi.waitFor(() => {
+      expect(respond).toHaveBeenCalledWith({
+        v: 1,
+        id: 5,
+        ok: true,
+        state: {
+          kind: 'get',
+          origin: 'https://mail.example.com',
+          rpId: 'mail.example.com',
+          passkeys: [],
+        },
+      });
+    });
+    const fromPopup = send(details, POPUP);
+    expect(fromPopup.respond).toHaveBeenCalledWith({ v: 1, id: 5, ok: false, error: 'invalid' });
+    const other = send({ ...details, token: 'd'.repeat(32) }, CONFIRM);
+    await vi.waitFor(() => {
+      expect(other.respond).toHaveBeenCalledWith({ v: 1, id: 5, ok: false, error: 'not-found' });
+    });
+    const cancel = send(
+      { v: 1, type: 'confirm-choice', id: 6, token: 'c'.repeat(32), choice: 'cancel' },
+      CONFIRM,
+    );
+    await vi.waitFor(() => {
+      expect(cancel.respond).toHaveBeenCalledWith({ v: 1, id: 6, ok: true });
+    });
+    expect(p.answers).toEqual([
+      {
+        tabId: 7,
+        frameId: 0,
+        request: 'a'.repeat(32),
+        result: { kind: 'error', name: 'NotAllowedError' },
+      },
+    ]);
+  });
+
+  it('takes a lock from the confirmation window', () => {
+    const { r, send } = runtime();
+    const d = deps();
+    serveHost(r, d);
+    send({ v: 1, type: 'lock', id: 0 }, CONFIRM);
+    expect(d.app.locks).toHaveBeenCalledTimes(1);
   });
 
   it('tells the popup when the vault locks', () => {

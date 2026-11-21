@@ -21,9 +21,10 @@ describe('extensionHtml', () => {
 });
 
 describe('extensionInput', () => {
-  it('builds the app and the popup', () => {
+  it('builds the app, the popup and the confirmation window', () => {
     const input = extensionInput(new URL('../', import.meta.url));
-    expect(Object.keys(input)).toEqual(['index', 'popup']);
+    expect(Object.keys(input)).toEqual(['index', 'popup', 'confirm']);
     expect(input.popup).toMatch(/[/\\]popup\.html$/);
+    expect(input.confirm).toMatch(/[/\\]confirm\.html$/);
   });
 });

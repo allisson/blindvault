@@ -15,6 +15,9 @@ import { UpdateMonitor } from './app/updates';
 import { VersionLock, vaultExists } from './app/version-lock';
 import { extensionTabs } from './extension/fill';
 import { hostRuntime, serveHost } from './extension/host';
+import { browserPasskeySwitch, browserWindows, windowToken } from './extension/passkey-browser';
+import { PasskeyHost } from './extension/passkey-host';
+import { nextId } from './extension/rpc';
 import { LanguageProvider } from './i18n/context';
 import { platform } from './platform';
 import { extensionLocks } from './platform/extension';
@@ -97,9 +100,29 @@ function start(root: HTMLElement): void {
       : undefined;
   void versionLock?.start();
 
-  // The session host answers the popup and the service worker (extension.md §4).
+  // The session host answers the popup, the confirmation window and the service worker (extension.md
+  // §4), and holds the pending passkey request (§7.7).
   const runtime = import.meta.env.MODE === 'extension' ? hostRuntime() : undefined;
   if (runtime) {
+    const windows = browserWindows();
+    const passkeys = windows
+      ? new PasskeyHost({
+          app: controller,
+          windows,
+          answer: (answer) => {
+            // No service worker listening: the page's call ends at its own timeout.
+            runtime
+              .sendMessage({ v: 1, type: 'passkey-answer', id: nextId(), ...answer })
+              .catch(() => undefined);
+          },
+          token: windowToken,
+          now: Date.now,
+        })
+      : undefined;
+    // A registration lost in an update comes back at start (§7.1, D289).
+    void browserPasskeySwitch()
+      ?.restore()
+      .catch(() => undefined);
     serveHost(runtime, {
       app: controller,
       activity: () => {
@@ -110,6 +133,7 @@ function start(root: HTMLElement): void {
       },
       now: Date.now,
       tabs: extensionTabs(),
+      passkeys,
     });
   }
 

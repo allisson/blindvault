@@ -33,10 +33,10 @@ export function popupRuntime(): PopupRuntime | undefined {
   return runtime?.id && runtime.sendMessage ? (runtime as PopupRuntime) : undefined;
 }
 
-type Fields = Record<string, unknown>;
+export type Fields = Record<string, unknown>;
 
 /** Sends one request; the answer when it is ours and well formed, else `undefined`. */
-async function ask(
+export async function ask(
   runtime: PopupRuntime,
   request: Fields & { readonly type: string },
 ): Promise<Fields | undefined> {
@@ -53,7 +53,7 @@ async function ask(
   return a.v === 1 && a.id === id && typeof a.ok === 'boolean' ? a : undefined;
 }
 
-function refused(a: Fields): Refusal | undefined {
+export function refused(a: Fields): Refusal | undefined {
   return a.ok === false &&
     typeof a.error === 'string' &&
     (REFUSALS as readonly string[]).includes(a.error)

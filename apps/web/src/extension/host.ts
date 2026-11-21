@@ -1,7 +1,7 @@
-// The session host's side of the extension's messages (extension.md §3, §4, §6.3, D283, D286). It
-// answers the popup and the service worker, and only them: a message from any other sender, a
-// content script's included, is ignored. Nothing it answers carries a secret but the value the user
-// asked to copy.
+// The session host's side of the extension's messages (extension.md §3, §4, §6.3, §7.7, D283, D286,
+// D289). It answers the popup, the confirmation window and the service worker, and only them: a
+// message from any other sender, a content script's included, is ignored. Nothing it answers
+// carries a secret but the value the user asked to copy.
 
 import { totpCode } from '@blindvault/crypto';
 import {
@@ -15,8 +15,10 @@ import {
 import { hex } from '../app/ids';
 import { normalizeForSearch } from '../app/search';
 import { type TabsPort, type Values, fillTab } from './fill';
+import { type PasskeyHost } from './passkey-host';
 import {
   type Answer,
+  CONFIRM_PAGE,
   type Copyable,
   type Found,
   HOST_SENDERS,
@@ -49,6 +51,8 @@ export interface HostDeps {
   readonly now: () => number;
   /** The browser's tabs, for `matches` and filling; absent outside the extension. */
   readonly tabs?: TabsPort | undefined;
+  /** The pending passkey request (§7.7); absent outside the extension. */
+  readonly passkeys?: PasskeyHost | undefined;
 }
 
 const LOGIN = 'login';
@@ -210,6 +214,22 @@ export async function answer(request: Request, deps: HostDeps): Promise<Answer> 
           : 'popup';
       return { v: 1, id, ok: true, result: outcome === 'filled' ? 'filled' : 'popup' };
     }
+    case 'passkey-create':
+    case 'passkey-get':
+      // Acknowledged at once; the result follows in `passkey-answer` (§7.7 Route, D289).
+      if (!deps.passkeys) return refusal(id, 'invalid');
+      deps.passkeys.start(request.passkey);
+      return { v: 1, id, ok: true };
+    case 'confirm-details': {
+      const state = deps.passkeys?.details(request.token) ?? 'not-found';
+      return state === 'not-found' ? refusal(id, state) : { v: 1, id, ok: true, state };
+    }
+    case 'confirm-choice': {
+      const outcome = deps.passkeys
+        ? await deps.passkeys.choose(request.token, request.choice)
+        : 'not-found';
+      return outcome === true ? { v: 1, id, ok: true } : refusal(id, outcome);
+    }
     default:
       return refusal(id, 'invalid');
   }
@@ -236,7 +256,7 @@ export function hostRuntime(): HostRuntime | undefined {
 /** Answers the popup and the service worker, and tells the popup when the vault locks. */
 export function serveHost(runtime: HostRuntime, deps: HostDeps): void {
   runtime.onMessage.addListener((message, sender, respond) => {
-    if (!fromPage(sender, runtime, [POPUP_PAGE, ...WORKER_PAGES])) return false;
+    if (!fromPage(sender, runtime, [POPUP_PAGE, CONFIRM_PAGE, ...WORKER_PAGES])) return false;
     // A second extension tab holds no vault (§3.1): the session host answers alone.
     if (deps.app.status.kind === 'elsewhere') return false;
     const parsed = parseRequest(message, HOST_TYPES);

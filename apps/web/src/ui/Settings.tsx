@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -33,6 +34,7 @@ import {
   type PhraseCheck,
   type VaultController,
 } from '../app/controller';
+import { browserPasskeySwitch } from '../extension/passkey-browser';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Language, type Messages, format } from '../i18n/messages';
 import { AboutBuild } from './About';
@@ -55,7 +57,7 @@ const GROUPS: readonly (readonly [
   readonly SettingsPage[],
 ])[] = [
   ['preferences', ['appearance', 'language', 'locking']],
-  ['security', ['password', 'passkey', 'recovery']],
+  ['security', ['password', 'passkey', 'sitePasskeys', 'recovery']],
   ['devices', ['devices']],
   ['data', ['backup', 'merge', 'import', 'storage']],
   ['danger', ['refound', 'erase']],
@@ -68,6 +70,7 @@ const PAGE_ICON: Readonly<Record<SettingsPage, IconName>> = {
   locking: 'timer',
   password: 'key-round',
   passkey: 'fingerprint',
+  sitePasskeys: 'globe',
   recovery: 'shield-check',
   devices: 'monitor-smartphone',
   backup: 'upload',
@@ -83,6 +86,11 @@ const LANGUAGE_NAME: Readonly<Record<Language, string>> = {
   en: 'English',
   'pt-BR': 'Português (Brasil)',
 };
+
+/** Settings › Passkeys exists only in the extension, which holds the sites' passkeys (§7.1). */
+function shown(page: SettingsPage): boolean {
+  return page !== 'sitePasskeys' || import.meta.env.MODE === 'extension';
+}
 
 /**
  * Settings (D252): an index of pages in groups, each row with its current value where one helps;
@@ -206,7 +214,7 @@ function SettingsIndex({
           title={group ? s.groups[group] : undefined}
           framed={framed}
         >
-          {pages.map((page) => (
+          {pages.filter(shown).map((page) => (
             <li key={page}>
               <button
                 type="button"
@@ -314,6 +322,7 @@ function SettingsPageView({
     passkey: () => (
       <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
     ),
+    sitePasskeys: () => <SitePasskeySettings />,
     recovery: () => <RecoveryPhraseSettings controller={controller} session={session} />,
     devices: () => (
       <DeviceSettings
@@ -691,6 +700,67 @@ function PasskeySettings({
           </Button>
         </form>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * Settings › Passkeys (extension.md §7.1, D268): a switch, off by default, that shows the browser's
+ * state; nothing is stored. Turning it on asks the host permission on the click and registers the
+ * content scripts; turning it off unregisters them and gives the permission back. Passkeys already
+ * saved stay in their items either way.
+ */
+function SitePasskeySettings() {
+  const m = useLanguage().messages;
+  const scripts = useMemo(browserPasskeySwitch, []);
+  const [on, setOn] = useState<boolean>();
+  const [denied, setDenied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void scripts?.on().then((held) => {
+      if (live) setOn(held);
+    });
+    return () => {
+      live = false;
+    };
+  }, [scripts]);
+  if (!scripts || on === undefined) return null;
+  return (
+    <section className="flex flex-col gap-4" data-section="site-passkeys">
+      <p className="text-sm">{m.settings.sitePasskeysIntro}</p>
+      <Notice>{m.settings.sitePasskeysPermission}</Notice>
+      <label className={`${TARGET} flex items-center gap-2 text-sm`}>
+        <input
+          type="checkbox"
+          role="switch"
+          checked={on}
+          disabled={busy}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setDenied(false);
+            setBusy(true);
+            // Called in the click itself: the browser asks the permission only in a user gesture.
+            const work = next ? scripts.enable() : scripts.disable().then(() => false);
+            void work
+              .then(
+                (held) => {
+                  if (next && !held) setDenied(true);
+                },
+                () => undefined,
+              )
+              .then(() => scripts.on())
+              .then(setOn, () => undefined)
+              .finally(() => {
+                setBusy(false);
+              });
+          }}
+          data-testid="site-passkeys-switch"
+        />
+        {m.settings.sitePasskeysSwitch}
+      </label>
+      {denied ? <p role="status">{m.settings.sitePasskeysDenied}</p> : null}
+      <p className="text-sm text-muted">{m.settings.sitePasskeysKept}</p>
     </section>
   );
 }
