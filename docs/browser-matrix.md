@@ -72,3 +72,53 @@ and installed app). Record the browser version and the result in the matrix.
 
 A capability a browser lacks must degrade as the overview says, with the app's own message: record
 the message as the result.
+
+## Extension
+
+The extension's capabilities (`extension.md` §10, §12, D287), on its Chromium and Firefox packages.
+
+| Capability | Chromium desktop | Firefox desktop |
+| --- | --- | --- |
+| Package loads, session host opens | auto | by hand 1.0.0-rc.2 |
+| Toolbar opens the popup, with the page's matches | not checked | by hand 1.0.0-rc.2 |
+| Fill from the popup, no submit | auto (test copy) | by hand 1.0.0-rc.2 |
+| Shortcut fills the one match | auto (test copy) | by hand 1.0.0-rc.2 |
+| Shortcut opens the popup on several matches | auto (answer only) | by hand 1.0.0-rc.2 |
+| User name alone, two-step sign-in | auto (page) | auto (page); by hand 1.0.0-rc.2 |
+| Never fills a cross-origin iframe | auto (test copy) | auto (page) |
+| Changed build stopped until confirmed (§8.2) | auto | not checked |
+
+Edge and Brave install the Chrome package from the Chrome Web Store: not checked (`extension.md` §10).
+
+What each source covers:
+
+- **auto.** `apps/extension/e2e`, Chromium only, with the unpacked package. Playwright cannot click
+  the toolbar or press a command: the fill tests load a test copy of the package granting the test
+  sites, and send the popup's and the service worker's messages from those pages ("test copy"); on
+  several matches they check the session host's answer, not that the popup opens ("answer only").
+  "page": the function injected into the page, in Chromium, Firefox and WebKit pages,
+  `apps/web/e2e/extension-fill.spec.ts`.
+- **by hand 1.0.0-rc.2.** Firefox 160.0 on macOS 26.6.2 (MacBook Air M1), on 2026-11-21, at
+  `d9da4ba`: the Firefox package installed as a temporary add-on in a new profile, the vault and its
+  Login items created through Marionette, then the toolbar, the shortcut (⌘⇧L) and the popup's
+  buttons driven by the system's own mouse and keyboard events, on a sign-in page and a two-step
+  page served from `http://localhost`. `action.openPopup()` opened the popup after the session
+  host's answer. The run found the popup opening scrolled past its header and with a horizontal
+  scrollbar, fixed in `d9da4ba`.
+
+To check a cell by hand, on a release's package, in each browser:
+
+1. **Install** the package: Firefox, `about:debugging` › This Firefox › Load Temporary Add-on, the
+   archive; Chrome, `chrome://extensions` › Developer mode › Load unpacked, the unzipped archive.
+2. **Create a vault** in the session host, and two Login items: one for the sign-in page's URL, one
+   for its origin only.
+3. **Toolbar:** on the sign-in page, open the popup (in Firefox, under the Extensions button); both
+   items show under "On this page". **Fill** one: user name and password filled, the popup closed,
+   the form not submitted.
+4. **Shortcut** (⌘⇧L, Ctrl+Shift+L elsewhere): with one matching item, it fills; with two, the
+   popup opens.
+5. **Two-step:** on a page with only a focused email field, Fill writes the user name alone.
+6. **Version lock:** load a changed build over the installed one; it asks for confirmation before
+   any vault.
+
+Record the browser version and the result in the table above.

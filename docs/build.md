@@ -93,6 +93,51 @@ Then compare the manifest hash with the one the About screen shows and with your
 To publish a release: set the version in `apps/web/package.json` and the root `package.json`,
 write `docs/releases/v<version>.md`, merge, then tag the merge commit and push the tag.
 
+## Extension
+
+The extension's packages wrap a build of `apps/web` (`extension.md` §2, D285). Each package has an
+`asset-manifest.txt` in the format above, listing every file of the package, `manifest.json`
+included; its hash is the one the extension's About shows.
+
+```sh
+SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/extension build
+shasum -a 256 apps/extension/dist/chrome/asset-manifest.txt apps/extension/dist/firefox/asset-manifest.txt
+```
+
+The build writes `apps/extension/dist/<browser>/`, to load unpacked, and
+`apps/extension/dist/blindvault-<browser>-<version>.zip`, the archive a store gets. The CI
+`reproducible` job builds both archives twice, as the web build, and compares them byte for byte.
+
+The release of a tag attaches, with the web files and the same attestation:
+
+- `blindvault-chrome-<version>.zip` and `blindvault-firefox-<version>.zip`;
+- `asset-manifest-chrome.txt` and `asset-manifest-firefox.txt`, each package's manifest. Its
+  `shasum -a 256` is the package's manifest hash.
+
+To check a release's packages:
+
+```sh
+gh release download <tag> -R allisson/blindvault -p 'blindvault-*.zip' -p 'asset-manifest-*.txt'
+gh attestation verify blindvault-firefox-<version>.zip -R allisson/blindvault
+gh attestation verify asset-manifest-firefox.txt -R allisson/blindvault
+mkdir firefox && unzip -q blindvault-firefox-<version>.zip -d firefox
+cmp asset-manifest-firefox.txt firefox/asset-manifest.txt
+(cd firefox && shasum -a 256 -c asset-manifest.txt)
+```
+
+The same with `chrome` for Chrome's.
+
+To check the package a store installed (`extension.md` §8.2), run the check in its folder, without
+the store's own folder, and compare the manifest's hash with the release's:
+
+- **Firefox:** the package is `extensions/blindvault@allisson.github.io.xpi` in the profile's folder
+  (`about:support`, "Profile Folder"). Unzip it, remove `META-INF/` (AMO's signature), and run
+  `shasum -a 256 -c asset-manifest.txt`.
+- **Chrome:** the package is unpacked in `Extensions/<extension ID>/<manifest version>_0/` in the
+  profile's folder (`chrome://version`, "Profile Path"). Copy it, remove `_metadata/` (the Web
+  Store's signature), and run `shasum -a 256 -c asset-manifest.txt`. Whether the store rewrites
+  `manifest.json` is still to confirm at the first upload (`extension.md` §8.2).
+
 ## Validation on the release candidate
 
 `v1.0.0-rc.1` (`d016b23`, release workflow run 43597999522), for the Security Gate on 2026-11-14:
