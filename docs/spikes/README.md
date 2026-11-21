@@ -76,7 +76,7 @@ Per browser of the matrix (installed app too on the phones):
 
 ## 6. Phase 10 spike — extension (D272, D281) — `spikes/extension/`
 
-Not run yet. An unpacked MV3 extension built on the Mac with
+Run on 2026-11-21 on the Mac only; results in `extension.md` (D282). An unpacked MV3 extension built on the Mac with
 `pnpm --filter @blindvault/spikes build:extension`, into `spikes/extension/dist/chrome` and
 `spikes/extension/dist/firefox`. It holds no vault data. The root of each is the `apps/web` build,
 unmodified except that `_headers` is left out: it is a Cloudflare file, and Chrome refuses a file
@@ -107,7 +107,7 @@ Delete the `webauthn.io` credentials and the PRF credential afterwards.
 
 ## 7. Phase 10 spike — Android (D272, D281) — `spikes/android/`
 
-Not run yet. A debug APK, package `io.github.allisson.blindvault.spike`, not the release's (D274),
+Run on 2026-11-21; results in `android.md` (D282). A debug APK, package `io.github.allisson.blindvault.spike`, not the release's (D274),
 built on the Mac with `pnpm --filter @blindvault/spikes build:android` (the `apps/web` build, the
 assets into `spikes/android/dist/assets`, then `./gradlew assembleDebug`; it needs
 `spikes/android/local.properties` with `sdk.dir=<Android SDK>`) and installed on the Samsung A54
