@@ -4,15 +4,24 @@
 // asked to copy.
 
 import { totpCode } from '@blindvault/crypto';
-import { type Field, type ItemView, type VaultSession } from '@blindvault/vault';
+import {
+  type Field,
+  type ItemView,
+  type VaultSession,
+  fillablePage,
+  matchingUrl,
+} from '@blindvault/vault';
 
 import { hex } from '../app/ids';
 import { normalizeForSearch } from '../app/search';
+import { type TabsPort, type Values, fillTab } from './fill';
 import {
   type Answer,
   type Copyable,
   type Found,
+  HOST_SENDERS,
   HOST_TYPES,
+  type Matched,
   POPUP_PAGE,
   type Request,
   SEARCH_MAX,
@@ -38,6 +47,8 @@ export interface HostDeps {
   /** The popup copied: the session host clears the clipboard after `seconds` (§6.3). */
   readonly copied: (seconds: number) => void;
   readonly now: () => number;
+  /** The browser's tabs, for `matches` and filling; absent outside the extension. */
+  readonly tabs?: TabsPort | undefined;
 }
 
 const LOGIN = 'login';
@@ -77,17 +88,74 @@ export function searchLogins(items: readonly ItemView[], query: string): Found[]
     const urls = fields.filter((f) => f.type === 'url').map(text);
     const haystack = normalizeForSearch([title, username, ...urls].filter(Boolean).join('\n'));
     if (!terms.every((t) => haystack.includes(t))) continue;
-    found.push({
-      itemId: hex(view.id),
-      title,
-      ...(username === undefined ? {} : { username }),
-      fields: (['username', 'password', 'totp'] as const).filter(
-        (c) => copyable(fields, c) !== undefined,
-      ),
-    });
+    found.push(foundOf(view));
   }
+  return byTitle(found);
+}
+
+function foundOf(view: ItemView & { item: NonNullable<ItemView['item']> }): Found {
+  const { title, fields } = view.item;
+  const username = text(fields.find((f) => f.role === 'username'));
+  return {
+    itemId: hex(view.id),
+    title,
+    ...(username === undefined ? {} : { username }),
+    fields: (['username', 'password', 'totp'] as const).filter(
+      (c) => copyable(fields, c) !== undefined,
+    ),
+  };
+}
+
+function byTitle<T extends Found>(found: T[]): T[] {
   const collator = new Intl.Collator();
   return found.sort((a, b) => collator.compare(a.title, b.title)).slice(0, SEARCH_MAX);
+}
+
+/** The Login items that match a page (§5, D287), with the URL that matched, in title order. */
+export function matchingLogins(items: readonly ItemView[], pageUrl: string): Matched[] {
+  const matched: Matched[] = [];
+  for (const view of items) {
+    if (!login(view)) continue;
+    const url = matchingUrl(view.item, pageUrl);
+    if (url !== null) matched.push({ ...foundOf(view), url });
+  }
+  return byTitle(matched);
+}
+
+/** The tab's page when it can match (§5.1), read from the browser, never from a message. */
+async function pageOf(tabs: TabsPort | undefined, tabId: number): Promise<URL | undefined> {
+  const url = tabs ? await tabs.url(tabId) : undefined;
+  return (url === undefined ? null : fillablePage(url)) ?? undefined;
+}
+
+/** What a fill writes: the user name and the password the item has, never another field. */
+function valuesOf(fields: readonly Field[]): Values {
+  const username = text(fields.find((f) => f.role === 'username'));
+  const password = text(fields.find((f) => f.role === 'password'));
+  return {
+    ...(username === undefined ? {} : { username }),
+    ...(password === undefined ? {} : { password }),
+  };
+}
+
+type FillOutcome =
+  'filled' | 'locked' | 'not-found' | 'page' | 'no-match' | 'no-field' | 'no-target' | 'moved';
+
+/** Fills a Login item into a tab, after checking again that it matches the tab's page (§6.1). */
+async function fillItem(
+  s: VaultSession,
+  tabs: TabsPort | undefined,
+  tabId: number,
+  itemId: string,
+): Promise<FillOutcome> {
+  const view = s.items().find((v) => hex(v.id) === itemId);
+  if (!view || !login(view)) return 'not-found';
+  const page = await pageOf(tabs, tabId);
+  if (!tabs || !page) return 'page';
+  if (matchingUrl(view.item, page.href) === null) return 'no-match';
+  const values = valuesOf(view.item.fields);
+  if (values.username === undefined && values.password === undefined) return 'no-field';
+  return fillTab(tabs, tabId, page.origin, values);
 }
 
 /** The answer to one request of the popup or the service worker. */
@@ -120,6 +188,28 @@ export async function answer(request: Request, deps: HostDeps): Promise<Answer> 
       deps.copied(clearSeconds);
       return { v: 1, id, ok: true, value, clearSeconds };
     }
+    case 'matches': {
+      if (!s) return refusal(id, 'locked');
+      const page = await pageOf(deps.tabs, request.tabId);
+      if (!page) return refusal(id, 'page');
+      return { v: 1, id, ok: true, items: matchingLogins(s.items(), page.href) };
+    }
+    case 'fill': {
+      if (!s) return refusal(id, 'locked');
+      const outcome = await fillItem(s, deps.tabs, request.tabId, request.itemId);
+      return outcome === 'filled' ? { v: 1, id, ok: true } : refusal(id, outcome);
+    }
+    case 'command-fill': {
+      // The shortcut fills when exactly one item matches; otherwise the popup opens (§6.2).
+      const page = s ? await pageOf(deps.tabs, request.tabId) : undefined;
+      const matched = s && page ? matchingLogins(s.items(), page.href) : [];
+      const [only] = matched;
+      const outcome =
+        s && only && matched.length === 1
+          ? await fillItem(s, deps.tabs, request.tabId, only.itemId)
+          : 'popup';
+      return { v: 1, id, ok: true, result: outcome === 'filled' ? 'filled' : 'popup' };
+    }
     default:
       return refusal(id, 'invalid');
   }
@@ -151,8 +241,12 @@ export function serveHost(runtime: HostRuntime, deps: HostDeps): void {
     if (deps.app.status.kind === 'elsewhere') return false;
     const parsed = parseRequest(message, HOST_TYPES);
     if (parsed.kind === 'other') return false;
-    if (parsed.kind === 'invalid') {
-      respond(refusal(parsed.id, 'invalid'));
+    // Each type from the pages that send it: `command-fill` from the service worker only (§4).
+    if (
+      parsed.kind === 'invalid' ||
+      !fromPage(sender, runtime, HOST_SENDERS[parsed.request.type as keyof typeof HOST_SENDERS])
+    ) {
+      respond(refusal(parsed.kind === 'invalid' ? parsed.id : parsed.request.id, 'invalid'));
       return false;
     }
     deps.activity();

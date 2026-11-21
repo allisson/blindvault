@@ -2,8 +2,8 @@
 // The extension's service worker in Chrome, its event page in Firefox (extension.md §1). It holds no
 // state and no key. Shipped as written, with no bundler. It opens the session host, the app in a
 // pinned tab, or focuses it (D286); clears the clipboard for the session host (§6.3); takes the
-// `fill` command (§6.2); and defers an update while a session host exists (§8.1): the session host
-// reloads the extension once the vault is locked.
+// `fill` command and hands it to the session host (§6.2, D287); and defers an update while a session
+// host exists (§8.1): the session host reloads the extension once the vault is locked.
 
 /**
  * @typedef {object} Context
@@ -100,8 +100,19 @@ export async function clearClipboard(api, clipboard) {
 }
 
 /**
+ * Whether the session host filled the tab: its answer to `command-fill` (§4).
+ * @param {unknown} answer
+ */
+function filled(answer) {
+  if (typeof answer !== 'object' || answer === null) return false;
+  const a = /** @type {Record<string, unknown>} */ (answer);
+  return a.v === 1 && a.id === 0 && a.ok === true && a.result === 'filled';
+}
+
+/**
  * The `fill` command (§6.2). On the session host's own tab the browser took the app's lock shortcut,
- * so it locks (D286); filling comes with the matching items.
+ * so it locks (D286). On another tab the session host fills when exactly one item matches; any other
+ * answer, or none, opens the popup.
  * @param {Api} api
  * @param {{ id?: number } | undefined} tab
  */
@@ -111,13 +122,30 @@ export async function command(api, tab) {
     await api.runtime.sendMessage({ v: 1, type: 'lock', id: 0 }).catch(() => undefined);
     return;
   }
+  if (host && tab?.id !== undefined) {
+    const answer = await api.runtime
+      .sendMessage({ v: 1, type: 'command-fill', id: 0, tabId: tab.id })
+      .catch(() => undefined);
+    if (filled(answer)) return;
+  }
   await api.action.openPopup().catch(() => undefined);
 }
 
 /** What the service worker answers, and the one page each may come from (extension.md §4). */
 const HANDLED = /** @type {const} */ ({ 'open-host': POPUP_PAGE, 'clipboard-clear': HOST_PAGE });
 /** Every type of the extension's messages: the others are answered by another page. */
-const TYPES = ['status', 'search', 'copy', 'lock', 'open-host', 'clipboard-clear', 'locked'];
+const TYPES = [
+  'status',
+  'search',
+  'copy',
+  'lock',
+  'matches',
+  'fill',
+  'command-fill',
+  'open-host',
+  'clipboard-clear',
+  'locked',
+];
 
 /**
  * The request when it is one the service worker answers, from the page it expects; `undefined`

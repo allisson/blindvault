@@ -7,7 +7,9 @@ import {
   type Copyable,
   type Found,
   HOST_PAGE,
+  type Matched,
   POPUP_TYPES,
+  REFUSALS,
   type Refusal,
   type Sender,
   fromPage,
@@ -51,10 +53,10 @@ async function ask(
   return a.v === 1 && a.id === id && typeof a.ok === 'boolean' ? a : undefined;
 }
 
-const REFUSALS: readonly string[] = ['invalid', 'locked', 'not-found', 'no-field'];
-
 function refused(a: Fields): Refusal | undefined {
-  return a.ok === false && typeof a.error === 'string' && REFUSALS.includes(a.error)
+  return a.ok === false &&
+    typeof a.error === 'string' &&
+    (REFUSALS as readonly string[]).includes(a.error)
     ? (a.error as Refusal)
     : undefined;
 }
@@ -87,6 +89,51 @@ export async function search(
   if (!a) return undefined;
   if (a.ok === true && Array.isArray(a.items) && a.items.every(found)) return a.items;
   return refused(a);
+}
+
+function matched(value: unknown): value is Matched {
+  return found(value) && typeof (value as unknown as Fields).url === 'string';
+}
+
+/** The Login items that match the tab's page (§6.1), or why none can. */
+export async function matches(
+  runtime: PopupRuntime,
+  tabId: number,
+): Promise<readonly Matched[] | Refusal | undefined> {
+  const a = await ask(runtime, { type: 'matches', tabId });
+  if (!a) return undefined;
+  if (a.ok === true && Array.isArray(a.items) && a.items.every(matched)) return a.items;
+  return refused(a);
+}
+
+/** Fills a matching item into the tab: `true` once done, or why it was refused. */
+export async function fill(
+  runtime: PopupRuntime,
+  tabId: number,
+  itemId: string,
+): Promise<true | Refusal | undefined> {
+  const a = await ask(runtime, { type: 'fill', tabId, itemId });
+  if (!a) return undefined;
+  if (a.ok === true) return true;
+  return refused(a);
+}
+
+/**
+ * The tab the popup was opened over: the active tab of its window. The browser grants `activeTab`
+ * on it for the user's click (§6.1).
+ */
+export async function activeTab(): Promise<number | undefined> {
+  const tabs = (
+    globalThis as {
+      chrome?: { tabs?: { query(q: object): Promise<{ id?: number }[]> } };
+    }
+  ).chrome?.tabs;
+  try {
+    const [tab] = (await tabs?.query({ active: true, currentWindow: true })) ?? [];
+    return tab?.id;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface Copied {

@@ -50,6 +50,12 @@ const en = {
     copied:
       'Copied. BlindVault tries to clear the clipboard in {seconds} s; clearing is not guaranteed.',
     failed: 'BlindVault did not answer. Open it and try again.',
+    onPage: 'On this page',
+    fill: 'Fill',
+    noPage: 'This page cannot be filled: only https pages, and http on localhost, can.',
+    noMatch: 'No login matches this page.',
+    noTarget: 'This page has no sign-in field to fill.',
+    moved: 'The page changed before the fill. Try again.',
   },
   update: {
     available: 'An update is available: version {current} → {next}.',
@@ -1273,6 +1279,12 @@ const ptBR: Messages = {
     copied:
       'Copiado. O BlindVault tenta limpar a área de transferência em {seconds} s; a limpeza não é garantida.',
     failed: 'O BlindVault não respondeu. Abra-o e tente de novo.',
+    onPage: 'Nesta página',
+    fill: 'Preencher',
+    noPage: 'Esta página não pode ser preenchida: só páginas https, e http em localhost, podem.',
+    noMatch: 'Nenhum login corresponde a esta página.',
+    noTarget: 'Esta página não tem campo de login para preencher.',
+    moved: 'A página mudou antes do preenchimento. Tente de novo.',
   },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',

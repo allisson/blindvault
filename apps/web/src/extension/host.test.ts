@@ -1,7 +1,16 @@
 import { type Field, type ItemView, type VaultSession } from '@blindvault/vault';
 import { describe, expect, it, vi } from 'vitest';
 
-import { type HostApp, type HostRuntime, answer, searchLogins, serveHost } from './host';
+import { type TabsPort } from './fill';
+import {
+  type HostApp,
+  type HostRuntime,
+  answer,
+  matchingLogins,
+  searchLogins,
+  serveHost,
+} from './host';
+import { type InPageOrder } from './inject';
 import { type Request, SEARCH_MAX } from './rpc';
 
 function id(n: number): Uint8Array {
@@ -50,9 +59,9 @@ const NEWER: ItemView = { id: id(5), hlc: {} as never, inTrash: false, readOnly:
 const EMPTY_PASSWORD = login(6, 'Empty', [{ type: 'secret', role: 'password', value: '' }]);
 const ITEMS = [MAIL, BANK, TRASHED, NOTE, NEWER, EMPTY_PASSWORD];
 
-function app(unlocked = true) {
+function app(unlocked = true, items: readonly ItemView[] = ITEMS) {
   const session = {
-    items: () => ITEMS,
+    items: () => items,
     preferences: { clipboardClearSeconds: 45 },
   } as unknown as VaultSession;
   const locks = vi.fn();
@@ -64,8 +73,28 @@ function app(unlocked = true) {
   return Object.assign(a, { locks });
 }
 
-function deps(a = app()) {
-  return { app: a, activity: vi.fn(), copied: vi.fn(), now: () => 59_000 };
+/** A tab showing `url`, whose top frame has a password field; `fillResult` is the fill's answer. */
+function tabsAt(url: string | undefined, fillResult: unknown = 'filled') {
+  const orders: InPageOrder[] = [];
+  const port: TabsPort = {
+    url: () => Promise.resolve(url),
+    run: (_tabId, _frames, order) => {
+      orders.push(order);
+      if (order.kind === 'fill') return Promise.resolve([{ frameId: 0, result: fillResult }]);
+      const origin = url === undefined ? '' : new URL(url).origin;
+      return Promise.resolve([
+        {
+          frameId: 0,
+          result: { origin, password: true, focusedPassword: false, focusedText: false },
+        },
+      ]);
+    },
+  };
+  return { port, orders };
+}
+
+function deps(a = app(), tabs: TabsPort | undefined = tabsAt('https://mail.example.com/').port) {
+  return { app: a, activity: vi.fn(), copied: vi.fn(), now: () => 59_000, tabs };
 }
 
 describe('searchLogins (D286)', () => {
@@ -176,6 +205,151 @@ describe('answer (extension.md §4, §6.3)', () => {
   });
 });
 
+describe('matchingLogins (extension.md §5, D287)', () => {
+  it('lists the Login items that match, with the URL that matched, never a trashed one', () => {
+    expect(matchingLogins(ITEMS, 'https://mail.example.com/inbox')).toEqual([
+      {
+        itemId: hexOf(1),
+        title: 'Mail',
+        username: 'ana@example.com',
+        fields: ['username', 'password', 'totp'],
+        url: 'https://mail.example.com',
+      },
+    ]);
+    expect(matchingLogins(ITEMS, 'https://bank.example/')).toMatchObject([
+      { title: 'Bank', url: 'bank.example' },
+    ]);
+    expect(matchingLogins(ITEMS, 'https://www.bank.example/')).toEqual([]);
+  });
+});
+
+describe('answer, filling (extension.md §6, D287)', () => {
+  it('answers the matching items of the tab’s page, read from the browser', async () => {
+    await expect(
+      answer(req({ type: 'matches', tabId: 3 } as never), deps()),
+    ).resolves.toMatchObject({ ok: true, items: [{ title: 'Mail' }] });
+  });
+
+  it.each([
+    ['a page on http', 'http://mail.example.com/'],
+    ['an extension page', 'chrome-extension://abc/index.html'],
+    ['a tab whose URL the browser does not give', undefined],
+  ])('answers that %s cannot match', async (_name, url) => {
+    await expect(
+      answer(req({ type: 'matches', tabId: 3 } as never), deps(app(), tabsAt(url).port)),
+    ).resolves.toEqual({ v: 1, id: 7, ok: false, error: 'page' });
+  });
+
+  it('answers page with no browser tabs to read', async () => {
+    await expect(
+      answer(req({ type: 'matches', tabId: 3 } as never), { ...deps(), tabs: undefined }),
+    ).resolves.toMatchObject({ ok: false, error: 'page' });
+  });
+
+  it('fills the user name and the password into the tab, with its top frame’s origin', async () => {
+    const tabs = tabsAt('https://mail.example.com/login');
+    await expect(
+      answer(req({ type: 'fill', tabId: 3, itemId: hexOf(1) } as never), deps(app(), tabs.port)),
+    ).resolves.toEqual({ v: 1, id: 7, ok: true });
+    expect(tabs.orders).toEqual([
+      { kind: 'probe' },
+      {
+        kind: 'fill',
+        origin: 'https://mail.example.com',
+        username: 'ana@example.com',
+        password: 'hunter2',
+      },
+    ]);
+  });
+
+  it('refuses to fill an item that does not match the tab, writing nothing', async () => {
+    const tabs = tabsAt('https://mail.example.com/');
+    await expect(
+      answer(req({ type: 'fill', tabId: 3, itemId: hexOf(2) } as never), deps(app(), tabs.port)),
+    ).resolves.toEqual({ v: 1, id: 7, ok: false, error: 'no-match' });
+    expect(tabs.orders).toEqual([]);
+  });
+
+  it.each([
+    ['a trashed item', hexOf(3), 'https://mail.example.com/', 'not-found'],
+    ['an unknown item', hexOf(9), 'https://mail.example.com/', 'not-found'],
+    ['a page that cannot match', hexOf(1), 'http://mail.example.com/', 'page'],
+  ])('refuses to fill %s', async (_name, itemId, url, error) => {
+    const tabs = tabsAt(url);
+    await expect(
+      answer(req({ type: 'fill', tabId: 3, itemId } as never), deps(app(), tabs.port)),
+    ).resolves.toMatchObject({ ok: false, error });
+    expect(tabs.orders).toEqual([]);
+  });
+
+  it('refuses an item with nothing to fill', async () => {
+    const bare = login(8, 'Bare', [
+      { type: 'url', role: 'url', value: 'https://mail.example.com' },
+    ]);
+    await expect(
+      answer(req({ type: 'fill', tabId: 3, itemId: hexOf(8) } as never), deps(app(true, [bare]))),
+    ).resolves.toMatchObject({ ok: false, error: 'no-field' });
+  });
+
+  it('reports a page that navigated, and one with no sign-in field', async () => {
+    const r = req({ type: 'fill', tabId: 3, itemId: hexOf(1) } as never);
+    const url = 'https://mail.example.com/';
+    await expect(answer(r, deps(app(), tabsAt(url, 'moved').port))).resolves.toMatchObject({
+      error: 'moved',
+    });
+    await expect(answer(r, deps(app(), tabsAt(url, 'no-target').port))).resolves.toMatchObject({
+      error: 'no-target',
+    });
+  });
+
+  it('refuses matches and fill while the vault is locked', async () => {
+    const d = deps(app(false));
+    await expect(answer(req({ type: 'matches', tabId: 3 } as never), d)).resolves.toMatchObject({
+      error: 'locked',
+    });
+    await expect(
+      answer(req({ type: 'fill', tabId: 3, itemId: hexOf(1) } as never), d),
+    ).resolves.toMatchObject({ error: 'locked' });
+  });
+});
+
+describe('answer, the shortcut (extension.md §6.2)', () => {
+  const command = req({ type: 'command-fill', tabId: 3 } as never);
+
+  it('fills when exactly one item matches', async () => {
+    const tabs = tabsAt('https://mail.example.com/');
+    await expect(answer(command, deps(app(), tabs.port))).resolves.toEqual({
+      v: 1,
+      id: 7,
+      ok: true,
+      result: 'filled',
+    });
+    expect(tabs.orders.map((o) => o.kind)).toEqual(['probe', 'fill']);
+  });
+
+  it('opens the popup when several match, none matches, or the vault is locked', async () => {
+    const twin = login(8, 'Mail too', [
+      { type: 'secret', role: 'password', value: 'p' },
+      { type: 'url', role: 'url', value: 'https://mail.example.com' },
+    ]);
+    const several = tabsAt('https://mail.example.com/');
+    await expect(
+      answer(command, deps(app(true, [MAIL, twin]), several.port)),
+    ).resolves.toMatchObject({ result: 'popup' });
+    expect(several.orders).toEqual([]);
+    await expect(
+      answer(command, deps(app(), tabsAt('https://nothing.example/').port)),
+    ).resolves.toMatchObject({ result: 'popup' });
+    await expect(answer(command, deps(app(false)))).resolves.toMatchObject({ result: 'popup' });
+  });
+
+  it('opens the popup when the page has no sign-in field', async () => {
+    await expect(
+      answer(command, deps(app(), tabsAt('https://mail.example.com/', 'no-target').port)),
+    ).resolves.toMatchObject({ result: 'popup' });
+  });
+});
+
 type Listener = Parameters<HostRuntime['onMessage']['addListener']>[0];
 
 function runtime() {
@@ -200,6 +374,7 @@ function runtime() {
 }
 
 const POPUP = 'chrome-extension://abc/popup.html';
+const WORKER = 'chrome-extension://abc/background.js';
 
 describe('serveHost (extension.md §4)', () => {
   it('answers the popup, and counts it as activity (D284)', async () => {
@@ -218,7 +393,7 @@ describe('serveHost (extension.md §4)', () => {
     const { r, send } = runtime();
     const d = deps();
     serveHost(r, d);
-    send({ v: 1, type: 'lock', id: 0 }, 'chrome-extension://abc/background.js');
+    send({ v: 1, type: 'lock', id: 0 }, WORKER);
     send({ v: 1, type: 'lock', id: 0 }, 'chrome-extension://abc/_generated_background_page.html');
     expect(d.app.locks).toHaveBeenCalledTimes(2);
   });
@@ -244,6 +419,54 @@ describe('serveHost (extension.md §4)', () => {
     const { respond } = send({ v: 1, type: 'lock', id: 4, now: true }, POPUP);
     expect(respond).toHaveBeenCalledWith({ v: 1, id: 4, ok: false, error: 'invalid' });
     expect(d.app.locks).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['command-fill from the popup', { v: 1, type: 'command-fill', id: 2, tabId: 3 }, POPUP],
+    [
+      'fill from the service worker',
+      { v: 1, type: 'fill', id: 2, tabId: 3, itemId: hexOf(1) },
+      WORKER,
+    ],
+    ['matches from the service worker', { v: 1, type: 'matches', id: 2, tabId: 3 }, WORKER],
+    [
+      'copy from the service worker',
+      { v: 1, type: 'copy', id: 2, itemId: hexOf(1), field: 'password' },
+      WORKER,
+    ],
+  ])('refuses %s, acting on nothing', (_name, message, url) => {
+    const { r, send } = runtime();
+    const tabs = tabsAt('https://mail.example.com/');
+    const d = deps(app(), tabs.port);
+    serveHost(r, d);
+    const { respond, kept } = send(message, url);
+    expect(kept).toBe(false);
+    expect(respond).toHaveBeenCalledWith({ v: 1, id: 2, ok: false, error: 'invalid' });
+    expect(tabs.orders).toEqual([]);
+    expect(d.copied).not.toHaveBeenCalled();
+    expect(d.activity).not.toHaveBeenCalled();
+  });
+
+  it('ignores a fill from a content script, whose sender is the web page', () => {
+    const { r, send } = runtime();
+    const tabs = tabsAt('https://mail.example.com/');
+    serveHost(r, deps(app(), tabs.port));
+    const { respond, kept } = send(
+      { v: 1, type: 'fill', id: 2, tabId: 3, itemId: hexOf(1) },
+      'https://mail.example.com/login',
+    );
+    expect(kept).toBe(false);
+    expect(respond).not.toHaveBeenCalled();
+    expect(tabs.orders).toEqual([]);
+  });
+
+  it('takes command-fill from the service worker', async () => {
+    const { r, send } = runtime();
+    serveHost(r, deps());
+    const { respond } = send({ v: 1, type: 'command-fill', id: 0, tabId: 3 }, WORKER);
+    await vi.waitFor(() => {
+      expect(respond).toHaveBeenCalledWith({ v: 1, id: 0, ok: true, result: 'filled' });
+    });
   });
 
   it('stays silent on the service worker’s messages', () => {

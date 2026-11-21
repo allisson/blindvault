@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Field, Item } from './item';
-import { fieldUrl, fillablePage, itemMatches } from './match';
+import { fieldUrl, fillablePage, itemMatches, matchingUrl } from './match';
 
 function login(urls: readonly (string | Partial<Field>)[], extra: Partial<Item> = {}): Item {
   return {
@@ -134,5 +134,18 @@ describe('itemMatches, items that never match', () => {
   it('ignores a field of another type holding the URL', () => {
     const item = login([{ type: 'text', value: 'https://example.com' }]);
     expect(itemMatches(item, 'https://example.com/')).toBe(false);
+  });
+});
+
+describe('matchingUrl', () => {
+  it('gives the first url field that matches, as written', () => {
+    const item = login(['mailto:x@y.z', 'https://example.org', ' example.com/login ']);
+    expect(matchingUrl(item, 'https://example.com/')).toBe(' example.com/login ');
+    expect(matchingUrl(item, 'https://example.net/')).toBeNull();
+  });
+
+  it('gives null for an item that never matches', () => {
+    const trashed = login(['https://example.com'], { trashOperationId: new Uint8Array(16) });
+    expect(matchingUrl(trashed, 'https://example.com/')).toBeNull();
   });
 });

@@ -12,6 +12,9 @@ describe('parseRequest (extension.md §4)', () => {
     [{ v: 1, type: 'search', id: 1, query: 'x'.repeat(QUERY_MAX) }],
     [{ v: 1, type: 'copy', id: 2, itemId: ITEM, field: 'password' }],
     [{ v: 1, type: 'copy', id: 2, itemId: ITEM, field: 'totp' }],
+    [{ v: 1, type: 'matches', id: 3, tabId: 0 }],
+    [{ v: 1, type: 'fill', id: 4, tabId: 12, itemId: ITEM }],
+    [{ v: 1, type: 'command-fill', id: 0, tabId: 12 }],
   ])('takes %j', (message) => {
     expect(parseRequest(message, HOST_TYPES)).toEqual({ kind: 'request', request: message });
   });
@@ -34,6 +37,17 @@ describe('parseRequest (extension.md §4)', () => {
       0,
     ],
     ['a field it cannot copy', { v: 1, type: 'copy', id: 0, itemId: ITEM, field: 'notes' }, 0],
+    ['no tab', { v: 1, type: 'matches', id: 0 }, 0],
+    ['a negative tab', { v: 1, type: 'matches', id: 0, tabId: -1 }, 0],
+    ['a tab as text', { v: 1, type: 'command-fill', id: 0, tabId: '3' }, 0],
+    ['a URL beside the tab', { v: 1, type: 'matches', id: 0, tabId: 1, url: 'https://a.b' }, 0],
+    ['a fill with no item', { v: 1, type: 'fill', id: 0, tabId: 1 }, 0],
+    ['a fill of a bad item ID', { v: 1, type: 'fill', id: 0, tabId: 1, itemId: 'x' }, 0],
+    [
+      'a fill carrying an origin',
+      { v: 1, type: 'fill', id: 0, tabId: 1, itemId: ITEM, origin: 'https://a.b' },
+      0,
+    ],
   ])('refuses %s', (_name, message, id) => {
     expect(parseRequest(message, HOST_TYPES)).toEqual(
       id === undefined ? { kind: 'invalid' } : { kind: 'invalid', id },

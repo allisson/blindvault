@@ -5,7 +5,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { startAppearance } from './app/appearance';
-import { popupRuntime } from './extension/popup-client';
+import { activeTab, popupRuntime } from './extension/popup-client';
 import { LanguageProvider } from './i18n/context';
 import { Popup } from './ui/Popup';
 import './index.css';
@@ -23,6 +23,7 @@ if (runtime) {
       <LanguageProvider>
         <Popup
           runtime={runtime}
+          tab={activeTab}
           close={() => {
             window.close();
           }}
