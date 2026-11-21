@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import {
   type PopupRuntime,
@@ -39,6 +39,7 @@ export function Popup({
   const [tabId, setTabId] = useState<number>();
   const [matched, setMatched] = useState<readonly Matched[] | 'page'>();
   const [note, setNote] = useState<string>();
+  const main = useRef<HTMLElement>(null);
 
   const refusedNote = (refusal: Refusal | undefined): string => {
     switch (refusal) {
@@ -60,6 +61,14 @@ export function Popup({
     onLocked(runtime, close);
     void status(runtime).then(setState);
   }, [runtime, close]);
+
+  useEffect(() => {
+    // The popup opens on the user's click, to search at once. Without scrolling: Firefox focuses
+    // while its popup is still short, and would open it scrolled past the header.
+    if (state === 'unlocked') {
+      main.current?.querySelector('input')?.focus({ preventScroll: true });
+    }
+  }, [state]);
 
   useEffect(() => {
     if (state !== 'unlocked') return;
@@ -128,7 +137,11 @@ export function Popup({
   };
 
   return (
-    <main data-testid="popup" className="flex w-80 flex-col gap-3 bg-surface p-4 text-fg">
+    <main
+      ref={main}
+      data-testid="popup"
+      className="flex w-80 flex-col gap-3 bg-surface p-4 text-fg"
+    >
       <header className="flex items-center gap-2">
         <span className="text-sm font-semibold">{m.app.name}</span>
         <span className="flex-1" />
@@ -150,8 +163,6 @@ export function Popup({
             label={m.popup.search}
             type="search"
             value={query}
-            // The popup opens on the user's click, to search at once.
-            autoFocus
             onChange={(e) => {
               setQuery(e.target.value);
             }}

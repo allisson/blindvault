@@ -132,7 +132,8 @@ test('the popup’s Lock locks the session host, and the popup then shows it loc
 }) => {
   const host = await sessionHost(context, extensionId);
   const page = await popup(context, extensionId);
-  await expect(page.getByRole('searchbox', { name: 'Search logins' })).toBeVisible();
+  // Focused on opening, to search at once.
+  await expect(page.getByRole('searchbox', { name: 'Search logins' })).toBeFocused();
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(host.getByTestId('lock-state')).toHaveText('Locked');
   const again = await popup(context, extensionId);
