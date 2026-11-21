@@ -80,6 +80,7 @@ receipt. A held record that fails it is shown as corrupt and is not written.
 | `value` | per type | below |
 | `role` | text, optional | a field role of the item's template (section 5) |
 | `label` | text, optional | single-line, trimmed, 1 to 128 code points |
+| `match` | text, optional | only on a `url` field: `domain`, the field matching the page's whole registrable domain when filling (D283); absent, it matches the exact origin |
 
 - A field with a `role` has that role's field type, and an item holds each role at most once.
 - A field without a `role`, one the user added, MUST have a `label`, except an `attachment` field,
