@@ -22,6 +22,7 @@ export type SettingsPage =
   | 'locking'
   | 'password'
   | 'passkey'
+  | 'sitePasskeys'
   | 'recovery'
   | 'devices'
   | 'backup'

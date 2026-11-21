@@ -66,6 +66,59 @@ describe('parseRequest (extension.md §4)', () => {
     expect(parseRequest({ v: 1, type: 'status', id: 0 }, POPUP_TYPES)).toEqual({ kind: 'other' });
   });
 
+  it('reads the confirmation window’s choices (§7.7)', () => {
+    const token = 'c'.repeat(32);
+    const choice = (extra: object) =>
+      parseRequest({ v: 1, type: 'confirm-choice', id: 1, token, ...extra }, HOST_TYPES);
+    expect(choice({ choice: 'use', credentialId: '0a1b' })).toEqual({
+      kind: 'request',
+      request: {
+        v: 1,
+        type: 'confirm-choice',
+        id: 1,
+        token,
+        choice: { choice: 'use', credentialId: '0a1b' },
+      },
+    });
+    expect(choice({ choice: 'save', itemId: ITEM })).toMatchObject({ kind: 'request' });
+    for (const c of ['save-new', 'browser', 'cancel']) {
+      expect(choice({ choice: c })).toMatchObject({ kind: 'request' });
+    }
+    for (const bad of [
+      { choice: 'use' },
+      { choice: 'use', credentialId: '0A1B' },
+      { choice: 'use', credentialId: 'abc' },
+      { choice: 'use', credentialId: 'ab'.repeat(1024) },
+      { choice: 'use', credentialId: '0a', itemId: ITEM },
+      { choice: 'save', itemId: 'x' },
+      { choice: 'save', itemId: ITEM, credentialId: '0a' },
+      { choice: 'cancel', itemId: ITEM },
+      { choice: 'sign' },
+    ]) {
+      expect(choice(bad)).toEqual({ kind: 'invalid', id: 1 });
+    }
+    expect(
+      parseRequest({ v: 1, type: 'confirm-details', id: 1, token: 'C'.repeat(32) }, HOST_TYPES),
+    ).toEqual({ kind: 'invalid', id: 1 });
+    expect(
+      parseRequest({ v: 1, type: 'confirm-choice', id: 1, choice: 'cancel' }, HOST_TYPES),
+    ).toEqual({ kind: 'invalid', id: 1 });
+  });
+
+  it('leaves passkey-answer, the session host’s own message, to the service worker', () => {
+    const answer = {
+      v: 1,
+      type: 'passkey-answer',
+      id: 0,
+      tabId: 1,
+      frameId: 0,
+      request: 'a',
+      result: {},
+    };
+    expect(parseRequest(answer, HOST_TYPES)).toEqual({ kind: 'other' });
+    expect(parseRequest({ ...answer, extra: 1 }, HOST_TYPES)).toEqual({ kind: 'invalid', id: 0 });
+  });
+
   it('refuses a malformed message of another receiver’s type', () => {
     expect(parseRequest({ v: 1, type: 'open-host', id: 0, url: 'x' }, HOST_TYPES)).toEqual({
       kind: 'invalid',
