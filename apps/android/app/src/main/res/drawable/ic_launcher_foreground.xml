@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- icons.py's keyhole on the 108 dp canvas: a circle of radius 0.12 at (0.5, 0.42) over a
+     trapezoid from y 0.47 to 0.73, half-widths 0.05 and 0.10, all inside the 66 dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M41.04,45.36a12.96,12.96 0,1 0,25.92 0a12.96,12.96 0,1 0,-25.92 0Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48.6,50.76L59.4,50.76L64.8,78.84L43.2,78.84Z" />
+</vector>

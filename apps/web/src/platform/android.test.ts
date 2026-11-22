@@ -222,6 +222,42 @@ describe('the Android lock signals (android.md §4.2)', () => {
     expect(activity.size).toBe(0);
   });
 
+  it('asks the shell for the lifecycle once, on first use, and takes the state it answers (D293)', async () => {
+    const s = fakeShell((m) =>
+      m.type === 'lifecycle-watch' ? ok(m, { state: 'hidden' }) : undefined,
+    );
+    const lock = androidLockSignals(() => s.bridge, { onActivity: () => () => undefined });
+    expect(s.sent).toEqual([]);
+    const seen: boolean[] = [];
+    lock.onHidden((hidden) => seen.push(hidden));
+    lock.onSystemLock(() => undefined);
+    expect(lock.hidden()).toBe(false);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(s.sent).toEqual([{ v: 1, type: 'lifecycle-watch', id: 1 }]);
+    expect(lock.hidden()).toBe(true);
+    expect(seen).toEqual([true]);
+    s.push({ v: 1, type: 'lifecycle', state: 'shown' });
+    expect(seen).toEqual([true, false]);
+  });
+
+  it.each([
+    ['a state the window does not know', (m: Message) => ok(m, { state: 'screen-off' })],
+    ['no state', (m: Message) => ok(m)],
+    ['another key', (m: Message) => ok(m, { state: 'shown', extra: 1 })],
+    ['a refusal', (m: Message) => no(m, 'invalid')],
+  ])('keeps the state it had when the watch is answered with %s', async (_case, answer) => {
+    const s = fakeShell(answer);
+    const lock = androidLockSignals(() => s.bridge, { onActivity: () => () => undefined });
+    const seen: boolean[] = [];
+    lock.onHidden((hidden) => seen.push(hidden));
+    s.push({ v: 1, type: 'lifecycle', state: 'hidden' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(s.sent).toHaveLength(1);
+    expect(lock.hidden()).toBe(true);
+    expect(seen).toEqual([true]);
+  });
+
   it('knows no lifecycle without the shell', () => {
     const lock = androidLockSignals(() => undefined, { onActivity: () => () => undefined });
     expect(lock.hidden()).toBe(false);

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keystore_seal_title">Configurar o desbloqueio por biometria</string>
+    <string name="keystore_open_title">Desbloquear o BlindVault</string>
+    <string name="webview_too_old">Esta versão do Android System WebView é antiga demais para o BlindVault. Atualize-a pela Play Store.</string>
+</resources>

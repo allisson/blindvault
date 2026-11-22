@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The BiometricPrompt's titles (android.md §5), in the app's terms (GLOSSARY.md). -->
+<resources>
+    <string name="keystore_seal_title">Set up biometric unlock</string>
+    <string name="keystore_open_title">Unlock BlindVault</string>
+    <string name="webview_too_old">This version of Android System WebView is too old for BlindVault. Update it from the Play Store.</string>
+</resources>

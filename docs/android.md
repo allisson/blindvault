@@ -1,7 +1,7 @@
 # BlindVault — Android app
 
 > Normative for the Android app; `overview.md` prevails on design. Implements D269, D270, D271,
-> D274, D282 and D290. Measurements behind it are in `docs/spikes/android.md`. Terms follow
+> D274, D282, D290, D292 and D293. Measurements behind it are in `docs/spikes/android.md`. Terms follow
 > `GLOSSARY.md` (app window, Keystore KEK, provider window, privileged browser, passkey).
 
 ## 1. Model
@@ -47,7 +47,8 @@ and extension builds carry none of it. It provides:
    (`apps/web/build/pages.ts`), which the shell adds to every response.
 2. `apps/android/build/assets.ts` copies it to `app/src/main/assets/web/` (not committed) and writes
    its `asset-manifest.txt` with the web build's format and code (D189), listing every file,
-   `headers.json` included; it prints the manifest's hash.
+   `headers.json` included, and `app/version.properties` (not committed), the `versionName` and
+   `versionCode` below; it prints the manifest's hash.
 3. `./gradlew assembleRelease` builds the unsigned APK, `app-release-unsigned.apk`, with no R8
    minification and no baseline profile, so its bytes depend only on the pinned inputs.
 
@@ -119,7 +120,9 @@ recording, and a blank thumbnail in Recents.
 | Manual | the app's Lock | the app's |
 
 The shell reports `onStop`, `onStart` and the screen turning off to the window over the bridge
-(§9); the platform port turns them into `LockSignals`. A lock follows D93 and D263.
+(§9); the platform port turns them into `LockSignals`. The shell can write to the window only once
+the window has written to it, so the port sends `lifecycle-watch` the first time it is used, and
+takes the state the shell answers (D293). A lock follows D93 and D263.
 
 ## 5. Keystore KEK (D271, D290, D292)
 
@@ -336,6 +339,7 @@ package, and the user enables both in Settings › Passwords & accounts.
 | window | `clipboard-copy` `{text, clearSeconds}`, `clipboard-clear` | done (§6.1) |
 | main window | `file-save`, `file-chunk`, `file-end`, `file-abort` | §6.2 |
 | window | `build-info` | `{versionName, versionCode, certSha256}` (§10) |
+| window | `lifecycle-watch` | `{state: "shown" \| "hidden"}`, the state now (§4.2, D293) |
 | shell, to the window | `lifecycle` `{state: "hidden" \| "shown" \| "screen-off"}` | none (§4.2) |
 | provider window | `provider-request` | the request: its kind, the caller (§7.3), the options, and for autofill the fields found |
 | provider window | `provider-assetlinks` `{domain}` | `bound`, `unbound`, `network` or `redirect` (§7.4) |
@@ -384,8 +388,8 @@ layout beyond the app's own responsive one.
 
 - **Kotlin, on the JVM.** The bridge's validation (every type, unknown `v`, `type` and key, a
   provider type outside a request), the allowlist's parsing and matching, `assetlinks.json`'s parsing
-  and binding (relation, package, every signer, redirect, size), `android:apk-key-hash`, and the
-  `versionCode`.
+  and binding (relation, package, every signer, redirect, size), and `android:apk-key-hash`.
+- **Vitest, in `apps/android`.** `build/assets.ts`: the APK's asset manifest and the `versionCode`.
 - **Vitest, in `apps/web`.** The Android platform port: lock signals, clipboard, file saving, the
   Keystore KEK's setup, unlock, failures and removal against a fake shell; the provider window's
   flow per caller kind.

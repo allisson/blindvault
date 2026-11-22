@@ -38,8 +38,8 @@ function needed(bridge: Bridge): ShellBridge {
 
 /**
  * Hidden from the shell's `hidden` (`onStop`) to its `shown` (`onStart`); the operating system's lock
- * is the screen turning off; activity is input in the window. Until the shell says otherwise, the
- * window that just started is shown.
+ * is the screen turning off; activity is input in the window. On first use the window sends
+ * `lifecycle-watch` (D293); until the shell answers, the window that just started is shown.
  */
 export function androidLockSignals(
   bridge: Bridge,
@@ -49,6 +49,11 @@ export function androidLockSignals(
   let watching = false;
   const hiddenListeners = new Set<(hidden: boolean) => void>();
   const systemListeners = new Set<() => void>();
+  const shownOrHidden = (next: boolean): void => {
+    if (next === hidden) return;
+    hidden = next;
+    for (const l of hiddenListeners) l(next);
+  };
   const watch = (): void => {
     const b = bridge();
     if (watching || !b) return;
@@ -58,11 +63,18 @@ export function androidLockSignals(
         for (const l of systemListeners) l();
         return;
       }
-      const next = state === 'hidden';
-      if (next === hidden) return;
-      hidden = next;
-      for (const l of hiddenListeners) l(next);
+      shownOrHidden(state === 'hidden');
     });
+    // The shell reaches the window only once the window has written to it (D293): this first
+    // message opens the way for every `lifecycle`, and its answer is the state now.
+    b.request('lifecycle-watch').then(
+      (answer) => {
+        const keys = Object.keys(answer).filter((k) => k !== 'v' && k !== 'id' && k !== 'ok');
+        if (keys.length !== 1 || (answer.state !== 'hidden' && answer.state !== 'shown')) return;
+        shownOrHidden(answer.state === 'hidden');
+      },
+      () => undefined,
+    );
   };
   return {
     hidden: () => {
