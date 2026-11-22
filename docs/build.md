@@ -138,6 +138,27 @@ the store's own folder, and compare the manifest's hash with the release's:
   Store's signature), and run `shasum -a 256 -c asset-manifest.txt`. Whether the store rewrites
   `manifest.json` is still to confirm at the first upload (`extension.md` §8.2).
 
+## Android
+
+The APK wraps the Android build of `apps/web` (`android.md` §2, D290). Its `asset-manifest.txt`, in
+the format above, lists every file of `assets/web/`, `headers.json` included; its hash is the one
+the app's About shows. Besides Node and pnpm, the build needs the JDK (Temurin 21.0.13+9) and the
+Android SDK (platform 36, build tools 36.0.0) of `docs/architecture.md`, with `ANDROID_HOME` set.
+
+```sh
+SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/android build
+shasum -a 256 apps/android/app/src/main/assets/web/asset-manifest.txt
+shasum -a 256 apps/android/app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+The build writes the unsigned APK, with no R8, no baseline profile, no VCS information and no
+dependency block, so its bytes depend only on the pinned inputs; Gradle checks every artifact it
+resolves against `apps/android/gradle/verification-metadata.xml`. The CI `android` job runs the
+Kotlin unit tests and builds the APK twice, as the web build, and compares the two byte for byte.
+Two builds on macOS 26.6.2 (arm64), the second under another time zone, locale and umask, gave the same
+APK. Signing, the release's files and the check of a signed APK against a rebuild come with the
+first Android release (`android.md` §10).
+
 ## Validation on the release candidate
 
 `v1.0.0-rc.1` (`d016b23`, release workflow run 43597999522), for the Security Gate on 2026-11-14:

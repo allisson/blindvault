@@ -43,6 +43,7 @@ Phase 10 — Extension and Android. Update this line when a gate passes.
 ```
 apps/web/            PWA, UI (mobile/tablet/desktop layouts), service worker, onboarding (no direct crypto)
 apps/extension/      browser extension: manifests, its service worker, the package around apps/web's build
+apps/android/        Android app: the Kotlin shell, the Gradle project, the APK around apps/web's build
 packages/crypto/     libsodium wrappers, key hierarchy, AEAD, AAD serialization, copied Noise state machine
 packages/vault/      domain model: items, fields, templates, versions, tombstones
 packages/storage/    IndexedDB schema, encrypted record persistence, migrations
@@ -70,6 +71,8 @@ pnpm install --frozen-lockfile            # install
 pnpm --filter @blindvault/web dev         # dev server
 pnpm --filter @blindvault/web build       # production build
 pnpm --filter @blindvault/extension build # extension packages (apps/extension/dist)
+pnpm --filter @blindvault/android build   # unsigned APK (needs JDK 21, ANDROID_HOME with platform 36, build tools 36.0.0)
+pnpm --filter @blindvault/android test:kotlin  # the shell's Kotlin unit tests on the JVM
 pnpm lint                                 # ESLint (strictTypeChecked + package boundaries)
 pnpm typecheck                            # tsc -b over every project
 pnpm format:check                         # Prettier (pnpm format to fix)

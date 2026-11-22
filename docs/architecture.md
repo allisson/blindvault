@@ -928,6 +928,7 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 
 | Dependency | Where | Justification |
 | --- | --- | --- |
+| `actions/setup-java` v6.2.0 | `.github/workflows/ci.yml`, job `android` | Installs Temurin 21.0.13+9, the exact JDK of `android.md` §2; the runner's own JDK changes with its image. GitHub's own action. Phase 10. |
 | `actions/attest-build-provenance` v4.2.2 | `.github/workflows/release.yml` | Signs the release files with a build provenance attestation (Sigstore, through GitHub), the signing of overview §12 (D194). Anyone can check a file with `gh attestation verify`, with no key of the project to distribute. Phase 3. |
 | `cloudflare/wrangler-action` v4.1.3, `wrangler` 4.152.0 | `.github/workflows/release.yml`, job `deploy` | Uploads the release's archive to Cloudflare Pages by direct upload (D228, D230), Cloudflare's own action and CLI. The action is pinned by commit; it installs the exact `wranglerVersion` with npm, without a lockfile, in a directory that is not uploaded, and `WRANGLER_SEND_METRICS=false` turns off wrangler's usage data. It holds the Pages token only in that job, under the `cloudflare-pages` environment. Phase 6. |
 | `nginx` 1.30.5 (Alpine image) | `apps/web/e2e/self-hosting/serve.sh`, CI job `self-hosting` | Serves the build with `deploy/nginx/blindvault.conf` for the self-hosting test (D195). Pinned by digest; the stable line. Test only. Phase 3. |
@@ -984,7 +985,13 @@ The ones already chosen are below.
 
 Chosen with `docs/android.md`; each lands in `apps/android` with the code, at a version at least 14
 days old then, Maven artifacts checked by hand against the same rule and recorded with their SHA-256
-in Gradle's dependency verification. Their transitive dependencies are listed here when they land.
+in Gradle's dependency verification (`apps/android/gradle/verification-metadata.xml`). The shell
+landed with the Gradle wrapper, the Android Gradle Plugin, `androidx.webkit`, JUnit and `org.json`;
+`androidx.credentials` lands with the credential provider. What the APK carries is listed below the
+table; the build's own closure (the plugin's hundreds of artifacts) is pinned only by that file, by
+SHA-256, and not listed by hand. `aapt2` is one artifact per operating system: the file has Gradle's
+hash of the macOS one and hand-made hashes, from Google Maven, of the Linux one CI uses and the
+Windows one.
 
 | Dependency | Justification |
 | --- | --- |
@@ -993,6 +1000,17 @@ in Gradle's dependency verification. Their transitive dependencies are listed he
 | `androidx.webkit` 1.18.0 | `WebViewAssetLoader`, which serves the `apps/web` build on an `https:` origin, and `addWebMessageListener`, the origin-checked bridge (`android.md` §3, §9). The platform has neither. Used in the spike. |
 | `androidx.credentials` 1.6.0 (2026-04-08) | The credential provider's request and response types and `CallingAppInfo.getOrigin(allowlist)`, the check of a privileged browser (`android.md` §7.3). The platform API alone carries passkeys as untyped bundles whose keys are this library's conventions, so the provider would copy them, and the origin check, by hand. Security-sensitive: approved by the maintainer for D290. `credentials-play-services-auth` is not used. |
 | JUnit 4.13.2 | The Kotlin unit tests on the JVM (`android.md` §13). Test only, never in the APK. |
+| `org.json:json` 20260814 (2026-08-14) | The reference `org.json`, for the Kotlin unit tests: Android's `org.json`, on which the bridge's validation runs in the app, is a stub on the JVM. The alternatives were Robolectric, much larger, or a JSON parser written by hand. A known difference: the reference refuses a duplicate key where Android's keeps the last, which matters nothing here, since the window's `JSON.stringify` writes none. Test only, never in the APK. |
+| Temurin JDK 21.0.13+9 (2026-10-20) | Runs Gradle and the compilers (`android.md` §2); the same exact version in CI (`actions/setup-java`) and on the maintainer's Mac, so a rebuild can match CI's APK. |
+| Android SDK platform 36, build tools 36.0.0 | `compileSdk` and `buildToolsVersion` (`android.md` §2). Installed by `sdkmanager`, which checks each package's hash against Google's repository; CI installs exactly these. |
+
+**In the APK**, `releaseRuntimeClasspath`: `androidx.webkit` 1.18.0 and what it brings,
+`androidx.annotation` 1.8.1, `androidx.annotation:annotation-experimental` 1.3.0, `androidx.core`
+1.1.0, `androidx.lifecycle:lifecycle-runtime` and `lifecycle-common` 2.0.0,
+`androidx.arch.core:core-common` 2.0.0, `androidx.versionedparcelable` 1.1.0, `androidx.collection`
+1.0.0 and `org.jspecify:jspecify` 1.0.0; the Kotlin standard library 2.2.10 (2025-08-13), which the
+plugin's Kotlin adds, with `org.jetbrains:annotations` 13.0. All but `androidx.webkit` (2026-10-21)
+date from 2025 or before. None is added by hand; each comes with `androidx.webkit` or Kotlin.
 
 The BiometricPrompt and the Keystore are the platform's (API 30 and up), not `androidx.biometric`. No
 Capacitor (D282).

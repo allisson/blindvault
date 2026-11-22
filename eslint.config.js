@@ -14,6 +14,11 @@ export default defineConfig(
       '**/.tsbuild/',
       '**/playwright-report/',
       '**/test-results/',
+      // apps/android: the copy of apps/web's Android build, and Gradle's outputs.
+      'apps/android/app/src/main/assets/web/',
+      'apps/android/app/build/',
+      'apps/android/.gradle/',
+      'apps/android/.gradle-build/',
     ],
   },
   js.configs.recommended,

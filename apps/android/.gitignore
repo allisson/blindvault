@@ -1,0 +1,9 @@
+# Gradle's own state and outputs.
+/.gradle/
+/.gradle-build/
+/.kotlin/
+/app/build/
+local.properties
+# Written by build/assets.ts from apps/web's Android build (android.md §2).
+/app/src/main/assets/web/
+/app/version.properties
