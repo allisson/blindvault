@@ -7,7 +7,11 @@
 import { platform } from '../platform';
 
 export interface ClipboardPort {
-  write(text: string): Promise<void>;
+  /**
+   * Writes `text`; `''` clears. A copy carries the clear's time, for a platform whose clear does not
+   * run in the page (android.md §6.1).
+   */
+  write(text: string, clearSeconds?: number): Promise<void>;
   hasFocus(): boolean;
   /** Calls `listener` on focus; returns the unsubscribe. */
   onFocus(listener: () => void): () => void;
@@ -39,7 +43,7 @@ export class ClipboardGuard {
   async copy(text: string, seconds: number): Promise<void> {
     checkSeconds(seconds);
     this.#cancel();
-    await this.#port.write(text);
+    await this.#port.write(text, seconds);
     this.copied(seconds);
   }
 

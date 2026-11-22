@@ -45,23 +45,28 @@ interface SaveEnv {
 }
 
 /**
- * Saves an opened attachment: an `application/octet-stream` Blob whatever its media type, so the
- * browser never renders it in the app's origin (D273), through an `<a download>` whose object URL is
- * revoked right after the click. `bytes` is wiped once the Blob holds its copy.
+ * An opened attachment as an `application/octet-stream` Blob whatever its media type, so the browser
+ * never renders it in the app's origin (D273). `bytes` is wiped once the Blob holds its copy.
+ */
+export function attachmentBlob(bytes: Uint8Array): Blob {
+  try {
+    // Opened by libsodium, so backed by an ArrayBuffer.
+    return new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' });
+  } finally {
+    bytes.fill(0);
+  }
+}
+
+/**
+ * Saves an opened attachment as `attachmentBlob`, through an `<a download>` whose object URL is
+ * revoked right after the click. Android saves the Blob through its shell instead (android.md §6.2).
  */
 export function saveAttachment(
   bytes: Uint8Array,
   name: string,
   env: SaveEnv = { document, URL },
 ): void {
-  let url: string;
-  try {
-    // Opened by libsodium, so backed by an ArrayBuffer.
-    const part = bytes as Uint8Array<ArrayBuffer>;
-    url = env.URL.createObjectURL(new Blob([part], { type: 'application/octet-stream' }));
-  } finally {
-    bytes.fill(0);
-  }
+  const url = env.URL.createObjectURL(attachmentBlob(bytes));
   try {
     const a = env.document.createElement('a');
     a.href = url;

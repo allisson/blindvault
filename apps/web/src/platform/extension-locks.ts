@@ -4,7 +4,8 @@
 // the session host or a message of the popup, never browsing. The clipboard's clear goes through the
 // service worker, which writes without the focus.
 
-import { type ClipboardPort } from '../app/clipboard';
+// A type only: `app/clipboard` reads the platform when it loads.
+import type { ClipboardPort } from '../app/clipboard';
 import { nextId } from '../extension/rpc';
 import { type LockSignals } from './platform';
 

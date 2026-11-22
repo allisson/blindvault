@@ -9,6 +9,7 @@ export default defineConfig(
       '**/node_modules/',
       '**/dist/',
       '**/dist-extension/',
+      '**/dist-android/',
       '**/coverage/',
       '**/.tsbuild/',
       '**/playwright-report/',

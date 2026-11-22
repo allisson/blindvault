@@ -8,15 +8,20 @@ import { HEADER_CSP } from './csp';
 
 export const HEADERS_FILE = '_headers';
 
+/** The headers of every response, name and value; the Android shell sends them too (android.md §2). */
+export const APP_HEADERS: readonly (readonly [string, string])[] = [
+  ['Content-Security-Policy', HEADER_CSP],
+  ['Referrer-Policy', 'no-referrer'],
+  ['X-Content-Type-Options', 'nosniff'],
+  ['Strict-Transport-Security', 'max-age=31536000'],
+  ['Cross-Origin-Opener-Policy', 'same-origin'],
+  ['Cache-Control', 'no-cache'],
+];
+
 export function pagesHeaders(): string {
   return [
     '/*',
-    `  Content-Security-Policy: ${HEADER_CSP}`,
-    '  Referrer-Policy: no-referrer',
-    '  X-Content-Type-Options: nosniff',
-    '  Strict-Transport-Security: max-age=31536000',
-    '  Cross-Origin-Opener-Policy: same-origin',
-    '  Cache-Control: no-cache',
+    ...APP_HEADERS.map(([name, value]) => `  ${name}: ${value}`),
     // Pages sends `Access-Control-Allow-Origin: *` by default; deploy/ sends none.
     '  ! Access-Control-Allow-Origin',
     '',

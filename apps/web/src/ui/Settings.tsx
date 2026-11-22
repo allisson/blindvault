@@ -37,6 +37,7 @@ import {
 import { browserPasskeySwitch } from '../extension/passkey-browser';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Language, type Messages, format } from '../i18n/messages';
+import { platform } from '../platform';
 import { AboutBuild } from './About';
 import { Button, ConfirmDialog, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { EraseVault } from './EraseVault';
@@ -1300,6 +1301,8 @@ function BackupSettings({
   const [password, setPassword] = useState('');
   const [working, setWorking] = useState(false);
   const [outcome, setOutcome] = useState<BackupExport>();
+  // Whether the file reached the user: on Android, through the shell's picker (android.md §6.2).
+  const [saved, setSaved] = useState<boolean>();
   const [form, setForm] = useState(0);
   const onExportPassword = useCallback((p: string | null) => {
     setExportPassword(p);
@@ -1312,6 +1315,7 @@ function BackupSettings({
   const run = (auth: ExportAuth) => {
     setWorking(true);
     setOutcome(undefined);
+    setSaved(undefined);
     // Called in the click itself: a passkey assertion needs the user activation.
     void controller
       .exportBackup(auth, protect ? (exportPassword ?? undefined) : undefined)
@@ -1320,7 +1324,19 @@ function BackupSettings({
         setWorking(false);
         setOutcome(result);
         if (result.kind === 'ok') {
-          download(result.file, result.name);
+          if (platform.files) {
+            platform.files.save(result.file, result.name).then(
+              (done) => {
+                setSaved(done === 'saved');
+              },
+              () => {
+                setSaved(false);
+              },
+            );
+          } else {
+            download(result.file, result.name);
+            setSaved(true);
+          }
           setProtect(false);
           setExportPassword(null);
           setForm((f) => f + 1);
@@ -1400,7 +1416,12 @@ function BackupSettings({
           {m.settings.backupPasskey}
         </Button>
       ) : null}
-      {outcome?.kind === 'ok' ? (
+      {saved === false ? (
+        <p role="alert" className="text-sm text-danger">
+          {m.settings.backupNotSaved}
+        </p>
+      ) : null}
+      {outcome?.kind === 'ok' && saved === true ? (
         <p role="status">
           {format(m.settings.backupDone, {
             name: outcome.name,

@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:extension": "vite build --mode extension",
+    "build:android": "vite build --mode android",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run",

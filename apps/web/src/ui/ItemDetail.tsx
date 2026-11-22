@@ -10,11 +10,12 @@ import {
 } from '@blindvault/vault';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 
-import { saveAttachment } from '../app/attachments';
+import { attachmentBlob, downloadName, saveAttachment } from '../app/attachments';
 import { type Navigation } from '../app/nav';
 import { host } from '../app/row';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format, roleName } from '../i18n/messages';
+import { platform } from '../platform';
 import { Button, Notice, Overflow, TARGET } from './components';
 import { writeError } from './errors';
 import { Icon, type IconName } from './icons';
@@ -91,8 +92,18 @@ function AttachmentView({
     setError(undefined);
     session.openAttachment(value).then(
       (opened) => {
-        if (opened) saveAttachment(opened, value.name);
-        else setHeld(false);
+        if (!opened) {
+          setHeld(false);
+          return;
+        }
+        if (!platform.files) {
+          saveAttachment(opened, value.name);
+          return;
+        }
+        // Android saves through its shell (android.md §6.2); a cancelled picker says nothing.
+        platform.files.save(attachmentBlob(opened), downloadName(value.name)).catch(() => {
+          setError(m.items.attachmentNotSaved);
+        });
       },
       (e: unknown) => {
         setError(

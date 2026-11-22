@@ -400,6 +400,14 @@ function NoVault({
             <li>{m.start.extensionVersionLock}</li>
           </>
         ) : null}
+        {platform.kind === 'android' ? (
+          // The Android app is a device of its own (android.md §11, D269).
+          <>
+            <li>{m.start.androidDevice}</li>
+            <li>{m.start.androidPair}</li>
+            <li>{m.start.androidSync}</li>
+          </>
+        ) : null}
       </ul>
       <div className="flex flex-col gap-2">
         <Button

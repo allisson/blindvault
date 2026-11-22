@@ -1,8 +1,10 @@
-// What differs between the web app and the browser extension (extension.md §2, D267). The build picks
-// one implementation (`index.ts`); the rest of the app reads it and never asks where it runs.
+// What differs between the web app, the browser extension and the Android app (extension.md §2,
+// android.md §2, D267, D290). The build picks one implementation (`index.ts`); the rest of the app
+// reads it and never asks where it runs.
 
-import { type ClipboardPort } from '../app/clipboard';
-import { type UpdateMonitor } from '../app/updates';
+// Types only: `app/clipboard` reads the platform when it loads.
+import type { ClipboardPort } from '../app/clipboard';
+import type { UpdateMonitor } from '../app/updates';
 
 /** What starts and restarts the locks while unlocked (overview §7, D54, D151, D284). */
 export interface LockSignals {
@@ -24,11 +26,21 @@ export interface UpdateHost {
   subscribe(listener: () => void): () => void;
 }
 
+/** Saving a file where the page cannot download a `blob:` link (android.md §6.2). */
+export interface FilePort {
+  /** Hands `file` to the user as `name`: `cancelled` when the user declined, or another save ran. */
+  save(file: Blob, name: string): Promise<'saved' | 'cancelled'>;
+  /** The vault locked: aborts the save in progress, if any. */
+  lock(): void;
+}
+
 export interface Platform {
-  readonly kind: 'web' | 'extension';
+  readonly kind: 'web' | 'extension' | 'android';
   /** Writes the clipboard: a copy, and its clear after the set time or on lock (D54, §6.3). */
   readonly clipboard: ClipboardPort;
   readonly lockSignals: LockSignals;
+  /** Absent where an `<a download>` saves the file: the web and the extension. */
+  readonly files?: FilePort;
   /**
    * Starts the update flow: on the web the service worker's, which the monitor follows (D190,
    * D191); in the extension the deferred reload of extension.md §8.1, applied once `host` is idle.

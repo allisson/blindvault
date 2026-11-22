@@ -155,6 +155,10 @@ const en = {
     extensionSync: 'It sees items added on your other devices only after a sync.',
     extensionVersionLock:
       'Each update of the extension shows its version and the hash of its files, and opens no vault until you confirm them.',
+    androidDevice:
+      'This app is a separate device of your vault, with its own copy, apart from BlindVault in your browser.',
+    androidPair: 'Pair it with the BlindVault app in your browser or another device of your vault.',
+    androidSync: 'It sees items added on your other devices only after a sync.',
     create: 'Create a new vault',
     pair: 'Pair with an existing device',
     restore: 'Restore from a backup',
@@ -793,6 +797,7 @@ const en = {
     attachmentWaiting:
       'This file is not on this device yet. It arrives with a sync with a device that holds it.',
     attachmentCorrupt: 'This attachment is corrupt and cannot be downloaded.',
+    attachmentNotSaved: 'This attachment could not be saved.',
     download: 'Download',
     fieldLabel: 'Label',
     fieldType: 'Field type',
@@ -1099,6 +1104,7 @@ const en = {
     backupNone:
       'This vault has no Recovery Phrase: the preview build created it, so no backup of it could be opened. Create a new vault to get one.',
     backupProtect: 'Also protect it with an export password',
+    backupNotSaved: 'The backup file was not saved. Make the backup again to save it.',
     backupMissing:
       'This backup lacks the attachments of: {titles}. Their files are not on this device yet: sync with a device that holds them, then make a new backup.',
     backupMasterKey:
@@ -1422,6 +1428,12 @@ const ptBR: Messages = {
       'Ela só vê itens criados nos seus outros dispositivos depois de uma sincronização.',
     extensionVersionLock:
       'Cada atualização da extensão mostra a versão e o hash dos seus arquivos, e nenhum cofre abre até você confirmá-los.',
+    androidDevice:
+      'Este app é um dispositivo à parte do seu cofre, com cópia própria, separada do BlindVault no seu navegador.',
+    androidPair:
+      'Pareie-o com o app BlindVault no seu navegador ou outro dispositivo do seu cofre.',
+    androidSync:
+      'Ele só vê itens criados nos seus outros dispositivos depois de uma sincronização.',
     create: 'Criar um cofre novo',
     pair: 'Parear com um dispositivo existente',
     restore: 'Restaurar de um backup',
@@ -2072,6 +2084,7 @@ const ptBR: Messages = {
     attachmentWaiting:
       'Este arquivo ainda não está neste dispositivo. Ele chega com uma sincronização com um dispositivo que o tenha.',
     attachmentCorrupt: 'Este anexo está corrompido e não pode ser baixado.',
+    attachmentNotSaved: 'Não foi possível salvar este anexo.',
     download: 'Baixar',
     fieldLabel: 'Rótulo',
     fieldType: 'Tipo de campo',
@@ -2378,6 +2391,7 @@ const ptBR: Messages = {
     backupNone:
       'Este cofre não tem Frase de Recuperação: a versão de prévia o criou, então nenhum backup dele poderia ser aberto. Crie um novo cofre para ter uma.',
     backupProtect: 'Proteger também com uma senha de exportação',
+    backupNotSaved: 'O arquivo do backup não foi salvo. Faça o backup de novo para salvá-lo.',
     backupMissing:
       'Este backup não tem os anexos de: {titles}. Os arquivos deles ainda não estão neste dispositivo: sincronize com um dispositivo que os tenha e faça um novo backup.',
     backupMasterKey:
