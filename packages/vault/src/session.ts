@@ -113,6 +113,8 @@ import {
 } from './item';
 import {
   DEFAULT_PREFERENCES,
+  KEYSTORE_IV_LENGTH,
+  KEYSTORE_SEALED_LENGTH,
   type LocalConfigCleartext,
   type LocalConfigState,
   type Preferences,
@@ -148,7 +150,28 @@ const FIRST_EPOCH = 1;
 /** The Recovery Envelope metadata keys this app knows (crypto-spec.md §9.5 step 8, D98). */
 const RECOVERY_METADATA_KEYS = 3;
 
-export type UnlockMethod = 'password' | 'passkey';
+/** The local password, the unlock passkey's PRF KEK, or the Keystore KEK on Android (D290). */
+export type UnlockMethod = 'password' | 'passkey' | 'keystore';
+
+/** The Master Key wrap and its purpose for `method`; `undefined` when it is not set up. */
+function wrapOf(
+  cleartext: Omit<LocalConfigCleartext, 'encrypted'>,
+  method: UnlockMethod,
+): { readonly wrap: Sealed; readonly purpose: LocalPurpose } | undefined {
+  switch (method) {
+    case 'password':
+      return { wrap: cleartext.kek.mkWrap, purpose: LocalPurpose.mkWrapDeviceKek };
+    case 'passkey':
+      return cleartext.prf && { wrap: cleartext.prf.mkWrap, purpose: LocalPurpose.mkWrapPrfKek };
+    case 'keystore':
+      return (
+        cleartext.keystore && {
+          wrap: cleartext.keystore.mkWrap,
+          purpose: LocalPurpose.mkWrapKeystoreKek,
+        }
+      );
+  }
+}
 
 /** What a caller writes: the session alone sets `trashOperationId`. */
 export type ItemInput = Omit<Item, 'trashOperationId'>;
@@ -1364,13 +1387,16 @@ export class VaultSession {
     const now = options.now ?? Date.now;
     const { vaultId, localConfigId } = localConfig;
     try {
-      const wrap = method === 'password' ? localConfig.kek.mkWrap : localConfig.prf?.mkWrap;
-      if (!wrap) throw new UnlockRejectedError();
-      const purpose =
-        method === 'password' ? LocalPurpose.mkWrapDeviceKek : LocalPurpose.mkWrapPrfKek;
+      const opening = wrapOf(localConfig, method);
+      if (!opening) throw new UnlockRejectedError();
       let masterKey: SymmetricKey;
       try {
-        masterKey = unwrapKey(keyring, kek, localAad(purpose, vaultId, localConfigId), wrap);
+        masterKey = unwrapKey(
+          keyring,
+          kek,
+          localAad(opening.purpose, vaultId, localConfigId),
+          opening.wrap,
+        );
       } catch (error) {
         if (error instanceof DecryptionError) throw new UnlockRejectedError();
         throw error;
@@ -1407,6 +1433,7 @@ export class VaultSession {
           localConfigId,
           kek: localConfig.kek,
           ...(localConfig.prf ? { prf: localConfig.prf } : {}),
+          ...(localConfig.keystore ? { keystore: localConfig.keystore } : {}),
           ...(localConfig.replacesVaultId ? { replacesVaultId: localConfig.replacesVaultId } : {}),
         },
         localState,
@@ -1436,7 +1463,7 @@ export class VaultSession {
    * The phrase opens the `mk` of the Recovery Envelope this device holds; the Master Key it yields
    * is proved by opening the encrypted part of this device's Local Config, then every record is
    * read as at unlock. Only Local Config is written: the Master Key wrapped under `kek`, with its
-   * salt and calibrated parameters; the PRF wrap is kept. No HLC is issued, so it runs while the
+   * salt and calibrated parameters; the PRF and Keystore KEK wraps are kept. No HLC is issued, so it runs while the
    * vault is read-only for a clock gone back (D73). `PasswordResetRejectedError` writes nothing.
    */
   static async resetPassword(options: ResetPasswordOptions): Promise<VaultSession> {
@@ -1495,6 +1522,7 @@ export class VaultSession {
         localConfigId,
         kek: localConfig.kek,
         ...(localConfig.prf ? { prf: localConfig.prf } : {}),
+        ...(localConfig.keystore ? { keystore: localConfig.keystore } : {}),
         ...(localConfig.replacesVaultId ? { replacesVaultId: localConfig.replacesVaultId } : {}),
       };
       const session = new VaultSession({
@@ -1618,6 +1646,66 @@ export class VaultSession {
     await this.#run(() => {
       const { prf, ...cleartext } = this.#cleartext;
       return { writes: [], deletes: [], result: undefined, ...(prf ? { cleartext } : {}) };
+    });
+  }
+
+  /**
+   * Sets up the Keystore KEK on Android (`android.md` §5, D290), as `setPasskey`: `current`, the
+   * Device KEK of the local password, must open the Master Key wrap (`UnlockRejectedError`
+   * otherwise); the Master Key is then wrapped under `keystoreKek`, bound to `localConfigId`, and
+   * stored with the IV and the secret the Android Keystore encrypted. Replaces a state set up
+   * before. Only Local Config is written. The caller wipes both KEKs.
+   */
+  async setKeystore(options: {
+    readonly current: SymmetricKey;
+    readonly keystoreKek: SymmetricKey;
+    readonly iv: Uint8Array;
+    readonly sealed: Uint8Array;
+  }): Promise<void> {
+    const { current, keystoreKek, iv, sealed } = options;
+    if (iv.length !== KEYSTORE_IV_LENGTH) throw new RangeError('Keystore IV is 12 bytes');
+    if (sealed.length !== KEYSTORE_SEALED_LENGTH) {
+      throw new RangeError('Keystore sealed secret is 48 bytes');
+    }
+    await this.#run(() => {
+      const { vaultId, localConfigId } = this.#cleartext;
+      let masterKey: SymmetricKey;
+      try {
+        masterKey = unwrapKey(
+          this.#keyring,
+          current,
+          localAad(LocalPurpose.mkWrapDeviceKek, vaultId, localConfigId),
+          this.#cleartext.kek.mkWrap,
+        );
+      } catch (error) {
+        if (error instanceof DecryptionError) throw new UnlockRejectedError();
+        throw error;
+      }
+      let mkWrap: Sealed;
+      try {
+        mkWrap = wrapKey(
+          keystoreKek,
+          localAad(LocalPurpose.mkWrapKeystoreKek, vaultId, localConfigId),
+          masterKey,
+        );
+      } finally {
+        this.#keyring.release(masterKey);
+      }
+      const keystore = { iv: iv.slice(), sealed: sealed.slice(), mkWrap };
+      return {
+        writes: [],
+        deletes: [],
+        result: undefined,
+        cleartext: { ...this.#cleartext, keystore },
+      };
+    });
+  }
+
+  /** Removes the Keystore KEK state; the caller deletes the Keystore key (`android.md` §5). */
+  async removeKeystore(): Promise<void> {
+    await this.#run(() => {
+      const { keystore, ...cleartext } = this.#cleartext;
+      return { writes: [], deletes: [], result: undefined, ...(keystore ? { cleartext } : {}) };
     });
   }
 
@@ -1924,12 +2012,15 @@ export class VaultSession {
   /** The Master Key, opened into `keyring` from the wrap of `method` (D181). */
   #openMasterKey(keyring: Keyring, kek: SymmetricKey, method: UnlockMethod): SymmetricKey {
     const { vaultId, localConfigId } = this.#cleartext;
-    const wrap = method === 'password' ? this.#cleartext.kek.mkWrap : this.#cleartext.prf?.mkWrap;
-    if (!wrap) throw new UnlockRejectedError();
-    const purpose =
-      method === 'password' ? LocalPurpose.mkWrapDeviceKek : LocalPurpose.mkWrapPrfKek;
+    const opening = wrapOf(this.#cleartext, method);
+    if (!opening) throw new UnlockRejectedError();
     try {
-      return unwrapKey(keyring, kek, localAad(purpose, vaultId, localConfigId), wrap);
+      return unwrapKey(
+        keyring,
+        kek,
+        localAad(opening.purpose, vaultId, localConfigId),
+        opening.wrap,
+      );
     } catch (error) {
       if (error instanceof DecryptionError) throw new UnlockRejectedError();
       throw error;
@@ -2321,6 +2412,12 @@ export class VaultSession {
       write,
       loser: { deviceId: loser.header.hlc.deviceId, title: typeof title === 'string' ? title : '' },
     });
+  }
+
+  /** Whether the Keystore KEK is set up on this device (`android.md` §5). */
+  get keystoreSetUp(): boolean {
+    this.#unlocked();
+    return this.#cleartext.keystore !== undefined;
   }
 
   /** The credential ID of the passkey set up on this device, if any (§5.5). */

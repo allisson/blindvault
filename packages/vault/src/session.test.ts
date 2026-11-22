@@ -1801,6 +1801,21 @@ describe('forgotten password reset with the Recovery Phrase (§5.4, §14, D173, 
     expect((await unlock(store, new Clock(), 3, 'passkey')).vaultId).toEqual(vaultId);
   });
 
+  it('keeps the Keystore KEK, which wraps the same Master Key (D290)', async () => {
+    const { session, store, keyring, words } = await create();
+    await session.setKeystore({
+      current: kek(keyring),
+      keystoreKek: kek(keyring, 5),
+      iv: new Uint8Array(12).fill(1),
+      sealed: new Uint8Array(48).fill(2),
+    });
+    const vaultId = session.vaultId;
+    session.lock();
+    await reset(store, words);
+    expect(parseLocalConfig(store.localConfig).keystore?.iv).toEqual(new Uint8Array(12).fill(1));
+    expect((await unlock(store, new Clock(), 5, 'keystore')).vaultId).toEqual(vaultId);
+  });
+
   it('refuses KDF parameters or a salt out of range before opening anything', async () => {
     const { session, store, words } = await create();
     session.lock();
@@ -4139,6 +4154,15 @@ describe('lock (CRYPTO-INV-010)', () => {
           prfInput: new Uint8Array(32),
         }),
       removePasskey: () => session.removePasskey(),
+      setKeystore: () =>
+        session.setKeystore({
+          current: kek(caller),
+          keystoreKek: kek(caller, 5),
+          iv: new Uint8Array(12),
+          sealed: new Uint8Array(48),
+        }),
+      removeKeystore: () => session.removeKeystore(),
+      keystoreSetUp: () => session.keystoreSetUp,
       forgetReplacedVault: () => session.forgetReplacedVault(),
       setPreferences: () => session.setPreferences(session.preferences),
       vaultId: () => session.vaultId,
@@ -4511,6 +4535,151 @@ describe('passkey unlock (§5.5, D75, D172)', () => {
     await expect(session.setPasskey(options)).rejects.toThrow(VaultLockedError);
     await expect(session.removePasskey()).rejects.toThrow(VaultLockedError);
     expect(() => session.passkeyCredentialId).toThrow(VaultLockedError);
+  });
+});
+
+describe('Keystore KEK unlock (android.md §5, D290, CRYPTO-INV-028)', () => {
+  const IV = new Uint8Array(12).fill(6);
+  const SEALED = new Uint8Array(48).fill(7);
+
+  function setup(keyring: Keyring, current = 1, keystore = 5) {
+    return {
+      current: kek(keyring, current),
+      keystoreKek: kek(keyring, keystore),
+      iv: IV,
+      sealed: SEALED,
+    };
+  }
+
+  it('sets up the Keystore KEK with the current password, writing only the Local Config', async () => {
+    const { session, store, keyring } = await create();
+    const itemId = await session.createItem(login());
+    const before = parseLocalConfig(store.localConfig);
+    const records = new Map(store.held);
+    const commits = store.commits.length;
+    expect(session.keystoreSetUp).toBe(false);
+    await session.setKeystore(setup(keyring));
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(store.commits.at(-1)?.put).toEqual([]);
+    expect(store.commits.at(-1)?.delete).toEqual([]);
+    expect(store.held).toEqual(records);
+    const after = parseLocalConfig(store.localConfig);
+    expect(after.kek).toEqual(before.kek);
+    expect(after.keystore?.iv).toEqual(IV);
+    expect(after.keystore?.sealed).toEqual(SEALED);
+    expect(session.keystoreSetUp).toBe(true);
+    // A later write keeps the state.
+    await session.updateItem(itemId, login('Renamed'));
+    expect(parseLocalConfig(store.localConfig).keystore).toEqual(after.keystore);
+    session.lock();
+    expect((await unlock(store, new Clock(), 5, 'keystore')).item(itemId)?.item?.title).toBe(
+      'Renamed',
+    );
+    expect((await unlock(store)).locked).toBe(false);
+  });
+
+  it.each([
+    ['the password KEK', 1],
+    ['the KEK of another Keystore secret', 6],
+  ])('refuses %s as the Keystore KEK, wiping the keyring', async (_name, seed) => {
+    const { session, store, keyring } = await create();
+    await session.setKeystore(setup(keyring));
+    session.lock();
+    await expect(unlock(store, new Clock(), seed, 'keystore')).rejects.toThrow(UnlockRejectedError);
+  });
+
+  it('refuses a Keystore unlock where none is set up', async () => {
+    const { session, store } = await create();
+    session.lock();
+    await expect(unlock(store, new Clock(), 5, 'keystore')).rejects.toThrow(UnlockRejectedError);
+  });
+
+  it('binds the Keystore wrap to its purpose, vault and Local Config (D121)', async () => {
+    const { session, store, keyring } = await create();
+    await session.setKeystore(setup(keyring));
+    const config = parseLocalConfig(store.localConfig);
+    const wrap = must(config.keystore).mkWrap;
+    const opens = (
+      purpose: LocalPurpose,
+      vaultId = config.vaultId,
+      localConfigId = config.localConfigId,
+    ) => {
+      const k = new Keyring();
+      try {
+        unwrapKey(k, kek(k, 5), localAad(purpose, vaultId, localConfigId), wrap);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        k.wipeAll();
+      }
+    };
+    expect(opens(LocalPurpose.mkWrapKeystoreKek)).toBe(true);
+    expect(opens(LocalPurpose.mkWrapPrfKek)).toBe(false);
+    expect(opens(LocalPurpose.mkWrapDeviceKek)).toBe(false);
+    expect(opens(LocalPurpose.mkWrapKeystoreKek, randomId())).toBe(false);
+    expect(opens(LocalPurpose.mkWrapKeystoreKek, config.vaultId, randomId())).toBe(false);
+  });
+
+  it('refuses another current password, writing nothing (D172)', async () => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    const bytes = store.localConfig;
+    await expect(session.setKeystore(setup(keyring, 2))).rejects.toThrow(UnlockRejectedError);
+    expect(store.commits).toHaveLength(commits);
+    expect(store.localConfig).toBe(bytes);
+    expect(session.keystoreSetUp).toBe(false);
+  });
+
+  it.each([
+    ['a short IV', { iv: new Uint8Array(11) }],
+    ['a long IV', { iv: new Uint8Array(13) }],
+    ['a short sealed secret', { sealed: new Uint8Array(47) }],
+    ['a long sealed secret', { sealed: new Uint8Array(49) }],
+  ])('refuses %s, writing nothing', async (_name, change) => {
+    const { session, store, keyring } = await create();
+    const commits = store.commits.length;
+    await expect(session.setKeystore({ ...setup(keyring), ...change })).rejects.toThrow(RangeError);
+    expect(store.commits).toHaveLength(commits);
+  });
+
+  it('replaces the state set up before, and lives beside the passkey', async () => {
+    const { session, store, keyring } = await create();
+    await session.setKeystore(setup(keyring));
+    await session.setPasskey({
+      current: kek(keyring),
+      prfKek: kek(keyring, 3),
+      credentialId: new Uint8Array([1]),
+      prfInput: new Uint8Array(32),
+    });
+    await session.setKeystore(setup(keyring, 1, 7));
+    session.lock();
+    await expect(unlock(store, new Clock(), 5, 'keystore')).rejects.toThrow(UnlockRejectedError);
+    expect((await unlock(store, new Clock(), 7, 'keystore')).locked).toBe(false);
+    expect((await unlock(store, new Clock(), 3, 'passkey')).locked).toBe(false);
+  });
+
+  it('removes the state, after which only the password unlocks', async () => {
+    const { session, store, keyring } = await create();
+    await session.setKeystore(setup(keyring));
+    await session.removeKeystore();
+    expect(session.keystoreSetUp).toBe(false);
+    expect(parseLocalConfig(store.localConfig).keystore).toBeUndefined();
+    const commits = store.commits.length;
+    await session.removeKeystore();
+    expect(store.commits).toHaveLength(commits);
+    session.lock();
+    await expect(unlock(store, new Clock(), 5, 'keystore')).rejects.toThrow(UnlockRejectedError);
+    expect((await unlock(store)).locked).toBe(false);
+  });
+
+  it('refuses setup and removal once locked', async () => {
+    const { session, keyring } = await create();
+    const options = setup(keyring);
+    session.lock();
+    await expect(session.setKeystore(options)).rejects.toThrow(VaultLockedError);
+    await expect(session.removeKeystore()).rejects.toThrow(VaultLockedError);
+    expect(() => session.keystoreSetUp).toThrow(VaultLockedError);
   });
 });
 

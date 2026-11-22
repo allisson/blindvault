@@ -36,6 +36,13 @@ describe('AEAD vectors (crypto-spec.md §7, §12)', () => {
       9,
     ],
     ['prf-kek', vectors.local.prfKek, LocalPurpose.mkWrapPrfKek, vectors.local.mkWrapPrfKek, 10],
+    [
+      'keystore-kek',
+      vectors.local.keystoreKek,
+      LocalPurpose.mkWrapKeystoreKek,
+      vectors.local.mkWrapKeystoreKek,
+      12,
+    ],
   ] as const)(
     'reproduces and opens the Master Key wrap under the %s',
     (_name, kek, purpose, wrap, i) => {

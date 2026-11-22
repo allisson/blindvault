@@ -12,9 +12,11 @@ import {
   decodeCbor,
   decodeEnvelope,
   deriveMasterSubkeys,
+  deriveKeystoreKek,
   derivePrfKek,
   deriveRecoveryKeys,
   generateKey,
+  generateKeystoreSecret,
   generatePrfInput,
   generateRecoveryPhrase,
   initCrypto,
@@ -293,7 +295,7 @@ describe('vault session over IndexedDB (D82, D163)', () => {
     expect((await unlocked(factory, vaultId)).folder(folderId)?.name).toBe('Taxes 2027');
   });
 
-  it('holds no key, no recovery secret and no plaintext after a full use, PRF wrap and password change included (CRYPTO-INV-001, 003, 006)', async () => {
+  it('holds no key, no recovery secret and no plaintext after a full use, PRF and Keystore wraps and password change included (CRYPTO-INV-001, 003, 006, 028)', async () => {
     const factory = new IDBFactory();
     const { session, vaultId, words } = await created(factory);
     const folderId = await session.createFolder('Taxes 2026');
@@ -316,13 +318,28 @@ describe('vault session over IndexedDB (D82, D163)', () => {
       credentialId: new Uint8Array([1, 2, 3, 4]),
       prfInput: generatePrfInput(),
     });
+    // The Keystore secret as the shell would release it, and the KEK derived from it (D290).
+    const secret = generateKeystoreSecret();
+    const secretBytes = secret.slice();
+    const keystoreKek = deriveKeystoreKek(keyring, secret);
+    const keystoreKekBytes = bytesOf(keyring, keystoreKek);
+    await session.setKeystore({
+      current: kek(keyring, 1),
+      keystoreKek,
+      iv: new Uint8Array(12).fill(1),
+      sealed: new Uint8Array(48).fill(2),
+    });
     await session.changePassword({
       current: kek(keyring, 1),
       next: kek(keyring, 2),
       salt: new Uint8Array(16).fill(8),
       kdfParams: { opslimit: 2, memlimit: MEMLIMIT },
     });
-    const kekBytes = [1, 2, 3].map((seed) => bytesOf(keyring, kek(keyring, seed)));
+    const kekBytes = [
+      ...[1, 2, 3].map((seed) => bytesOf(keyring, kek(keyring, seed))),
+      secretBytes,
+      keystoreKekBytes,
+    ];
     // The Recovery Phrase, its entropy and the envelope key it derives (§5.4).
     const entropy = parseRecoveryPhrase(keyring, words);
     const recovery = deriveRecoveryKeys(keyring, entropy);
@@ -354,6 +371,7 @@ describe('vault session over IndexedDB (D82, D163)', () => {
     databases.push(db);
     const config = parseLocalConfig((await db.localConfig()) ?? new Uint8Array(0));
     expect(config.prf).toBeDefined();
+    expect(config.keystore).toBeDefined();
     expect(values.some((bytes) => contains(bytes, config.kek.mkWrap.c))).toBe(true);
     const found = needles.filter((needle) => values.some((bytes) => contains(bytes, needle)));
     expect(found).toEqual([]);

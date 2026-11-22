@@ -201,6 +201,7 @@ VAULT_KEY = seq(0x20, 32)
 RECORD_KEY = seq(0x40, 32)
 PHRASE_ENTROPY = seq(0x60, 32)
 PRF_OUTPUT = seq(0x80, 32)
+KEYSTORE_SECRET = seq(0x90, 32)
 VAULT_ID = seq(0xA0, 16)
 LOCAL_CONFIG_ID = seq(0xB0, 16)
 ITEM_ID = seq(0xC0, 16)
@@ -685,8 +686,9 @@ def classify_local_cleartext(lc) -> str:
         return "corrupt"
     if is_uint(lc.get("localConfigFormatVersion")) and lc["localConfigFormatVersion"] != 1:
         return "unsupported-version"
-    allowed = {"localConfigFormatVersion", "vaultId", "localConfigId", "kek", "prf", "replacesVaultId", "encrypted"}
-    kek, prf = lc.get("kek"), lc.get("prf")
+    allowed = {"localConfigFormatVersion", "vaultId", "localConfigId", "kek", "prf", "keystore", "replacesVaultId",
+               "encrypted"}
+    kek, prf, ks = lc.get("kek"), lc.get("prf"), lc.get("keystore")
     ok = (
         lc.get("localConfigFormatVersion") == 1 and not set(lc) - allowed
         and is_id(lc.get("vaultId")) and is_id(lc.get("localConfigId"))
@@ -697,6 +699,10 @@ def classify_local_cleartext(lc) -> str:
             isinstance(prf, dict) and set(prf) == {"credentialId", "prfInput", "mkWrap"}
             and isinstance(prf["credentialId"], bytes) and len(prf["credentialId"]) >= 1
             and isinstance(prf["prfInput"], bytes) and len(prf["prfInput"]) == 32 and is_sealed(prf["mkWrap"], 48)))
+        and (ks is None if "keystore" not in lc else (
+            isinstance(ks, dict) and set(ks) == {"iv", "sealed", "mkWrap"}
+            and isinstance(ks["iv"], bytes) and len(ks["iv"]) == 12
+            and isinstance(ks["sealed"], bytes) and len(ks["sealed"]) == 48 and is_sealed(ks["mkWrap"], 48)))
         and ("replacesVaultId" not in lc or is_id(lc["replacesVaultId"]))
         and is_sealed(lc.get("encrypted"))
     )
@@ -999,9 +1005,12 @@ _LOCAL = {
     "encrypted": {"n": nonce(11), "c": seq(0x00, 272)},
 }
 _PRF = {"credentialId": seq(0x33, 20), "prfInput": seq(0x44, 32), "mkWrap": {"n": nonce(10), "c": seq(0x00, 48)}}
+_KEYSTORE = {"iv": seq(0x55, 12), "sealed": seq(0x66, 48), "mkWrap": {"n": nonce(12), "c": seq(0x00, 48)}}
 LOCAL_CLEARTEXT = [
     ("valid", "phase 1 Local Config", _LOCAL),
     ("valid", "with PRF KEK state", {**_LOCAL, "prf": _PRF}),
+    ("valid", "with Keystore KEK state", {**_LOCAL, "keystore": _KEYSTORE}),
+    ("valid", "with PRF and Keystore KEK states", {**_LOCAL, "prf": _PRF, "keystore": _KEYSTORE}),
     ("valid", "with replacesVaultId", {**_LOCAL, "replacesVaultId": seq(0xA1, 16)}),
     ("unsupported-version", "localConfigFormatVersion 2", {**_LOCAL, "localConfigFormatVersion": 2}),
     ("corrupt", "unknown cleartext key", {**_LOCAL, "nickname": "home"}),
@@ -1011,6 +1020,13 @@ LOCAL_CLEARTEXT = [
     ("corrupt", "mkWrap with a short ciphertext", {**_LOCAL, "kek": {**_LOCAL["kek"],
                                                                      "mkWrap": {"n": nonce(9), "c": seq(0, 47)}}}),
     ("corrupt", "prfInput of 31 bytes", {**_LOCAL, "prf": {**_PRF, "prfInput": seq(0x44, 31)}}),
+    ("corrupt", "Keystore iv of 11 bytes", {**_LOCAL, "keystore": {**_KEYSTORE, "iv": seq(0x55, 11)}}),
+    ("corrupt", "Keystore sealed secret of 47 bytes", {**_LOCAL, "keystore": {**_KEYSTORE, "sealed": seq(0x66, 47)}}),
+    ("corrupt", "Keystore sealed secret of 49 bytes", {**_LOCAL, "keystore": {**_KEYSTORE, "sealed": seq(0x66, 49)}}),
+    ("corrupt", "unknown key in keystore", {**_LOCAL, "keystore": {**_KEYSTORE, "alias": "k"}}),
+    ("corrupt", "keystore without mkWrap", {**_LOCAL, "keystore": {"iv": seq(0x55, 12), "sealed": seq(0x66, 48)}}),
+    ("corrupt", "Keystore mkWrap with a short ciphertext", {**_LOCAL, "keystore": {
+        **_KEYSTORE, "mkWrap": {"n": nonce(12), "c": seq(0, 47)}}}),
     ("corrupt", "missing encrypted part", {k: v for k, v in _LOCAL.items() if k != "encrypted"}),
 ]
 
@@ -2954,6 +2970,7 @@ def main() -> None:
     keyslot_seed = kdf(recovery_kek, 2, "bvrckek_")
     keyslot_pk, keyslot_sk = bindings.crypto_box_seed_keypair(keyslot_seed)
     prf_kek = kdf(PRF_OUTPUT, 1, "bvprfkek")
+    keystore_kek = kdf(KEYSTORE_SECRET, 1, "bvkskek_")
 
     # layout
     aad_live = record_aad(RT_ITEM, ITEM_ID, KEY_EPOCH, HLC, False)
@@ -2974,7 +2991,8 @@ def main() -> None:
         ],
         "localAad": [
             {"purpose": p, "vaultId": h(VAULT_ID), "localConfigId": h(LOCAL_CONFIG_ID), "aad": h(local_aad(p))}
-            for p in ("bv.v1.mk-wrap.device-kek", "bv.v1.mk-wrap.prf-kek", "bv.v1.local-config")
+            for p in ("bv.v1.mk-wrap.device-kek", "bv.v1.mk-wrap.prf-kek", "bv.v1.mk-wrap.keystore-kek",
+                      "bv.v1.local-config")
         ],
     }
 
@@ -2983,6 +3001,7 @@ def main() -> None:
         "masterKey": h(MASTER_KEY),
         "phraseEntropy": h(PHRASE_ENTROPY),
         "prfOutput": h(PRF_OUTPUT),
+        "keystoreSecret": h(KEYSTORE_SECRET),
         "subkeys": [
             {"parent": "masterKey", "context": "bvmaster", "id": 1, "name": "vaultKeyWrap", "key": h(k_vkwrap)},
             {"parent": "masterKey", "context": "bvmaster", "id": 2, "name": "versionId", "key": h(k_version)},
@@ -2992,6 +3011,7 @@ def main() -> None:
             {"parent": "recoveryKek", "context": "bvrckek_", "id": 1, "name": "envelope", "key": h(k_envelope)},
             {"parent": "recoveryKek", "context": "bvrckek_", "id": 2, "name": "keyslotSeed", "key": h(keyslot_seed)},
             {"parent": "prfOutput", "context": "bvprfkek", "id": 1, "name": "prfKek", "key": h(prf_kek)},
+            {"parent": "keystoreSecret", "context": "bvkskek_", "id": 1, "name": "keystoreKek", "key": h(keystore_kek)},
         ],
         "keyslotKeyPair": {"seed": h(keyslot_seed), "publicKey": h(keyslot_pk), "secretKey": h(keyslot_sk)},
     }
@@ -3135,23 +3155,36 @@ def main() -> None:
     lc_part = LOCAL_ENCRYPTED_PART
     assert classify_local_encrypted(lc_part) == "valid"
     v["local"] = {
-        "deviceKek": h(dkek), "prfKek": h(prf_kek), "localConfigKey": h(k_localconfig),
+        "deviceKek": h(dkek), "prfKek": h(prf_kek), "keystoreKek": h(keystore_kek), "localConfigKey": h(k_localconfig),
         "mkWrapDeviceKek": {k: h(x) for k, x in seal(dkek, local_aad("bv.v1.mk-wrap.device-kek"), MASTER_KEY, nonce(9)).items()},
         "mkWrapPrfKek": {k: h(x) for k, x in seal(prf_kek, local_aad("bv.v1.mk-wrap.prf-kek"), MASTER_KEY, nonce(10)).items()},
+        "mkWrapKeystoreKek": {k: h(x) for k, x in seal(keystore_kek, local_aad("bv.v1.mk-wrap.keystore-kek"), MASTER_KEY,
+                                                        nonce(12)).items()},
         "encryptedPart": {"plaintextCbor": h(cbor(lc_part)),
                           **{k: h(x) for k, x in seal(k_localconfig, local_aad("bv.v1.local-config"), pad(cbor(lc_part)), nonce(11)).items()}},
     }
     dk_wrap = seal(dkek, local_aad("bv.v1.mk-wrap.device-kek"), MASTER_KEY, nonce(9))
+    ks_wrap = seal(keystore_kek, local_aad("bv.v1.mk-wrap.keystore-kek"), MASTER_KEY, nonce(12))
     local_must_not_open = [
-        ("device-kek wrap under another localConfigId", layout(label("bv.v1.mk-wrap.device-kek"), VAULT_ID, seq(0xB1, 16))),
-        ("device-kek wrap under another vaultId", layout(label("bv.v1.mk-wrap.device-kek"), seq(0xA1, 16), LOCAL_CONFIG_ID)),
-        ("device-kek wrap under the prf-kek purpose", local_aad("bv.v1.mk-wrap.prf-kek")),
+        ("device-kek wrap under another localConfigId", dkek, dk_wrap,
+         layout(label("bv.v1.mk-wrap.device-kek"), VAULT_ID, seq(0xB1, 16))),
+        ("device-kek wrap under another vaultId", dkek, dk_wrap,
+         layout(label("bv.v1.mk-wrap.device-kek"), seq(0xA1, 16), LOCAL_CONFIG_ID)),
+        ("device-kek wrap under the prf-kek purpose", dkek, dk_wrap, local_aad("bv.v1.mk-wrap.prf-kek")),
+        ("keystore-kek wrap under another localConfigId", keystore_kek, ks_wrap,
+         layout(label("bv.v1.mk-wrap.keystore-kek"), VAULT_ID, seq(0xB1, 16))),
+        ("keystore-kek wrap under another vaultId", keystore_kek, ks_wrap,
+         layout(label("bv.v1.mk-wrap.keystore-kek"), seq(0xA1, 16), LOCAL_CONFIG_ID)),
+        ("keystore-kek wrap under the prf-kek purpose", keystore_kek, ks_wrap, local_aad("bv.v1.mk-wrap.prf-kek")),
+        ("keystore-kek wrap under the device-kek purpose", keystore_kek, ks_wrap, local_aad("bv.v1.mk-wrap.device-kek")),
+        ("keystore-kek wrap with the key of another secret", kdf(seq(0x91, 32), 1, "bvkskek_"), ks_wrap,
+         local_aad("bv.v1.mk-wrap.keystore-kek")),
     ]
-    for _, aad in local_must_not_open:
-        assert not opens(dkek, aad, dk_wrap)
+    for _, key, wrap, aad in local_must_not_open:
+        assert not opens(key, aad, wrap)
     v["local"]["mustNotOpen"] = [
-        {"case": c, "key": h(dkek), "aad": h(aad), "n": h(dk_wrap["n"]), "c": h(dk_wrap["c"])}
-        for c, aad in local_must_not_open
+        {"case": c, "key": h(key), "aad": h(aad), "n": h(wrap["n"]), "c": h(wrap["c"])}
+        for c, key, wrap, aad in local_must_not_open
     ]
 
     # transcripts

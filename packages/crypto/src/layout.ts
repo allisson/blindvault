@@ -114,10 +114,11 @@ export function recordAad(header: RecordHeader, vaultId: Uint8Array): Uint8Array
   );
 }
 
-/** The purpose labels of local wraps (crypto-spec.md §8, D121). */
+/** The purpose labels of local wraps (crypto-spec.md §8, D121, D290). */
 export const LocalPurpose = {
   mkWrapDeviceKek: 'bv.v1.mk-wrap.device-kek',
   mkWrapPrfKek: 'bv.v1.mk-wrap.prf-kek',
+  mkWrapKeystoreKek: 'bv.v1.mk-wrap.keystore-kek',
   localConfig: 'bv.v1.local-config',
 } as const;
 

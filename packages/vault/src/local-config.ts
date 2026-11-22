@@ -1,4 +1,4 @@
-// Local Config content (record-content.md §9, D58, D121, D151, D164, D170). An invalid value makes
+// Local Config content (record-content.md §9, D58, D121, D151, D164, D170, D290). An invalid value makes
 // unlock refuse the Local Config as corrupt; an unknown format version asks for an app update.
 
 import {
@@ -38,9 +38,22 @@ export interface LocalConfigCleartext {
     readonly prfInput: Uint8Array;
     readonly mkWrap: Sealed;
   };
+  /** The Keystore KEK state, written only by the Android app (`android.md` §5, D290). */
+  readonly keystore?: KeystoreState;
   readonly replacesVaultId?: Uint8Array;
   readonly encrypted: Sealed;
 }
+
+export interface KeystoreState {
+  /** The GCM IV of the Android Keystore's encryption of the Keystore secret. */
+  readonly iv: Uint8Array;
+  /** The Keystore secret as the Android Keystore encrypted it, tag included. */
+  readonly sealed: Uint8Array;
+  readonly mkWrap: Sealed;
+}
+
+export const KEYSTORE_IV_LENGTH = 12;
+export const KEYSTORE_SEALED_LENGTH = 48;
 
 export interface Preferences {
   readonly autoLockMinutes: number;
@@ -112,6 +125,7 @@ export function readLocalConfig(value: CborValue): LocalConfigCleartext {
       'localConfigId',
       'kek',
       'prf',
+      'keystore',
       'replacesVaultId',
       'encrypted',
     ]),
@@ -144,6 +158,15 @@ export function readLocalConfig(value: CborValue): LocalConfigCleartext {
     check(credentialId instanceof Uint8Array && credentialId.length >= 1, 'credentialId');
     check(isBytes(prfInput, 32), 'prfInput');
     out.prf = { credentialId, prfInput, mkWrap: sealed(prf.get('mkWrap'), WRAP_LENGTH) };
+  }
+  if (value.has('keystore')) {
+    const keystore = value.get('keystore');
+    check(isTextKeyed(keystore) && exactKeys(keystore, ['iv', 'sealed', 'mkWrap']), 'keystore');
+    const iv = keystore.get('iv');
+    const secret = keystore.get('sealed');
+    check(isBytes(iv, KEYSTORE_IV_LENGTH), 'keystore iv');
+    check(isBytes(secret, KEYSTORE_SEALED_LENGTH), 'keystore sealed');
+    out.keystore = { iv, sealed: secret, mkWrap: sealed(keystore.get('mkWrap'), WRAP_LENGTH) };
   }
   if (value.has('replacesVaultId')) {
     const replaces = value.get('replacesVaultId');
@@ -280,6 +303,16 @@ export function localConfigToCbor(config: LocalConfigCleartext): CborMap {
       ]),
     );
   }
+  if (config.keystore) {
+    map.set(
+      'keystore',
+      new Map<CborValue, CborValue>([
+        ['iv', config.keystore.iv],
+        ['sealed', config.keystore.sealed],
+        ['mkWrap', sealedToCbor(config.keystore.mkWrap)],
+      ]),
+    );
+  }
   if (config.replacesVaultId) map.set('replacesVaultId', config.replacesVaultId);
   readLocalConfig(map);
   return map;
@@ -330,8 +363,15 @@ export function parseLocalConfig(bytes: Uint8Array): LocalConfigCleartext {
  * (D96). Only the cleartext part changes: no wrap is bound to that key. Throws as `parseLocalConfig`.
  */
 export function localConfigWithoutReplaces(bytes: Uint8Array): Uint8Array {
-  const { vaultId, localConfigId, kek, prf, encrypted } = parseLocalConfig(bytes);
+  const { vaultId, localConfigId, kek, prf, keystore, encrypted } = parseLocalConfig(bytes);
   return encodeCbor(
-    localConfigToCbor({ vaultId, localConfigId, kek, ...(prf ? { prf } : {}), encrypted }),
+    localConfigToCbor({
+      vaultId,
+      localConfigId,
+      kek,
+      ...(prf ? { prf } : {}),
+      ...(keystore ? { keystore } : {}),
+      encrypted,
+    }),
   );
 }

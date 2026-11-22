@@ -1,4 +1,4 @@
-// Subkeys with crypto_kdf (crypto-spec.md §5, D2, D16, D23, D75). A parent key is used only to
+// Subkeys with crypto_kdf (crypto-spec.md §5, D2, D16, D23, D75, D290). A parent key is used only to
 // derive the subkeys of its row, never directly as an encryption key.
 
 import { KEY_LENGTH, Keyring, type SymmetricKey, keyBytes, sameKey } from './keys';
@@ -10,6 +10,7 @@ export const KdfContext = {
   phrase: 'bvrphras',
   recoveryKek: 'bvrckek_',
   prf: 'bvprfkek',
+  keystore: 'bvkskek_',
 } as const;
 
 export type KdfContext = (typeof KdfContext)[keyof typeof KdfContext];

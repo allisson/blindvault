@@ -62,6 +62,12 @@
         "aad": "0000001562762e76312e6d6b2d777261702e7072662d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
       },
       {
+        "purpose": "bv.v1.mk-wrap.keystore-kek",
+        "vaultId": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+        "localConfigId": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "aad": "0000001a62762e76312e6d6b2d777261702e6b657973746f72652d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+      },
+      {
         "purpose": "bv.v1.local-config",
         "vaultId": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
         "localConfigId": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
@@ -73,6 +79,7 @@
     "masterKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
     "phraseEntropy": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
     "prfOutput": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+    "keystoreSecret": "909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
     "subkeys": [
       {
         "parent": "masterKey",
@@ -129,6 +136,13 @@
         "id": 1,
         "name": "prfKek",
         "key": "cb643ff2637ad25e0558e3555d4fef63a3afec3ce6a3490720d9d04fd3152623"
+      },
+      {
+        "parent": "keystoreSecret",
+        "context": "bvkskek_",
+        "id": 1,
+        "name": "keystoreKek",
+        "key": "79f49ef7394f1d5808304afc42b9c1762c889ed96eb4a94efd1d1b45e4fc7fee"
       }
     ],
     "keyslotKeyPair": {
@@ -398,6 +412,7 @@
   "local": {
     "deviceKek": "845d19b1243385efc62e7a715cc98d78d421efa905dd6a505a66244dd1574965",
     "prfKek": "cb643ff2637ad25e0558e3555d4fef63a3afec3ce6a3490720d9d04fd3152623",
+    "keystoreKek": "79f49ef7394f1d5808304afc42b9c1762c889ed96eb4a94efd1d1b45e4fc7fee",
     "localConfigKey": "baae1762b0ec8fb33efcbe7a94c714ecd77e2e1e2fceb746d0ac852d5c862904",
     "mkWrapDeviceKek": {
       "n": "090909090909090909090909090909090909090909090909",
@@ -406,6 +421,10 @@
     "mkWrapPrfKek": {
       "n": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
       "c": "20a8a020c62a380c5e7a3d8952292abc6755aa25fa8c4530cdd94749740ff288d6d2813ef4427edea9aeb2e9c5e9805b"
+    },
+    "mkWrapKeystoreKek": {
+      "n": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+      "c": "95903ed2810e47e0e5be6febe11e468377afb6ac62e6bf62d35a43f0eaabf581ed251e5df1294540c3a6f2adb83127e7"
     },
     "encryptedPart": {
       "plaintextCbor": "a363686c63831b00000199c82cc000075044b9a1c7ccc91aaaffea9c110496830d6b707265666572656e636573a36f6175746f4c6f636b4d696e75746573057168696464656e4c6f636b5365636f6e6473183c75636c6970626f617264436c6561725365636f6e6473181e6e6465766963654964656e74697479a2697075626c69634b657958206b3ee67463583cbe3dc08fe9d0765c2666ff5210dd527c9d8705e44927c80d556a707269766174654b65795820d0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeef",
@@ -433,6 +452,41 @@
         "aad": "0000001562762e76312e6d6b2d777261702e7072662d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
         "n": "090909090909090909090909090909090909090909090909",
         "c": "fb9f63701c2e7fa703c9a1fede57b75fae320342d3c47466378bf6b08a11b5f544913f4e5af8de1e7bfa602eb10d15f7"
+      },
+      {
+        "case": "keystore-kek wrap under another localConfigId",
+        "key": "79f49ef7394f1d5808304afc42b9c1762c889ed96eb4a94efd1d1b45e4fc7fee",
+        "aad": "0000001a62762e76312e6d6b2d777261702e6b657973746f72652d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b1b2b3b4b5b6b7b8b9babbbcbdbebfc0",
+        "n": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+        "c": "95903ed2810e47e0e5be6febe11e468377afb6ac62e6bf62d35a43f0eaabf581ed251e5df1294540c3a6f2adb83127e7"
+      },
+      {
+        "case": "keystore-kek wrap under another vaultId",
+        "key": "79f49ef7394f1d5808304afc42b9c1762c889ed96eb4a94efd1d1b45e4fc7fee",
+        "aad": "0000001a62762e76312e6d6b2d777261702e6b657973746f72652d6b656b00000010a1a2a3a4a5a6a7a8a9aaabacadaeafb000000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "n": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+        "c": "95903ed2810e47e0e5be6febe11e468377afb6ac62e6bf62d35a43f0eaabf581ed251e5df1294540c3a6f2adb83127e7"
+      },
+      {
+        "case": "keystore-kek wrap under the prf-kek purpose",
+        "key": "79f49ef7394f1d5808304afc42b9c1762c889ed96eb4a94efd1d1b45e4fc7fee",
+        "aad": "0000001562762e76312e6d6b2d777261702e7072662d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "n": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+        "c": "95903ed2810e47e0e5be6febe11e468377afb6ac62e6bf62d35a43f0eaabf581ed251e5df1294540c3a6f2adb83127e7"
+      },
+      {
+        "case": "keystore-kek wrap under the device-kek purpose",
+        "key": "79f49ef7394f1d5808304afc42b9c1762c889ed96eb4a94efd1d1b45e4fc7fee",
+        "aad": "0000001862762e76312e6d6b2d777261702e6465766963652d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "n": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+        "c": "95903ed2810e47e0e5be6febe11e468377afb6ac62e6bf62d35a43f0eaabf581ed251e5df1294540c3a6f2adb83127e7"
+      },
+      {
+        "case": "keystore-kek wrap with the key of another secret",
+        "key": "31baa81ea6e2dc00143ab1dc93152c78856e249246d16ffb5d78da4c93756379",
+        "aad": "0000001a62762e76312e6d6b2d777261702e6b657973746f72652d6b656b00000010a0a1a2a3a4a5a6a7a8a9aaabacadaeaf00000010b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "n": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c",
+        "c": "95903ed2810e47e0e5be6febe11e468377afb6ac62e6bf62d35a43f0eaabf581ed251e5df1294540c3a6f2adb83127e7"
       }
     ]
   },
