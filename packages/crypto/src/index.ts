@@ -93,6 +93,7 @@ export {
   generatePrfInput,
   isBackupEligible,
 } from './prf';
+export { KEYSTORE_SECRET_LENGTH, deriveKeystoreKek, generateKeystoreSecret } from './keystore';
 export { type Hlc, LocalPurpose, type RecordHeader, localAad, recordAad } from './layout';
 export { NONCE_LENGTH, type Sealed, TAG_LENGTH, open, seal, unwrapKey, wrapKey } from './aead';
 export { type CborMap, type CborValue, decodeCbor, encodeCbor } from './cbor';

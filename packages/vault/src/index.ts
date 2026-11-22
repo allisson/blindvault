@@ -84,6 +84,9 @@ export {
 } from './folder';
 export {
   DEFAULT_PREFERENCES,
+  KEYSTORE_IV_LENGTH,
+  KEYSTORE_SEALED_LENGTH,
+  type KeystoreState,
   LOCAL_CONFIG_FORMAT_VERSION,
   type LocalConfigCleartext,
   type LocalConfigEncrypted,

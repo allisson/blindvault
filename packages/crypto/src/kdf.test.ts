@@ -12,6 +12,7 @@ const roots: Record<string, string> = {
   masterKey: kdf.masterKey,
   phraseEntropy: kdf.phraseEntropy,
   prfOutput: kdf.prfOutput,
+  keystoreSecret: kdf.keystoreSecret,
 };
 for (const s of kdf.subkeys) roots[s.name] = s.key;
 
