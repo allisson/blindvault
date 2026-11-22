@@ -22,6 +22,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { recordIdPrefix } from './backup-file';
 import { VaultController } from './controller';
+import {
+  KeystoreCancelledError,
+  KeystoreInvalidatedError,
+  type KeystorePort,
+  KeystoreUnavailableError,
+} from './keystore';
 import { PasskeyCancelledError, type PasskeyPort, type PasskeyResult } from './passkey';
 
 /** Bytes as the `File` a user picks. */
@@ -2042,6 +2048,310 @@ describe('passkey unlock (§5.5, D75, D84, D172)', () => {
     expect(await c.passkeysSupported()).toBe(false);
     expect(await c.setUpPasskey(PASSWORD)).toEqual({ kind: 'unavailable' });
     expect(c.hasPasskey).toBe(false);
+  });
+});
+
+type KeystoreFailure = 'cancelled' | 'invalidated' | 'unavailable';
+
+function keystoreError(failure: KeystoreFailure): Error {
+  if (failure === 'cancelled') return new KeystoreCancelledError();
+  if (failure === 'invalidated') return new KeystoreInvalidatedError();
+  return new KeystoreUnavailableError();
+}
+
+/**
+ * A stand-in shell: one key per `localConfigId`; "encrypting" XORs the secret with the key's byte
+ * and pads a tag. `fail` makes the next seals and opens refuse, `wrong` makes opens answer another
+ * secret.
+ */
+class FakeKeystore implements KeystorePort {
+  available = true;
+  fail: KeystoreFailure | undefined;
+  wrong = false;
+  readonly calls: string[] = [];
+  readonly deleted: string[] = [];
+  readonly keys = new Map<string, number>();
+  #next = 1;
+
+  static id(localConfigId: Uint8Array): string {
+    return [...localConfigId].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  status(localConfigId: Uint8Array) {
+    this.calls.push('status');
+    const exists = this.keys.has(FakeKeystore.id(localConfigId));
+    return Promise.resolve({ available: this.available, ...(exists ? { strongBox: false } : {}) });
+  }
+
+  seal(localConfigId: Uint8Array, secret: Uint8Array) {
+    this.calls.push('seal');
+    if (this.fail) return Promise.reject(keystoreError(this.fail));
+    const key = this.#next++;
+    this.keys.set(FakeKeystore.id(localConfigId), key);
+    const sealed = new Uint8Array(48);
+    sealed.set(secret.map((b) => b ^ key));
+    return Promise.resolve({ iv: new Uint8Array(12).fill(key), sealed, strongBox: false });
+  }
+
+  open(localConfigId: Uint8Array, _iv: Uint8Array, sealed: Uint8Array) {
+    this.calls.push('open');
+    if (this.fail) return Promise.reject(keystoreError(this.fail));
+    const key = this.keys.get(FakeKeystore.id(localConfigId));
+    if (key === undefined) return Promise.reject(new KeystoreInvalidatedError());
+    const secret = sealed.subarray(0, 32).map((b) => b ^ key);
+    return Promise.resolve(this.wrong ? secret.map((b) => b ^ 0xff) : secret);
+  }
+
+  delete(localConfigId: Uint8Array) {
+    const id = FakeKeystore.id(localConfigId);
+    this.deleted.push(id);
+    this.keys.delete(id);
+    return Promise.resolve();
+  }
+}
+
+describe('Keystore KEK (android.md §5, D271, D290, D292)', () => {
+  function android(factory = new IDBFactory(), keystore = new FakeKeystore()) {
+    const c = new VaultController({ factory, locks: navigator.locks, kdf: fakeKdf(), keystore });
+    controllers.push(c);
+    return c;
+  }
+
+  async function withKeystore(keystore = new FakeKeystore(), factory = new IDBFactory()) {
+    const c = android(factory, keystore);
+    await c.start();
+    await createIn(c);
+    return { c, keystore, factory };
+  }
+
+  async function setUp(c: VaultController) {
+    expect(await c.setUpKeystore(PASSWORD)).toEqual({ kind: 'ok', strongBox: false });
+  }
+
+  async function localConfigIdOf(factory: IDBFactory, vaultId: Uint8Array) {
+    const db = await VaultDatabase.open(vaultId, factory);
+    try {
+      return FakeKeystore.id(parseLocalConfig(must(await db.localConfig())).localConfigId);
+    } finally {
+      db.close();
+    }
+  }
+
+  it('sets up with the current password, then unlocks with the key, also at the next start', async () => {
+    const { c, keystore, factory } = await withKeystore();
+    expect(c.hasKeystore).toBe(false);
+    expect(await c.keystoreStatus()).toEqual({ available: true });
+    await setUp(c);
+    expect(c.hasKeystore).toBe(true);
+    expect(session(c).keystoreSetUp).toBe(true);
+    expect(await c.keystoreStatus()).toEqual({ available: true, strongBox: false });
+    const vaultId = session(c).vaultId;
+    c.lock();
+    expect(await c.unlockWithKeystore()).toBe('ok');
+    expect(session(c).vaultId).toEqual(vaultId);
+    await c.close();
+    const next = android(factory, keystore);
+    await next.start();
+    expect(next.hasKeystore).toBe(true);
+    expect(await next.unlockWithKeystore()).toBe('ok');
+    expect(keystore.deleted).toEqual([]);
+  });
+
+  it('refuses another current password before any BiometricPrompt (D172, D292)', async () => {
+    const { c, keystore } = await withKeystore();
+    expect(await c.setUpKeystore('not the password')).toEqual({ kind: 'wrong-password' });
+    expect(keystore.calls).not.toContain('seal');
+    expect(keystore.keys.size).toBe(0);
+    expect(c.hasKeystore).toBe(false);
+    expect(session(c).keystoreSetUp).toBe(false);
+  });
+
+  it('sets nothing up when the prompt is closed or no strong biometric is enrolled', async () => {
+    const { c, keystore } = await withKeystore();
+    keystore.fail = 'cancelled';
+    expect(await c.setUpKeystore(PASSWORD)).toEqual({ kind: 'cancelled' });
+    keystore.fail = 'unavailable';
+    expect(await c.setUpKeystore(PASSWORD)).toEqual({ kind: 'unavailable' });
+    expect(c.hasKeystore).toBe(false);
+    expect(session(c).keystoreSetUp).toBe(false);
+  });
+
+  it('deletes the key of a setup locked during the prompt (D104, D292)', async () => {
+    const { c, keystore } = await withKeystore();
+    const seal = keystore.seal.bind(keystore);
+    keystore.seal = (id, secret) => {
+      c.lock();
+      return seal(id, secret);
+    };
+    expect(await c.setUpKeystore(PASSWORD)).toEqual({ kind: 'locked' });
+    expect(c.status.kind).toBe('locked');
+    expect(c.hasKeystore).toBe(false);
+    expect(keystore.keys.size).toBe(0);
+    expect(keystore.deleted).toHaveLength(1);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(session(c).keystoreSetUp).toBe(false);
+  });
+
+  it('stays locked on a closed prompt or with no strong biometric, the password still unlocking', async () => {
+    const { c, keystore } = await withKeystore();
+    await setUp(c);
+    c.lock();
+    keystore.fail = 'cancelled';
+    expect(await c.unlockWithKeystore()).toBe('cancelled');
+    expect(c.status.kind).toBe('locked');
+    keystore.fail = 'unavailable';
+    expect(await c.unlockWithKeystore()).toBe('unavailable');
+    expect(c.status.kind).toBe('locked');
+    expect(c.hasKeystore).toBe(true);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(session(c).keystoreSetUp).toBe(true);
+  });
+
+  it('after a new biometric, unlocks by password only, then removes the state and the key (§5, D292)', async () => {
+    const { c, keystore, factory } = await withKeystore();
+    await setUp(c);
+    const local = await localConfigIdOf(factory, session(c).vaultId);
+    c.lock();
+    keystore.fail = 'invalidated';
+    expect(await c.unlockWithKeystore()).toBe('invalidated');
+    expect(c.status.kind).toBe('locked');
+    expect(c.keystoreInvalidated).toBe(true);
+    expect(c.hasKeystore).toBe(false);
+    expect(await c.unlock('not the password')).toBe('wrong-password');
+    expect(keystore.deleted).toEqual([]);
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    expect(session(c).keystoreSetUp).toBe(false);
+    expect(keystore.deleted).toEqual([local]);
+    expect(c.keystoreInvalidated).toBe(false);
+    // Set up again afterwards like the first time.
+    keystore.fail = undefined;
+    await setUp(c);
+    expect(c.hasKeystore).toBe(true);
+  });
+
+  it('rejects a secret that does not open the wrap (CRYPTO-INV-028)', async () => {
+    const { c, keystore } = await withKeystore();
+    await setUp(c);
+    c.lock();
+    keystore.wrong = true;
+    expect(await c.unlockWithKeystore()).toBe('rejected');
+    expect(c.status.kind).toBe('locked');
+    keystore.wrong = false;
+    expect(await c.unlockWithKeystore()).toBe('ok');
+  });
+
+  it('aborts an unlock locked during the prompt', async () => {
+    const { c, keystore } = await withKeystore();
+    await setUp(c);
+    c.lock();
+    const open = keystore.open.bind(keystore);
+    keystore.open = (id, iv, sealed) => {
+      c.lock();
+      return open(id, iv, sealed);
+    };
+    expect(await c.unlockWithKeystore()).toBe('ok');
+    expect(c.status.kind).toBe('locked');
+  });
+
+  it('removes the state and deletes the key, with nothing more asked (D172)', async () => {
+    const { c, keystore, factory } = await withKeystore();
+    await setUp(c);
+    const local = await localConfigIdOf(factory, session(c).vaultId);
+    await c.removeKeystore();
+    expect(c.hasKeystore).toBe(false);
+    expect(session(c).keystoreSetUp).toBe(false);
+    expect(keystore.deleted).toEqual([local]);
+    c.lock();
+    expect(await c.unlockWithKeystore()).toBe('ok');
+    expect(c.status.kind).toBe('locked');
+  });
+
+  it('opens the Master Key wrap again for an export and a regeneration (D181, D185, D292)', async () => {
+    const { c, keystore } = await withKeystore();
+    await setUp(c);
+    expect((await c.exportBackup({ kind: 'keystore' })).kind).toBe('ok');
+    c.newRegenerationPhrase();
+    expect((await c.regenerateRecoveryPhrase({ kind: 'keystore' })).kind).toBe('ok');
+    keystore.fail = 'cancelled';
+    expect(await c.exportBackup({ kind: 'keystore' })).toEqual({ kind: 'cancelled' });
+    keystore.fail = 'unavailable';
+    expect(await c.exportBackup({ kind: 'keystore' })).toEqual({ kind: 'unavailable' });
+    keystore.fail = undefined;
+    keystore.wrong = true;
+    expect(await c.exportBackup({ kind: 'keystore' })).toEqual({ kind: 'rejected' });
+    expect(c.hasKeystore).toBe(true);
+  });
+
+  it('removes the state and the key at once when a re-authentication finds the key invalidated (D292)', async () => {
+    const { c, keystore, factory } = await withKeystore();
+    await setUp(c);
+    const local = await localConfigIdOf(factory, session(c).vaultId);
+    keystore.fail = 'invalidated';
+    expect(await c.exportBackup({ kind: 'keystore' })).toEqual({ kind: 'invalidated' });
+    expect(session(c).keystoreSetUp).toBe(false);
+    expect(c.hasKeystore).toBe(false);
+    expect(c.keystoreInvalidated).toBe(false);
+    expect(keystore.deleted).toEqual([local]);
+  });
+
+  it('refuses the Keystore KEK where none is set up', async () => {
+    const { c, keystore } = await withKeystore();
+    expect(await c.exportBackup({ kind: 'keystore' })).toEqual({ kind: 'unavailable' });
+    c.lock();
+    expect(await c.unlockWithKeystore()).toBe('ok');
+    expect(c.status.kind).toBe('locked');
+    expect(keystore.calls).not.toContain('open');
+  });
+
+  it('deletes the key by the old localConfigId on erase (D120, D292)', async () => {
+    const { c, keystore, factory } = await withKeystore();
+    await setUp(c);
+    const local = await localConfigIdOf(factory, session(c).vaultId);
+    c.lock();
+    expect(await c.erase()).toEqual({ kind: 'ok' });
+    expect(keystore.deleted).toEqual([local]);
+    expect(c.hasKeystore).toBe(false);
+  });
+
+  it('deletes the key by the old localConfigId after a re-founding proved by the Keystore KEK (D187, D292)', async () => {
+    const { c, keystore, factory } = await withKeystore();
+    await setUp(c);
+    const local = await localConfigIdOf(factory, session(c).vaultId);
+    expect(await c.beginRefounding({ kind: 'keystore' })).toBe('ok');
+    c.newRefoundingPhrase();
+    expect(await c.refound('a new local password after re-founding', 'X')).toEqual({ kind: 'ok' });
+    expect(keystore.deleted).toEqual([local]);
+    expect(c.hasKeystore).toBe(false);
+    expect(session(c).keystoreSetUp).toBe(false);
+  });
+
+  it('deletes the key by the old localConfigId when a backup replaces the vault (D120, D183, D292)', async () => {
+    const source = android();
+    await source.start();
+    const words = must(source.newRecoveryPhrase());
+    await source.create(PASSWORD, 'Source');
+    const made = await source.exportBackup({ kind: 'password', password: PASSWORD });
+    if (made.kind !== 'ok') throw new Error(made.kind);
+    await source.close();
+
+    const { c, keystore, factory } = await withKeystore();
+    await setUp(c);
+    const local = await localConfigIdOf(factory, session(c).vaultId);
+    c.lock();
+    expect((await c.openBackupFile(blobOf(await bytesOf(made)))).kind).toBe('ok');
+    expect((await c.openBackup({ kind: 'phrase', words })).kind).toBe('ok');
+    expect(await c.restore('a new local password for this device', { replace: true })).toEqual({
+      kind: 'ok',
+    });
+    expect(keystore.deleted).toEqual([local]);
+    expect(c.hasKeystore).toBe(false);
+  });
+
+  it('offers nothing without the shell', async () => {
+    const c = await created();
+    expect(await c.keystoreStatus()).toBeUndefined();
+    expect(await c.setUpKeystore(PASSWORD)).toEqual({ kind: 'unavailable' });
+    expect(c.hasKeystore).toBe(false);
   });
 });
 

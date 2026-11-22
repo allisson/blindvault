@@ -34,6 +34,7 @@ import {
   type PhraseCheck,
   type VaultController,
 } from '../app/controller';
+import { type KeystoreStatus } from '../app/keystore';
 import { browserPasskeySwitch } from '../extension/passkey-browser';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Language, type Messages, format } from '../i18n/messages';
@@ -50,6 +51,7 @@ import { SyncDevice } from './Sync';
 import { RefoundVault } from './RefoundVault';
 import { OpenBackup, RegeneratePhrase, focusBackup, useOpenBackup } from './RegeneratePhrase';
 import { Icon, type IconName } from './icons';
+import { keystoreError } from './keystore';
 import { DeviceStorage } from './StorageState';
 
 /** The index's groups, in order; the last has no title (D252). */
@@ -87,6 +89,11 @@ const LANGUAGE_NAME: Readonly<Record<Language, string>> = {
   en: 'English',
   'pt-BR': 'Português (Brasil)',
 };
+
+/** The page's title: on Android, the unlock passkey's page is biometric unlock's (android.md §5). */
+function pageTitle(m: Messages, page: SettingsPage, keystore: boolean): string {
+  return page === 'passkey' && keystore ? m.keystore.title : m.settings.pages[page];
+}
 
 /** Settings › Passkeys exists only in the extension, which holds the sites' passkeys (§7.1). */
 function shown(page: SettingsPage): boolean {
@@ -137,7 +144,9 @@ export function Settings({
   if (!framed) {
     return (
       <OpenBackup.Provider value={openBackup}>
-        {view ?? <SettingsIndex session={session} nav={nav} />}
+        {view ?? (
+          <SettingsIndex session={session} nav={nav} keystore={controller.keystoreSupported} />
+        )}
       </OpenBackup.Provider>
     );
   }
@@ -165,7 +174,13 @@ export function Settings({
               </Button>
             ))}
           </div>
-          <SettingsIndex session={session} nav={nav} framed current={page} />
+          <SettingsIndex
+            session={session}
+            nav={nav}
+            framed
+            current={page}
+            keystore={controller.keystoreSupported}
+          />
         </div>
         <div className="flex min-w-0 justify-center overflow-y-auto">
           {view ?? <p className="p-4 text-sm text-muted">{m.settings.choose}</p>}
@@ -180,9 +195,12 @@ function SettingsIndex({
   nav,
   framed = false,
   current,
+  keystore = false,
 }: {
   readonly session: VaultSession;
   readonly nav: Navigation;
+  /** The Android app: the unlock passkey's row is biometric unlock's (android.md §5). */
+  readonly keystore?: boolean;
   /** In the vault frame, beside the open page: its row is marked, and a row swaps the page. */
   readonly framed?: boolean;
   readonly current?: SettingsPage | undefined;
@@ -194,7 +212,9 @@ function SettingsIndex({
     appearance: s.themes[currentAppearance().theme],
     language: LANGUAGE_NAME[language],
     locking: format(s.hintMinutes, { n: String(session.preferences.autoLockMinutes) }),
-    passkey: session.passkeyCredentialId === undefined ? s.hintOff : s.hintOn,
+    passkey: (keystore ? session.keystoreSetUp : session.passkeyCredentialId !== undefined)
+      ? s.hintOn
+      : s.hintOff,
     backup:
       last === undefined
         ? s.hintNever
@@ -229,7 +249,7 @@ function SettingsIndex({
                 data-testid={`settings-${page}`}
               >
                 <Icon name={PAGE_ICON[page]} />
-                <span className="min-w-0 flex-1">{s.pages[page]}</span>
+                <span className="min-w-0 flex-1">{pageTitle(m, page, keystore)}</span>
                 {hint[page] ? (
                   <span className="min-w-0 truncate text-sm text-muted">{hint[page]}</span>
                 ) : null}
@@ -320,9 +340,12 @@ function SettingsPageView({
     ),
     locking: () => <LockSettings controller={controller} preferences={session.preferences} />,
     password: () => <ChangePassword controller={controller} />,
-    passkey: () => (
-      <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
-    ),
+    passkey: () =>
+      controller.keystoreSupported ? (
+        <KeystoreSettings controller={controller} session={session} focus={focus === 'passkey'} />
+      ) : (
+        <PasskeySettings controller={controller} session={session} focus={focus === 'passkey'} />
+      ),
     sitePasskeys: () => <SitePasskeySettings />,
     recovery: () => <RecoveryPhraseSettings controller={controller} session={session} />,
     devices: () => (
@@ -343,7 +366,7 @@ function SettingsPageView({
   return (
     <div className="flex w-full max-w-md flex-col gap-6 p-4" data-settings-page={page}>
       <h1 tabIndex={-1} className="text-title">
-        {m.settings.pages[page]}
+        {pageTitle(m, page, controller.keystoreSupported)}
       </h1>
       {content[page]()}
     </div>
@@ -698,6 +721,112 @@ function PasskeySettings({
           />
           <Button type="submit" disabled={password === '' || state.kind === 'working'}>
             {state.kind === 'working' ? m.settings.passkeySettingUp : m.settings.passkeySetUp}
+          </Button>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
+type KeystoreState =
+  | { readonly kind: 'idle' | 'working' | 'done' | 'removed' }
+  | { readonly kind: 'wrong-password' | 'cancelled' | 'unavailable' | 'locked' };
+
+/**
+ * Biometric unlock, the Keystore KEK (android.md §5, D172, D292): set up with the current local
+ * password, offered only with a strong biometric enrolled, removed with nothing more asked. Shows
+ * where the key lives, as the shell reads it.
+ */
+function KeystoreSettings({
+  controller,
+  session,
+  focus,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+  readonly focus: boolean;
+}) {
+  const m = useLanguage().messages;
+  const k = m.keystore;
+  const on = session.keystoreSetUp;
+  const [status, setStatus] = useState<KeystoreStatus>();
+  const [password, setPassword] = useState('');
+  const [state, setState] = useState<KeystoreState>({ kind: 'idle' });
+  useEffect(() => {
+    let live = true;
+    void controller.keystoreStatus().then((s) => {
+      if (live) setStatus(s ?? { available: false });
+    });
+    return () => {
+      live = false;
+    };
+  }, [controller, on]);
+  useEffect(() => {
+    if (focus && status !== undefined) focusPage();
+  }, [focus, status]);
+  if (status === undefined) return null;
+  const error = {
+    'wrong-password': m.settings.wrong,
+    cancelled: k.setupCancelled,
+    locked: k.setupCancelled,
+    unavailable: k.noBiometric,
+  };
+  return (
+    <section className="flex flex-col gap-4" data-section="passkey">
+      {state.kind === 'done' ? <p role="status">{k.done}</p> : null}
+      {state.kind === 'removed' ? <p role="status">{k.removed}</p> : null}
+      {on ? (
+        <>
+          <p className="text-sm">{k.on}</p>
+          {status.strongBox === undefined ? null : (
+            <p className="text-sm text-muted" data-testid="keystore-holder">
+              {status.strongBox ? k.strongBox : k.tee}
+            </p>
+          )}
+          <Button
+            variant="quiet"
+            className="self-start"
+            disabled={state.kind === 'working'}
+            onClick={() => {
+              setState({ kind: 'working' });
+              void controller.removeKeystore().then(() => {
+                setState({ kind: 'removed' });
+              });
+            }}
+          >
+            {k.remove}
+          </Button>
+        </>
+      ) : null}
+      {!on && !status.available ? <p className="text-sm text-muted">{k.noBiometric}</p> : null}
+      {!on && status.available ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setState({ kind: 'working' });
+            void controller.setUpKeystore(password).then((outcome) => {
+              setPassword('');
+              setState({ kind: outcome.kind === 'ok' ? 'done' : outcome.kind });
+            });
+          }}
+        >
+          <p className="text-sm">{k.intro}</p>
+          <Notice>{k.lostDevice}</Notice>
+          <Field
+            label={k.password}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setState({ kind: 'idle' });
+            }}
+            error={state.kind in error ? error[state.kind as keyof typeof error] : undefined}
+            data-testid="keystore-password"
+          />
+          <Button type="submit" disabled={password === '' || state.kind === 'working'}>
+            {state.kind === 'working' ? k.settingUp : k.setUp}
           </Button>
         </form>
       ) : null}
@@ -1185,8 +1314,16 @@ export function recordTypeName(m: Messages, recordType: number): string {
 }
 
 /** What an export that made no file says (backup-format.md §8, D64, D179, D181). */
-export function exportError(m: Messages, outcome: BackupExport): string | undefined {
+export function exportError(
+  m: Messages,
+  outcome: BackupExport,
+  keystore = false,
+): string | undefined {
   const s = m.settings;
+  if (keystore) {
+    const text = keystoreError(m, outcome.kind);
+    if (text) return text;
+  }
   switch (outcome.kind) {
     case 'ok':
     case 'locked':
@@ -1203,6 +1340,8 @@ export function exportError(m: Messages, outcome: BackupExport): string | undefi
       return s.backupPasskeyNoVerification;
     case 'unavailable':
       return s.backupPasskeyUnavailable;
+    case 'invalidated':
+      return m.keystore.removedInvalidated;
     case 'kdf-failed':
       return s.backupKdfFailed;
     case 'corrupt-record':
@@ -1347,7 +1486,7 @@ function BackupSettings({
       });
   };
   const ready = !working && (!protect || exportPassword !== null);
-  const error = outcome ? exportError(m, outcome) : undefined;
+  const error = outcome ? exportError(m, outcome, controller.keystoreSupported) : undefined;
   return (
     <form
       className="flex flex-col gap-4"
@@ -1417,6 +1556,18 @@ function BackupSettings({
           }}
         >
           {m.settings.backupPasskey}
+        </Button>
+      ) : null}
+      {controller.hasKeystore ? (
+        <Button
+          variant="quiet"
+          className="self-start"
+          disabled={!ready}
+          onClick={() => {
+            run({ kind: 'keystore' });
+          }}
+        >
+          {m.keystore.reauth}
         </Button>
       ) : null}
       {saved === false ? (

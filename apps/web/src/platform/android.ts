@@ -1,12 +1,27 @@
 // The Android app's platform (android.md §2, D290): the app runs in a WebView of the shell, which it
 // reaches over the bridge (§9). No service worker and no update prompt (§10, D282); the locks follow
 // the activity and the screen (§4.2); the clipboard and its clear are the shell's (§6.1); a file is
-// saved through the shell, in chunks (§6.2). The bridge is looked up on first use, so importing this
+// saved through the shell, in chunks (§6.2); the Keystore KEK's key is the shell's (§5). The bridge is looked up on first use, so importing this
 // module needs no shell.
 
 // A type only: `app/clipboard` reads the platform when it loads.
 import type { ClipboardPort } from '../app/clipboard';
-import { type ShellBridge, ShellRefusedError, androidShell, shellBridge } from './android-bridge';
+import { KEYSTORE_SECRET_LENGTH } from '@blindvault/crypto';
+import { KEYSTORE_IV_LENGTH, KEYSTORE_SEALED_LENGTH } from '@blindvault/vault';
+import {
+  KeystoreCancelledError,
+  KeystoreInvalidatedError,
+  type KeystorePort,
+  KeystoreUnavailableError,
+} from '../app/keystore';
+import { fromBase64url, toBase64url } from '../extension/passkey-options';
+import {
+  type ShellAnswer,
+  type ShellBridge,
+  ShellRefusedError,
+  androidShell,
+  shellBridge,
+} from './android-bridge';
 import { type FilePort, type LockSignals, type Platform } from './platform';
 import { pageLockSignals } from './web';
 
@@ -146,6 +161,94 @@ export function androidFiles(bridge: Bridge): FilePort {
   };
 }
 
+class MalformedAnswerError extends Error {
+  override name = 'MalformedAnswerError';
+  constructor(type: string) {
+    super(`The shell sent a malformed answer to ${type}`);
+  }
+}
+
+/** The answer's fields beyond `v`, `id` and `ok`, refused unless exactly `required` and `optional`. */
+function fieldsOf(
+  type: string,
+  answer: ShellAnswer,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): Readonly<Record<string, unknown>> {
+  const keys = Object.keys(answer).filter((k) => k !== 'v' && k !== 'id' && k !== 'ok');
+  const known = keys.every((k) => required.includes(k) || optional.includes(k));
+  if (!known || !required.every((k) => keys.includes(k))) throw new MalformedAnswerError(type);
+  return answer;
+}
+
+function bytesOf(type: string, value: unknown, length: number): Uint8Array {
+  const bytes = typeof value === 'string' ? fromBase64url(value) : undefined;
+  if (bytes?.length !== length) throw new MalformedAnswerError(type);
+  return bytes;
+}
+
+function booleanOf(type: string, value: unknown): boolean {
+  if (typeof value !== 'boolean') throw new MalformedAnswerError(type);
+  return value;
+}
+
+/**
+ * `keystore-status`, `-seal`, `-open` and `-delete`, each naming the key by `localConfigId` (D292).
+ * Every answer is checked key by key and length by length; a refusal the user or the device caused
+ * becomes its own error.
+ */
+export function androidKeystore(bridge: Bridge): KeystorePort {
+  const call = async (
+    type: string,
+    localConfigId: Uint8Array,
+    fields: Readonly<Record<string, string>> = {},
+  ): Promise<ShellAnswer> => {
+    const b = needed(bridge);
+    try {
+      return await b.request(type, { localConfigId: toBase64url(localConfigId), ...fields });
+    } catch (error) {
+      if (error instanceof ShellRefusedError) {
+        if (error.error === 'cancelled') throw new KeystoreCancelledError();
+        if (error.error === 'invalidated') throw new KeystoreInvalidatedError();
+        if (error.error === 'unavailable') throw new KeystoreUnavailableError();
+      }
+      throw error;
+    }
+  };
+  return {
+    status: async (localConfigId) => {
+      const type = 'keystore-status';
+      const f = fieldsOf(type, await call(type, localConfigId), ['available'], ['strongBox']);
+      return {
+        available: booleanOf(type, f.available),
+        ...('strongBox' in f ? { strongBox: booleanOf(type, f.strongBox) } : {}),
+      };
+    },
+    seal: async (localConfigId, secret) => {
+      const type = 'keystore-seal';
+      const answer = await call(type, localConfigId, { secret: toBase64url(secret) });
+      const f = fieldsOf(type, answer, ['iv', 'sealed', 'strongBox']);
+      return {
+        iv: bytesOf(type, f.iv, KEYSTORE_IV_LENGTH),
+        sealed: bytesOf(type, f.sealed, KEYSTORE_SEALED_LENGTH),
+        strongBox: booleanOf(type, f.strongBox),
+      };
+    },
+    open: async (localConfigId, iv, sealed) => {
+      const type = 'keystore-open';
+      const answer = await call(type, localConfigId, {
+        iv: toBase64url(iv),
+        sealed: toBase64url(sealed),
+      });
+      return bytesOf(type, fieldsOf(type, answer, ['secret']).secret, KEYSTORE_SECRET_LENGTH);
+    },
+    delete: async (localConfigId) => {
+      const type = 'keystore-delete';
+      fieldsOf(type, await call(type, localConfigId), []);
+    },
+  };
+}
+
 let bridge: ShellBridge | undefined;
 
 /** The shell's bridge, made once, on first use. */
@@ -162,5 +265,6 @@ export const androidPlatform: Platform = {
   clipboard: androidClipboard(shell),
   lockSignals: androidLockSignals(shell, pageLockSignals),
   files: androidFiles(shell),
+  keystore: androidKeystore(shell),
   startUpdates: () => undefined,
 };

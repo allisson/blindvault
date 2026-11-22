@@ -4,6 +4,7 @@
 
 // Types only: `app/clipboard` reads the platform when it loads.
 import type { ClipboardPort } from '../app/clipboard';
+import type { KeystorePort } from '../app/keystore';
 import type { UpdateMonitor } from '../app/updates';
 
 /** What starts and restarts the locks while unlocked (overview §7, D54, D151, D284). */
@@ -41,6 +42,8 @@ export interface Platform {
   readonly lockSignals: LockSignals;
   /** Absent where an `<a download>` saves the file: the web and the extension. */
   readonly files?: FilePort;
+  /** The Keystore KEK's key (android.md §5): the Android app only. */
+  readonly keystore?: KeystorePort;
   /**
    * Starts the update flow: on the web the service worker's, which the monitor follows (D190,
    * D191); in the extension the deferred reload of extension.md §8.1, applied once `host` is idle.
