@@ -1324,10 +1324,12 @@ function BackupSettings({
         setWorking(false);
         setOutcome(result);
         if (result.kind === 'ok') {
+          // The date is recorded once the file is saved (D291): on the web, once handed over.
           if (platform.files) {
             platform.files.save(result.file, result.name).then(
               (done) => {
                 setSaved(done === 'saved');
+                if (done === 'saved') void controller.backupSaved();
               },
               () => {
                 setSaved(false);
@@ -1336,6 +1338,7 @@ function BackupSettings({
           } else {
             download(result.file, result.name);
             setSaved(true);
+            void controller.backupSaved();
           }
           setProtect(false);
           setExportPassword(null);
