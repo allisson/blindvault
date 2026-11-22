@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Plugin, defineConfig } from 'vite';
 
+import { androidInput, androidPage } from './build/android';
 import { assetManifest } from './build/asset-manifest';
 import { META_CSP } from './build/csp';
 import { extensionInput, extensionPage } from './build/extension';
@@ -30,27 +31,30 @@ function csp(): Plugin {
 
 // `--mode extension` builds the app for apps/extension (extension.md §2): no public/ (its sw.js,
 // 404.html and web manifest are the web's), no `_headers`, and the icons the extension's manifest
-// names. apps/extension writes the package's own asset manifest over this one.
+// names. apps/extension writes the package's own asset manifest over this one. `--mode android`
+// builds it for apps/android (android.md §2) the same way, with `headers.json` for the shell.
 export default defineConfig(({ mode }) => {
-  const extension = mode === 'extension';
+  const publicDir = new URL('./public/', import.meta.url);
+  const root = new URL('./', import.meta.url);
+  const packaged =
+    mode === 'extension'
+      ? { page: extensionPage(publicDir), outDir: 'dist-extension', input: extensionInput(root) }
+      : mode === 'android'
+        ? { page: androidPage(publicDir), outDir: 'dist-android', input: androidInput(root) }
+        : undefined;
   return {
     plugins: [
       react(),
       tailwindcss(),
       csp(),
       versionText(pkg.version),
-      ...(extension
-        ? [extensionPage(new URL('./public/', import.meta.url))]
-        : [pagesHeadersFile()]),
+      packaged ? packaged.page : pagesHeadersFile(),
       assetManifest(new URL('../../.nvmrc', import.meta.url)),
     ],
-    ...(extension
+    ...(packaged
       ? {
           publicDir: false as const,
-          build: {
-            outDir: 'dist-extension',
-            rollupOptions: { input: extensionInput(new URL('./', import.meta.url)) },
-          },
+          build: { outDir: packaged.outDir, rollupOptions: { input: packaged.input } },
         }
       : {}),
     // The Argon2id worker is built as a module, as the dev server serves it (app/kdf.ts).

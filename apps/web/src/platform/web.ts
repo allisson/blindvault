@@ -2,7 +2,8 @@
 // §11, D54, D63, D151, D190, D191). Browser objects are looked up on use, so importing this module
 // needs no DOM.
 
-import { type ClipboardPort } from '../app/clipboard';
+// A type only: `app/clipboard` reads the platform when it loads.
+import type { ClipboardPort } from '../app/clipboard';
 import { registerServiceWorker } from '../app/service-worker';
 import { type LockSignals, type Platform } from './platform';
 

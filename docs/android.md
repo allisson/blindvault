@@ -42,8 +42,8 @@ and extension builds carry none of it. It provides:
 **Build.** `pnpm --filter @blindvault/android build`:
 
 1. `vite build --mode android` writes `apps/web/dist-android`: no `public/` (its `sw.js`, `404.html`
-   and web manifest are the web's), no `_headers`, two entries, `index.html` (the main window) and
-   `provider.html` (the provider window), and `headers.json`, the headers `_headers` sets on `/*`
+   and web manifest are the web's), no `_headers`, the entry `index.html` (the main window), and
+   with the credential provider (§7) a second one, `provider.html` (the provider window), and `headers.json`, the headers `_headers` sets on `/*`
    (`apps/web/build/pages.ts`), which the shell adds to every response.
 2. `apps/android/build/assets.ts` copies it to `app/src/main/assets/web/` (not committed) and writes
    its `asset-manifest.txt` with the web build's format and code (D189), listing every file,
@@ -185,7 +185,8 @@ download a `blob:` link:
 2. `file-chunk` `{data}`: base64, at most 1 MiB decoded, written in order; answered `ok`.
 3. `file-end`: the shell closes the document and answers `saved`.
 
-A lock, or the window leaving, aborts the save and deletes the partial document. An attachment keeps
+One save runs at a time; a save asked while another runs is dropped. A lock (the window sends
+`file-abort`), or the window leaving, aborts the save and deletes the partial document. An attachment keeps
 the sanitized name and `application/octet-stream` (D273, CRYPTO-INV-025).
 
 ## 7. Credential provider (D269, D290)
@@ -304,7 +305,12 @@ package, and the user enables both in Settings › Passwords & accounts.
 - **Format.** JSON objects `{v: 1, type, id, ...}`, as the extension's RPC (`extension.md` §4): `type`
   from a closed list per window, every key validated by type and range, an unknown `v`, `type` or key
   refused with an error answer, never acted on. Bytes travel as base64url, except file chunks
-  (base64, §6.2).
+  (base64, §6.2). The listener's JavaScript object is `blindvaultShell`; each message is the JSON
+  text of one object.
+- **Answers.** `{v: 1, id, ok: true, ...}` with the request's `id`, or `{v: 1, id, ok: false, error}`
+  with `error` one of `invalid` (the request was refused), `cancelled`, `invalidated`, `unavailable`
+  or `failed` (the shell could not do it). The window takes an answer only for a request it has
+  pending, and ignores any other message, as it ignores a `lifecycle` with another `state`.
 - **Senders.** The shell takes each type only from the window the table names; the provider window's
   types only from a provider window with a request in progress.
 
@@ -314,7 +320,7 @@ package, and the user enables both in Settings › Passwords & accounts.
 | window | `keystore-open` `{iv, sealed}` | `{secret}`, or `cancelled`, `invalidated`, `unavailable` |
 | window | `keystore-delete` | done |
 | window | `clipboard-copy` `{text, clearSeconds}`, `clipboard-clear` | done (§6.1) |
-| main window | `file-save`, `file-chunk`, `file-end` | §6.2 |
+| main window | `file-save`, `file-chunk`, `file-end`, `file-abort` | §6.2 |
 | window | `build-info` | `{versionName, versionCode, certSha256}` (§10) |
 | shell, to the window | `lifecycle` `{state: "hidden" \| "shown" \| "screen-off"}` | none (§4.2) |
 | provider window | `provider-request` | the request: its kind, the caller (§7.3), the options, and for autofill the fields found |

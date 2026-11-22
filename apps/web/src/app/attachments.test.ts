@@ -1,7 +1,7 @@
 import { MAX_ATTACHMENT_SIZE, blobLength, initCrypto } from '@blindvault/crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { checkPick, downloadName, saveAttachment } from './attachments';
+import { attachmentBlob, checkPick, downloadName, saveAttachment } from './attachments';
 
 beforeAll(async () => {
   await initCrypto();
@@ -112,6 +112,14 @@ describe('saveAttachment (attachments.md §7, D273)', () => {
     const blob = blobs.get('blob:1');
     expect(blob?.type).toBe('application/octet-stream');
     if (!blob) throw new Error('no blob');
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    expect(bytes).toEqual(new Uint8Array(3));
+  });
+
+  it('makes the Blob Android saves through its shell: octet-stream, and the bytes wiped (android.md §6.2)', async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const blob = attachmentBlob(bytes);
+    expect(blob.type).toBe('application/octet-stream');
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
     expect(bytes).toEqual(new Uint8Array(3));
   });

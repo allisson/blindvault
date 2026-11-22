@@ -67,6 +67,8 @@ function Root({ controller, monitor, versionLock }: RootProps) {
       nav.reset();
       // A copied secret does not outlive the unlocked vault, as far as the browser allows (D54).
       clipboard.lock();
+      // Nor does a file being saved through the Android shell (android.md §6.2).
+      platform.files?.lock();
       return;
     }
     const signals = platform.lockSignals;
