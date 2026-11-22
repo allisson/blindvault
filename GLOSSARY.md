@@ -192,6 +192,11 @@ _Avoid_: passkey (alone, in this sense), biometric unlock
 A device-local key, derived from a secret that only the Android Keystore releases behind biometric confirmation, that unlocks the vault on that device as an alternative to the local password.
 _Avoid_: biometric key, fingerprint unlock key
 
+**Biometric unlock**:
+The name the Android app's screens give to unlocking with the Keystore KEK.
+_pt-BR_: desbloqueio por biometria
+_Avoid_: fingerprint unlock (other strong biometrics count too)
+
 **Recovery Phrase**:
 The 24-word phrase that represents the vault's recovery secret.
 _pt-BR_: Frase de Recuperação

@@ -2,8 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ClipboardGuard } from '../app/clipboard';
 import {
+  KeystoreCancelledError,
+  KeystoreInvalidatedError,
+  KeystoreUnavailableError,
+} from '../app/keystore';
+import { toBase64url } from '../extension/passkey-options';
+import {
   androidClipboard,
   androidFiles,
+  androidKeystore,
   androidLockSignals,
   androidPlatform,
   FILE_CHUNK_BYTES,
@@ -44,6 +51,11 @@ function fakeShell(respond: (message: Message) => unknown = () => undefined) {
 
 const ok = (m: Message, fields: Message = {}) => ({ v: 1, id: m.id, ok: true, ...fields });
 const no = (m: Message, error: string) => ({ v: 1, id: m.id, ok: false, error });
+
+function must<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('missing');
+  return value;
+}
 
 /** Whether `promise` is still pending once every queued task has run. */
 async function pending(promise: Promise<unknown>): Promise<boolean> {
@@ -358,6 +370,107 @@ describe('saving a file through the Android shell (android.md §6.2)', () => {
   });
 });
 
+describe('the Keystore KEK through the Android shell (android.md §5, §9, D292)', () => {
+  const LOCAL = new Uint8Array(16).fill(7);
+  const IV = new Uint8Array(12).fill(1);
+  const SEALED = new Uint8Array(48).fill(2);
+  const SECRET = new Uint8Array(32).fill(3);
+  const b64 = toBase64url;
+
+  it('names the key by `localConfigId` in every call, and decodes each answer', async () => {
+    const { sent, bridge } = fakeShell((m) => {
+      if (m.type === 'keystore-status') return ok(m, { available: true, strongBox: false });
+      if (m.type === 'keystore-seal') {
+        return ok(m, { iv: b64(IV), sealed: b64(SEALED), strongBox: true });
+      }
+      if (m.type === 'keystore-open') return ok(m, { secret: b64(SECRET) });
+      return ok(m);
+    });
+    const keystore = androidKeystore(() => bridge);
+    await expect(keystore.status(LOCAL)).resolves.toEqual({ available: true, strongBox: false });
+    await expect(keystore.seal(LOCAL, SECRET)).resolves.toEqual({
+      iv: IV,
+      sealed: SEALED,
+      strongBox: true,
+    });
+    await expect(keystore.open(LOCAL, IV, SEALED)).resolves.toEqual(SECRET);
+    await expect(keystore.delete(LOCAL)).resolves.toBeUndefined();
+    const id = b64(LOCAL);
+    expect(sent).toEqual([
+      { v: 1, type: 'keystore-status', id: 1, localConfigId: id },
+      { v: 1, type: 'keystore-seal', id: 2, localConfigId: id, secret: b64(SECRET) },
+      { v: 1, type: 'keystore-open', id: 3, localConfigId: id, iv: b64(IV), sealed: b64(SEALED) },
+      { v: 1, type: 'keystore-delete', id: 4, localConfigId: id },
+    ]);
+  });
+
+  it('takes a status without `strongBox` when the key does not exist', async () => {
+    const { bridge } = fakeShell((m) => ok(m, { available: false }));
+    await expect(androidKeystore(() => bridge).status(LOCAL)).resolves.toEqual({
+      available: false,
+    });
+  });
+
+  it('turns `cancelled`, `invalidated` and `unavailable` into their errors, and keeps any other refusal', async () => {
+    for (const [error, type] of [
+      ['cancelled', KeystoreCancelledError],
+      ['invalidated', KeystoreInvalidatedError],
+      ['unavailable', KeystoreUnavailableError],
+      ['failed', ShellRefusedError],
+      ['invalid', ShellRefusedError],
+    ] as const) {
+      const { bridge } = fakeShell((m) => no(m, error));
+      await expect(androidKeystore(() => bridge).open(LOCAL, IV, SEALED)).rejects.toThrow(type);
+    }
+  });
+
+  it.each([
+    ['a status with no `available`', 'keystore-status', {}],
+    ['a status whose `available` is not a boolean', 'keystore-status', { available: 'yes' }],
+    [
+      'a status whose `strongBox` is not a boolean',
+      'keystore-status',
+      { available: true, strongBox: 1 },
+    ],
+    ['a status with another key', 'keystore-status', { available: true, extra: 1 }],
+    [
+      'a seal with an 11-byte IV',
+      'keystore-seal',
+      { iv: b64(IV.subarray(1)), sealed: b64(SEALED), strongBox: true },
+    ],
+    [
+      'a seal with a 47-byte ciphertext',
+      'keystore-seal',
+      { iv: b64(IV), sealed: b64(SEALED.subarray(1)), strongBox: true },
+    ],
+    ['a seal with no `strongBox`', 'keystore-seal', { iv: b64(IV), sealed: b64(SEALED) }],
+    [
+      'a seal in padded base64',
+      'keystore-seal',
+      { iv: `${b64(IV)}=`, sealed: b64(SEALED), strongBox: true },
+    ],
+    ['an open with a 31-byte secret', 'keystore-open', { secret: b64(SECRET.subarray(1)) }],
+    ['an open with a 33-byte secret', 'keystore-open', { secret: b64(new Uint8Array(33)) }],
+    ['an open whose secret is not text', 'keystore-open', { secret: 3 }],
+    ['an open with another key', 'keystore-open', { secret: b64(SECRET), iv: b64(IV) }],
+    ['a delete with a key', 'keystore-delete', { done: true }],
+  ])('refuses %s', async (_name, type, fields) => {
+    const { bridge } = fakeShell((m) => ok(m, fields));
+    const keystore = androidKeystore(() => bridge);
+    const calls: Readonly<Record<string, () => Promise<unknown>>> = {
+      'keystore-status': () => keystore.status(LOCAL),
+      'keystore-seal': () => keystore.seal(LOCAL, SECRET),
+      'keystore-open': () => keystore.open(LOCAL, IV, SEALED),
+      'keystore-delete': () => keystore.delete(LOCAL),
+    };
+    await expect(must(calls[type])()).rejects.toThrow(/malformed/);
+  });
+
+  it('calls nothing without the shell', async () => {
+    await expect(androidKeystore(() => undefined).status(LOCAL)).rejects.toThrow(/shell/);
+  });
+});
+
 describe('the Android platform (android.md §2)', () => {
   it('starts no update flow (§10, D282)', () => {
     const monitor = { watch: vi.fn(), look: vi.fn() };
@@ -366,6 +479,7 @@ describe('the Android platform (android.md §2)', () => {
       subscribe: () => () => true,
     });
     expect(androidPlatform.kind).toBe('android');
+    expect(androidPlatform.keystore).toBeDefined();
     expect(monitor.watch).not.toHaveBeenCalled();
     expect(monitor.look).not.toHaveBeenCalled();
   });

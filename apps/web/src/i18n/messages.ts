@@ -27,6 +27,37 @@ const en = {
       'Verify a release outside the app: compare this hash with the one published in the release, then check the served files against its manifest with',
     releases: 'Releases on GitHub',
   },
+  keystore: {
+    title: 'Biometric unlock',
+    unlock: 'Unlock with biometrics',
+    reauth: 'Use biometric unlock instead',
+    cancelled: 'The biometric prompt was closed.',
+    rejected: 'Biometric unlock did not open this vault. Use the password.',
+    unavailable:
+      'No strong biometric, such as a fingerprint, is enrolled on this phone, so biometric unlock does not work. Use the password.',
+    invalidated:
+      'The biometrics enrolled on this phone changed, so biometric unlock no longer opens the vault. Unlock with the password: biometric unlock is then removed, and you can set it up again in Settings.',
+    removedInvalidated:
+      'The biometrics enrolled on this phone changed, so biometric unlock was removed. Use the password, and set biometric unlock up again in Settings if you want it.',
+    intro:
+      'Biometric unlock opens the vault on this phone with a strong biometric, such as a fingerprint, instead of the local password. Every unlock asks for it, and enrolling a new biometric turns it off.',
+    lostDevice:
+      'With biometric unlock, whoever holds this phone needs only an enrolled biometric to open the vault, not the local password. Enroll only your own biometrics.',
+    password: 'Local password',
+    setUp: 'Set up biometric unlock',
+    settingUp: 'Setting up biometric unlock…',
+    on: 'Biometric unlock is set up on this phone.',
+    strongBox: 'Its key is in StrongBox, the phone’s separate security chip.',
+    tee: 'Its key is in the phone’s trusted execution environment (TEE): this phone has no StrongBox.',
+    done: 'Biometric unlock set up.',
+    remove: 'Remove biometric unlock',
+    removed: 'Biometric unlock removed.',
+    setupCancelled: 'The biometric prompt was closed, or the vault locked. Nothing was set up.',
+    noBiometric:
+      'Biometric unlock needs a strong biometric, such as a fingerprint, enrolled on this phone. Enroll one in Android’s settings, then come back.',
+    ready: 'Set up biometric unlock to open the vault without typing the local password.',
+    readyAction: 'Set up biometric unlock',
+  },
   versionLock: {
     title: 'The extension changed',
     intro:
@@ -1296,6 +1327,37 @@ const ptBR: Messages = {
     verify:
       'Verifique uma versão fora do app: compare este hash com o publicado na versão e confira os arquivos servidos contra o manifesto dela com',
     releases: 'Versões no GitHub',
+  },
+  keystore: {
+    title: 'Desbloqueio por biometria',
+    unlock: 'Desbloquear com biometria',
+    reauth: 'Usar o desbloqueio por biometria',
+    cancelled: 'O pedido de biometria foi fechado.',
+    rejected: 'O desbloqueio por biometria não abriu este cofre. Use a senha.',
+    unavailable:
+      'Nenhuma biometria forte, como uma digital, está cadastrada neste celular, então o desbloqueio por biometria não funciona. Use a senha.',
+    invalidated:
+      'As biometrias cadastradas neste celular mudaram, então o desbloqueio por biometria não abre mais o cofre. Desbloqueie com a senha: o desbloqueio por biometria é então removido, e você pode configurá-lo de novo em Configurações.',
+    removedInvalidated:
+      'As biometrias cadastradas neste celular mudaram, então o desbloqueio por biometria foi removido. Use a senha e, se quiser, configure o desbloqueio por biometria de novo em Configurações.',
+    intro:
+      'O desbloqueio por biometria abre o cofre neste celular com uma biometria forte, como uma digital, no lugar da senha local. Cada desbloqueio a pede, e cadastrar uma biometria nova o desativa.',
+    lostDevice:
+      'Com o desbloqueio por biometria, quem estiver com este celular precisa apenas de uma biometria cadastrada para abrir o cofre, não da senha local. Cadastre só as suas biometrias.',
+    password: 'Senha local',
+    setUp: 'Configurar desbloqueio por biometria',
+    settingUp: 'Configurando o desbloqueio por biometria…',
+    on: 'O desbloqueio por biometria está configurado neste celular.',
+    strongBox: 'A chave dele está no StrongBox, o chip de segurança separado do celular.',
+    tee: 'A chave dele está no ambiente de execução confiável (TEE) do celular: este celular não tem StrongBox.',
+    done: 'Desbloqueio por biometria configurado.',
+    remove: 'Remover desbloqueio por biometria',
+    removed: 'Desbloqueio por biometria removido.',
+    setupCancelled: 'O pedido de biometria foi fechado, ou o cofre bloqueou. Nada foi configurado.',
+    noBiometric:
+      'O desbloqueio por biometria precisa de uma biometria forte, como uma digital, cadastrada neste celular. Cadastre uma nas configurações do Android e volte.',
+    ready: 'Configure o desbloqueio por biometria para abrir o cofre sem digitar a senha local.',
+    readyAction: 'Configurar desbloqueio por biometria',
   },
   versionLock: {
     title: 'A extensão mudou',

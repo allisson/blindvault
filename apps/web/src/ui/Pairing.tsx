@@ -23,6 +23,7 @@ import {
 } from '../app/stun-settings';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
+import { keystoreError } from './keystore';
 import { Button, CopyCheck, Field, Notice, TARGET, TextArea, useCheck } from './components';
 import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
@@ -740,8 +741,16 @@ function StageBody({
   }
 }
 
-function startError(m: Messages, outcome: PairingStart | undefined): string | undefined {
+function startError(
+  m: Messages,
+  outcome: PairingStart | undefined,
+  keystore: boolean,
+): string | undefined {
   const p = m.pairing;
+  if (keystore && outcome) {
+    const text = keystoreError(m, outcome);
+    if (text) return text;
+  }
   switch (outcome) {
     case undefined:
     case 'ok':
@@ -755,6 +764,8 @@ function startError(m: Messages, outcome: PairingStart | undefined): string | un
     case 'no-user-verification':
     case 'unavailable':
       return p.passkeyFailed;
+    case 'invalidated':
+      return m.keystore.removedInvalidated;
     case 'no-webrtc':
       return p.unavailable;
     case 'read-only':
@@ -899,6 +910,18 @@ export function InviteDevice({
               {p.passkey}
             </Button>
           ) : null}
+          {controller.hasKeystore ? (
+            <Button
+              variant="quiet"
+              className="self-start"
+              disabled={working}
+              onClick={() => {
+                start({ kind: 'keystore' });
+              }}
+            >
+              {m.keystore.reauth}
+            </Button>
+          ) : null}
           <form
             className="flex flex-col gap-2"
             onSubmit={(e) => {
@@ -915,7 +938,7 @@ export function InviteDevice({
                 setPassword(e.target.value);
                 setOutcome(undefined);
               }}
-              error={startError(m, outcome)}
+              error={startError(m, outcome, controller.keystoreSupported)}
               autoFocus
               data-testid="invite-password"
             />

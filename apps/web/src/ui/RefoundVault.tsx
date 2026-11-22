@@ -9,6 +9,7 @@ import { type Navigation } from '../app/nav';
 import { drawPositions } from '../app/phrase-check';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
+import { keystoreError } from './keystore';
 import { Button, Field, Notice, TARGET } from './components';
 import { NewPassword } from './NewPassword';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
@@ -31,7 +32,11 @@ type Step =
     }
   | { readonly kind: 'password' };
 
-function authError(m: Messages, outcome: RefoundingStart): string | undefined {
+function authError(m: Messages, outcome: RefoundingStart, keystore: boolean): string | undefined {
+  if (keystore) {
+    const text = keystoreError(m, outcome);
+    if (text) return text;
+  }
   switch (outcome) {
     case 'ok':
     case 'locked':
@@ -44,6 +49,8 @@ function authError(m: Messages, outcome: RefoundingStart): string | undefined {
     case 'no-user-verification':
     case 'unavailable':
       return m.refound.passkeyFailed;
+    case 'invalidated':
+      return m.keystore.removedInvalidated;
   }
 }
 
@@ -106,7 +113,7 @@ export function RefoundVault({
       } else if (outcome === 'locked') {
         setStep({ kind: 'idle' });
       } else {
-        setError(authError(m, outcome));
+        setError(authError(m, outcome, controller.keystoreSupported));
       }
     });
   };
@@ -238,6 +245,18 @@ export function RefoundVault({
                   }}
                 >
                   {r.authPasskey}
+                </Button>
+              ) : null}
+              {controller.hasKeystore ? (
+                <Button
+                  variant="quiet"
+                  className="self-start"
+                  disabled={working}
+                  onClick={() => {
+                    auth({ kind: 'keystore' });
+                  }}
+                >
+                  {m.keystore.reauth}
                 </Button>
               ) : null}
             </form>

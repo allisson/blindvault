@@ -6,6 +6,7 @@ import { type ExportAuth, type Regeneration, type VaultController } from '../app
 import { drawPositions } from '../app/phrase-check';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
+import { keystoreError } from './keystore';
 import { Button, Field, Notice } from './components';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
 import { Wizard, WizardActions } from './Wizard';
@@ -42,8 +43,16 @@ export function useOpenBackup(): () => void {
 }
 
 /** What a regeneration that changed nothing says. */
-function regenerationError(m: Messages, outcome: Regeneration): string | undefined {
+function regenerationError(
+  m: Messages,
+  outcome: Regeneration,
+  keystore: boolean,
+): string | undefined {
   const s = m.settings;
+  if (keystore) {
+    const text = keystoreError(m, outcome.kind);
+    if (text) return text;
+  }
   switch (outcome.kind) {
     case 'ok':
     case 'locked':
@@ -58,6 +67,8 @@ function regenerationError(m: Messages, outcome: Regeneration): string | undefin
     case 'no-user-verification':
     case 'unavailable':
       return s.regenPasskeyFailed;
+    case 'invalidated':
+      return m.keystore.removedInvalidated;
   }
 }
 
@@ -99,7 +110,7 @@ export function RegeneratePhrase({
       if (outcome.kind === 'ok') setStep({ kind: 'done', recovery: outcome.recovery });
       else if (outcome.kind === 'blocked' || outcome.kind === 'no-phrase')
         setStep({ kind: 'idle' });
-      else setError(regenerationError(m, outcome));
+      else setError(regenerationError(m, outcome, controller.keystoreSupported));
     });
   };
   const g = m.settings.regenSteps;
@@ -238,6 +249,18 @@ export function RegeneratePhrase({
                 }}
               >
                 {m.settings.regenPasskey}
+              </Button>
+            ) : null}
+            {controller.hasKeystore ? (
+              <Button
+                variant="quiet"
+                className="self-start"
+                disabled={working}
+                onClick={() => {
+                  run({ kind: 'keystore' });
+                }}
+              >
+                {m.keystore.reauth}
               </Button>
             ) : null}
           </form>

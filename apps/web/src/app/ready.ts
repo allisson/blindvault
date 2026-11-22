@@ -17,7 +17,7 @@ export type Ready =
   /** Joined a pairing (§13.3, D203). */
   | { readonly start: 'paired' };
 
-export type ReadyAdvice = 'passkey' | 'check-phrase' | 'readmit' | 'pair' | 'backup';
+export type ReadyAdvice = 'passkey' | 'keystore' | 'check-phrase' | 'readmit' | 'pair' | 'backup';
 
 export interface ReadyInput {
   readonly ready: Ready;
@@ -25,12 +25,20 @@ export interface ReadyInput {
   readonly devices: DeviceAdvice | undefined;
   /** Whether this browser can set up passkey unlock. */
   readonly passkeys: boolean;
+  /** Whether the Android app can set up the Keystore KEK: a strong biometric enrolled (D292). */
+  readonly keystore?: boolean;
   /** Whether the vault can export a backup: it holds its Recovery Envelope (D179). */
   readonly exportable: boolean;
 }
 
-export function readyAdvice({ ready, devices, passkeys, exportable }: ReadyInput): ReadyAdvice[] {
-  const advice: ReadyAdvice[] = passkeys ? ['passkey'] : [];
+export function readyAdvice({
+  ready,
+  devices,
+  passkeys,
+  keystore = false,
+  exportable,
+}: ReadyInput): ReadyAdvice[] {
+  const advice: ReadyAdvice[] = passkeys ? ['passkey'] : keystore ? ['keystore'] : [];
   if (ready.start === 'created') {
     if (exportable) advice.push('backup');
     // A vault just created is on its only device.

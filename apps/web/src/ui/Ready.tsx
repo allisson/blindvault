@@ -27,10 +27,14 @@ export function Ready({
 }) {
   const m = useMessages();
   const [passkeys, setPasskeys] = useState(false);
+  const [keystore, setKeystore] = useState(false);
   useEffect(() => {
     let live = true;
     void controller.passkeysSupported().then((s) => {
       if (live) setPasskeys(s);
+    });
+    void controller.keystoreStatus().then((s) => {
+      if (live) setKeystore(s?.available === true);
     });
     return () => {
       live = false;
@@ -40,10 +44,12 @@ export function Ready({
     ready,
     devices: devicesOf(session).advice,
     passkeys,
+    keystore,
     exportable: session.recovery !== undefined,
   });
   const text: Record<ReadyAdvice, string> = {
     passkey: m.ready.passkey,
+    keystore: m.keystore.ready,
     'check-phrase': m.ready.checkPhrase,
     readmit: m.restore.readmit,
     pair: m.ready.pair,
@@ -51,6 +57,7 @@ export function Ready({
   };
   const action: Record<ReadyAdvice, { label: string; focus: SettingsFocus } | undefined> = {
     passkey: { label: m.ready.passkeyAction, focus: 'passkey' },
+    keystore: { label: m.keystore.readyAction, focus: 'passkey' },
     'check-phrase': { label: m.ready.checkPhraseAction, focus: 'recovery' },
     readmit: { label: m.ready.readmitAction, focus: 'readmit' },
     pair: { label: m.ready.pairAction, focus: 'pair' },
@@ -58,6 +65,7 @@ export function Ready({
   };
   const done: Partial<Record<ReadyAdvice, boolean>> = {
     passkey: session.passkeyCredentialId !== undefined,
+    keystore: session.keystoreSetUp,
     backup: session.lastBackupAt !== undefined,
   };
   return (

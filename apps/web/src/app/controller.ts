@@ -14,8 +14,10 @@ import {
   UserVerificationError,
   calibrateDeviceKek,
   deriveDeviceKek,
+  deriveKeystoreKek,
   derivePrfKek,
   generateDeviceIdentity,
+  generateKeystoreSecret,
   generatePrfInput,
   generateRecoveryPhrase,
   generateSalt,
@@ -48,6 +50,7 @@ import {
   ContentInvalidError,
   ExportRejectedError,
   HlcReadOnlyError,
+  type KeystoreState,
   type LocalConfigCleartext,
   MergeRejectedError,
   type MergeResult,
@@ -83,6 +86,13 @@ import { type BackupReminder, backupReminderOf } from './backup-reminder';
 import { type ClockNotice, WritableTimer, clockNoticeOf } from './clock';
 import { type EraseAdvice, devicesOf, eraseAdvice } from './devices';
 import { type ImportRead, type ImportSource, readImport } from './import';
+import {
+  KeystoreCancelledError,
+  KeystoreInvalidatedError,
+  type KeystorePort,
+  type KeystoreStatus,
+  KeystoreUnavailableError,
+} from './keystore';
 import {
   Inviting,
   Joining,
@@ -148,6 +158,16 @@ export type PasskeySetup =
   | { readonly kind: 'ok'; readonly backupEligible: boolean }
   | { readonly kind: 'wrong-password' | 'cancelled' | 'no-user-verification' | 'unavailable' };
 
+/**
+ * A Keystore KEK unlock (android.md §5, D292): `invalidated` when a new biometric destroyed the key,
+ * `rejected` when the secret does not open the wrap.
+ */
+export type KeystoreOutcome = 'ok' | 'cancelled' | 'invalidated' | 'unavailable' | 'rejected';
+
+export type KeystoreSetup =
+  | { readonly kind: 'ok'; readonly strongBox: boolean }
+  | { readonly kind: 'wrong-password' | 'cancelled' | 'unavailable' | 'locked' };
+
 /** Check Recovery Phrase (§5.4, D24, D180): `invalid` for input that is not a phrase at all. */
 export type PhraseCheck =
   | { readonly kind: RecoveryCheckResult | 'no-envelope' | 'corrupt-envelope' | 'locked' }
@@ -158,13 +178,24 @@ export type PhraseCheck =
       readonly position?: number;
     };
 
-/** How the user opens the Master Key wrap again before an export (D181). */
+/** How the user opens the Master Key wrap again before an export (D181, D292). */
 export type ExportAuth =
-  { readonly kind: 'password'; readonly password: string } | { readonly kind: 'passkey' };
+  | { readonly kind: 'password'; readonly password: string }
+  | { readonly kind: 'passkey' }
+  | { readonly kind: 'keystore' };
 
-/** Why opening the Master Key wrap again failed (D181, D185). */
+/**
+ * Why opening the Master Key wrap again failed (D181, D185): `invalidated` when the Keystore key is
+ * gone, its state then removed (D292).
+ */
 type ReauthFailure =
-  'wrong-password' | 'locked' | 'cancelled' | 'rejected' | 'no-user-verification' | 'unavailable';
+  | 'wrong-password'
+  | 'locked'
+  | 'cancelled'
+  | 'rejected'
+  | 'no-user-verification'
+  | 'unavailable'
+  | 'invalidated';
 
 /**
  * A Recovery Phrase regeneration (§5.4, D185): `no-phrase` when no phrase was handed out or it went
@@ -206,6 +237,7 @@ export type BackupExport =
         | 'rejected'
         | 'no-user-verification'
         | 'unavailable'
+        | 'invalidated'
         /** The Argon2id worker failed, as when it cannot allocate the memory asked for (R-10). */
         | 'kdf-failed';
     }
@@ -372,6 +404,8 @@ export interface ControllerDeps {
   readonly storage?: StorageManager;
   /** WebAuthn, for passkey unlock (§5.5); absent where the browser has none. */
   readonly passkeys?: PasskeyPort;
+  /** The Android shell's Keystore, for the Keystore KEK (android.md §5); the Android app only. */
+  readonly keystore?: KeystorePort;
   /** The stored STUN list, read when each pairing starts (D209); the defaults when absent. */
   readonly stun?: () => StunSettings;
   /** WebRTC, for pairing (§8.4); absent where the browser has none. */
@@ -388,6 +422,14 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 function ceremonyFailure(error: unknown): 'cancelled' | 'unavailable' {
   if (error instanceof PasskeyCancelledError) return 'cancelled';
   if (error instanceof PrfUnavailableError) return 'unavailable';
+  throw error;
+}
+
+/** A BiometricPrompt that gave no secret, or the key gone (android.md §5). */
+function keystoreFailure(error: unknown): 'cancelled' | 'unavailable' | 'invalidated' {
+  if (error instanceof KeystoreCancelledError) return 'cancelled';
+  if (error instanceof KeystoreUnavailableError) return 'unavailable';
+  if (error instanceof KeystoreInvalidatedError) return 'invalidated';
   throw error;
 }
 
@@ -416,6 +458,15 @@ export class VaultController {
   #lock: HeldLock | undefined;
   /** The PRF KEK state of the Local Config last read or written, for the unlock prompt. */
   #passkey: { readonly credentialId: Uint8Array; readonly prfInput: Uint8Array } | undefined;
+  /** The `localConfigId` of the Local Config last read, which names the Keystore key (D292). */
+  #localConfigId: Uint8Array | undefined;
+  /** The Keystore KEK state of the Local Config last read or written (android.md §5). */
+  #keystore: KeystoreState | undefined;
+  /**
+   * The shell said the Keystore key is gone while locked: the next password unlock removes the state
+   * and the key (android.md §5, D292). Kept in memory only.
+   */
+  #keystoreInvalidated = false;
   /** Bumped by every lock: an operation started before it is aborted (D104). */
   #epoch = 0;
   #drops = 0;
@@ -593,6 +644,8 @@ export class VaultController {
       if (!bytes) throw new Error('no Local Config');
       const config = parseLocalConfig(bytes);
       this.#passkey = config.prf;
+      this.#localConfigId = config.localConfigId;
+      this.#keystore = config.keystore;
       return config;
     } catch (error) {
       this.#set({
@@ -646,6 +699,22 @@ export class VaultController {
     this.#db = undefined;
     this.#vaultId = undefined;
     this.#passkey = undefined;
+    this.#localConfigId = undefined;
+    this.#keystore = undefined;
+    this.#keystoreInvalidated = false;
+  }
+
+  /**
+   * The vault whose Local Config named a Keystore key is gone or replaced: the key is deleted, by the
+   * old `localConfigId`, without waiting (android.md §5, D292). Nothing is held afterwards.
+   */
+  #forgetKeystore(): void {
+    const localConfigId = this.#localConfigId;
+    const held = this.#keystore;
+    this.#localConfigId = undefined;
+    this.#keystore = undefined;
+    this.#keystoreInvalidated = false;
+    if (held && localConfigId) this.#deps.keystore?.delete(localConfigId).catch(() => undefined);
   }
 
   // --- create ------------------------------------------------------------------------------------
@@ -973,6 +1042,7 @@ export class VaultController {
       this.#db = db;
       this.#vaultId = session.vaultId;
       this.#passkey = undefined;
+      this.#forgetKeystore();
       if (old?.passkey) {
         const forgotten = await this.#deps.passkeys?.forget(old.passkey.credentialId);
         this.#leftoverPasskey = forgotten !== true;
@@ -1211,6 +1281,7 @@ export class VaultController {
       } catch {
         // Nothing was deleted: the vault opens again below, locked.
       }
+      if (deleted) this.#forgetKeystore();
       await this.#forgetVault();
       if (!deleted) {
         this.#eraseFailure = 'failed';
@@ -1281,6 +1352,8 @@ export class VaultController {
         method: 'password',
         now: this.#now,
       });
+      // The Keystore key is gone: the password unlock removes its state and the key (§5, D292).
+      if (this.#keystoreInvalidated && epoch === this.#epoch) await this.#dropKeystore(session);
       if (epoch !== this.#epoch) {
         session.lock();
         throw new Aborted();
@@ -1440,6 +1513,99 @@ export class VaultController {
       throw error;
     } finally {
       assertion.prfOutput?.fill(0);
+    }
+  }
+
+  /**
+   * Whether this vault has the Keystore KEK set up on this device, as last read, and its key was not
+   * found gone (android.md §5).
+   */
+  get hasKeystore(): boolean {
+    return (
+      this.#keystore !== undefined &&
+      this.#deps.keystore !== undefined &&
+      !this.#keystoreInvalidated
+    );
+  }
+
+  /** Whether this app holds the Android shell's Keystore: its unlock alternative (android.md §5). */
+  get keystoreSupported(): boolean {
+    return this.#deps.keystore !== undefined;
+  }
+
+  /**
+   * The shell found the Keystore key gone, after a new biometric: the unlock screen says so until
+   * the password unlock that removes the state (android.md §5, D292).
+   */
+  get keystoreInvalidated(): boolean {
+    return this.#keystoreInvalidated;
+  }
+
+  /**
+   * Whether a strong biometric is enrolled, and where the key lives when it exists (D292);
+   * `undefined` outside the Android app or with no vault.
+   */
+  async keystoreStatus(): Promise<KeystoreStatus | undefined> {
+    const port = this.#deps.keystore;
+    const db = this.#db;
+    if (!port || !db) return undefined;
+    const config = await this.#readConfig(db);
+    return config ? port.status(config.localConfigId) : undefined;
+  }
+
+  /**
+   * Unlocks with the Keystore KEK (android.md §5): the shell shows the BiometricPrompt and answers
+   * the secret, from which the KEK is derived, the secret then wiped (CRYPTO-INV-028).
+   */
+  async unlockWithKeystore(): Promise<KeystoreOutcome> {
+    const db = this.#db;
+    const port = this.#deps.keystore;
+    const held = this.#keystore;
+    const localConfigId = this.#localConfigId;
+    if (this.#status.kind !== 'locked' || !db || !port || !held || !localConfigId) return 'ok';
+    if (this.#keystoreInvalidated) return 'ok';
+    const epoch = this.#epoch;
+    this.#set({ kind: 'unlocking' });
+    let secret: Uint8Array;
+    try {
+      secret = await port.open(localConfigId, held.iv, held.sealed);
+    } catch (error) {
+      if (error instanceof KeystoreInvalidatedError) this.#keystoreInvalidated = true;
+      if (epoch === this.#epoch) this.#set({ kind: 'locked' });
+      return keystoreFailure(error);
+    }
+    const keyring = new Keyring();
+    try {
+      if (epoch !== this.#epoch) throw new Aborted();
+      const config = await this.#readConfig(db);
+      if (!config) return 'ok';
+      const kek = deriveKeystoreKek(keyring, secret);
+      const session = await VaultSession.unlock({
+        store: db,
+        localConfig: config,
+        keyring,
+        kek,
+        method: 'keystore',
+        now: this.#now,
+      });
+      if (epoch !== this.#epoch) {
+        session.lock();
+        throw new Aborted();
+      }
+      this.#set({ kind: 'unlocked', session });
+      return 'ok';
+    } catch (error) {
+      keyring.wipeAll();
+      if (error instanceof Aborted) return 'ok';
+      if (error instanceof ContentInvalidError) {
+        this.#set({ kind: 'corrupt' });
+        return 'ok';
+      }
+      this.#set({ kind: 'locked' });
+      if (error instanceof UnlockRejectedError) return 'rejected';
+      throw error;
+    } finally {
+      secret.fill(0);
     }
   }
 
@@ -1611,6 +1777,84 @@ export class VaultController {
     return (await this.#deps.passkeys?.forget(credentialId)) ? 'forgotten' : 'by-hand';
   }
 
+  /**
+   * Sets up the Keystore KEK (android.md §5, D172, D292): `current` must open the Master Key wrap
+   * before the shell shows any BiometricPrompt, so a wrong password creates no key. The shell then
+   * seals a new secret, from which the KEK that wraps the Master Key is derived. A setup that fails
+   * after the shell answered deletes the key.
+   */
+  async setUpKeystore(current: string): Promise<KeystoreSetup> {
+    const status = this.#status;
+    const db = this.#db;
+    const port = this.#deps.keystore;
+    if (status.kind !== 'unlocked' || !db || !port) return { kind: 'unavailable' };
+    const epoch = this.#epoch;
+    const keyring = new Keyring();
+    const secret = generateKeystoreSecret();
+    let sealedFor: Uint8Array | undefined;
+    let committed = false;
+    try {
+      const config = await this.#readConfig(db);
+      if (!config) return { kind: 'locked' };
+      const { salt, opslimit, memlimit } = config.kek;
+      const currentKek = await deriveDeviceKek(
+        keyring,
+        this.#deps.kdf(),
+        normalizePassword(current),
+        salt,
+        { opslimit, memlimit },
+      );
+      if (epoch !== this.#epoch) return { kind: 'locked' };
+      status.session.confirmUser({ kek: currentKek, method: 'password' });
+      let sealed: Awaited<ReturnType<KeystorePort['seal']>>;
+      try {
+        sealed = await port.seal(config.localConfigId, secret);
+      } catch (error) {
+        if (error instanceof KeystoreCancelledError) return { kind: 'cancelled' };
+        if (error instanceof KeystoreUnavailableError) return { kind: 'unavailable' };
+        throw error;
+      }
+      sealedFor = config.localConfigId;
+      const keystoreKek = deriveKeystoreKek(keyring, secret);
+      await status.session.setKeystore({
+        current: currentKek,
+        keystoreKek,
+        iv: sealed.iv,
+        sealed: sealed.sealed,
+      });
+      committed = true;
+      this.#keystoreInvalidated = false;
+      await this.#readConfig(db);
+      this.#set({ ...status });
+      return { kind: 'ok', strongBox: sealed.strongBox };
+    } catch (error) {
+      if (error instanceof UnlockRejectedError) return { kind: 'wrong-password' };
+      if (error instanceof VaultLockedError) return { kind: 'locked' };
+      throw error;
+    } finally {
+      keyring.wipeAll();
+      secret.fill(0);
+      if (sealedFor && !committed) port.delete(sealedFor).catch(() => undefined);
+    }
+  }
+
+  /** Removes the Keystore KEK: its state, then its key; nothing more is asked (D172). */
+  async removeKeystore(): Promise<void> {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return;
+    await this.#dropKeystore(status.session);
+    this.#set({ ...status });
+  }
+
+  /** Removes the Keystore KEK state, then deletes the key without waiting (android.md §5, D292). */
+  async #dropKeystore(session: VaultSession): Promise<void> {
+    await session.removeKeystore();
+    this.#keystore = undefined;
+    this.#keystoreInvalidated = false;
+    const localConfigId = this.#localConfigId;
+    if (localConfigId) this.#deps.keystore?.delete(localConfigId).catch(() => undefined);
+  }
+
   // --- Recovery Phrase ---------------------------------------------------------------------------
 
   /**
@@ -1729,7 +1973,8 @@ export class VaultController {
     auth: ExportAuth,
     keyring: Keyring,
     db: VaultDatabase,
-  ): Promise<SymmetricKey | 'cancelled' | 'unavailable' | 'locked'> {
+  ): Promise<SymmetricKey | 'cancelled' | 'unavailable' | 'invalidated' | 'locked'> {
+    if (auth.kind === 'keystore') return this.#keystoreKek(keyring);
     if (auth.kind === 'password') {
       const config = await this.#readConfig(db);
       if (!config) return 'locked';
@@ -1758,6 +2003,32 @@ export class VaultController {
     } finally {
       assertion.prfOutput?.fill(0);
     }
+  }
+
+  /**
+   * The Keystore KEK, from a secret the shell released behind the BiometricPrompt (D292). A key found
+   * gone has its state and key removed at once, since the vault is unlocked.
+   */
+  async #keystoreKek(
+    keyring: Keyring,
+  ): Promise<SymmetricKey | 'cancelled' | 'unavailable' | 'invalidated'> {
+    const port = this.#deps.keystore;
+    const held = this.#keystore;
+    const localConfigId = this.#localConfigId;
+    if (!port || !held || !localConfigId) return 'unavailable';
+    let secret: Uint8Array;
+    try {
+      secret = await port.open(localConfigId, held.iv, held.sealed);
+    } catch (error) {
+      const failure = keystoreFailure(error);
+      const status = this.#status;
+      if (failure === 'invalidated' && status.kind === 'unlocked') {
+        await this.#dropKeystore(status.session);
+        this.#set({ ...status });
+      }
+      return failure;
+    }
+    return deriveKeystoreKek(keyring, secret);
   }
 
   // --- Recovery Phrase regeneration --------------------------------------------------------------
@@ -2176,6 +2447,7 @@ export class VaultController {
     this.#db = db;
     this.#vaultId = session.vaultId;
     this.#passkey = undefined;
+    this.#forgetKeystore();
     if (old?.passkey) {
       const forgotten = await this.#deps.passkeys?.forget(old.passkey.credentialId);
       this.#leftoverPasskey = forgotten !== true;
@@ -2460,6 +2732,7 @@ export class VaultController {
       this.#vaultId = session.vaultId;
       const oldPasskey = this.#passkey;
       this.#passkey = undefined;
+      this.#forgetKeystore();
       if (oldPasskey) {
         const forgotten = await this.#deps.passkeys?.forget(oldPasskey.credentialId);
         this.#leftoverPasskey = forgotten !== true;

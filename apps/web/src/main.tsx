@@ -63,7 +63,8 @@ function start(root: HTMLElement): void {
       await Promise.all([kdf?.ready(), preloadStrength()]);
     },
     storage: navigator.storage,
-    passkeys: browserPasskeys(),
+    // The Android app's alternative is the Keystore KEK: WebAuthn does not run on its origin (D271).
+    ...(platform.keystore ? { keystore: platform.keystore } : { passkeys: browserPasskeys() }),
     stun: loadStunSettings,
     ...(typeof RTCPeerConnection === 'undefined'
       ? {}

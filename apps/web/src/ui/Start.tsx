@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import { type PasskeyOutcome, type Status, type VaultController } from '../app/controller';
+import {
+  type KeystoreOutcome,
+  type PasskeyOutcome,
+  type Status,
+  type VaultController,
+} from '../app/controller';
 import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
 import { platform } from '../platform';
@@ -186,15 +191,28 @@ function Unlock({
   const [wrong, setWrong] = useState(false);
   const [passkey, setPasskey] = useState<PasskeyOutcome>('ok');
   const [supported, setSupported] = useState(false);
+  const [keystore, setKeystore] = useState<KeystoreOutcome>('ok');
+  // Unknown until the shell answers: the button shows meanwhile, as the key may still open.
+  const [biometric, setBiometric] = useState(true);
   useEffect(() => {
     let live = true;
     void controller.passkeysSupported().then((s) => {
       if (live) setSupported(s);
     });
+    void controller.keystoreStatus().then((s) => {
+      if (live && s) setBiometric(s.available);
+    });
     return () => {
       live = false;
     };
   }, [controller]);
+  const keystoreText = {
+    ok: undefined,
+    cancelled: m.keystore.cancelled,
+    rejected: m.keystore.rejected,
+    unavailable: m.keystore.unavailable,
+    invalidated: undefined,
+  }[keystore];
   const passkeyError = {
     ok: undefined,
     cancelled: m.unlock.passkeyCancelled,
@@ -218,6 +236,36 @@ function Unlock({
           >
             {m.restore.dismiss}
           </Button>
+        </div>
+      ) : null}
+      {controller.keystoreInvalidated ? (
+        <Notice>
+          <span data-testid="keystore-invalidated">{m.keystore.invalidated}</span>
+        </Notice>
+      ) : null}
+      {controller.hasKeystore && !biometric ? (
+        <p className="text-sm text-muted">{m.keystore.unavailable}</p>
+      ) : null}
+      {controller.hasKeystore && biometric ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            disabled={working}
+            onClick={() => {
+              setWrong(false);
+              setKeystore('ok');
+              void controller.unlockWithKeystore().then((outcome) => {
+                setKeystore(outcome);
+                if (outcome === 'unavailable') setBiometric(false);
+              });
+            }}
+          >
+            {m.keystore.unlock}
+          </Button>
+          {keystoreText ? (
+            <p role="alert" className="text-sm text-danger">
+              {keystoreText}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {supported && controller.hasPasskey ? (
@@ -260,6 +308,7 @@ function Unlock({
             setPassword(e.target.value);
             setWrong(false);
             setPasskey('ok');
+            setKeystore('ok');
           }}
           error={wrong ? m.unlock.wrong : undefined}
           data-testid="unlock-password"

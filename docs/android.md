@@ -121,7 +121,7 @@ recording, and a blank thumbnail in Recents.
 The shell reports `onStop`, `onStart` and the screen turning off to the window over the bridge
 (§9); the platform port turns them into `LockSignals`. A lock follows D93 and D263.
 
-## 5. Keystore KEK (D271, D290)
+## 5. Keystore KEK (D271, D290, D292)
 
 The Keystore KEK replaces the unlock passkey on Android: the same place in Settings, the same rules
 for setting it up and removing it (D172, D173). It is a change to the key hierarchy, specified in
@@ -135,19 +135,32 @@ for setting it up and removing it (D172, D173). It is a change to the key hierar
 - `setIsStrongBoxBacked(true)` first, and the TEE when the device has no StrongBox, as the A54
   (D282); Settings shows which one holds the key.
 
+Every Keystore message carries `localConfigId` (base64url), from which the shell names the key
+(D292).
+
+**Status.** `keystore-status` answers whether a strong biometric is enrolled (`available`) and, when
+the key exists, whether StrongBox holds it (`strongBox`, from its `KeyInfo`). The window offers the
+setup only when `available`, and Settings shows `strongBox`; nothing of it is stored.
+
 **Construction.** The Master Key never crosses the bridge:
 
-1. **Setup.** The window opens the Master Key wrap with the current local password (D172), generates
+1. **Setup.** The window opens the Master Key wrap with the current local password (D172), before
+   any BiometricPrompt, so a wrong password creates no key. It generates
    a random 32-byte Keystore secret, and sends it to the shell (`keystore-seal`). The shell creates
    the key, shows the BiometricPrompt, encrypts the secret, and answers the GCM IV and ciphertext.
    The window derives the Keystore KEK from the secret, wraps the Master Key under it bound to
    `localConfigId` (D121), writes the Keystore KEK state in Local Config's cleartext part, and wipes
-   the secret.
+   the secret. A setup that fails after the shell answered deletes the key.
 2. **Unlock.** The window sends the IV and ciphertext (`keystore-open`); the shell shows the
    BiometricPrompt, decrypts, and answers the secret, which the window turns into the Keystore KEK,
    then wipes.
 3. **Removal.** The window removes the Keystore KEK state and asks the shell to delete the key
-   (`keystore-delete`). Erase, re-founding and every replacement of the vault remove it too (D120).
+   (`keystore-delete`). Erase, re-founding and every replacement of the vault remove it too (D120),
+   the key by the old `localConfigId`, after the commit. The window does not wait for the answer:
+   the key opens nothing once its wrap is gone (D292).
+4. **Re-authentication.** As the unlock passkey, the Keystore KEK opens the Master Key wrap again
+   for a backup export, a Recovery Phrase regeneration, a re-founding and the start of a pairing
+   (D181, D185, D187, D202). "Vault ready" recommends setting it up in the passkey's place (D198).
 
 **Keystore KEK state**, in Local Config (`record-content.md` §9): the IV, the encrypted secret and
 the Master Key wrap. Without the Keystore key it opens nothing; with it, only behind the biometric.
@@ -157,7 +170,7 @@ the Master Key wrap. Without the Keystore key it opens nothing; with it, only be
 | Shell answer | Window |
 | --- | --- |
 | `cancelled` | stays on the unlock screen |
-| `invalidated` (`KeyPermanentlyInvalidatedException`) | unlocks by password only, says the enrolled biometrics changed, and after the next password unlock removes the state and the key |
+| `invalidated` (`KeyPermanentlyInvalidatedException`) | unlocks by password only, says the enrolled biometrics changed, and after the next password unlock in this process removes the state and the key; at a re-authentication, unlocked, removes both at once (D292) |
 | `unavailable` (no strong biometric enrolled) | offers no setup; an existing state unlocks by password only, with the reason |
 
 The setup screen states that a lost phone is then protected by its biometric instead of the local
@@ -316,9 +329,10 @@ package, and the user enables both in Settings › Passwords & accounts.
 
 | From | `type` | Answer |
 | --- | --- | --- |
-| window | `keystore-seal` `{secret}` | `{iv, sealed, strongBox}`, or `cancelled`, `unavailable` (§5) |
-| window | `keystore-open` `{iv, sealed}` | `{secret}`, or `cancelled`, `invalidated`, `unavailable` |
-| window | `keystore-delete` | done |
+| window | `keystore-status` `{localConfigId}` | `{available}`, with `strongBox` when the key exists (§5, D292) |
+| window | `keystore-seal` `{localConfigId, secret}` | `{iv, sealed, strongBox}`, or `cancelled`, `unavailable` (§5) |
+| window | `keystore-open` `{localConfigId, iv, sealed}` | `{secret}`, or `cancelled`, `invalidated`, `unavailable` |
+| window | `keystore-delete` `{localConfigId}` | done |
 | window | `clipboard-copy` `{text, clearSeconds}`, `clipboard-clear` | done (§6.1) |
 | main window | `file-save`, `file-chunk`, `file-end`, `file-abort` | §6.2 |
 | window | `build-info` | `{versionName, versionCode, certSha256}` (§10) |

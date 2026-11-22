@@ -21,12 +21,15 @@ import {
   encodePayloadText,
   memoryPair,
 } from '@blindvault/sync';
+import { VaultDatabase } from '@blindvault/storage';
+import { parseLocalConfig } from '@blindvault/vault';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { VaultController } from './controller';
 import { hex } from './ids';
 import { type PairingPort, type PairingStage, STUN_SERVERS } from './pairing';
+import { type KeystorePort } from './keystore';
 import { type PasskeyPort } from './passkey';
 import { type StunSettings } from './stun-settings';
 import { type SyncPort, type SyncStage } from './sync';
@@ -204,6 +207,7 @@ function controller(
   passkeys?: PasskeyPort,
   stun?: () => StunSettings,
   sync?: SyncPort,
+  keystore?: KeystorePort,
 ) {
   const c = new VaultController({
     factory,
@@ -214,6 +218,7 @@ function controller(
     ...(passkeys ? { passkeys } : {}),
     ...(stun ? { stun } : {}),
     ...(sync ? { sync } : {}),
+    ...(keystore ? { keystore } : {}),
   });
   controllers.push(c);
   return c;
@@ -714,6 +719,42 @@ describe('replace by pairing (§8.4, D150, D153, D154, D204)', () => {
     const again = controller('b', factory);
     await again.start();
     expect(await titles(again, PASSWORD_NEW)).toEqual(['Bank']);
+  });
+
+  it('deletes the replaced vault’s Keystore key by its old localConfigId (android.md §5, D292)', async () => {
+    const net = network();
+    const deleted: Uint8Array[] = [];
+    const keystore: KeystorePort = {
+      status: () => Promise.resolve({ available: true }),
+      seal: () =>
+        Promise.resolve({ iv: new Uint8Array(12), sealed: new Uint8Array(48), strongBox: false }),
+      open: () => Promise.reject(new Error('not used')),
+      delete: (id) => {
+        deleted.push(id);
+        return Promise.resolve();
+      },
+    };
+    const factory = new IDBFactory();
+    const b = controller('b', factory, net.b, undefined, undefined, undefined, keystore);
+    await b.start();
+    b.newRecoveryPhrase();
+    await b.create(PASSWORD_B, 'Old name');
+    expect(await b.setUpKeystore(PASSWORD_B)).toEqual({ kind: 'ok', strongBox: false });
+    const db = await VaultDatabase.open(session(b).vaultId, factory);
+    const bytes = await db.localConfig();
+    if (!bytes) throw new Error('no Local Config');
+    const old = parseLocalConfig(bytes).localConfigId;
+    db.close();
+    b.lock();
+    const a = await pairWith(b, net);
+    a.confirmSas();
+    b.confirmSas();
+    await vi.waitFor(() => {
+      expect(b.status.kind).toBe('unlocked');
+    });
+    expect(deleted).toEqual([old]);
+    expect(b.hasKeystore).toBe(false);
+    expect(session(b).keystoreSetUp).toBe(false);
   });
 
   it('replaces a locked vault of the same vaultId in its own database (D153)', async () => {

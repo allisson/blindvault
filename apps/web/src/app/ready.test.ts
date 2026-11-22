@@ -61,6 +61,18 @@ describe('Vault ready recommendations (§13.3, D198)', () => {
     ).toEqual(['check-phrase', 'readmit']);
   });
 
+  it('recommends biometric unlock in the passkey’s place on Android, with a strong biometric (D292)', () => {
+    expect(readyAdvice({ ...CREATED, passkeys: false, keystore: true })).toEqual([
+      'keystore',
+      'backup',
+      'pair',
+    ]);
+    expect(readyAdvice({ ...CREATED, passkeys: false, keystore: false })).toEqual([
+      'backup',
+      'pair',
+    ]);
+  });
+
   it('after a pairing: passkey, then a backup, as the pair start of section 13.3 lists (D203)', () => {
     const paired: ReadyInput = { ...CREATED, ready: { start: 'paired' }, devices: undefined };
     expect(readyAdvice(paired)).toEqual(['passkey', 'backup']);
