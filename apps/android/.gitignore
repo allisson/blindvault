@@ -1,6 +1,8 @@
 # Gradle's own state and outputs.
 /.gradle/
 /.gradle-build/
+# The dependency verification report, written before the root build script moves the build directory.
+/build/reports/
 /.kotlin/
 /app/build/
 local.properties
