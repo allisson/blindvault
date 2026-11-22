@@ -981,19 +981,56 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     caller.wipeAll();
   });
 
-  it('records the date of the last backup in Local Config, and nothing else (§13.4)', async () => {
+  it('records the export’s date as the last backup only once the file is saved, and nothing else (§13.4, D291)', async () => {
     const { session, store, clock, keyring } = await create();
     expect(session.lastBackupAt).toBeUndefined();
     const records = new Map(store.held);
     const commits = store.commits.length;
     clock.t += 1234;
     await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    expect(store.commits).toHaveLength(commits);
+    expect(session.lastBackupAt).toBeUndefined();
+    clock.t += 5000;
+    await session.recordBackup();
     expect(store.commits).toHaveLength(commits + 1);
     expect(store.commits.at(-1)?.put).toEqual([]);
     expect(store.commits.at(-1)?.delete).toEqual([]);
     expect(store.held).toEqual(records);
     expect(session.lastBackupAt).toBe(T0 + 1234);
     expect((await unlock(store, clock)).lastBackupAt).toBe(T0 + 1234);
+  });
+
+  it('records a made file once, and nothing with no file made (D291)', async () => {
+    const { session, store, clock, keyring } = await create();
+    const commits = store.commits.length;
+    await session.recordBackup();
+    expect(store.commits).toHaveLength(commits);
+    expect(session.lastBackupAt).toBeUndefined();
+    await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    await session.recordBackup();
+    clock.t += 1000;
+    await session.recordBackup();
+    expect(store.commits).toHaveLength(commits + 1);
+    expect(session.lastBackupAt).toBe(T0);
+  });
+
+  it('records the last file made when a second export came before the save (D291)', async () => {
+    const { session, clock, keyring } = await create();
+    await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    clock.t += 1000;
+    await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    await session.recordBackup();
+    expect(session.lastBackupAt).toBe(T0 + 1000);
+  });
+
+  it('records nothing for a file made before a lock (D291)', async () => {
+    const { session, store, keyring } = await create();
+    await session.exportBackup({ kek: kek(keyring), method: 'password' });
+    session.lock();
+    await expect(session.recordBackup()).rejects.toBeInstanceOf(VaultLockedError);
+    const again = await unlock(store);
+    await again.recordBackup();
+    expect(again.lastBackupAt).toBeUndefined();
   });
 
   it('says the backup may be incomplete while Local Config lists rejected peers (D115)', async () => {
@@ -1059,6 +1096,7 @@ describe('backup export (§10, D36, D64, D115, D181)', () => {
     const caller = new Keyring();
     const file = await behind.exportBackup({ kek: kek(caller), method: 'password' });
     expect((await openWithPhrase(joined(file), words)).payload.records).toHaveLength(3);
+    await behind.recordBackup();
     expect(behind.lastBackupAt).toBe(clock.t);
     caller.wipeAll();
   });
@@ -1339,6 +1377,7 @@ describe('fresh restore (§10, D30, D33, D39, D59, D61, D64)', () => {
     await vault.session.updateItem(id, login('Renamed'));
     await vault.session.createFolder('Work');
     const file = await vault.session.exportBackup({ kek: kek(vault.keyring), method: 'password' });
+    await vault.session.recordBackup();
     return { ...vault, id, file };
   }
 
@@ -3245,6 +3284,7 @@ describe('re-founding (§14, D28, D40, D60, D72, D86, D99, D187)', () => {
     const { session: old0, keyring } = await create();
     await old0.setPreferences({ ...DEFAULT_PREFERENCES, autoLockMinutes: 1 });
     await old0.exportBackup({ kek: kek(keyring), method: 'password' });
+    await old0.recordBackup();
     await old0.setPasskey({
       current: kek(keyring),
       prfKek: kek(keyring, 4),
@@ -4180,6 +4220,7 @@ describe('lock (CRYPTO-INV-010)', () => {
           entropy: generateRecoveryPhrase(caller).entropy,
         }),
       exportBackup: () => session.exportBackup({ kek: kek(caller), method: 'password' }),
+      recordBackup: () => session.recordBackup(),
       lastBackupAt: () => session.lastBackupAt,
       backupMayBeIncomplete: () => session.backupMayBeIncomplete,
       dismissRejectedPeer: () => session.dismissRejectedPeer(randomId()),

@@ -1010,6 +1010,8 @@ export class VaultSession {
   readonly #watchers = new Set<(envelopes: readonly Uint8Array[]) => void>();
   #timer: ReturnType<typeof setInterval> | undefined;
   #locked = false;
+  /** The export date of the last file made and not yet reported saved (D291). */
+  #madeBackupAt: number | undefined;
   /** The keyrings of pairings started on this device, wiped on lock (D93, D202). */
   readonly #grants = new Set<Keyring>();
 
@@ -1945,8 +1947,8 @@ export class VaultSession {
    * throws `ExportRejectedError` naming it (D64). Waits for the Item Versions to be verified
    * (D277), then streams every held blob after the records, read from storage one at a time, and
    * names the Items citing a blob not held (§8 step 5, D279). The Master Key, the file key and the
-   * export KEK live in a keyring of their own, wiped before this returns. Records the date of the
-   * last backup in Local Config; writes no record and issues no HLC.
+   * export KEK live in a keyring of their own, wiped before this returns. Writes nothing and issues
+   * no HLC: `recordBackup` records the date once the file is saved (D291).
    */
   exportBackup(options: BackupOptions): Promise<BackupFile> {
     const { kek, method, exportPassword } = options;
@@ -1992,12 +1994,8 @@ export class VaultSession {
             return blob;
           }),
         );
-        return {
-          writes: [],
-          deletes: [],
-          result: { parts, exportedAt, missing },
-          lastBackupAt: exportedAt,
-        };
+        this.#madeBackupAt = exportedAt;
+        return { writes: [], deletes: [], result: { parts, exportedAt, missing } };
       } finally {
         scratch.wipeAll();
         this.#grants.delete(scratch);
@@ -2006,6 +2004,24 @@ export class VaultSession {
           if (!derived) exportPassword.port.terminate();
         }
       }
+    });
+  }
+
+  /**
+   * The app reports the last file made saved (D291): records its export date as the last backup in
+   * Local Config, once, in a commit of the Local Config only. With no file made since, or since the
+   * last report, it commits nothing.
+   */
+  recordBackup(): Promise<void> {
+    return this.#run(() => {
+      const at = this.#madeBackupAt;
+      this.#madeBackupAt = undefined;
+      return {
+        writes: [],
+        deletes: [],
+        result: undefined,
+        ...(at !== undefined ? { lastBackupAt: at } : {}),
+      };
     });
   }
 

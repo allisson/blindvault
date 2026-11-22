@@ -1652,7 +1652,7 @@ export class VaultController {
    * Makes a backup (§10, D181): the local password, or a passkey assertion asked for first while
    * the click's user activation lasts, opens the Master Key wrap again. `exportPassword`, already
    * checked for strength by the caller (D134, D155), adds the password keyslot. The caller hands
-   * the file to the browser.
+   * the file to the browser, then calls `backupSaved` once it is saved (D291).
    */
   async exportBackup(auth: ExportAuth, exportPassword?: string): Promise<BackupExport> {
     const status = this.#status;
@@ -1676,7 +1676,6 @@ export class VaultController {
             }
           : {}),
       });
-      this.#set({ ...status });
       return {
         kind: 'ok',
         // Parts the export allocated itself, each on an `ArrayBuffer` of its own.
@@ -1703,6 +1702,22 @@ export class VaultController {
     } finally {
       keyring.wipeAll();
     }
+  }
+
+  /**
+   * The last file `exportBackup` made reached the user (D291): its date becomes the last backup made
+   * on this device. Locked, or with no file made since, it records nothing.
+   */
+  async backupSaved(): Promise<void> {
+    const status = this.#status;
+    if (status.kind !== 'unlocked') return;
+    try {
+      await status.session.recordBackup();
+    } catch (error) {
+      if (error instanceof VaultLockedError) return;
+      throw error;
+    }
+    if (this.#status === status) this.#set({ ...status });
   }
 
   /**

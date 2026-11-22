@@ -202,8 +202,8 @@ bj      = a blob exactly as stored (attachments.md §2),   42 ≤ len(bj) ≤ 10
    (section 6). Before it starts, it waits for the Item Version pass (D277); an attachment whose
    blob is not held does not stop the export, which warns, naming each such item, that the backup
    lacks its attachment (D279).
-6. Wipe the Master Key, the file key and the KEKs. Record the date of the last backup in Local
-   Config (§13.4) once the file is made, since the app cannot know whether it was saved.
+6. Wipe the Master Key, the file key and the KEKs. The export's date is recorded as the last backup
+   in Local Config (§13.4) only once the app reports the file saved (D291).
 
 **Restore**, in this order; any failure rejects the file and writes nothing (D61, D64). Each
 rejection names its reason (in parentheses):

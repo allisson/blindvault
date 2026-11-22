@@ -469,7 +469,7 @@ describe('backup export (§10, D36, D64, D181)', () => {
     return { c, log, factory };
   }
 
-  it('asks for the local password again and makes the file, recording the date (D181, §13.4)', async () => {
+  it('asks for the local password again and makes the file, recording the date once saved (D181, D291, §13.4)', async () => {
     const { c, log } = await exporting();
     expect(session(c).lastBackupAt).toBeUndefined();
     const made = await c.exportBackup({ kind: 'password', password: PASSWORD });
@@ -478,7 +478,11 @@ describe('backup export (§10, D36, D64, D181)', () => {
     expect(made.name).toBe('blindvault-2026-03-04.bvault');
     // Only the Device KEK is derived: no export password, no password keyslot.
     expect(log).toEqual(['derive']);
+    expect(session(c).lastBackupAt).toBeUndefined();
+    expect(c.backupReminder).toEqual({ kind: 'never' });
+    await c.backupSaved();
     expect(session(c).lastBackupAt).toBe(AT);
+    expect(c.backupReminder).toBeUndefined();
 
     log.length = 0;
     const protectedFile = await c.exportBackup(
@@ -507,6 +511,16 @@ describe('backup export (§10, D36, D64, D181)', () => {
     expect(await c.exportBackup({ kind: 'password', password: PASSWORD })).toEqual({
       kind: 'kdf-failed',
     });
+    expect(session(c).lastBackupAt).toBeUndefined();
+  });
+
+  it('records nothing for a file whose save did not end, nor once locked (D291)', async () => {
+    const { c } = await exporting();
+    expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    c.lock();
+    await c.backupSaved();
+    expect(await c.unlock(PASSWORD)).toBe('ok');
+    await c.backupSaved();
     expect(session(c).lastBackupAt).toBeUndefined();
   });
 
@@ -2035,7 +2049,7 @@ describe('backup reminder (§13.4, D188)', () => {
   const DAY = 24 * 60 * 60 * 1000;
   const T0 = new Date(2026, 2, 4, 12).getTime();
 
-  it('reminds a new vault, until dismissed or a backup is made; a lock brings it back while due', async () => {
+  it('reminds a new vault, until dismissed or a backup is saved; a lock brings it back while due', async () => {
     const c = controller(new IDBFactory(), undefined, undefined, () => T0);
     await c.start();
     expect(c.backupReminder).toBeUndefined();
@@ -2048,6 +2062,9 @@ describe('backup reminder (§13.4, D188)', () => {
     expect(await c.unlock(PASSWORD)).toBe('ok');
     expect(c.backupReminder).toEqual({ kind: 'never' });
     expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    // A file made but not saved is no backup (D291).
+    expect(c.backupReminder).toEqual({ kind: 'never' });
+    await c.backupSaved();
     expect(c.backupReminder).toBeUndefined();
   });
 
@@ -2058,6 +2075,7 @@ describe('backup reminder (§13.4, D188)', () => {
     await c.start();
     await createIn(c);
     expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    await c.backupSaved();
     await c.close();
 
     now = T0 + 30 * DAY - 1;
@@ -2094,6 +2112,7 @@ describe('backup reminder (§13.4, D188)', () => {
     await c.start();
     await createIn(c);
     expect((await c.exportBackup({ kind: 'password', password: PASSWORD })).kind).toBe('ok');
+    await c.backupSaved();
     now = T0 + DAY;
     must(c.newRegenerationPhrase());
     expect((await c.regenerateRecoveryPhrase({ kind: 'password', password: PASSWORD })).kind).toBe(
