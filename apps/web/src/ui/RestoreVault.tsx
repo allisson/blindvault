@@ -1,5 +1,5 @@
 import { type BlobRestore, type VaultSession } from '@blindvault/vault';
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 
 import { phraseLabel } from '../app/backup-file';
 import {
@@ -266,6 +266,9 @@ function RestorePassword({
   const { messages: m, language } = useLanguage();
   const [password, setPassword] = useState<string | null>(null);
   const [understood, setUnderstood] = useState(false);
+  // A disabled button says why only when the confirmation is all that is missing (D298).
+  const checkFirst = replace && !understood && password !== null;
+  const checkFirstId = useId();
   const onChange = useCallback((p: string | null) => {
     setPassword(p);
   }, []);
@@ -307,8 +310,17 @@ function RestorePassword({
           {m.replace.understand}
         </label>
       ) : null}
+      {checkFirst ? (
+        <p id={checkFirstId} className="text-sm text-muted" data-testid="replace-check-first">
+          {m.replace.checkFirst}
+        </p>
+      ) : null}
       <WizardActions>
-        <Button type="submit" disabled={!password || (replace && !understood) || working}>
+        <Button
+          type="submit"
+          disabled={!password || (replace && !understood) || working}
+          aria-describedby={checkFirst ? checkFirstId : undefined}
+        >
           {replace
             ? working
               ? m.replace.replacing

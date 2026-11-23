@@ -410,9 +410,14 @@ async function replacing(browser: Browser) {
   await fillPassword(b.getByTestId('new-password'), PASSWORD_NEW);
   await fillPassword(b.getByTestId('confirm-password'), PASSWORD_NEW);
   await checkSameNetwork(b);
-  // Nothing starts before the user confirms the replacement (D183, D204).
+  // Nothing starts before the user confirms the replacement (D183, D204), and the disabled button
+  // says why (D298).
   await expect(button(b, 'Start pairing')).toBeDisabled();
+  await expect(button(b, 'Start pairing')).toHaveAccessibleDescription(
+    'Check the confirmation above to continue.',
+  );
   await b.getByTestId('replace-understood').check();
+  await expect(b.getByTestId('replace-check-first')).toHaveCount(0);
 
   const { offer } = await invite(a);
   await button(b, 'Start pairing').click();

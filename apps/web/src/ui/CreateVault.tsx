@@ -4,6 +4,7 @@ import { type VaultController } from '../app/controller';
 import { deviceName } from '../app/device-name';
 import { drawPositions } from '../app/phrase-check';
 import { useMessages } from '../i18n/context';
+import { platform } from '../platform';
 import { Button, Card } from './components';
 import { NewPassword } from './NewPassword';
 import { ConfirmWords, PhraseWords } from './PhraseSteps';
@@ -119,7 +120,8 @@ function SetPassword({
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          if (password) void controller.create(password, deviceName(navigator.userAgent));
+          if (password)
+            void controller.create(password, deviceName(navigator.userAgent, platform.kind));
         }}
       >
         <NewPassword

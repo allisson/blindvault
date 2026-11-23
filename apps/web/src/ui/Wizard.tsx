@@ -12,7 +12,9 @@ import {
 import { createPortal } from 'react-dom';
 
 import { useMessages } from '../i18n/context';
-import { format } from '../i18n/messages';
+import { type Messages, format } from '../i18n/messages';
+import { platform } from '../platform';
+import type { Platform } from '../platform/platform';
 import { Button, Message, WizardPlace } from './components';
 import { useLayout } from './hooks';
 import { Icon } from './icons';
@@ -191,6 +193,12 @@ export function AdvancedOptions({
   );
 }
 
+/** A file step's hint: its types, and on the web and in the extension that a file may be dropped (D298). */
+export function dropHint(m: Messages, kind: Platform['kind'], accept: string): string {
+  const types = accept.split(',').join(', ');
+  return kind === 'android' ? types : format(m.wizard.drop, { types });
+}
+
 /**
  * A file step's drop area over the same file input (D254): a file chosen or dropped is held, and
  * the step's Continue reads it.
@@ -238,9 +246,7 @@ export function FileDrop({
       >
         <Icon name="upload" className="text-muted" />
         <span className="font-medium break-all">{file ? file.name : m.wizard.chooseFile}</span>
-        <span className="text-muted">
-          {format(m.wizard.drop, { types: accept.split(',').join(', ') })}
-        </span>
+        <span className="text-muted">{dropHint(m, platform.kind, accept)}</span>
         <input
           type="file"
           accept={accept}

@@ -81,9 +81,14 @@ async function replaceWith(page: Page, file: Buffer, words: readonly string[]) {
   await button(page, 'Open the backup').click();
   await page.getByTestId('new-password').fill(NEW_PASSWORD, { timeout: 30_000 });
   await page.getByTestId('confirm-password').fill(NEW_PASSWORD);
-  // Nothing is replaced without the explicit confirmation (D183).
+  // Nothing is replaced without the explicit confirmation (D183), and the disabled button says why
+  // (D298).
   await expect(button(page, 'Replace')).toBeDisabled();
+  await expect(button(page, 'Replace')).toHaveAccessibleDescription(
+    'Check the confirmation above to continue.',
+  );
   await page.getByTestId('replace-understood').check();
+  await expect(page.getByTestId('replace-check-first')).toHaveCount(0);
   await button(page, 'Replace').click();
   await openVault(page);
 }
