@@ -1,4 +1,4 @@
-// The main window (android.md §3, §4, §9, D290, D293): a WebView running apps/web's Android build,
+// The main window (android.md §3, §4, §9, D290, D293, D294): a WebView running apps/web's Android build,
 // served from the APK at https://appassets.androidplatform.net with the headers of headers.json, so
 // the app runs under its real CSP. The bridge is `addWebMessageListener`, open to that origin in the
 // main frame only; the shell holds no vault key and logs nothing of what crosses it.
@@ -52,7 +52,7 @@ class MainActivity : Activity() {
 
     /** The window's frame, from its last message: where answers and `lifecycle` go. */
     private var window: JavaScriptReplyProxy? = null
-    private var hidden = false
+    private val visibility = Visibility()
     private var pendingCamera: PermissionRequest? = null
     private var pendingChooser: ValueCallback<Array<Uri>>? = null
 
@@ -179,7 +179,7 @@ class MainActivity : Activity() {
                 reply(Outcome.Ok())
             }
             Request.BuildInfo -> reply(buildInfo())
-            Request.LifecycleWatch -> reply(Outcome.Ok(JSONObject().put("state", if (hidden) "hidden" else "shown")))
+            Request.LifecycleWatch -> reply(Outcome.Ok(JSONObject().put("state", if (visibility.hidden) "hidden" else "shown")))
         }
     }
 
@@ -205,18 +205,30 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
-        hidden = false
-        post(Answer.lifecycle(Lifecycle.SHOWN))
+        post(Answer.lifecycle(visibility.started()))
     }
 
     override fun onStop() {
-        hidden = true
-        post(Answer.lifecycle(Lifecycle.HIDDEN))
+        visibility.stopped()?.let { post(Answer.lifecycle(it)) }
         super.onStop()
+    }
+
+    /** The shell's pickers, opening and saving a file, keep the window shown while open (D294). */
+    @Deprecated("Activity's own result API: the shell uses no androidx.activity")
+    override fun startActivityForResult(intent: Intent, requestCode: Int) {
+        val picker = requestCode == OPEN_REQUEST || requestCode == SAVE_REQUEST
+        if (picker) visibility.pickerOpened()
+        try {
+            super.startActivityForResult(intent, requestCode)
+        } catch (e: RuntimeException) {
+            if (picker) visibility.pickerClosed()
+            throw e
+        }
     }
 
     @Deprecated("Activity's own result API: the shell uses no androidx.activity")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == OPEN_REQUEST || requestCode == SAVE_REQUEST) visibility.pickerClosed()
         when (requestCode) {
             OPEN_REQUEST -> {
                 val callback = pendingChooser ?: return

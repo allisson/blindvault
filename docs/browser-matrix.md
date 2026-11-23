@@ -139,3 +139,49 @@ To check a cell by hand, on a release's package, in each browser:
    Confirm signs in. "Use another authenticator" hands the call to the browser's own prompt.
 
 Record the browser version and the result in the table above.
+
+## Android
+
+The Android app's capabilities (`android.md` §13), on the Samsung A54 (D281). The credential
+provider and autofill rows come with their task.
+
+| Capability | Samsung A54 |
+| --- | --- |
+| Installs, opens on the first screen (§11) | not checked |
+| Create a vault, lock, unlock by password | not checked |
+| Pair with the PWA by QR (camera) and sync both ways | not checked |
+| Keystore KEK: setup, unlock, StrongBox or TEE shown (§5) | not checked |
+| Keystore KEK: a new fingerprint invalidates it, password unlock removes it (§5) | not checked |
+| Auto-lock, hidden-app lock, screen off (§4.2) | not checked |
+| Hidden-app lock at immediately: a backup saved and an attachment added through the pickers (D294) | not checked |
+| FLAG_SECURE: no screenshot, blank in Recents (§3) | not checked |
+| Copy a password: hidden in the clipboard preview, cleared after the set time (§6.1) | not checked |
+| Save a backup and an attachment; restore the backup (§6.2) | not checked |
+| About: version, manifest hash, certificate SHA-256 equal to the release's (§10) | not checked |
+| An update installs over the app and keeps the vault (§10) | not checked |
+
+To check it, on a release's signed APK, installed over ADB (`adb install`), with a PWA on another
+device:
+
+1. **Install** and open: the first screen says the app is a separate device of the vault.
+2. **Create a vault**, lock, unlock with the password.
+3. **Pair** with the PWA: scan its QR code with the camera, confirm the SAS on both, then sync once
+   from each side; an item made on each appears on the other.
+4. **Keystore KEK:** Settings › set it up; Settings shows StrongBox or the TEE (the A54 has no
+   StrongBox, D282). Lock, unlock with the fingerprint. Enroll a new fingerprint in Android's
+   settings: the next unlock asks for the password and says the biometrics changed, and Settings
+   no longer shows the Keystore KEK.
+5. **Locks:** auto-lock at 1 min without touching; hidden-app lock at 1 min with the app in the
+   background, and a return before then keeps it unlocked; screen off locks at once.
+6. **Pickers** (D294): hidden-app lock at immediately; Settings › export a backup and save it, and
+   add an attachment to an item: both finish unlocked. Leaving the app for the home screen still
+   locks it.
+7. **FLAG_SECURE:** a screenshot is refused; Recents shows a blank card.
+8. **Clipboard:** copy a password; Android's preview hides it; after the clear time it is gone.
+9. **Files:** download the attachment; lock, erase the vault, and restore the saved backup.
+10. **About:** the version, the manifest hash and the certificate SHA-256 equal the release body's
+    and `release-cert.sha256`.
+11. **Update:** install the next APK over it (`adb install -r`): the vault reopens locked, with its
+    items.
+
+Record the Android version, the WebView version and the result in the table above.

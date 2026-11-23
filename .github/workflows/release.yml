@@ -3,9 +3,10 @@ name: Release
 # A tag v<version> builds once. That build becomes the GitHub Release and, from the release's
 # attested archive, the Cloudflare Pages deployment at the dedicated origin (D90, D228, D230); the
 # served files are then checked against the release (D194). No push to main deploys anything: an
-# installed copy takes an update only after confirmation (D63, D191). The cloudflare-pages
-# environment allows only v* tags and holds CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and ORIGIN,
-# the origin the check reads (docs/deployment.md).
+# installed copy takes an update only after confirmation (D63, D191). The release also carries the
+# extension's packages and the unsigned APK, which the maintainer signs offline (D270). The
+# cloudflare-pages environment allows only v* tags and holds CLOUDFLARE_API_TOKEN,
+# CLOUDFLARE_ACCOUNT_ID and ORIGIN, the origin the check reads (docs/deployment.md).
 on:
   push:
     tags: ['v*']
@@ -35,11 +36,18 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 21.0.13+9
+      - name: Android SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-36' 'build-tools;36.0.0' > /dev/null
       - run: pnpm install --frozen-lockfile
       - name: Build
         run: |
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/web build
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/extension build
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) pnpm --filter @blindvault/android build
       - name: Compare sw.js with the previous release
         id: worker
         run: |
@@ -74,6 +82,11 @@ jobs:
             cp apps/extension/dist/blindvault-$browser-*.zip "$RUNNER_TEMP/release/"
             cp apps/extension/dist/$browser/asset-manifest.txt "$RUNNER_TEMP/release/asset-manifest-$browser.txt"
           done
+          # The unsigned APK and its asset manifest; the maintainer signs it offline and attaches the
+          # signed APK (android.md §10, D270).
+          cp apps/android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            "$RUNNER_TEMP/release/blindvault-android-${GITHUB_REF_NAME#v}-unsigned.apk"
+          cp apps/android/app/src/main/assets/web/asset-manifest.txt "$RUNNER_TEMP/release/asset-manifest-android.txt"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ runner.temp }}/release/*

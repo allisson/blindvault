@@ -13,6 +13,7 @@ import {
   androidKeystore,
   androidLockSignals,
   androidPlatform,
+  androidSigningCertificate,
   FILE_CHUNK_BYTES,
 } from './android';
 import { type ShellObject, ShellRefusedError, androidShell, shellBridge } from './android-bridge';
@@ -507,6 +508,36 @@ describe('the Keystore KEK through the Android shell (android.md §5, §9, D292)
   });
 });
 
+describe('the signing certificate through the Android shell (android.md §10)', () => {
+  const CERT = 'ab'.repeat(32);
+  const info = { versionName: '1.0.0-rc.3', versionCode: 1_000_003, certSha256: CERT };
+
+  it('asks `build-info` and takes its certificate hash', async () => {
+    const { sent, bridge } = fakeShell((m) => ok(m, info));
+    await expect(androidSigningCertificate(() => bridge)()).resolves.toBe(CERT);
+    expect(sent).toEqual([{ v: 1, type: 'build-info', id: 1 }]);
+  });
+
+  it.each([
+    ['no `certSha256`', { versionName: info.versionName, versionCode: info.versionCode }],
+    ['an uppercase hash', { ...info, certSha256: CERT.toUpperCase() }],
+    ['a 31-byte hash', { ...info, certSha256: CERT.slice(2) }],
+    ['a hash with colons', { ...info, certSha256: CERT.match(/../g)?.join(':') }],
+    ['a hash that is not text', { ...info, certSha256: 1 }],
+    ['no `versionName`', { versionCode: info.versionCode, certSha256: CERT }],
+    ['another key', { ...info, extra: 1 }],
+  ])('answers no certificate for %s', async (_name, fields) => {
+    const { bridge } = fakeShell((m) => ok(m, fields));
+    await expect(androidSigningCertificate(() => bridge)()).resolves.toBeUndefined();
+  });
+
+  it('answers no certificate on a refusal or without the shell', async () => {
+    const { bridge } = fakeShell((m) => no(m, 'failed'));
+    await expect(androidSigningCertificate(() => bridge)()).resolves.toBeUndefined();
+    await expect(androidSigningCertificate(() => undefined)()).resolves.toBeUndefined();
+  });
+});
+
 describe('the Android platform (android.md §2)', () => {
   it('starts no update flow (§10, D282)', () => {
     const monitor = { watch: vi.fn(), look: vi.fn() };
@@ -516,6 +547,7 @@ describe('the Android platform (android.md §2)', () => {
     });
     expect(androidPlatform.kind).toBe('android');
     expect(androidPlatform.keystore).toBeDefined();
+    expect(androidPlatform.signingCertificate).toBeDefined();
     expect(monitor.watch).not.toHaveBeenCalled();
     expect(monitor.look).not.toHaveBeenCalled();
   });

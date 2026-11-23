@@ -45,6 +45,11 @@ export interface Platform {
   /** The Keystore KEK's key (android.md §5): the Android app only. */
   readonly keystore?: KeystorePort;
   /**
+   * The SHA-256 of the APK's signing certificate in lowercase hex, for About (android.md §10), or
+   * undefined when the shell gives none: the Android app only.
+   */
+  readonly signingCertificate?: () => Promise<string | undefined>;
+  /**
    * Starts the update flow: on the web the service worker's, which the monitor follows (D190,
    * D191); in the extension the deferred reload of extension.md §8.1, applied once `host` is idle.
    */

@@ -1,7 +1,8 @@
 // The Android app's platform (android.md §2, D290): the app runs in a WebView of the shell, which it
 // reaches over the bridge (§9). No service worker and no update prompt (§10, D282); the locks follow
 // the activity and the screen (§4.2); the clipboard and its clear are the shell's (§6.1); a file is
-// saved through the shell, in chunks (§6.2); the Keystore KEK's key is the shell's (§5). The bridge is looked up on first use, so importing this
+// saved through the shell, in chunks (§6.2); the Keystore KEK's key is the shell's (§5); About reads the
+// signing certificate from the shell (§10). The bridge is looked up on first use, so importing this
 // module needs no shell.
 
 // A type only: `app/clipboard` reads the platform when it loads.
@@ -261,6 +262,26 @@ export function androidKeystore(bridge: Bridge): KeystorePort {
   };
 }
 
+/**
+ * `build-info`'s `certSha256`; the shell reads it from PackageManager. Any refusal or malformed answer
+ * gives none, and About says it is not available.
+ */
+export function androidSigningCertificate(bridge: Bridge): () => Promise<string | undefined> {
+  return async () => {
+    const b = bridge();
+    if (!b) return undefined;
+    try {
+      const type = 'build-info';
+      const f = fieldsOf(type, await b.request(type), ['versionName', 'versionCode', 'certSha256']);
+      return typeof f.certSha256 === 'string' && /^[0-9a-f]{64}$/.test(f.certSha256)
+        ? f.certSha256
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
+
 let bridge: ShellBridge | undefined;
 
 /** The shell's bridge, made once, on first use. */
@@ -278,5 +299,6 @@ export const androidPlatform: Platform = {
   lockSignals: androidLockSignals(shell, pageLockSignals),
   files: androidFiles(shell),
   keystore: androidKeystore(shell),
+  signingCertificate: androidSigningCertificate(shell),
   startUpdates: () => undefined,
 };
