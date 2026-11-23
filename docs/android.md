@@ -401,6 +401,10 @@ toward the caller that asked.
   manual flow (D216). WebRTC runs in the WebView (D282), with the STUN list of D209.
 - `navigator.storage.persist()` answers `false` in the WebView (D282). The data lives in the app's
   data directory and goes with an uninstall or a clear of the app's data; the backup reminders hold.
+- The app shows its own texts where the browser's would be wrong (D298): the storage state says the
+  vault goes only with the app or its data and offers no request to keep it; the export does not
+  warn that the save dialog may lock the vault (D294); a file step names its types with no "or drop
+  it here"; the default device name is "BlindVault app on Android".
 
 ## 12. Out of v1
 

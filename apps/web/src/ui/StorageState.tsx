@@ -12,6 +12,8 @@ import { devicesOf, lastSyncOf } from '../app/devices';
 import { type StorageWarning, safariTab, storageWarnings } from '../app/storage-state';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
+import { platform } from '../platform';
+import type { Platform } from '../platform/platform';
 import { Button, Notice, StorageAlert } from './components';
 
 const KB = 1000;
@@ -39,19 +41,42 @@ export function percent(language: string, usage: number, quota: number): string 
   );
 }
 
+/**
+ * The storage state's texts on a platform. The Android app's data is never evicted: it goes only
+ * with the app or its data, and `persist()` always answers `false` there (android.md §11, D298).
+ */
+export function storageTexts(m: Messages, kind: Platform['kind']) {
+  const android = kind === 'android';
+  return {
+    notKeptOnly: android ? m.storage.androidNotKeptOnly : m.storage.notKeptOnly,
+    nearlyFull: android ? m.storage.androidNearlyFull : m.storage.nearlyFull,
+    persistence: (persisted: boolean | null): string =>
+      android
+        ? m.storage.androidKept
+        : persisted === true
+          ? m.storage.kept
+          : persisted === false
+            ? m.storage.notKept
+            : m.storage.unknown,
+    /** Whether asking the browser to keep the storage can change anything. */
+    canAsk: !android,
+  };
+}
+
 function warningText(
   m: Messages,
   language: string,
   warning: StorageWarning,
   status: StorageStatus | undefined,
 ): string {
+  const texts = storageTexts(m, platform.kind);
   switch (warning) {
     case 'safari-tab':
       return m.storage.safariTab;
     case 'not-kept':
-      return m.storage.notKeptOnly;
+      return texts.notKeptOnly;
     case 'nearly-full':
-      return format(m.storage.nearlyFull, {
+      return format(texts.nearlyFull, {
         percent: percent(language, status?.usage ?? 0, status?.quota ?? 1),
       });
   }
@@ -122,16 +147,13 @@ export function DeviceStorage({
   const when = new Intl.DateTimeFormat(language, { dateStyle: 'long', timeStyle: 'short' });
   const usage = status?.usage ?? null;
   const quota = status?.quota ?? null;
+  const texts = storageTexts(m, platform.kind);
   return (
     <section className="flex flex-col gap-4" data-testid="device-storage">
       <p className="text-sm" data-testid="storage-persistence">
-        {persisted === true
-          ? m.storage.kept
-          : persisted === false
-            ? m.storage.notKept
-            : m.storage.unknown}
+        {texts.persistence(persisted)}
       </p>
-      {persisted === false ? (
+      {persisted === false && texts.canAsk ? (
         <Button
           variant="quiet"
           className="self-start"

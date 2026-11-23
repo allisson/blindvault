@@ -39,6 +39,7 @@ import { browserPasskeySwitch } from '../extension/passkey-browser';
 import { useLanguage } from '../i18n/context';
 import { LANGUAGES, type Language, type Messages, format } from '../i18n/messages';
 import { platform } from '../platform';
+import type { Platform } from '../platform/platform';
 import { AboutBuild } from './About';
 import { Button, ConfirmDialog, Field, INPUT, Notice, TARGET, TextArea } from './components';
 import { EraseVault } from './EraseVault';
@@ -104,6 +105,14 @@ function shown(page: SettingsPage): boolean {
  * Settings (D252): an index of pages in groups, each row with its current value where one helps;
  * a row opens its page over the index, and back returns to it.
  */
+/**
+ * Whether to warn that the app hidden by the browser's save dialog locks the vault mid-export: with
+ * the immediate hidden-app lock, not in the Android app, whose picker does not lock it (D294, D298).
+ */
+export function warnsHiddenExport(kind: Platform['kind'], hiddenLockSeconds: number): boolean {
+  return hiddenLockSeconds === 0 && kind !== 'android';
+}
+
 export function Settings({
   controller,
   session,
@@ -1540,7 +1549,7 @@ function BackupSettings({
         }}
         data-testid="backup-password"
       />
-      {session.preferences.hiddenLockSeconds === 0 ? (
+      {warnsHiddenExport(platform.kind, session.preferences.hiddenLockSeconds) ? (
         <p className="text-sm text-muted">{m.settings.backupHidden}</p>
       ) : null}
       <Button type="submit" disabled={!ready || password === ''}>

@@ -9,6 +9,7 @@ import { type Navigation } from '../app/nav';
 import { drawPositions } from '../app/phrase-check';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
+import { platform } from '../platform';
 import { keystoreError } from './keystore';
 import { Button, Field, Notice, TARGET } from './components';
 import { NewPassword } from './NewPassword';
@@ -292,12 +293,14 @@ export function RefoundVault({
                 if (!next) return;
                 setWorking(true);
                 setError(undefined);
-                void controller.refound(next, deviceName(navigator.userAgent)).then((outcome) => {
-                  setWorking(false);
-                  // `ok`: the new vault's session replaces this screen.
-                  if (outcome.kind === 'busy') setError(r.busy);
-                  else if (outcome.kind !== 'ok') setStep({ kind: 'idle' });
-                });
+                void controller
+                  .refound(next, deviceName(navigator.userAgent, platform.kind))
+                  .then((outcome) => {
+                    setWorking(false);
+                    // `ok`: the new vault's session replaces this screen.
+                    if (outcome.kind === 'busy') setError(r.busy);
+                    else if (outcome.kind !== 'ok') setStep({ kind: 'idle' });
+                  });
               }}
             >
               <p className="text-sm">{r.passwordIntro}</p>

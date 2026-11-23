@@ -1,5 +1,5 @@
 import { DEFAULT_PREFERENCES, type RejectedRecord, type VaultSession } from '@blindvault/vault';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react';
 
 import { recordIdPrefix } from '../app/backup-file';
 import {
@@ -23,6 +23,7 @@ import {
 } from '../app/stun-settings';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
+import { platform } from '../platform';
 import { keystoreError } from './keystore';
 import { Button, CopyCheck, Field, Notice, TARGET, TextArea, useCheck } from './components';
 import { MergeNotices } from './MergeBackup';
@@ -840,7 +841,10 @@ export function InviteDevice({
     setOutcome(undefined);
     // Called in the click itself: a passkey assertion needs the user activation.
     void controller
-      .startPairing(auth, { sameNetwork, defaultName: deviceName(navigator.userAgent) })
+      .startPairing(auth, {
+        sameNetwork,
+        defaultName: deviceName(navigator.userAgent, platform.kind),
+      })
       .then((result) => {
         setPassword('');
         setWorking(false);
@@ -978,6 +982,9 @@ export function JoinVault({
   const [sameNetwork, setSameNetwork] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const ready = password !== null && password !== '' && (!replace || understood);
+  // A disabled button says why only when the confirmation is all that is missing (D298).
+  const checkFirst = replace && !understood && password !== null && password !== '';
+  const checkFirstId = useId();
   const onChange = useCallback((value: string | null) => {
     setPassword(value);
   }, []);
@@ -1019,7 +1026,7 @@ export function JoinVault({
           if (password && ready)
             void controller.beginJoin(password, {
               sameNetwork,
-              name: deviceName(navigator.userAgent),
+              name: deviceName(navigator.userAgent, platform.kind),
               replace,
             });
         }}
@@ -1044,8 +1051,17 @@ export function JoinVault({
             {m.replace.understand}
           </label>
         ) : null}
+        {checkFirst ? (
+          <p id={checkFirstId} className="text-sm text-muted" data-testid="replace-check-first">
+            {m.replace.checkFirst}
+          </p>
+        ) : null}
         <WizardActions>
-          <Button type="submit" disabled={!ready}>
+          <Button
+            type="submit"
+            disabled={!ready}
+            aria-describedby={checkFirst ? checkFirstId : undefined}
+          >
             {j.submit}
           </Button>
         </WizardActions>
@@ -1117,7 +1133,10 @@ export function ReadmitDevice({
     setWorking(true);
     setOutcome(undefined);
     void controller
-      .startReadmission(role, { sameNetwork, defaultName: deviceName(navigator.userAgent) })
+      .startReadmission(role, {
+        sameNetwork,
+        defaultName: deviceName(navigator.userAgent, platform.kind),
+      })
       .then((result) => {
         setWorking(false);
         setOutcome(result);

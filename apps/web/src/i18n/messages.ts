@@ -159,6 +159,12 @@ const en = {
       'The browser may delete this vault’s storage, and this is the only device of the vault: if it does, only a backup and the Recovery Phrase bring the vault back. Make a backup, and pair another device.',
     nearlyFull:
       'Storage on this device is nearly full: BlindVault uses {percent} of what the browser allows. Free some space, or the browser may refuse to save changes.',
+    androidKept:
+      'The vault lives in the app’s data: it goes only if the app is uninstalled or its data is cleared. Keep a recent backup.',
+    androidNotKeptOnly:
+      'This is the only device of the vault: if the app is uninstalled or its data is cleared, only a backup and the Recovery Phrase bring the vault back. Make a backup, and pair another device.',
+    androidNearlyFull:
+      'Storage on this device is nearly full: BlindVault uses {percent} of what the app may use. Free some space, or the app may fail to save changes.',
   },
   framed: {
     title: 'Open in its own tab',
@@ -620,6 +626,7 @@ const en = {
     pairWarning:
       'The vault on this device is deleted and replaced by the vault of the device you pair with, whether it is this vault or another one. Changes that exist only on this device are lost. If you can still unlock the vault, make a backup first, in Settings.',
     understand: 'I understand that the vault on this device will be replaced',
+    checkFirst: 'Check the confirmation above to continue.',
     submit: 'Replace',
     replacing: 'Replacing the vault…',
     leftoverPasskey:
@@ -1462,6 +1469,12 @@ const ptBR: Messages = {
       'O navegador pode apagar o armazenamento deste cofre, e este é o único dispositivo do cofre: se isso acontecer, só um backup e a Frase de Recuperação trazem o cofre de volta. Faça um backup e pareie outro dispositivo.',
     nearlyFull:
       'O espaço neste dispositivo está quase cheio: o BlindVault usa {percent} do que o navegador permite. Libere espaço, ou o navegador pode recusar salvar alterações.',
+    androidKept:
+      'O cofre fica nos dados do app: só some se o app for desinstalado ou se os dados dele forem apagados. Tenha um backup recente.',
+    androidNotKeptOnly:
+      'Este é o único dispositivo do cofre: se o app for desinstalado ou os dados dele forem apagados, só um backup e a Frase de Recuperação trazem o cofre de volta. Faça um backup e pareie outro dispositivo.',
+    androidNearlyFull:
+      'O espaço neste dispositivo está quase cheio: o BlindVault usa {percent} do que o app pode usar. Libere espaço, ou o app pode não conseguir salvar alterações.',
   },
   framed: {
     title: 'Abra numa aba própria',
@@ -1933,6 +1946,7 @@ const ptBR: Messages = {
     pairWarning:
       'O cofre deste dispositivo é apagado e substituído pelo cofre do dispositivo com que você parear, seja ele este cofre ou outro. As alterações que só existem neste dispositivo se perdem. Se você ainda consegue desbloquear o cofre, faça um backup antes, em Configurações.',
     understand: 'Entendo que o cofre deste dispositivo será substituído',
+    checkFirst: 'Marque a confirmação acima para continuar.',
     submit: 'Substituir',
     replacing: 'Substituindo o cofre…',
     leftoverPasskey:
