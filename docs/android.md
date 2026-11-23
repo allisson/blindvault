@@ -84,6 +84,15 @@ Both windows set up their WebView the same way:
   (`android.webkit.WebView.EnableSafeBrowsing` `false`) and WebView metrics
   (`android.webkit.WebView.MetricsOptOut` `true`): the WebView loads only the app's own origin, and
   neither may send a lookup or a metric about the app.
+- **Autofill.** No autofill service, another password manager's or the system's augmented one,
+  sees a field of the app, so none offers to save the local password or an item's secret, which
+  `autocomplete="off"` does not stop in a WebView. The WebView reports its page's fields to the
+  `AutofillManager` it gets from its context, and skips autofill when there is none; the shell
+  creates it with a context that answers null for that service. `importantForAutofill` on the
+  WebView alone does not stop it: measured on the A54, the session still opened. The WebView is
+  also `IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS`, for the framework's own path. The local
+  password cannot be filled by another manager either, and the app does not show the warning of
+  D175 (D297).
 - **Camera.** `onPermissionRequest` grants only `RESOURCE_VIDEO_CAPTURE`, only to the app's origin,
   after the Android `CAMERA` permission is granted at runtime; every other resource is denied. The
   spike read the app's QR codes this way (D282).
@@ -415,7 +424,8 @@ layout beyond the app's own responsive one.
 - **CI.** The unsigned APK built twice and compared; no emulator, which has no real biometric.
 - **By hand**, on the Samsung A54, recorded in `browser-matrix.md` (Android): install; create, pair
   and sync with the PWA; the Keystore KEK's setup, unlock, and invalidation by a new fingerprint; the
-  locks of §4.2, behind the pickers too (D294); FLAG_SECURE; saving a backup and an attachment;
+  locks of §4.2, behind the pickers too (D294); FLAG_SECURE; no autofill service offering to save
+  the local password or an item's secret (D297); saving a backup and an attachment;
   About; a passkey create and get on `webauthn.io` in Chrome and Firefox; a password filled in Chrome and in an app bound by
   `assetlinks.json`; a refused app that is not bound.
 

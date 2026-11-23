@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 
 import { type Strength, estimator } from '../app/strength';
 import { useLanguage } from '../i18n/context';
+import { platform } from '../platform';
+import type { Platform } from '../platform/platform';
 import { Field } from './components';
+
+/**
+ * Whether to warn against letting the browser save the local password (D175): not in the Android
+ * app, whose WebView no autofill service sees (D297).
+ */
+export function warnsBrowserSave(kind: Platform['kind']): boolean {
+  return kind !== 'android';
+}
 
 /** A new local password and its confirmation; `onChange` gets it only once it is acceptable (D71). */
 export function NewPassword({
@@ -83,7 +93,9 @@ export function NewPassword({
         data-testid="confirm-password"
       />
       {/* A browser can keep the password next to the locked storage (D175). */}
-      <p className="text-sm text-muted">{m.create.browserSave}</p>
+      {warnsBrowserSave(platform.kind) ? (
+        <p className="text-sm text-muted">{m.create.browserSave}</p>
+      ) : null}
     </>
   );
 }
