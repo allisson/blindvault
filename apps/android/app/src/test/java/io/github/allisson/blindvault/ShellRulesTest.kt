@@ -1,5 +1,6 @@
 package io.github.allisson.blindvault
 
+import android.content.Context
 import android.hardware.biometrics.BiometricPrompt
 import android.webkit.PermissionRequest
 import org.junit.Assert.assertEquals
@@ -10,6 +11,23 @@ import org.junit.Test
 // android.md §3 and §5: navigation, the camera, the file chooser's types, headers.json, the
 // Keystore key's alias and the BiometricPrompt's errors.
 class ShellRulesTest {
+    @Test
+    fun hidesOnlyTheAutofillManagerFromTheWebView() {
+        // Context.AUTOFILL_MANAGER_SERVICE, which the SDK hides.
+        assertTrue(hidesService("autofill"))
+        for (name in listOf(
+            Context.CLIPBOARD_SERVICE,
+            Context.LAYOUT_INFLATER_SERVICE,
+            Context.INPUT_METHOD_SERVICE,
+            Context.WINDOW_SERVICE,
+            Context.ACCESSIBILITY_SERVICE,
+            Context.DISPLAY_SERVICE,
+            "",
+            "Autofill",
+            "autofill ",
+        )) assertFalse(name, hidesService(name))
+    }
+
     @Test
     fun keepsTheWindowOnTheAppsOrigin() {
         assertEquals(Navigation.STAY, navigationOf("https", "appassets.androidplatform.net"))

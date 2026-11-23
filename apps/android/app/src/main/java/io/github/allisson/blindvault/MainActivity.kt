@@ -9,12 +9,14 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -77,7 +79,15 @@ class MainActivity : Activity() {
         val headers = parseHeaders(assets.open("web/headers.json").bufferedReader().use { it.readText() })
         val loader = WebViewAssetLoader.Builder().addPathHandler("/", AppAssets(this, headers)).build()
 
-        web = WebView(this)
+        // No autofill service sees a field of the app: it would offer to save the local password and
+        // the items' secrets, which autocomplete="off" does not stop. The WebView asks its context for
+        // the autofill manager and skips autofill without one; importantForAutofill alone does not
+        // reach the fields it reports itself (D297).
+        web = WebView(object : ContextWrapper(this) {
+            override fun getSystemService(name: String): Any? =
+                if (hidesService(name)) null else super.getSystemService(name)
+        })
+        web.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true

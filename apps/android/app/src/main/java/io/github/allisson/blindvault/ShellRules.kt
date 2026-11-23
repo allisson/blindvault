@@ -17,6 +17,13 @@ fun navigationOf(scheme: String?, host: String?): Navigation = when {
     else -> Navigation.EXTERNAL
 }
 
+/**
+ * The system services the WebView's context answers with null: the autofill manager only, under the
+ * name `Context.AUTOFILL_MANAGER_SERVICE` has held since API 26 and the SDK hides. The WebView reaches
+ * autofill only through it, and treats a null manager as autofill turned off (D297).
+ */
+fun hidesService(name: String): Boolean = name == "autofill"
+
 /** The camera only, asked by the app's origin only. */
 fun grantsCamera(origin: String, resources: Array<String>): Boolean =
     origin.trimEnd('/') == ORIGIN &&
