@@ -123,6 +123,11 @@ It also has these limits:
 - **A large vault on a first sync.** The device that receives a first sync, or a re-admission,
   holds every record it receives in memory until the transfer ends, so a very large vault can run a
   phone out of memory. Attachments are not part of it: they come afterwards, one at a time.
+- **Firefox reading the first code.** When Firefox scans or pastes the other device's code first,
+  in pairing, re-admission or sync, it gives up a few seconds after it shows its answer if that
+  answer is not read (D296). Read its answer at once with the other device's camera, or start again.
+  On the device that shows the first code, allow the camera: without it, on the same network, the
+  other device may give up the same way.
 - **Same network only, without a camera.** With "Same network only (no STUN server)", reconnecting
   two paired devices, and pairing by copy and paste, were not checked on real devices (D259). If
   pairing fails, pair by QR code; if either fails, turn the option off so a STUN server is used.
