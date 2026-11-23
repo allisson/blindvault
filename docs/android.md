@@ -405,6 +405,15 @@ toward the caller that asked.
   vault goes only with the app or its data and offers no request to keep it; the export does not
   warn that the save dialog may lock the vault (D294); a file step names its types with no "or drop
   it here"; the default device name is "BlindVault app on Android".
+- TalkBack reads a checkable control's name only from the control itself (D299). Measured on the
+  Samsung A54, WebView 158.0.8127.46, with probes on the unlock screen: a checkbox named by a
+  wrapping `<label>`, a `<label for>` or `aria-labelledby`, and a button with `aria-pressed` named
+  by `aria-label` or `aria-labelledby`, reach it with no name; a checkbox with `aria-label`, a
+  button with `aria-pressed` and text, and a `role="checkbox"` with text keep theirs. Chrome
+  158.0.8127.42 reads all of them on the same build. A text field or select loses every name,
+  `aria-label` included (Chrome gives it as the field's hint); its description (`aria-describedby`)
+  is the only text TalkBack reads, so on Android a field is described by its own label. Removing
+  the autofill wrapper (D297), `importantForAutofill` or `FLAG_SECURE` changes nothing.
 
 ## 12. Out of v1
 

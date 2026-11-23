@@ -4,13 +4,14 @@ import {
   VaultLockedError,
   type VaultSession,
 } from '@blindvault/vault';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { type VaultController } from '../app/controller';
 import { IMPORT_SOURCES, type ImportRead, type ImportSource, MAX_IMPORT_SIZE } from '../app/import';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, Field, INPUT, Notice } from './components';
+import { platform } from '../platform';
+import { Button, Field, INPUT, Notice, describedBy } from './components';
 import { writeError } from './errors';
 import { FileDrop, Wizard, WizardActions } from './Wizard';
 
@@ -46,6 +47,7 @@ export function ImportItems({
   readonly session: VaultSession;
 }) {
   const { messages: m, language } = useLanguage();
+  const sourceLabel = useId();
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [source, setSource] = useState<ImportSource>('bitwarden');
   const [passphrase, setPassphrase] = useState('');
@@ -110,9 +112,10 @@ export function ImportItems({
           {step.kind === 'file' ? (
             <>
               <label className="flex flex-col gap-1 text-sm font-medium">
-                {m.import.source}
+                <span id={sourceLabel}>{m.import.source}</span>
                 <select
                   className={INPUT}
+                  aria-describedby={describedBy(platform.kind, sourceLabel)}
                   value={source}
                   disabled={busy}
                   data-testid="import-source"

@@ -202,6 +202,7 @@ export function OpenBackup({
             <label key={value} className={`${TARGET} flex items-center gap-2`}>
               <input
                 type="radio"
+                aria-label={value === 'phrase' ? m.restore.byPhrase : m.restore.byPassword}
                 name="restore-method"
                 checked={method === value}
                 onChange={() => {
@@ -301,6 +302,7 @@ function RestorePassword({
         <label className={`${TARGET} flex items-center gap-2 text-sm`}>
           <input
             type="checkbox"
+            aria-label={m.replace.understand}
             checked={understood}
             onChange={(e) => {
               setUnderstood(e.target.checked);

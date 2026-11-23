@@ -147,6 +147,7 @@ export function SameNetwork({
       <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
+          aria-label={m.pairing.sameNetwork}
           checked={checked || forced}
           disabled={forced}
           onChange={(e) => {
@@ -1042,6 +1043,7 @@ export function JoinVault({
           <label className={`${TARGET} flex items-center gap-2 text-sm`}>
             <input
               type="checkbox"
+              aria-label={m.replace.understand}
               checked={understood}
               onChange={(e) => {
                 setUnderstood(e.target.checked);

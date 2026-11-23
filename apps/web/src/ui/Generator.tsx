@@ -59,6 +59,7 @@ export function Generator({
           <label key={mode} className={`${TARGET} flex items-center gap-2`}>
             <input
               type="radio"
+              aria-label={m.generator[mode]}
               name="generator-mode"
               checked={settings.mode === mode}
               onChange={() => {
@@ -106,6 +107,7 @@ export function Generator({
               <label key={set} className={`${TARGET} flex items-center gap-2`}>
                 <input
                   type="checkbox"
+                  aria-label={m.generator[set]}
                   checked={settings.sets.includes(set)}
                   onChange={(e) => {
                     const sets = e.target.checked

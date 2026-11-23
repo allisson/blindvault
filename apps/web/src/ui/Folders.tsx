@@ -1,5 +1,5 @@
 import { type BlockedRecord, type VaultSession } from '@blindvault/vault';
-import { type ReactNode, useState, useSyncExternalStore } from 'react';
+import { type ReactNode, useId, useState, useSyncExternalStore } from 'react';
 
 import {
   type FolderFailure,
@@ -13,7 +13,8 @@ import { hex } from '../app/ids';
 import { type ListScreen, type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, Field, INPUT, Notice, ROW } from './components';
+import { platform } from '../platform';
+import { Button, Field, INPUT, Notice, ROW, describedBy } from './components';
 import { useLayout } from './hooks';
 import { Icon, type IconName } from './icons';
 
@@ -248,6 +249,7 @@ export function FolderActions({
   readonly onChange: () => void;
 }) {
   const { messages: m, language } = useLanguage();
+  const moveToLabel = useId();
   const [action, setAction] = useState<Action>('none');
   const [failure, setFailure] = useState<FolderFailure>();
   const [target, setTarget] = useState<string>();
@@ -345,9 +347,10 @@ export function FolderActions({
           }}
         >
           <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
-            {m.folders.moveTo}
+            <span id={moveToLabel}>{m.folders.moveTo}</span>
             <select
               className={INPUT}
+              aria-describedby={describedBy(platform.kind, moveToLabel)}
               value={target}
               onChange={(e) => {
                 setTarget(e.target.value);

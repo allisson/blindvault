@@ -62,6 +62,7 @@ export function EraseVault({
       <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
+          aria-label={m.erase.understand}
           checked={understood}
           onChange={(e) => {
             setUnderstood(e.target.checked);

@@ -16,6 +16,8 @@ import { sharedOrigin } from '../app/origin';
 import { type StorageWarning, safariTab } from '../app/storage-state';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
+import { platform } from '../platform';
+import type { Platform } from '../platform/platform';
 import { AboutBuild } from './About';
 import { useAbout } from './about-context';
 import { useLayout } from './hooks';
@@ -379,6 +381,21 @@ export function Badge({
   );
 }
 
+/**
+ * A field's description: on Android its label first, since the WebView drops every name a field
+ * gets and keeps its description (D299), then the field's error or hint.
+ */
+export function describedBy(
+  kind: Platform['kind'],
+  label: string,
+  message?: string,
+): string | undefined {
+  const ids = [kind === 'android' ? label : undefined, message].filter(
+    (x): x is string => x !== undefined,
+  );
+  return ids.length > 0 ? ids.join(' ') : undefined;
+}
+
 export function Field({
   label,
   hint,
@@ -412,7 +429,7 @@ export function Field({
   }, [password]);
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label id={`${id}-label`} htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
       <div className="relative flex">
@@ -424,7 +441,11 @@ export function Field({
           type={password && shown ? 'text' : type}
           className={`${INPUT} min-w-0 flex-1 ${password ? 'pe-11' : ''}`}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error || hint ? `${id}-message` : undefined}
+          aria-describedby={describedBy(
+            platform.kind,
+            `${id}-label`,
+            error || hint ? `${id}-message` : undefined,
+          )}
           autoComplete="off"
           spellCheck={false}
           {...props}
@@ -433,7 +454,6 @@ export function Field({
           <button
             type="button"
             aria-pressed={shown}
-            aria-label={shown ? m.items.hidePassword : m.items.showPassword}
             title={shown ? m.items.hidePassword : m.items.showPassword}
             disabled={props.disabled}
             className={`${TARGET} absolute inset-y-0 end-0 inline-flex min-w-10 items-center justify-center rounded-control text-muted hover:text-fg disabled:opacity-50`}
@@ -442,6 +462,7 @@ export function Field({
             }}
           >
             <Icon name={shown ? 'eye-off' : 'eye'} />
+            <span className="sr-only">{shown ? m.items.hidePassword : m.items.showPassword}</span>
           </button>
         ) : null}
       </div>
@@ -487,7 +508,7 @@ export function TextArea({
   const id = useId();
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label id={`${id}-label`} htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
       <textarea
@@ -495,7 +516,11 @@ export function TextArea({
         rows={4}
         className={`${INPUT} py-2`}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error || hint ? `${id}-message` : undefined}
+        aria-describedby={describedBy(
+          platform.kind,
+          `${id}-label`,
+          error || hint ? `${id}-message` : undefined,
+        )}
         autoComplete="off"
         spellCheck={false}
         {...props}
