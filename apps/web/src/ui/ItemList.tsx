@@ -1,5 +1,12 @@
 import { type Item, type TreeItem, type VaultSession } from '@blindvault/vault';
-import { type ReactNode, type RefObject, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  type ReactNode,
+  type RefObject,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import { findNode, treeItems } from '../app/folders';
 import { hex } from '../app/ids';
@@ -9,7 +16,8 @@ import { type SearchIndex } from '../app/search';
 import { listMove } from '../app/shortcuts';
 import { useLanguage } from '../i18n/context';
 import { type Messages } from '../i18n/messages';
-import { Button, INPUT, Pill, ROW } from './components';
+import { platform } from '../platform';
+import { Button, INPUT, Pill, ROW, describedBy } from './components';
 import { useLayout } from './hooks';
 import { Icon } from './icons';
 import { FirstSteps } from './FirstSteps';
@@ -50,6 +58,7 @@ export function ItemList({
   readonly notice?: ReactNode;
 }) {
   const { messages: m, language } = useLanguage();
+  const searchLabel = useId();
   const layout = useLayout();
   // In memory, kept across lists; a type the list shown lacks falls back to all (D245).
   const [type, setType] = useState<Template>();
@@ -154,34 +163,41 @@ export function ItemList({
           ) : null}
         </div>
         {list.name !== 'trash' ? (
-          <input
-            ref={searchRef}
-            type="search"
-            aria-label={m.vault.search}
-            title={m.vault.searchHint}
-            placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
-            aria-keyshortcuts="Control+K Meta+K"
-            autoComplete="off"
-            spellCheck={false}
-            className={INPUT}
-            value={query}
-            onChange={(e) => {
-              onQuery(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              // ↓ moves into the list; Esc clears the search, in every browser (D251).
-              if (e.key === 'ArrowDown' && !e.altKey) {
-                const first = rows()[0];
-                if (!first) return;
-                e.preventDefault();
-                first.focus();
-              } else if (e.key === 'Escape' && query !== '') {
-                e.preventDefault();
-                onQuery('');
-              }
-            }}
-            data-testid="search"
-          />
+          <>
+            {/* Read only as the search's description, on Android (D299). */}
+            <span hidden id={searchLabel}>
+              {m.vault.search}
+            </span>
+            <input
+              ref={searchRef}
+              type="search"
+              aria-label={m.vault.search}
+              aria-describedby={describedBy(platform.kind, searchLabel)}
+              title={m.vault.searchHint}
+              placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
+              aria-keyshortcuts="Control+K Meta+K"
+              autoComplete="off"
+              spellCheck={false}
+              className={INPUT}
+              value={query}
+              onChange={(e) => {
+                onQuery(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                // ↓ moves into the list; Esc clears the search, in every browser (D251).
+                if (e.key === 'ArrowDown' && !e.altKey) {
+                  const first = rows()[0];
+                  if (!first) return;
+                  e.preventDefault();
+                  first.focus();
+                } else if (e.key === 'Escape' && query !== '') {
+                  e.preventDefault();
+                  onQuery('');
+                }
+              }}
+              data-testid="search"
+            />
+          </>
         ) : null}
         {folderPill || types.length > 1 ? (
           <div className="flex gap-2">

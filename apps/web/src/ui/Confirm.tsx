@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useId, useState } from 'react';
 
 import { confirmChoice, confirmDetails } from '../extension/confirm-client';
 import { type PopupRuntime, openHost } from '../extension/popup-client';
@@ -243,13 +243,24 @@ function Choice({
   readonly title: string;
   readonly detail?: string | undefined;
 }) {
+  const detailId = useId();
   return (
     <label className={`${TARGET} flex items-start gap-2 rounded-control bg-raised p-2 text-sm`}>
-      <input type="radio" className="mt-1" name={name} checked={checked} onChange={onChange} />
+      <input
+        type="radio"
+        className="mt-1"
+        name={name}
+        checked={checked}
+        onChange={onChange}
+        aria-label={title}
+        aria-describedby={detail === undefined ? undefined : detailId}
+      />
       <span className="flex min-w-0 flex-col">
         <span className="font-medium break-words">{title}</span>
         {detail === undefined ? null : (
-          <span className="text-xs text-muted break-all">{detail}</span>
+          <span id={detailId} className="text-xs text-muted break-all">
+            {detail}
+          </span>
         )}
       </span>
     </label>

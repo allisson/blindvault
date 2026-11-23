@@ -6,7 +6,7 @@ import {
   roleOf,
   template,
 } from '@blindvault/vault';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { checkPick } from '../app/attachments';
 import { folderRows } from '../app/folders';
@@ -29,7 +29,18 @@ import { type Navigation } from '../app/nav';
 import { saveShortcut } from '../app/shortcuts';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format, roleName } from '../i18n/messages';
-import { Button, ConfirmDialog, Field, INPUT, Modal, Notice, TARGET, TextArea } from './components';
+import { platform } from '../platform';
+import {
+  Button,
+  ConfirmDialog,
+  Field,
+  INPUT,
+  Modal,
+  Notice,
+  TARGET,
+  TextArea,
+  describedBy,
+} from './components';
 import { writeError } from './errors';
 import { Generator } from './Generator';
 import { Icon } from './icons';
@@ -61,6 +72,7 @@ function FieldEditor({
   const { messages: m, language } = useLanguage();
   const [generating, setGenerating] = useState(false);
   const [shown, setShown] = useState(false);
+  const matchDomainHint = useId();
   const custom = field.role === undefined;
   const t = template(draft.templateId);
   const def = field.role !== undefined && t ? roleOf(t, field.role) : undefined;
@@ -180,6 +192,8 @@ function FieldEditor({
           <input
             type="checkbox"
             className="mt-1"
+            aria-label={m.items.matchDomain}
+            aria-describedby={matchDomainHint}
             checked={field.matchDomain === true}
             onChange={(e) => {
               onChange({ ...field, matchDomain: e.target.checked });
@@ -188,7 +202,9 @@ function FieldEditor({
           />
           <span className="flex flex-col">
             {m.items.matchDomain}
-            <span className="text-muted">{m.items.matchDomainHint}</span>
+            <span id={matchDomainHint} className="text-muted">
+              {m.items.matchDomainHint}
+            </span>
           </span>
         </label>
       ) : null}
@@ -315,6 +331,8 @@ export function ItemEditor({
   readonly onChange: () => void;
 }) {
   const { messages: m, language } = useLanguage();
+  const addFieldLabel = useId();
+  const folderLabel = useId();
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | undefined>(() => {
     const item = id ? session.item(id)?.item : undefined;
@@ -500,9 +518,10 @@ export function ItemEditor({
       })}
       <div className="flex items-end gap-2">
         <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
-          {m.items.addField}
+          <span id={addFieldLabel}>{m.items.addField}</span>
           <select
             className={INPUT}
+            aria-describedby={describedBy(platform.kind, addFieldLabel)}
             value={adding}
             onChange={(e) => {
               const type = FIELD_TYPES.find((t) => t === e.target.value);
@@ -562,9 +581,10 @@ export function ItemEditor({
         </div>
       ) : null}
       <label className="flex flex-col gap-1 text-sm font-medium">
-        {m.folders.folder}
+        <span id={folderLabel}>{m.folders.folder}</span>
         <select
           className={INPUT}
+          aria-describedby={describedBy(platform.kind, folderLabel)}
           value={folderKey}
           onChange={(e) => {
             const picked = folders.find((r) => hex(r.folder.id) === e.target.value);

@@ -3,7 +3,8 @@ import { type ReactNode, useId, useState } from 'react';
 import { clipboard } from '../app/clipboard';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
-import { Button, CopyCheck, INPUT, Message, useCheck } from './components';
+import { platform } from '../platform';
+import { Button, CopyCheck, INPUT, Message, describedBy, useCheck } from './components';
 import { Icon } from './icons';
 import { useToast } from './Toast';
 
@@ -173,14 +174,18 @@ export function SecretInput({
   const common = {
     id,
     'aria-invalid': error ? true : undefined,
-    'aria-describedby': error || hint ? `${id}-message` : undefined,
+    'aria-describedby': describedBy(
+      platform.kind,
+      `${id}-label`,
+      error || hint ? `${id}-message` : undefined,
+    ),
     autoComplete: 'off',
     spellCheck: false,
     'data-testid': `input-${label}`,
   } as const;
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+      <label id={`${id}-label`} htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
       <div className="flex items-start gap-2">

@@ -177,6 +177,7 @@ export function RefoundVault({
               <label className={`${TARGET} flex items-start gap-2 text-sm`}>
                 <input
                   type="checkbox"
+                  aria-label={r.understand}
                   checked={understood}
                   onChange={(e) => {
                     setUnderstood(e.target.checked);
@@ -189,6 +190,7 @@ export function RefoundVault({
                 <label className={`${TARGET} flex items-start gap-2 text-sm`}>
                   <input
                     type="checkbox"
+                    aria-label={format(r.understandRejected, { names: rejected })}
                     checked={understoodRejected}
                     onChange={(e) => {
                       setUnderstoodRejected(e.target.checked);

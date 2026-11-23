@@ -41,7 +41,16 @@ import { LANGUAGES, type Language, type Messages, format } from '../i18n/message
 import { platform } from '../platform';
 import type { Platform } from '../platform/platform';
 import { AboutBuild } from './About';
-import { Button, ConfirmDialog, Field, INPUT, Notice, TARGET, TextArea } from './components';
+import {
+  Button,
+  ConfirmDialog,
+  Field,
+  INPUT,
+  Notice,
+  TARGET,
+  TextArea,
+  describedBy,
+} from './components';
 import { EraseVault } from './EraseVault';
 import { ExportPassword } from './ExportPassword';
 import { ImportItems } from './ImportItems';
@@ -318,6 +327,7 @@ function SettingsPageView({
   readonly focus: SettingsFocus | undefined;
 }) {
   const { messages: m, language, setLanguage } = useLanguage();
+  const languageLabel = useId();
   useEffect(() => {
     if (focus === 'backup') focusBackup();
     // The passkey page shows once support is known: it focuses itself.
@@ -330,9 +340,10 @@ function SettingsPageView({
     appearance: () => <AppearanceSettings />,
     language: () => (
       <label className="flex flex-col gap-1 text-sm font-medium">
-        {m.settings.language}
+        <span id={languageLabel}>{m.settings.language}</span>
         <select
           className={INPUT}
+          aria-describedby={describedBy(platform.kind, languageLabel)}
           value={language}
           onChange={(e) => {
             const next = LANGUAGES.find((l) => l === e.target.value);
@@ -398,6 +409,7 @@ function AppearanceSettings() {
           <label key={theme} className={`${TARGET} flex items-center gap-2`}>
             <input
               type="radio"
+              aria-label={m.settings.themes[theme]}
               name="appearance-theme"
               checked={appearance.theme === theme}
               onChange={() => {
@@ -414,6 +426,7 @@ function AppearanceSettings() {
           <label key={accent} className={`${TARGET} flex items-center gap-2`}>
             <input
               type="radio"
+              aria-label={m.settings.accents[accent]}
               name="appearance-accent"
               checked={appearance.accent === accent}
               onChange={() => {
@@ -872,6 +885,7 @@ function SitePasskeySettings() {
       <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
+          aria-label={m.settings.sitePasskeysSwitch}
           role="switch"
           checked={on}
           disabled={busy}
@@ -1521,6 +1535,7 @@ function BackupSettings({
       <label className={`${TARGET} flex items-center gap-2 text-sm`}>
         <input
           type="checkbox"
+          aria-label={m.settings.backupProtect}
           checked={protect}
           onChange={(e) => {
             setProtect(e.target.checked);
