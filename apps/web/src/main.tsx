@@ -4,6 +4,7 @@ import { answerLink, offerLink, startInitiator, startResponder } from '@blindvau
 import { App, supported } from './App';
 import { startAppearance } from './app/appearance';
 import { manifestHash } from './app/build-info';
+import { cameraAvailable, heldCameraFirst } from './app/camera';
 import { clipboard } from './app/clipboard';
 import { VaultController } from './app/controller';
 import { framed } from './app/frame';
@@ -23,6 +24,9 @@ import { platform } from './platform';
 import { extensionLocks } from './platform/extension';
 import { Framed } from './ui/Framed';
 import './index.css';
+
+/** The camera port, read at each use: WebKit replaces `navigator.mediaDevices` (e2e/camera.ts). */
+const camera = () => (cameraAvailable(navigator) ? navigator.mediaDevices : undefined);
 
 const root = document.getElementById('root');
 if (!root) {
@@ -68,7 +72,11 @@ function start(root: HTMLElement): void {
     stun: loadStunSettings,
     ...(typeof RTCPeerConnection === 'undefined'
       ? {}
-      : { pairing: { startInitiator, startResponder }, sync: { offerLink, answerLink } }),
+      : {
+          // The side that shows the first code holds the camera before it gathers (D296).
+          pairing: { startInitiator: heldCameraFirst(camera, startInitiator), startResponder },
+          sync: { offerLink: heldCameraFirst(camera, offerLink), answerLink },
+        }),
   });
   const monitor = new UpdateMonitor({
     lock: () => {

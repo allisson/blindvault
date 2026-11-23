@@ -2,7 +2,7 @@
 
 > Normative for the bytes and the order of pairing and re-admission; `overview.md` prevails on
 > design. Implements overview §8 and D1, D4, D22, D29, D30, D33, D34, D35, D45, D49, D50, D93,
-> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201, D202, D203 and D206, using the conventions, primitives
+> D101, D117, D122, D136, D148, D150, D153, D157, D161, D199, D201, D202, D203, D206 and D296, using the conventions, primitives
 > and encodings of `crypto-spec.md` (§1, §2, §3, §13, §14). The full transfer that follows the
 > handshake is in `sync-protocol.md` §2, and the blob phase after the commit in `sync-protocol.md`
 > §10.1 (D278, D279).
@@ -29,7 +29,9 @@ pairing (section 8) or re-admission (section 9)
   the device that holds the vault is **A**, the other **B**; both set means **re-admission**;
   neither set aborts before any connection (section 7).
 - In pairing the UI has A show the first payload (A = I), so B scans first and holds the camera
-  before it gathers ICE candidates, and its host candidate is a raw IP address (D161). The
+  before it gathers ICE candidates, and its host candidate is a raw IP address (D161). A holds the
+  camera before it gathers too, since it reads B's answer with it: R starts its ICE checks when it
+  makes its answer, before I reads it, and needs a pair it can reach while it waits (D296). The
   protocol accepts B as I too, for copy/paste.
 - Every message after the handshake travels inside the Noise channel (section 10). Nothing is sent
   before the handshake but the payloads and the WebRTC/DTLS traffic, so a refusal before the

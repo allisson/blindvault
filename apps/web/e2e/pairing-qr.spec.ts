@@ -86,6 +86,8 @@ test('pairs by QR codes both ways: B scans A, A scans B, then B holds the vault 
   const a = await device(browser, browserName, fakeQrCamera, requests);
   const b = await device(browser, browserName, fakeQrCamera, requests);
   await invite(a);
+  // A held the camera before it gathered, and let it go (D296).
+  await expectCameraReleased(a);
   // The code is the payload's text, the one shown below it.
   const offer = await a.getByTestId('pairing-text').inputValue();
   await join(b);
@@ -167,6 +169,14 @@ test('a denied camera says so, and pasting still works (D208)', async ({
   await b.getByTestId('pairing-paste').fill(await a.getByTestId('pairing-text').inputValue());
   await button(b, 'Show my answer').click();
   await expect(b.getByTestId('pairing-qr')).toBeVisible({ timeout: 30_000 });
+});
+
+test('A shows its code with a denied camera or none (D296)', async ({ browser, browserName }) => {
+  for (const camera of [deniedCamera, noCamera]) {
+    const a = await device(browser, browserName, camera);
+    await invite(a);
+    await expect(a.getByTestId('pairing-text')).not.toHaveValue('');
+  }
 });
 
 test('a browser with no camera offers only the paste (D208)', async ({ browser, browserName }) => {
