@@ -1,4 +1,4 @@
-// The shell's decisions that need no Android object (android.md §3, §5, §10), kept apart so the JVM
+// The shell's decisions that need no Android object (android.md §3, §4.2, §5, §10), kept apart so the JVM
 // tests run them.
 package io.github.allisson.blindvault
 
@@ -64,6 +64,37 @@ fun biometricError(code: Int): ShellError = when (code) {
     BiometricPrompt.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED,
     -> ShellError.UNAVAILABLE
     else -> ShellError.FAILED
+}
+
+/**
+ * Whether the main window counts as hidden (§4.2, D294): stopped, unless the stop is the shell's own
+ * file picker in front of it, which the window opened and waits on.
+ */
+class Visibility {
+    private var picker = false
+    var hidden = false
+        private set
+
+    fun pickerOpened() {
+        picker = true
+    }
+
+    fun pickerClosed() {
+        picker = false
+    }
+
+    /** `onStop`: the `lifecycle` to send, none behind the shell's picker. */
+    fun stopped(): Lifecycle? {
+        if (picker) return null
+        hidden = true
+        return Lifecycle.HIDDEN
+    }
+
+    /** `onStart`. */
+    fun started(): Lifecycle {
+        hidden = false
+        return Lifecycle.SHOWN
+    }
 }
 
 fun sha256Hex(bytes: ByteArray): String = hex(MessageDigest.getInstance("SHA-256").digest(bytes))

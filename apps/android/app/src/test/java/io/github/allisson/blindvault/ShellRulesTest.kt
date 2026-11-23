@@ -99,6 +99,37 @@ class ShellRulesTest {
     }
 
     @Test
+    fun reportsAStopAsHiddenAndAStartAsShown() {
+        val visibility = Visibility()
+        assertFalse(visibility.hidden)
+        assertEquals(Lifecycle.HIDDEN, visibility.stopped())
+        assertTrue(visibility.hidden)
+        assertEquals(Lifecycle.SHOWN, visibility.started())
+        assertFalse(visibility.hidden)
+    }
+
+    @Test
+    fun keepsTheWindowShownBehindTheShellsOwnPicker() {
+        val visibility = Visibility()
+        visibility.pickerOpened()
+        assertEquals(null, visibility.stopped())
+        assertFalse(visibility.hidden)
+        visibility.pickerClosed()
+        assertEquals(Lifecycle.SHOWN, visibility.started())
+        // Once the picker answered, a stop hides the window again.
+        assertEquals(Lifecycle.HIDDEN, visibility.stopped())
+        assertTrue(visibility.hidden)
+    }
+
+    @Test
+    fun aPickerOpenedWhileHiddenDoesNotShowTheWindow() {
+        val visibility = Visibility()
+        visibility.stopped()
+        visibility.pickerOpened()
+        assertTrue(visibility.hidden)
+    }
+
+    @Test
     fun hexesACertificatesSha256() {
         assertEquals(
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",

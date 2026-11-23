@@ -1,7 +1,7 @@
 # BlindVault — Android app
 
 > Normative for the Android app; `overview.md` prevails on design. Implements D269, D270, D271,
-> D274, D282, D290, D292 and D293. Measurements behind it are in `docs/spikes/android.md`. Terms follow
+> D274, D282, D290, D292, D293, D294 and D295. Measurements behind it are in `docs/spikes/android.md`. Terms follow
 > `GLOSSARY.md` (app window, Keystore KEK, provider window, privileged browser, passkey).
 
 ## 1. Model
@@ -115,7 +115,7 @@ recording, and a blank thumbnail in Recents.
 | Lock | Android | Web, as before |
 | --- | --- | --- |
 | Auto-lock | 1 to 60 min without a touch or a key in the window (D151) | same |
-| Hidden-app lock | the activity stopped (`onStop`) for the set time, immediately to 15 min; `onStart` before then resets it | the page hidden (D54, D151) |
+| Hidden-app lock | the activity stopped (`onStop`) for the set time, immediately to 15 min; `onStart` before then resets it; not while the shell's own file picker is open (D294) | the page hidden (D54, D151) |
 | Operating-system lock | at once, when the screen turns off (`ACTION_SCREEN_OFF`) | — |
 | Manual | the app's Lock | the app's |
 
@@ -123,6 +123,11 @@ The shell reports `onStop`, `onStart` and the screen turning off to the window o
 (§9); the platform port turns them into `LockSignals`. The shell can write to the window only once
 the window has written to it, so the port sends `lifecycle-watch` the first time it is used, and
 takes the state the shell answers (D293). A lock follows D93 and D263.
+
+The shell's pickers, opening a file (§3) and saving one (§6.2), are system activities in front of the
+window, which gets `onStop`. From the call that opens one to its result, the shell does not report
+that stop as `hidden`, so a lock set to immediately does not abort the operation the window asked
+for (D294). The auto-lock and the screen turning off still lock.
 
 ## 5. Keystore KEK (D271, D290, D292)
 
@@ -351,11 +356,18 @@ toward the caller that asked.
 
 ## 10. Distribution, signing and updates (D270, D274)
 
-- **Release.** CI builds the unsigned APK; the maintainer signs it locally with the release key, kept
-  offline and out of CI, with `apksigner` (schemes v2 and v3). The release publishes the signed APK,
-  its SHA-256, the APK's `asset-manifest.txt` and the signing certificate's SHA-256; `docs/build.md`
-  gives the rebuild's commands with the first APK: build the unsigned APK, copy the published signature onto it with `apksigcopier`,
-  and compare the bytes with the published APK.
+- **Release.** The release workflow builds the unsigned APK and attaches it,
+  `blindvault-android-<version>-unsigned.apk`, with its `asset-manifest-android.txt`, both attested.
+  The maintainer signs it locally with the release key, kept offline and out of CI, with `apksigner`
+  (schemes v2 and v3), through `apps/android/build/sign.sh`, which checks the unsigned APK's
+  attestation against the tag, the signer against `apps/android/release-cert.sha256`, and that
+  `apksigcopier` gives the signed APK back from the unsigned one and the signature. The maintainer
+  then attaches `blindvault-android-<version>.apk` and adds its SHA-256 and the certificate's to the
+  release body. `docs/build.md` gives the rebuild's commands: build the unsigned APK, copy the
+  published signature onto it with `apksigcopier`, and compare the bytes with the published APK.
+- **Release key.** RSA 4096, valid 30 years, in a keystore kept offline by the maintainer. Android
+  installs an update only under the same key, so its loss ends updates of installed apps: users would
+  reinstall, losing the app's data, and restore from a backup or pair again.
 - **Updates.** Only by hand: the APK from GitHub Releases, through Obtainium or a self-run F-Droid
   repository (D270). The app never checks for updates. Installing an update ends the running
   process, which locks the vault; the user starts the new version. There is no version lock (D290):
@@ -363,9 +375,13 @@ toward the caller that asked.
   signed by the same key.
 - **About** shows the version, the hash of the APK's `asset-manifest.txt` and the SHA-256 of the
   signing certificate, read from `PackageManager`.
-- **Developer verification** (D274). The release package is registered in the maintainer's Play
-  Console account as an app distributed outside Google Play; the proof that the account holds the
-  key is made offline. Android checks it at install; the app makes no call for it.
+- **Developer verification** (D274, D295). The release package is registered in the maintainer's
+  Play Console account as an app distributed outside Google Play, with the release certificate's
+  SHA-256. The proof that the account holds the key is an APK of the same package, signed with the
+  release key, holding only the console's snippet in `assets/adi-registration.properties`
+  (`apps/android/build/registration-apk.sh`), uploaded to the console and never published. Android
+  checks the registration at install, for direct installs from 2027 (D295); the app makes no call
+  for it.
 
 ## 11. Onboarding, pairing and sync
 
@@ -399,8 +415,8 @@ layout beyond the app's own responsive one.
 - **CI.** The unsigned APK built twice and compared; no emulator, which has no real biometric.
 - **By hand**, on the Samsung A54, recorded in `browser-matrix.md` (Android): install; create, pair
   and sync with the PWA; the Keystore KEK's setup, unlock, and invalidation by a new fingerprint; the
-  locks of §4.2; FLAG_SECURE; saving a backup and an attachment; a passkey create and get on
-  `webauthn.io` in Chrome and Firefox; a password filled in Chrome and in an app bound by
+  locks of §4.2, behind the pickers too (D294); FLAG_SECURE; saving a backup and an attachment;
+  About; a passkey create and get on `webauthn.io` in Chrome and Firefox; a password filled in Chrome and in an app bound by
   `assetlinks.json`; a refused app that is not bound.
 
 Negative tests, each named in `security-invariants.md` under CRYPTO-INV-028 (Keystore KEK) and

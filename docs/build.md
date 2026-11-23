@@ -156,8 +156,56 @@ dependency block, so its bytes depend only on the pinned inputs; Gradle checks e
 resolves against `apps/android/gradle/verification-metadata.xml`. The CI `android` job runs the
 Kotlin unit tests and builds the APK twice, as the web build, and compares the two byte for byte.
 Two builds on macOS 26.6.2 (arm64), the second under another time zone, locale and umask, gave the same
-APK. Signing, the release's files and the check of a signed APK against a rebuild come with the
-first Android release (`android.md` §10).
+APK.
+
+The release of a tag attaches, with the same attestation:
+
+- `blindvault-android-<version>-unsigned.apk`, the APK CI built, and `asset-manifest-android.txt`,
+  its `assets/web/asset-manifest.txt`;
+- `blindvault-android-<version>.apk`, the same APK signed by the maintainer with the release key
+  (`android.md` §10), attached after the workflow, without an attestation: its SHA-256 and the
+  signing certificate's are in the release body.
+
+The release certificate's SHA-256 is pinned in `apps/android/release-cert.sha256`. To check a
+release's APK against your own build of the tag, with build tools 36.0.0 on `PATH` (`apksigner`)
+and `apksigcopier` 1.1.1 (`pipx install apksigcopier==1.1.1`):
+
+```sh
+gh release download <tag> -R allisson/blindvault -p 'blindvault-android-*' -p asset-manifest-android.txt
+gh attestation verify blindvault-android-<version>-unsigned.apk -R allisson/blindvault
+apksigner verify --print-certs blindvault-android-<version>.apk
+apksigcopier copy blindvault-android-<version>.apk \
+  apps/android/app/build/outputs/apk/release/app-release-unsigned.apk rebuilt-signed.apk
+cmp rebuilt-signed.apk blindvault-android-<version>.apk
+cmp asset-manifest-android.txt apps/android/app/src/main/assets/web/asset-manifest.txt
+```
+
+`apksigner` must print one signer, whose certificate SHA-256 digest equals the pinned one and the
+one About shows; `cmp` must print nothing: the published APK is then your build plus the published
+signature, and nothing else. The same `cmp` against the downloaded unsigned APK checks CI's build.
+
+**Signing a release** (the maintainer). Once the release workflow of the tag has finished:
+
+```sh
+apps/android/build/sign.sh <tag> <keystore>
+```
+
+It downloads the unsigned APK, checks its attestation against the tag, signs it with `apksigner`
+(schemes v2 and v3, asking for the keystore's password), checks the signer against
+`release-cert.sha256` and the `apksigcopier` round trip above, and prints the commands that attach
+the signed APK and add the `## Android` section, its SHA-256 and the certificate's, to the release
+body. It runs none of them.
+
+**Developer verification** (D274, D295), once, before the first Android release:
+
+1. In the Play Console account, register the package `io.github.allisson.blindvault` as an app
+   distributed outside Google Play, with the SHA-256 of `release-cert.sha256`.
+2. Copy the console's snippet into a file, and build the proof APK:
+   `apps/android/build/registration-apk.sh <snippet file> <keystore> adi-registration.apk`. It holds
+   the package, no code and only `assets/adi-registration.properties`, signed with the release key,
+   and checks the signer against `release-cert.sha256`.
+3. Upload `adi-registration.apk` in the console. It is never published; the release APK carries no
+   snippet.
 
 ## Validation on the release candidate
 

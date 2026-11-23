@@ -20,6 +20,7 @@ const en = {
     title: 'About BlindVault',
     version: 'Version',
     hash: 'SHA-256 of the asset manifest',
+    certificate: 'SHA-256 of the signing certificate',
     unavailable: 'Not available in this build.',
     informational:
       'The app shows these values about itself, and a modified app can show any value. They do not prove which code runs.',
@@ -1321,6 +1322,7 @@ const ptBR: Messages = {
     title: 'Sobre o BlindVault',
     version: 'Versão',
     hash: 'SHA-256 do manifesto de assets',
+    certificate: 'SHA-256 do certificado de assinatura',
     unavailable: 'Indisponível neste build.',
     informational:
       'O app mostra esses valores sobre si mesmo, e um app alterado pode mostrar qualquer valor. Eles não provam qual código está rodando.',
