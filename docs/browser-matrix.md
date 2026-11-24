@@ -147,18 +147,31 @@ provider and autofill rows come with their task.
 
 | Capability | Samsung A54 |
 | --- | --- |
-| Installs, opens on the first screen (§11) | not checked |
-| Create a vault, lock, unlock by password | not checked |
-| Pair with the PWA by QR (camera) and sync both ways | not checked |
-| Keystore KEK: setup, unlock, StrongBox or TEE shown (§5) | not checked |
-| Keystore KEK: a new fingerprint invalidates it, password unlock removes it (§5) | not checked |
-| Auto-lock, hidden-app lock, screen off (§4.2) | not checked |
-| Hidden-app lock at immediately: a backup saved and an attachment added through the pickers (D294) | not checked |
-| FLAG_SECURE: no screenshot, blank in Recents (§3) | not checked |
-| Copy a password: hidden in the clipboard preview, cleared after the set time (§6.1) | not checked |
-| Save a backup and an attachment; restore the backup (§6.2) | not checked |
-| About: version, manifest hash, certificate SHA-256 equal to the release's (§10) | not checked |
-| An update installs over the app and keeps the vault (§10) | not checked |
+| Installs, opens on the first screen (§11) | by hand, test build; by hand 1.0.0-rc.3 |
+| Create a vault, lock, unlock by password | by hand, test build; by hand 1.0.0-rc.3 |
+| Pair with the PWA by QR (camera) and sync both ways | by hand, test build |
+| Keystore KEK: setup, unlock, StrongBox or TEE shown (§5) | by hand, test build (TEE) |
+| Keystore KEK: a new fingerprint invalidates it, password unlock removes it (§5) | by hand, test build |
+| Auto-lock, hidden-app lock, screen off (§4.2) | by hand, test build |
+| Hidden-app lock at immediately: a backup saved and an attachment added through the pickers (D294) | by hand, test build |
+| FLAG_SECURE: no screenshot, blank in Recents (§3) | by hand, test build |
+| Copy a password: hidden in the clipboard preview, cleared after the set time (§6.1) | by hand, test build |
+| Save a backup and an attachment; restore the backup (§6.2) | by hand, test build |
+| About: version, manifest hash, certificate SHA-256 equal to the release's (§10) | by hand 1.0.0-rc.3 |
+| An update installs over the app and keeps the vault (§10) | by hand 1.0.0-rc.3 (same version) |
+
+What each source covers, on Android 16 with WebView 158.0.8127.46, the app driven over ADB and read
+with `uiautomator`:
+
+- **by hand, test build.** On 2026-11-23, the unsigned APK of `0058141` signed with a throwaway key.
+  Pairing with Chrome 158 on macOS 26.6.2 (MacBook Air M1), by QR both ways, the A54's answer read
+  within about 11 s; an item made on each side reached the other. The run found D296 (a later
+  answer failed), D297, D298 and D299, fixed before the release.
+- **by hand 1.0.0-rc.3.** On 2026-11-24, the release's signed APK. About showed the version, the
+  hash of the attached `asset-manifest-android.txt` and the pinned certificate. No later release
+  existed, so the update was the same APK installed again (`adb install -r`) over an unlocked vault:
+  the process ended, and the app reopened locked with its note. An update to a newer version is
+  checked at the next release.
 
 To check it, on a release's signed APK, installed over ADB (`adb install`), with a PWA on another
 device:
@@ -180,7 +193,7 @@ device:
 8. **Clipboard:** copy a password; Android's preview hides it; after the clear time it is gone.
 9. **Files:** download the attachment; lock, erase the vault, and restore the saved backup.
 10. **About:** the version, the manifest hash and the certificate SHA-256 equal the release body's
-    and `release-cert.sha256`.
+    Android section (D300) and `release-cert.sha256`.
 11. **Update:** install the next APK over it (`adb install -r`): the vault reopens locked, with its
     items.
 
