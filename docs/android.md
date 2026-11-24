@@ -438,8 +438,10 @@ Android appends to the intent is not read. A `password` result answers `RESULT_O
 `cancelled`, `browser`, Back, the window stopped, a lock or the request's time answer
 `RESULT_CANCELED`, which fills nothing.
 
-**Visibility** (D304). Whether Android 14 shows the requesting package to the service is measured on
-the A54; if it does not, the app holds `QUERY_ALL_PACKAGES` and reads only the package that asks.
+**Visibility** (D304). Android 14 hides the requesting package from the service: on the A54,
+`getPackageInfo` failed and no dataset was answered until the package was visible. The app holds
+`QUERY_ALL_PACKAGES` and reads only the package that asks; a `<queries>` for browsers would leave out
+the apps of §7.4.
 
 ## 9. Bridge (D290)
 

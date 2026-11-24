@@ -230,4 +230,11 @@ class AutofillTest {
         assert(service.contains("""android:permission="android.permission.BIND_AUTOFILL_SERVICE"""")) { service }
         assert(manifest.contains("""<action android:name="android.service.autofill.AutofillService" />"""))
     }
+
+    @Test
+    fun theServiceCanSeeThePackageThatAsks() {
+        // Measured on the A54 (D304): without it, getPackageInfo cannot find the package and no dataset is answered.
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        assert(manifest.contains("""<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />"""))
+    }
 }

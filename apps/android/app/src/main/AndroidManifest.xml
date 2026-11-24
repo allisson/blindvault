@@ -16,6 +16,9 @@
     <uses-permission
         android:name="android.permission.USE_FINGERPRINT"
         tools:node="remove" />
+    <!-- android.md §8 (D304): the autofill service reads the signing certificates of the package that asks, which
+         Android 14 hides from it otherwise (measured on the A54); no other package is read. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <uses-feature
         android:name="android.hardware.camera"

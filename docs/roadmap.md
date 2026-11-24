@@ -526,7 +526,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] `docs/extension.md`, then the extension (Chromium, Firefox) with password autofill and the version lock (D267, D270)
 - [x] Stored passkeys in the extension: `passkey` field type, ES256 and EdDSA, flags, history notice (D268)
 - [x] `docs/android.md`, then the Android app: WebView shell, Keystore KEK, pairing and sync, reproducible APK off the Play Store, `io.github.allisson.blindvault` registered for Google's developer verification (D269, D270, D271, D274; first signed APK in v1.0.0-rc.3, checked by hand on the A54 in `browser-matrix.md`, D300)
-- [ ] Passkeys and autofill on Android: credential provider, autofill service, `assetlinks.json` binding (D269)
+- [x] Passkeys and autofill on Android: credential provider, autofill service, `assetlinks.json` binding (D269; D301 to D304, checked by hand on the A54 in `browser-matrix.md`)
 
 ### Release Gate → v1.0
 

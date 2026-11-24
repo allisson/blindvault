@@ -162,6 +162,7 @@ provider and autofill rows come with their task.
 | Passkey create and get on `webauthn.io` in Chrome and Firefox, through the provider window (§7, D301) | by hand, debug build |
 | "Use another authenticator" shows the system sheet again; Cancel, before or after the unlock, and Back end the call (§7.1) | by hand, debug build |
 | An app `webauthn.io`'s `assetlinks.json` does not bind gets no password and no passkey; the passkey's refusal comes before the unlock (§7.4, D303) | by hand, debug build |
+| Autofill: a password filled in Chrome after the unlock and the tap; an unbound app's native fields filled with nothing; BlindVault's own fields offered nothing (§8, D304) | by hand, debug build |
 
 What each source covers, on Android 16 with WebView 158.0.8127.46, the app driven over ADB and read
 with `uiautomator`:
@@ -197,6 +198,18 @@ with `uiautomator`:
   sheet again. Chrome 158.0.8127.42 still logged in on `webauthn.io` with its passkey. The run found
   `provider.xml` declaring passkeys only, so Android never asked BlindVault for a password; fixed
   before the change landed.
+- **by hand, debug build (D304).** On 2026-11-24, the debug build of the autofill change, set as the
+  autofill service over ADB in place of the user's manager and set back after, with Chrome
+  158.0.8127.42 already on "Autofill using another service". On
+  `https://the-internet.herokuapp.com/login`, the tap on the user name field showed the BlindVault
+  menu; the window unlocked, named the site, listed the test vault's one matching Login, and the tap on
+  it filled the user name and the password, which the page's own Login accepted ("You logged into a
+  secure area!"); BlindVault submitted nothing. The throwaway `com.example.bvprobe`, given a native
+  user name and password field, got the menu; the window searched the Login items, said the app is not
+  bound to `webauthn.io`, and Cancel left both fields empty. The local password field of BlindVault's
+  main window opened no autofill session. The run found that Android hides the asking package from
+  the service, so `getPackageInfo` failed and no dataset was answered: measured with a throwaway build
+  that could see the probe, then fixed with `QUERY_ALL_PACKAGES` before the change landed.
 
 To check it, on a release's signed APK, installed over ADB (`adb install`), with a PWA on another
 device:
