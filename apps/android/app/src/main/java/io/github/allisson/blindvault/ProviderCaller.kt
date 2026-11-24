@@ -8,7 +8,7 @@ import androidx.credentials.provider.CallingAppInfo
 
 private const val ALLOWLIST_ASSET = "privileged-apps.json"
 
-private object Allowlist {
+internal object Allowlist {
     private var json: String? = null
 
     @Synchronized

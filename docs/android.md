@@ -391,24 +391,57 @@ Bytes are base64url without padding, each bounded. The shell writes the response
 `transports` `["internal", "hybrid"]` on create, and `clientExtensionResults`, with `credProps.rk`
 true on create.
 
-## 8. Autofill (D269, D290)
+## 8. Autofill (D269, D290, D304)
 
 The app is also an `AutofillService`; Android groups it with the credential provider of the same
-package, and the user enables both in Settings › Passwords & accounts.
+package, and the user enables both in Settings › Passwords & accounts. Chrome fills through it only
+with "Autofill using another service" chosen in its settings.
 
-- `onFillRequest` finds the user name and password fields in the `AssistStructure` (autofill hints,
-  input types, HTML attributes), and answers one dataset, BlindVault, whose authentication opens the
-  provider window. It answers nothing when the structure holds no such field.
+- `onFillRequest` finds the user name and password fields in the `AssistStructure`, and answers one
+  dataset, BlindVault, with a menu presentation, whose authentication opens the provider window. It
+  answers nothing when the structure holds no such field. No inline suggestion and no settings
+  activity.
 - **Who asks.** The package of the structure's activity, with its signing certificates from
-  `PackageManager`. When that package and certificate are in the privileged-browser allowlist (§7.3)
-  and the field's `getWebScheme()` is `https`, the request is the site's, with origin
-  `https://<getWebDomain()>`. Otherwise it is the app's, and §7.4 applies: a web domain reported by
-  any other app is ignored.
+  `PackageManager`. When a `CallingAppInfo` made of that package, its certificates and the origin
+  `https://<webDomain>` passes `getOrigin` with the allowlist (§7.3), and the focused field's
+  `getWebScheme()` is `https`, the request is the site's, with that origin. Otherwise it is the app's,
+  and §7.4 applies: a web domain reported by any other app is ignored.
 - The window lists the matching logins (§7.6), and the user's tap on one answers the dataset with the
   user name and the password for the fields found. The app that asked submits its form, or not;
   BlindVault never does.
 - **Out of v1.** `onSaveRequest` (saving a login typed in another app), cards, identities and TOTP
   codes; the compatibility mode for browsers without native autofill (§12).
+
+**Fields** (D304):
+
+| Field | A node that |
+| --- | --- |
+| Password | has `password` in its `autofillHints`, or the HTML `type` `password`, or an `inputType` of the text class with the variation `PASSWORD`, `WEB_PASSWORD` or `VISIBLE_PASSWORD`; never one whose HTML `autocomplete` is `new-password` |
+| User name | has `username` or `email` as a hint or HTML `autocomplete`; else the last text or email field before the first password field, in the structure's order |
+
+A dataset is answered when there is a password field, or a user name field named by a hint (a
+sign-in in two steps).
+
+**Domain** (D304). A node's web domain is the `webDomain` of the nearest node, itself or an ancestor,
+that sets one. The focused field's decides the request; only the fields of that same domain are
+filled, so nothing goes into a cross-origin frame. An allowlisted browser whose focused field has
+another scheme or no domain gets no dataset. A package that does not have exactly one signer, or
+that the service cannot see, gets nothing; BlindVault's own package gets nothing.
+
+**Window** (D304). The authentication opens `ProviderActivity` for the autofill request; its
+`provider-request` answers `{kind: "password", caller}` and the window runs §7.6 unchanged. The
+fields' IDs stay in the shell. The asking app's process starts the authentication intent and may fill
+in its extras, not its data: the caller and the fields are kept in memory under a random 32-byte token
+in the intent's data (`blindvault-autofill:<token>`), taken once, at most 16 kept, and the structure
+Android appends to the intent is not read. A `password` result answers `RESULT_OK` with
+`EXTRA_AUTHENTICATION_RESULT`, a dataset with the user name and the password for those fields;
+`cancelled`, `browser`, Back, the window stopped, a lock or the request's time answer
+`RESULT_CANCELED`, which fills nothing.
+
+**Visibility** (D304). Android 14 hides the requesting package from the service: on the A54,
+`getPackageInfo` failed and no dataset was answered until the package was visible. The app holds
+`QUERY_ALL_PACKAGES` and reads only the package that asks; a `<queries>` for browsers would leave out
+the apps of §7.4.
 
 ## 9. Bridge (D290)
 
@@ -526,7 +559,8 @@ layout beyond the app's own responsive one.
   locks of §4.2, behind the pickers too (D294); FLAG_SECURE; no autofill service offering to save
   the local password or an item's secret (D297); saving a backup and an attachment;
   About; a passkey create and get on `webauthn.io` in Chrome and Firefox; a password filled in Chrome
-  (§8); an app that is not bound, a throwaway debug app asking a password and a passkey of
+  on a public test sign-in page (§8), the throwaway debug app's native fields refused while unbound,
+  and BlindVault's own fields offered nothing (D304); an app that is not bound, a throwaway debug app asking a password and a passkey of
   `webauthn.io`, refused (D303).
 
 Negative tests, each named in `security-invariants.md` under CRYPTO-INV-028 (Keystore KEK) and

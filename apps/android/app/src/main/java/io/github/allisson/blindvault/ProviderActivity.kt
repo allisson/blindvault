@@ -1,6 +1,7 @@
-// The provider window (android.md §7.1, §9, D301, D303): `ProviderActivity` runs apps/web's provider.html in
-// the same WebView as the main window's, for one passkey or password request Credential Manager passed, from
-// a privileged browser or an app. The window unlocks, asks
+// The provider window (android.md §7.1, §8, §9, D301, D303, D304): `ProviderActivity` runs apps/web's provider.html
+// in the same WebView as the main window's, for one passkey or password request Credential Manager passed, or one
+// autofill request the autofill service keeps under the token of the intent's data, from a privileged browser or
+// an app. The window unlocks, asks
 // the user and answers with `provider-result`; the shell checks it against the request and its caller,
 // answers Credential Manager and finishes. Exactly one answer per activity: Back, the window stopped or
 // destroyed without one, or a newer request, answers a cancellation. An app gets a credential only after the window's `provider-assetlinks` was answered
@@ -15,6 +16,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
 import android.view.WindowManager
+import android.view.autofill.AutofillId
+import android.view.autofill.AutofillManager
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -53,6 +56,9 @@ class ProviderActivity : Activity() {
     private var kind = RequestKind.GET
     private var request: ProviderRequest? = null
 
+    /** An autofill request (§8): its fields, filled on a `password` result; `null` for Credential Manager's. */
+    private var autofill: PendingAutofill<AutofillId>? = null
+
     /** `provider-request` answered: it is answered once. */
     private var requested = false
 
@@ -82,16 +88,27 @@ class ProviderActivity : Activity() {
         current?.takeIf { it !== this }?.end(CallerAnswer.Cancelled)
         current = this
 
-        kind = when (intent.getStringExtra(EXTRA_REQUEST_KIND)) {
-            RequestKind.GET.wire -> RequestKind.GET
-            RequestKind.CREATE.wire -> RequestKind.CREATE
-            RequestKind.PASSWORD.wire -> RequestKind.PASSWORD
-            // Not an entry of ours: nothing to answer.
-            else -> return end(CallerAnswer.UseAnother)
-        }
-        request = when (val read = readRequest()) {
-            null -> return end(CallerAnswer.Unknown)
-            else -> read.value ?: return end(CallerAnswer.Dom(DomError.NOT_ALLOWED))
+        val uri = intent.data
+        if (uri != null) {
+            // An autofill request (§8, D304): only by its token, taken once; the extras and the appended structure
+            // are not read.
+            val pending = uri.takeIf { it.scheme == AUTOFILL_SCHEME }?.schemeSpecificPart?.let { autofillRequests.take(it) }
+                ?: return end(CallerAnswer.Cancelled)
+            autofill = pending
+            kind = RequestKind.PASSWORD
+            request = providerRequestOf(RequestKind.PASSWORD, pending.caller, null, null) ?: return end(CallerAnswer.Cancelled)
+        } else {
+            kind = when (intent.getStringExtra(EXTRA_REQUEST_KIND)) {
+                RequestKind.GET.wire -> RequestKind.GET
+                RequestKind.CREATE.wire -> RequestKind.CREATE
+                RequestKind.PASSWORD.wire -> RequestKind.PASSWORD
+                // Not an entry of ours: nothing to answer.
+                else -> return end(CallerAnswer.UseAnother)
+            }
+            request = when (val read = readRequest()) {
+                null -> return end(CallerAnswer.Unknown)
+                else -> read.value ?: return end(CallerAnswer.Dom(DomError.NOT_ALLOWED))
+            }
         }
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return end(CallerAnswer.Unknown)
 
@@ -257,6 +274,7 @@ class ProviderActivity : Activity() {
     private fun end(answer: CallerAnswer) {
         if (ended) return
         ended = true
+        autofill?.let { return endAutofill(it, answer) }
         val data = Intent()
         val code = when (answer) {
             is CallerAnswer.Created -> {
@@ -305,6 +323,19 @@ class ProviderActivity : Activity() {
             CallerAnswer.UseAnother -> RESULT_CANCELED
         }
         if (code == RESULT_OK) setResult(code, data) else setResult(code)
+        finish()
+    }
+
+    /** Answers the autofill request (§8 "Window"): the filled dataset on a `password` result, otherwise nothing filled. */
+    private fun endAutofill(pending: PendingAutofill<AutofillId>, answer: CallerAnswer) {
+        if (answer is CallerAnswer.Password) {
+            setResult(
+                RESULT_OK,
+                Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, filledDataset(this, pending, answer.userName, answer.password)),
+            )
+        } else {
+            setResult(RESULT_CANCELED)
+        }
         finish()
     }
 

@@ -16,6 +16,9 @@
     <uses-permission
         android:name="android.permission.USE_FINGERPRINT"
         tools:node="remove" />
+    <!-- android.md §8 (D304): the autofill service reads the signing certificates of the package that asks, which
+         Android 14 hides from it otherwise (measured on the A54); no other package is read. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -75,6 +78,17 @@
             <meta-data
                 android:name="android.credentials.provider"
                 android:resource="@xml/provider" />
+        </service>
+
+        <!-- android.md §8 (D304): the autofill service, bound by the system only. -->
+        <service
+            android:name=".FillService"
+            android:exported="true"
+            android:label="BlindVault"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
         </service>
     </application>
 </manifest>
