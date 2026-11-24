@@ -1602,7 +1602,6 @@ function BackupSettings({
       {outcome?.kind === 'ok' && saved === true ? (
         <p role="status">
           {format(m.settings.backupDone, {
-            name: outcome.name,
             id: phraseLabel(phraseId),
             date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(phraseCreatedAt),
           })}

@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MESSAGES } from '../i18n/messages';
+import { aboutVerify } from './About';
 import { warnsHiddenExport } from './Settings';
 import { storageTexts } from './StorageState';
 import { dropHint } from './Wizard';
@@ -65,5 +66,36 @@ describe('the file step’s hint (D254, D298)', () => {
   it('names only the types in the Android app', () => {
     expect(dropHint(m, 'android', '.bvault')).toBe('.bvault');
     expect(dropHint(m, 'android', '.csv,.json')).toBe('.csv, .json');
+  });
+});
+
+describe('About’s check outside the app', () => {
+  it('checks the served files against the manifest on the web', () => {
+    expect(aboutVerify(m, 'web')).toBe(
+      'Verify a release outside the app: compare this hash with the one published in the release, then check the served files against its manifest with',
+    );
+  });
+
+  it('checks the unzipped APK’s assets/web against the release’s Android section in the Android app', () => {
+    const text = aboutVerify(m, 'android');
+    expect(text).toBe(
+      'Verify a release outside the app: compare this hash with the one in the release’s Android section, then unzip the APK and, in its assets/web folder, check the files against the manifest with',
+    );
+    expect(text).not.toMatch(/served/);
+  });
+
+  it('checks the unpacked store package in the extension', () => {
+    const text = aboutVerify(m, 'extension');
+    expect(text).toBe(
+      'Verify a release outside the app: compare this hash with the one published in the release, then unpack the store’s package, remove _metadata/ (Chrome) or META-INF/ (Firefox), and check its files against the manifest with',
+    );
+    expect(text).not.toMatch(/served/);
+  });
+
+  it('has the same three texts in Portuguese', () => {
+    const pt = MESSAGES['pt-BR'];
+    const texts = (['web', 'android', 'extension'] as const).map((kind) => aboutVerify(pt, kind));
+    expect(new Set(texts).size).toBe(3);
+    expect(aboutVerify(pt, 'android')).toMatch(/assets\/web/);
   });
 });
