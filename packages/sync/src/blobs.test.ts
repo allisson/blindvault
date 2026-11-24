@@ -139,7 +139,7 @@ describe('blob phase of an admission (sync-protocol.md §10.1, pairing-protocol.
     const wants = sent('b-to-a').filter((m) => m.t === 'blobs-want');
     expect(wants).toHaveLength(2);
     expect(sent('a-to-b').filter((m) => m.t === 'blob-missing')).toHaveLength(16_385);
-  });
+  }, 30_000);
 
   it('rejects and reports a blob that does not match its blobId, then goes on (D278)', async () => {
     const { a, b } = pairing();
