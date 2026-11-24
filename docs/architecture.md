@@ -988,7 +988,7 @@ Chosen with `docs/android.md`; each lands in `apps/android` with the code, at a 
 days old then, Maven artifacts checked by hand against the same rule and recorded with their SHA-256
 in Gradle's dependency verification (`apps/android/gradle/verification-metadata.xml`). The shell
 landed with the Gradle wrapper, the Android Gradle Plugin, `androidx.webkit`, JUnit and `org.json`;
-`androidx.credentials` lands with the credential provider. What the APK carries is listed below the
+`androidx.credentials` landed with the credential provider. What the APK carries is listed below the
 table; the build's own closure (the plugin's hundreds of artifacts) is pinned only by that file, by
 SHA-256, and not listed by hand. `aapt2` is one artifact per operating system: the file has Gradle's
 hash of the macOS one and hand-made hashes, from Google Maven, of the Linux one CI uses and the
@@ -1005,16 +1005,31 @@ Windows one.
 | Temurin JDK 21.0.13+9 (2026-10-20) | Runs Gradle and the compilers (`android.md` §2); the same exact version in CI (`actions/setup-java`) and on the maintainer's Mac, so a rebuild can match CI's APK. |
 | Android SDK platform 36, build tools 36.0.0 | `compileSdk` and `buildToolsVersion` (`android.md` §2). Installed by `sdkmanager`, which checks each package's hash against Google's repository; CI installs exactly these. |
 
-**In the APK**, `releaseRuntimeClasspath`: `androidx.webkit` 1.18.0 and what it brings,
-`androidx.annotation` 1.8.1, `androidx.annotation:annotation-experimental` 1.3.0, `androidx.core`
-1.1.0, `androidx.lifecycle:lifecycle-runtime` and `lifecycle-common` 2.0.0,
-`androidx.arch.core:core-common` 2.0.0, `androidx.versionedparcelable` 1.1.0, `androidx.collection`
-1.0.0 and `org.jspecify:jspecify` 1.0.0; the Kotlin standard library 2.2.10 (2025-08-13), which the
-plugin's Kotlin adds, with `org.jetbrains:annotations` 13.0. All but `androidx.webkit` (2026-10-21)
-date from 2025 or before. None is added by hand; each comes with `androidx.webkit` or Kotlin.
+**In the APK**, `releaseRuntimeClasspath`: `androidx.webkit` 1.18.0 (2026-10-21) and `androidx.credentials`
+1.6.0 (2026-04-08), and what they bring: `androidx.annotation` 1.8.1 (with `annotation-jvm`) and
+`annotation-experimental` 1.4.1; `androidx.core` and `core-ktx` 1.15.0; `androidx.collection` 1.4.2 (with
+`collection-jvm`); `androidx.biometric` 1.1.0, which `androidx.credentials` needs, and with it
+`androidx.appcompat` and `appcompat-resources` 1.2.0, `androidx.activity` 1.1.0 and `androidx.fragment`
+1.2.5 (the shell's code uses the platform's BiometricPrompt, not this library);
+`androidx.lifecycle` `lifecycle-common`, `lifecycle-runtime`, `lifecycle-livedata`,
+`lifecycle-livedata-core`, `lifecycle-viewmodel` and `lifecycle-viewmodel-savedstate` 2.6.2;
+`androidx.arch.core` `core-common` and `core-runtime` 2.2.0; `androidx.savedstate` 1.2.1;
+`androidx.concurrent:concurrent-futures` 1.1.0; `androidx.profileinstaller` 1.3.0,
+`androidx.startup:startup-runtime` 1.1.1 and `androidx.tracing` 1.2.0; `androidx.versionedparcelable`
+1.1.1; the view libraries `androidx.cursoradapter`, `customview`, `drawerlayout`, `interpolator`,
+`loader`, `vectordrawable`, `vectordrawable-animated` and `viewpager` (1.0.0 to 1.1.0, from 2019 to
+2020); `com.google.guava:listenablefuture` 1.0 and `org.jspecify:jspecify` 1.0.0; the Kotlin standard
+library 2.2.10 (2025-08-13), which the plugin's Kotlin adds, `kotlinx-coroutines-core`,
+`kotlinx-coroutines-core-jvm`, `kotlinx-coroutines-android` and `kotlinx-coroutines-bom` 1.9.0
+(2024-09-13), and `org.jetbrains:annotations` 23.0.0. All but `androidx.webkit` and `androidx.credentials`
+date from 2025 or before. None is added by hand but those two; each other comes with one of them or
+with Kotlin.
 
-The BiometricPrompt and the Keystore are the platform's (API 30 and up), not `androidx.biometric`. No
-Capacitor (D282).
+The BiometricPrompt and the Keystore are the platform's (API 30 and up), not `androidx.biometric`,
+which only `androidx.credentials` uses. Its `USE_FINGERPRINT` permission, `androidx.startup`'s
+`InitializationProvider` and `profileinstaller`'s `ProfileInstallReceiver` are removed from the merged
+manifest, which keeps the permissions and components of `android.md` §3 and §7 (D302). No Capacitor
+(D282).
 
 ### Phase 0 spikes (`spikes/`, throwaway, deleted)
 

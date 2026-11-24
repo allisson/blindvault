@@ -1,8 +1,9 @@
 # BlindVault — Android app
 
 > Normative for the Android app; `overview.md` prevails on design. Implements D269, D270, D271,
-> D274, D282, D290, D292, D293, D294, D295 and D301. Measurements behind it are in `docs/spikes/android.md`. Terms follow
-> `GLOSSARY.md` (app window, Keystore KEK, provider window, privileged browser, passkey).
+> D274, D282, D290, D292, D293, D294, D295, D301 and D302. Measurements behind it are in
+> `docs/spikes/android.md`. Terms follow `GLOSSARY.md` (app window, Keystore KEK, provider window,
+> privileged browser, passkey).
 
 ## 1. Model
 
@@ -101,7 +102,10 @@ Both windows set up their WebView the same way:
   import, attachments). Saving is §6.2.
 
 **Manifest.** Permissions `INTERNET` (WebRTC, §11), `CAMERA` and `USE_BIOMETRIC`, and no storage
-permission. `allowBackup="false"`, and `dataExtractionRules` exclude every domain from cloud backup
+permission. The libraries' own additions are removed from the merged manifest: `USE_FINGERPRINT`,
+`androidx.startup`'s `InitializationProvider` and `profileinstaller`'s `ProfileInstallReceiver`; what
+remains beside the two activities and the credential provider service is `androidx.core`'s signature
+permission for its non-exported receivers (D302). `allowBackup="false"`, and `dataExtractionRules` exclude every domain from cloud backup
 and device transfer, so neither the vault database nor Local Config reaches Google Drive or another
 phone; the vault leaves the device only by pairing, sync or `.bvault` (D290). Cleartext traffic is
 off (`usesCleartextTraffic="false"`). Both activities set `FLAG_SECURE`: no screenshot, no screen

@@ -1,0 +1,10 @@
+# The privileged-browser allowlist of the credential provider (docs/android.md §7.3, D301).
+# app/src/main/assets/privileged-apps.json is Google's file kept as published, filtered to the
+# `release` signatures: an entry left with none is dropped. It is pretty-printed with a 2-space indent
+# and a final newline. The app never fetches it. To update it, download the source again, filter it the
+# same way, and change every line below with it, before each release.
+source: https://www.gstatic.com/gpm-passkeys-privileged-apps/apps.json
+upstream-last-modified: 2026-09-16
+fetched: 2026-11-24
+upstream-sha256: 0891ee2507894999ead3eb4f42e17936a2e8ed8f8fd95592535c9811ef319481
+file-sha256: 731e402f6b6b19de41189169f23892c52a878f294115f28de17a3df16a9f3ec8
