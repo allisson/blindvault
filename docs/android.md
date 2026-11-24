@@ -317,7 +317,8 @@ that its app is used, and carries no vault data (D269).
 
 **Fetch** (D303). The shell takes `domain` only as a lowercase ASCII host name with a dot, not an IP
 address, at most 253 characters, and answers `invalid` otherwise. It fetches without redirects or
-cache, within 10 s for the whole and 256 KiB, and answers:
+cache, within 10 s for the whole and 256 KiB, with the `User-Agent` `BlindVault` and nothing about
+the device, at most 16 times per window, and answers:
 
 | Answer | When |
 | --- | --- |

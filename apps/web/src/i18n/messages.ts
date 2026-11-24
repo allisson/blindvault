@@ -116,6 +116,20 @@ const en = {
     failed: 'BlindVault did not answer. Try again.',
     noVault:
       'BlindVault on this phone holds no vault it can open. Create, restore or pair one in the app first.',
+    app: 'App',
+    binding: 'Checking that {domain} links this app…',
+    unbound: '{app} is not linked to {domain}, so BlindVault hands it nothing.',
+    unboundNone: 'The domain’s assetlinks.json does not name this app.',
+    unboundRedirect:
+      'The domain’s assetlinks.json is a redirect, which BlindVault does not follow.',
+    unboundNetwork: 'BlindVault could not read the domain’s assetlinks.json.',
+    passwordTitle: 'Sign in with a password',
+    search: 'Search logins',
+    noLogins: 'No login with a user name and a password matches.',
+    passwordUnbound:
+      '{app} is not linked to this login’s addresses ({domains}). Pick another login, or cancel.',
+    passwordNoDomain:
+      'This login has no https address an app can be linked to. Pick another login.',
   },
   update: {
     available: 'An update is available: version {current} → {next}.',
@@ -1431,6 +1445,20 @@ const ptBR: Messages = {
     failed: 'O BlindVault não respondeu. Tente de novo.',
     noVault:
       'O BlindVault deste celular não tem um cofre que possa abrir. Crie, restaure ou pareie um no app antes.',
+    app: 'App',
+    binding: 'Conferindo se {domain} vincula este app…',
+    unbound: '{app} não está vinculado a {domain}, então o BlindVault não entrega nada a ele.',
+    unboundNone: 'O assetlinks.json do domínio não cita este app.',
+    unboundRedirect:
+      'O assetlinks.json do domínio é um redirecionamento, que o BlindVault não segue.',
+    unboundNetwork: 'O BlindVault não conseguiu ler o assetlinks.json do domínio.',
+    passwordTitle: 'Entrar com uma senha',
+    search: 'Buscar logins',
+    noLogins: 'Nenhum login com nome de usuário e senha corresponde.',
+    passwordUnbound:
+      '{app} não está vinculado aos endereços deste login ({domains}). Escolha outro login ou cancele.',
+    passwordNoDomain:
+      'Este login não tem endereço https a que um app possa se vincular. Escolha outro login.',
   },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',

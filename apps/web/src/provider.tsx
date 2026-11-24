@@ -1,4 +1,4 @@
-// The Android provider window (android.md §7.1, §7.7, D301): the second entry of the Android build,
+// The Android provider window (android.md §7.1, §7.7, D301, D303): the second entry of the Android build,
 // which the shell loads for one Credential Manager request. It is an app window of the vault (D51):
 // it takes the vault over from the main window, unlocks, signs or saves on the user's tap, answers
 // once, and locks. It starts no pairing, sync or update flow.
@@ -38,6 +38,12 @@ if (bridge && supported() && platform.keystore) {
     app: controller,
     shell: {
       request: () => bridge.request('provider-request'),
+      assetlinks: async (domain) => {
+        const { result } = await bridge.request('provider-assetlinks', { domain });
+        return result === 'bound' || result === 'unbound' || result === 'redirect'
+          ? result
+          : 'network';
+      },
       result: (result) => {
         // The shell answers Credential Manager and finishes the activity; it sends no answer.
         bridge.request('provider-result', { result }).catch(() => undefined);
