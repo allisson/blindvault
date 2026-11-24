@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- android.md §7: the one credential type the provider serves in this change, passkeys. -->
+<!-- android.md §7: the credential types the provider serves, passkeys and passwords (D303). Android asks a
+     provider only for the types listed here. -->
 <credential-provider>
     <capabilities>
         <capability name="androidx.credentials.TYPE_PUBLIC_KEY_CREDENTIAL" />
+        <capability name="android.credentials.TYPE_PASSWORD_CREDENTIAL" />
     </capabilities>
 </credential-provider>
