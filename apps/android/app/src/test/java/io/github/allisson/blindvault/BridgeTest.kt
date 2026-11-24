@@ -1,5 +1,6 @@
 package io.github.allisson.blindvault
 
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -23,17 +24,20 @@ class BridgeTest {
         return m.toString()
     }
 
-    private fun accepted(text: String): Request {
-        val parsed = Bridge.parse(text)
+    private fun accepted(text: String, from: BridgeWindow = BridgeWindow.MAIN): Request {
+        val parsed = Bridge.parse(text, from)
         assertTrue("$text: $parsed", parsed is Parsed.Accepted)
         parsed as Parsed.Accepted
         assertEquals(7L, parsed.id)
         return parsed.request
     }
 
-    private fun refused(text: String) = assertEquals(text, Parsed.Refused(7), Bridge.parse(text))
+    private fun refused(text: String, from: BridgeWindow = BridgeWindow.MAIN) {
+        val parsed = Bridge.parse(text, from)
+        assertTrue("$text: $parsed", parsed is Parsed.Refused && parsed.id == 7L)
+    }
 
-    private fun dropped(text: String) = assertEquals(text, Parsed.Dropped, Bridge.parse(text))
+    private fun dropped(text: String) = assertEquals(text, Parsed.Dropped, Bridge.parse(text, BridgeWindow.MAIN))
 
     @Test
     fun acceptsTheKeystoreTypes() {
@@ -75,7 +79,7 @@ class BridgeTest {
         accepted(message("file-save", "name" to "n".repeat(FILE_NAME_MAX), "mediaType" to "text/csv"))
         val full = Base64.getEncoder().encodeToString(ByteArray(FILE_CHUNK_BYTES))
         assertEquals(FILE_CHUNK_BYTES, (accepted(message("file-chunk", "data" to full)) as Request.FileChunk).data.size)
-        assertEquals(9007199254740991L, (Bridge.parse("""{"v":1,"id":9007199254740991,"type":"build-info"}""") as Parsed.Accepted).id)
+        assertEquals(9007199254740991L, (Bridge.parse("""{"v":1,"id":9007199254740991,"type":"build-info"}""", BridgeWindow.MAIN) as Parsed.Accepted).id)
     }
 
     @Test
@@ -94,6 +98,71 @@ class BridgeTest {
             """{"v":1,"id":true,"type":"build-info"}""",
             """{"v":1,"id":9007199254740992,"type":"build-info"}""",
         )) dropped(text)
+    }
+
+    private val provider = BridgeWindow.PROVIDER
+    private val result = JSONObject().put("kind", "cancelled")
+
+    @Test
+    fun acceptsTheProviderTypesFromTheProviderWindow() {
+        assertEquals(Request.ProviderRequest, accepted(message("provider-request"), provider))
+        val parsed = accepted(message("provider-result", "result" to result), provider) as Request.ProviderResult
+        assertEquals("cancelled", parsed.result.getString("kind"))
+    }
+
+    @Test
+    fun refusesTheProviderTypesFromTheMainWindow() {
+        refused(message("provider-request"))
+        refused(message("provider-result", "result" to result))
+    }
+
+    @Test
+    fun refusesFileTypesFromTheProviderWindow() {
+        refused(message("file-save", "name" to "a", "mediaType" to "text/csv"), provider)
+        refused(message("file-chunk", "data" to "AAEC"), provider)
+        refused(message("file-end"), provider)
+        refused(message("file-abort"), provider)
+    }
+
+    @Test
+    fun takesTheWindowTypesFromBothWindows() {
+        for (from in BridgeWindow.entries) {
+            accepted(message("keystore-status", "localConfigId" to id16), from)
+            accepted(message("keystore-seal", "localConfigId" to id16, "secret" to secret), from)
+            accepted(message("keystore-open", "localConfigId" to id16, "iv" to iv, "sealed" to sealed), from)
+            accepted(message("keystore-delete", "localConfigId" to id16), from)
+            accepted(message("clipboard-copy", "text" to "x", "clearSeconds" to 30), from)
+            accepted(message("clipboard-clear"), from)
+            accepted(message("build-info"), from)
+            accepted(message("lifecycle-watch"), from)
+        }
+    }
+
+    @Test
+    fun refusesAProviderRequestWithAKey() {
+        refused(message("provider-request", "kind" to "get"), provider)
+        refused(message("provider-request", "result" to result), provider)
+    }
+
+    @Test
+    fun refusesAMalformedProviderResult() {
+        refused(message("provider-result"), provider)
+        for (value in listOf<Any?>("cancelled", 7, true, null, JSONArray(), "{}")) {
+            refused(message("provider-result", "result" to value), provider)
+        }
+        refused(message("provider-result", "result" to result, "extra" to 1), provider)
+        refused(message("provider-result", "kind" to "cancelled"), provider)
+    }
+
+    @Test
+    fun aRefusedMessageNamesItsTypeSoTheProviderWindowCanEndOnIt() {
+        assertEquals(
+            Parsed.Refused(7, "provider-result"),
+            Bridge.parse(message("provider-result", "result" to 7), provider),
+        )
+        assertEquals(Parsed.Refused(7, "provider-request"), Bridge.parse(message("provider-request"), BridgeWindow.MAIN))
+        assertEquals(Parsed.Refused(7, null), Bridge.parse("""{"v":1,"id":7,"type":7}""", provider))
+        assertEquals(Parsed.Refused(7, null), Bridge.parse("""{"v":1,"id":7}""", provider))
     }
 
     @Test

@@ -48,6 +48,7 @@ android {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.18.0")
+    implementation("androidx.credentials:credentials:1.6.0")
     testImplementation("junit:junit:4.13.2")
     // Android's org.json is a stub on the JVM; the tests run the bridge's validation on this one.
     testImplementation("org.json:json:20260814")

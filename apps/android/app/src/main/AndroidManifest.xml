@@ -1,12 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- android.md §3: WebRTC, the camera for QR codes and the biometric; no storage permission. Nothing
      reaches a cloud backup or another phone, no cleartext traffic, and the WebView sends no Safe
-     Browsing lookup and no metric. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     Browsing lookup and no metric. §7: the provider window is not exported (Credential Manager opens it
+     through a PendingIntent), in a task of its own and out of Recents; the credential provider service is
+     bound by the system only. -->
+<!-- D302: androidx.credentials brings androidx.biometric, androidx.startup and profileinstaller; the
+     app uses the platform's BiometricPrompt and runs no initializer, so their permission and
+     components are removed from the merged manifest. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission
+        android:name="android.permission.USE_FINGERPRINT"
+        tools:node="remove" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -38,5 +47,34 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ProviderActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity="" />
+
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="remove" />
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:node="remove" />
+
+        <service
+            android:name=".ProviderService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="BlindVault"
+            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.credentials.CredentialProviderService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.credentials.provider"
+                android:resource="@xml/provider" />
+        </service>
     </application>
 </manifest>

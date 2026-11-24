@@ -114,6 +114,8 @@ const en = {
     ended: 'This request has ended.',
     close: 'Close',
     failed: 'BlindVault did not answer. Try again.',
+    noVault:
+      'BlindVault on this phone holds no vault it can open. Create, restore or pair one in the app first.',
   },
   update: {
     available: 'An update is available: version {current} → {next}.',
@@ -1427,6 +1429,8 @@ const ptBR: Messages = {
     ended: 'Este pedido terminou.',
     close: 'Fechar',
     failed: 'O BlindVault não respondeu. Tente de novo.',
+    noVault:
+      'O BlindVault deste celular não tem um cofre que possa abrir. Crie, restaure ou pareie um no app antes.',
   },
   update: {
     available: 'Há uma atualização disponível: versão {current} → {next}.',

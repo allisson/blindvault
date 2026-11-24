@@ -1,8 +1,9 @@
 // The shell's side of the bridge (android.md §9, D290, D293): JSON text from the window, one object
 // `{v: 1, type, id, ...}` per message. `type` comes from a closed list and every key is checked by
 // type and range; anything else is refused with `invalid`, never acted on. A message without an
-// `id` the window could match is dropped, since no answer would reach a request. Pure Kotlin on
-// org.json, so the JVM tests run it as the app does.
+// `id` the window could match is dropped, since no answer would reach a request. Each type comes from
+// the windows the §9 table names: the file types from the main window only, the provider types from
+// the provider window only. Pure Kotlin on org.json, so the JVM tests run it as the app does.
 package io.github.allisson.blindvault
 
 import org.json.JSONException
@@ -51,14 +52,23 @@ sealed interface Request {
     data object FileAbort : Request
     data object BuildInfo : Request
     data object LifecycleWatch : Request
+
+    /** `provider-request` (§7.7): no key; the shell answers from the request Credential Manager passed. */
+    data object ProviderRequest : Request
+
+    /** `provider-result` (§7.7): an object, checked against the pending request by `parseCallerAnswer`. */
+    class ProviderResult(val result: JSONObject) : Request
 }
+
+/** The window a message came from (§9 "Senders"). */
+enum class BridgeWindow { MAIN, PROVIDER }
 
 sealed interface Parsed {
     /** No `id` to answer. */
     data object Dropped : Parsed
 
-    /** Answered `invalid`. */
-    data class Refused(val id: Long) : Parsed
+    /** Answered `invalid`; `type` is the message's, when it named one, so the provider window can end on it. */
+    data class Refused(val id: Long, val type: String? = null) : Parsed
 
     class Accepted(val id: Long, val request: Request) : Parsed
 }
@@ -85,9 +95,17 @@ sealed interface Outcome {
 
 private class Invalid : Exception()
 
-private class Type(val keys: Set<String>, val build: (JSONObject) -> Request)
+private val BOTH = BridgeWindow.entries.toSet()
+
+private class Type(
+    val keys: Set<String>,
+    val windows: Set<BridgeWindow> = BOTH,
+    val build: (JSONObject) -> Request,
+)
 
 private val ENVELOPE = setOf("v", "type", "id")
+private val MAIN_ONLY = setOf(BridgeWindow.MAIN)
+private val PROVIDER_ONLY = setOf(BridgeWindow.PROVIDER)
 
 private val TYPES: Map<String, Type> = mapOf(
     "keystore-status" to Type(setOf("localConfigId")) { Request.KeystoreStatus(localConfigId(it)) },
@@ -110,7 +128,7 @@ private val TYPES: Map<String, Type> = mapOf(
         Request.ClipboardCopy(text, seconds.toInt())
     },
     "clipboard-clear" to Type(emptySet()) { Request.ClipboardClear },
-    "file-save" to Type(setOf("name", "mediaType")) {
+    "file-save" to Type(setOf("name", "mediaType"), MAIN_ONLY) {
         val name = string(it, "name")
         if (name.isEmpty() || name.length > FILE_NAME_MAX || name.any { c -> c < ' ' || c == '\u007f' || c == '/' }) {
             throw Invalid()
@@ -119,7 +137,7 @@ private val TYPES: Map<String, Type> = mapOf(
         if (!MEDIA_TYPE.matches(mediaType)) throw Invalid()
         Request.FileSave(name, mediaType)
     },
-    "file-chunk" to Type(setOf("data")) {
+    "file-chunk" to Type(setOf("data"), MAIN_ONLY) {
         val text = string(it, "data")
         if (!BASE64.matches(text)) throw Invalid()
         val data = try {
@@ -132,14 +150,18 @@ private val TYPES: Map<String, Type> = mapOf(
         }
         Request.FileChunk(data)
     },
-    "file-end" to Type(emptySet()) { Request.FileEnd },
-    "file-abort" to Type(emptySet()) { Request.FileAbort },
+    "file-end" to Type(emptySet(), MAIN_ONLY) { Request.FileEnd },
+    "file-abort" to Type(emptySet(), MAIN_ONLY) { Request.FileAbort },
     "build-info" to Type(emptySet()) { Request.BuildInfo },
     "lifecycle-watch" to Type(emptySet()) { Request.LifecycleWatch },
+    "provider-request" to Type(emptySet(), PROVIDER_ONLY) { Request.ProviderRequest },
+    "provider-result" to Type(setOf("result"), PROVIDER_ONLY) {
+        Request.ProviderResult(it.opt("result") as? JSONObject ?: throw Invalid())
+    },
 )
 
 /** A whole JSON number as the window writes one, `null` for anything else (a fraction, a string). */
-private fun integer(value: Any?): Long? = when (value) {
+internal fun integer(value: Any?): Long? = when (value) {
     is Int -> value.toLong()
     is Long -> value
     else -> null
@@ -147,26 +169,29 @@ private fun integer(value: Any?): Long? = when (value) {
 
 private fun string(m: JSONObject, key: String): String = m.opt(key) as? String ?: throw Invalid()
 
-/** Canonical base64url without padding, of exactly `length` bytes. */
-private fun bytes(m: JSONObject, key: String, length: Int): ByteArray {
-    val text = string(m, key)
-    if (!BASE64URL.matches(text) || text.length % 4 == 1) throw Invalid()
+/** Canonical base64url without padding, of `min` to `max` bytes; `null` for anything else. */
+fun decodeBase64url(text: String, min: Int, max: Int): ByteArray? {
+    if (!BASE64URL.matches(text) || text.length % 4 == 1) return null
     val bytes = try {
         Base64.getUrlDecoder().decode(text)
     } catch (e: IllegalArgumentException) {
-        throw Invalid()
+        return null
     }
     // Unused bits set give another text for the same bytes: refused, so each value has one form.
-    if (bytes.size != length || base64url(bytes) != text) throw Invalid()
+    if (bytes.size < min || bytes.size > max || base64url(bytes) != text) return null
     return bytes
 }
+
+/** Canonical base64url without padding, of exactly `length` bytes. */
+private fun bytes(m: JSONObject, key: String, length: Int): ByteArray =
+    decodeBase64url(string(m, key), length, length) ?: throw Invalid()
 
 private fun localConfigId(m: JSONObject) = bytes(m, "localConfigId", ID_LENGTH)
 
 fun base64url(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 
 object Bridge {
-    fun parse(text: String): Parsed {
+    fun parse(text: String, from: BridgeWindow): Parsed {
         val message = try {
             JSONObject(text)
         } catch (e: JSONException) {
@@ -175,15 +200,16 @@ object Bridge {
         val id = integer(message.opt("id"))
         if (id == null || id < 1 || id > MAX_SAFE_INTEGER) return Parsed.Dropped
         return try {
-            Parsed.Accepted(id, request(message))
+            Parsed.Accepted(id, request(message, from))
         } catch (e: Invalid) {
-            Parsed.Refused(id)
+            Parsed.Refused(id, message.opt("type") as? String)
         }
     }
 
-    private fun request(message: JSONObject): Request {
+    private fun request(message: JSONObject, from: BridgeWindow): Request {
         if (integer(message.opt("v")) != BRIDGE_VERSION.toLong()) throw Invalid()
         val type = TYPES[message.opt("type") as? String ?: throw Invalid()] ?: throw Invalid()
+        if (from !in type.windows) throw Invalid()
         val keys = message.keys().asSequence().toSet()
         if (keys != ENVELOPE + type.keys) throw Invalid()
         return type.build(message)

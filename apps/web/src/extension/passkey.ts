@@ -14,7 +14,7 @@ import {
 } from '@blindvault/vault';
 
 import { hex } from '../app/ids';
-import { type Credential, type PasskeyRequest, toBase64url } from './passkey-options';
+import { type Credential, type PasskeyCall, toBase64url } from './passkey-options';
 
 /** The bounds of the pending request's time, in ms (§7.4, D289). */
 export const TIMEOUT_MIN = 30_000;
@@ -60,7 +60,7 @@ function algorithmOf(
  * The checks of §7.2, in order, on the origin the browser reported: `undefined` when one fails, and
  * the call goes back to the browser.
  */
-export function checkRequest(request: PasskeyRequest): Checked | undefined {
+export function checkRequest(request: PasskeyCall): Checked | undefined {
   const page = fillablePage(request.origin);
   if (!page) return undefined;
   const asked = request.kind === 'create' ? request.options.rp.id : request.options.rpId;
@@ -79,7 +79,7 @@ export function checkRequest(request: PasskeyRequest): Checked | undefined {
  * `clientDataJSON` (§7.3), in WebAuthn's key order: `type`, `challenge`, the origin the browser
  * reported, `crossOrigin`, and `topOrigin` in a frame of another origin than the top frame's.
  */
-export function clientDataJSON(request: PasskeyRequest): Uint8Array {
+export function clientDataJSON(request: PasskeyCall): Uint8Array {
   const type = request.kind === 'create' ? 'webauthn.create' : 'webauthn.get';
   const cross = request.origin !== request.topOrigin;
   const parts = [

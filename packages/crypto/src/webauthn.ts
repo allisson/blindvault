@@ -249,6 +249,9 @@ export interface PasskeyAssertion {
   readonly signature: Uint8Array;
 }
 
+/** The length of a `clientDataHash`, SHA-256's. */
+const CLIENT_DATA_HASH_LENGTH = 32;
+
 /**
  * Signs a get (extension.md §7.3): `authenticatorData ‖ SHA-256(clientDataJSON)` with the stored
  * key, ES256 through WebCrypto with the key imported non-extractable for this signature only,
@@ -259,9 +262,25 @@ export async function signPasskeyAssertion(
   rpId: string,
   clientDataJSON: Uint8Array,
 ): Promise<PasskeyAssertion> {
+  return signPasskeyAssertionHash(privateKey, rpId, lib().crypto_hash_sha256(clientDataJSON));
+}
+
+/**
+ * Signs a get over the `clientDataHash` a privileged browser passed to the Android provider, which
+ * builds `clientDataJSON` itself (android.md §7.3, D301): `authenticatorData ‖ clientDataHash`.
+ * `privateKey` and `clientDataHash` are left unchanged.
+ */
+export async function signPasskeyAssertionHash(
+  privateKey: Uint8Array,
+  rpId: string,
+  clientDataHash: Uint8Array,
+): Promise<PasskeyAssertion> {
+  if (clientDataHash.length !== CLIENT_DATA_HASH_LENGTH) {
+    throw new EncodingError('clientDataHash is not 32 bytes');
+  }
   const algorithm = checkedAlgorithm(privateKey);
   const data = authenticatorData(rpId);
-  const signed = concat(data, lib().crypto_hash_sha256(clientDataJSON));
+  const signed = concat(data, clientDataHash);
   if (algorithm === 'ES256') {
     const key = await crypto.subtle.importKey('pkcs8', privateKey, P256, false, ['sign']);
     const raw = new Uint8Array(

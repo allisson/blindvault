@@ -24,7 +24,11 @@ export function androidPage(publicDir: URL): Plugin {
   return {
     name: 'blindvault-android-page',
     apply: 'build',
-    transformIndexHtml: { order: 'pre', handler: (html) => extensionHtml(html) },
+    transformIndexHtml: {
+      order: 'pre',
+      // The provider window's page names no web manifest to drop.
+      handler: (html, ctx) => (ctx.filename.endsWith('/index.html') ? extensionHtml(html) : html),
+    },
     generateBundle() {
       for (const name of ANDROID_ICONS) {
         this.emitFile({
@@ -38,7 +42,10 @@ export function androidPage(publicDir: URL): Plugin {
   };
 }
 
-/** The Android build's pages: the main window. The provider window comes with the provider. */
+/** The Android build's pages: the main window and the provider window (android.md §2, §7.1). */
 export function androidInput(root: URL): Record<string, string> {
-  return { index: fileURLToPath(new URL('index.html', root)) };
+  return {
+    index: fileURLToPath(new URL('index.html', root)),
+    provider: fileURLToPath(new URL('provider.html', root)),
+  };
 }

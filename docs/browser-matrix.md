@@ -159,6 +159,8 @@ provider and autofill rows come with their task.
 | Save a backup and an attachment; restore the backup (§6.2) | by hand, test build |
 | About: version, manifest hash, certificate SHA-256 equal to the release's (§10) | by hand 1.0.0-rc.3 |
 | An update installs over the app and keeps the vault (§10) | by hand 1.0.0-rc.3 (same version) |
+| Passkey create and get on `webauthn.io` in Chrome and Firefox, through the provider window (§7, D301) | by hand, debug build |
+| "Use another authenticator" shows the system sheet again; Cancel, before or after the unlock, and Back end the call (§7.1) | by hand, debug build |
 
 What each source covers, on Android 16 with WebView 158.0.8127.46, the app driven over ADB and read
 with `uiautomator`:
@@ -172,6 +174,18 @@ with `uiautomator`:
   existed, so the update was the same APK installed again (`adb install -r`) over an unlocked vault:
   the process ended, and the app reopened locked with its note. An update to a newer version is
   checked at the next release.
+- **by hand, debug build.** On 2026-11-24, the debug build of the credential provider's change
+  (`io.github.allisson.blindvault.debug`), installed beside the release app, with Chrome
+  158.0.8127.42. It was turned on as an additional service in Settings › Passwords, passkeys and
+  autofill, another manager staying the preferred one, and picked through the sheet's "Save another
+  way" and "Use once". Chrome accepted the registration without `clientDataJSON` and the assertion
+  signed over its `clientDataHash`; `webauthn.io` registered the passkey and logged in with it. Cancel
+  and Back gave the page `NotAllowedError`. The run found the unlock card's Cancel out of sight,
+  fixed before the change landed. Firefox 161.0, the same day and build: the same steps registered
+  and logged in on `webauthn.io`, and "Use another authenticator" showed the sheet again. Firefox
+  hands the same cancellation to the page as `AbortError` ("ceremony was sent an abort signal"), on
+  Cancel before the unlock and on Back after it; the page's own 60 s timeout ends the call the same
+  way.
 
 To check it, on a release's signed APK, installed over ADB (`adb install`), with a PWA on another
 device:

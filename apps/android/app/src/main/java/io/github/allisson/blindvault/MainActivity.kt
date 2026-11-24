@@ -9,42 +9,24 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
-import android.view.View
 import android.view.WindowManager
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.webkit.JavaScriptReplyProxy
-import androidx.webkit.WebViewAssetLoader
-import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
-import java.io.ByteArrayInputStream
 
 private const val OPEN_REQUEST = 1
 private const val CAMERA_REQUEST = 3
-
-/** `assets/web/`, apps/web's Android build, with the headers of every response. */
-private class AppAssets(activity: Activity, private val headers: Map<String, String>) : WebViewAssetLoader.PathHandler {
-    private val assets = WebViewAssetLoader.AssetsPathHandler(activity)
-
-    override fun handle(path: String): WebResourceResponse? =
-        assets.handle("web/$path")?.apply { responseHeaders = headers }
-}
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -71,87 +53,13 @@ class MainActivity : Activity() {
             setContentView(TextView(this).apply { setText(R.string.webview_too_old) })
             return
         }
-        WebView.setWebContentsDebuggingEnabled(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
         keystore = ShellKeystore(this)
         clipboard = ShellClipboard(applicationContext)
         files = FileSaver(this, ::answer)
 
-        val headers = parseHeaders(assets.open("web/headers.json").bufferedReader().use { it.readText() })
-        val loader = WebViewAssetLoader.Builder().addPathHandler("/", AppAssets(this, headers)).build()
-
-        // No autofill service sees a field of the app: it would offer to save the local password and
-        // the items' secrets, which autocomplete="off" does not stop. The WebView asks its context for
-        // the autofill manager and skips autofill without one; importantForAutofill alone does not
-        // reach the fields it reports itself (D297).
-        web = WebView(object : ContextWrapper(this) {
-            override fun getSystemService(name: String): Any? =
-                if (hidesService(name)) null else super.getSystemService(name)
-        })
-        web.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-        web.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = false
-            allowContentAccess = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            setSupportMultipleWindows(false)
-            javaScriptCanOpenWindowsAutomatically = false
-        }
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse =
-                loader.shouldInterceptRequest(request.url)
-                    ?: WebResourceResponse("text/plain", "utf-8", 404, "Not Found", headers, ByteArrayInputStream(ByteArray(0)))
-
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                when (navigationOf(request.url.scheme, request.url.host)) {
-                    Navigation.STAY -> false
-                    Navigation.EXTERNAL -> {
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, request.url).addCategory(Intent.CATEGORY_BROWSABLE))
-                        } catch (e: ActivityNotFoundException) {
-                            // No browser: the link opens nothing.
-                        }
-                        true
-                    }
-                    Navigation.DROP -> true
-                }
-        }
-        web.webChromeClient = object : WebChromeClient() {
-            override fun onPermissionRequest(request: PermissionRequest) {
-                if (!grantsCamera(request.origin.toString(), request.resources)) return request.deny()
-                if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                    request.grant(request.resources)
-                } else {
-                    pendingCamera?.deny()
-                    pendingCamera = request
-                    requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST)
-                }
-            }
-
-            override fun onShowFileChooser(
-                view: WebView,
-                callback: ValueCallback<Array<Uri>>,
-                params: FileChooserParams,
-            ): Boolean {
-                pendingChooser?.onReceiveValue(null)
-                pendingChooser = callback
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
-                val types = mediaTypesOf(params.acceptTypes)
-                if (types.isNotEmpty()) intent.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
-                if (params.mode == FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                try {
-                    startActivityForResult(intent, OPEN_REQUEST)
-                } catch (e: ActivityNotFoundException) {
-                    pendingChooser = null
-                    callback.onReceiveValue(null)
-                }
-                return true
-            }
-        }
-        WebViewCompat.addWebMessageListener(web, "blindvaultShell", setOf(ORIGIN)) { _, message, origin, isMainFrame, reply ->
-            if (!isMainFrame || origin.toString().trimEnd('/') != ORIGIN) return@addWebMessageListener
+        web = newShellWebView(this, chromeClient()) { reply, data ->
             window = reply
-            when (val parsed = Bridge.parse(message.data ?: return@addWebMessageListener)) {
+            when (val parsed = Bridge.parse(data ?: return@newShellWebView, BridgeWindow.MAIN)) {
                 is Parsed.Dropped -> Unit
                 is Parsed.Refused -> answer(parsed.id, Outcome.Error(ShellError.INVALID))
                 is Parsed.Accepted -> handle(parsed.id, parsed.request)
@@ -164,6 +72,40 @@ class MainActivity : Activity() {
             addView(web)
         })
         web.loadUrl("$ORIGIN/index.html")
+    }
+
+    /** The camera for the app's origin and the file chooser: what only the main window needs (§3). */
+    private fun chromeClient() = object : WebChromeClient() {
+        override fun onPermissionRequest(request: PermissionRequest) {
+            if (!grantsCamera(request.origin.toString(), request.resources)) return request.deny()
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                request.grant(request.resources)
+            } else {
+                pendingCamera?.deny()
+                pendingCamera = request
+                requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST)
+            }
+        }
+
+        override fun onShowFileChooser(
+            view: WebView,
+            callback: ValueCallback<Array<Uri>>,
+            params: FileChooserParams,
+        ): Boolean {
+            pendingChooser?.onReceiveValue(null)
+            pendingChooser = callback
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            val types = mediaTypesOf(params.acceptTypes)
+            if (types.isNotEmpty()) intent.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+            if (params.mode == FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            try {
+                startActivityForResult(intent, OPEN_REQUEST)
+            } catch (e: ActivityNotFoundException) {
+                pendingChooser = null
+                callback.onReceiveValue(null)
+            }
+            return true
+        }
     }
 
     private fun handle(id: Long, request: Request) {
@@ -188,22 +130,11 @@ class MainActivity : Activity() {
                 files.abort()
                 reply(Outcome.Ok())
             }
-            Request.BuildInfo -> reply(buildInfo())
+            Request.BuildInfo -> reply(shellBuildInfo(this))
             Request.LifecycleWatch -> reply(Outcome.Ok(JSONObject().put("state", if (visibility.hidden) "hidden" else "shown")))
+            // The provider types come from the provider window only (§9): the parser has refused them.
+            Request.ProviderRequest, is Request.ProviderResult -> reply(Outcome.Error(ShellError.INVALID))
         }
-    }
-
-    /** The version and the signing certificate's SHA-256, from PackageManager (§10). */
-    private fun buildInfo(): Outcome {
-        val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-        val signers = info.signingInfo?.apkContentsSigners
-        if (signers == null || signers.size != 1) return Outcome.Error(ShellError.FAILED)
-        return Outcome.Ok(
-            JSONObject()
-                .put("versionName", info.versionName)
-                .put("versionCode", info.longVersionCode)
-                .put("certSha256", sha256Hex(signers[0].toByteArray())),
-        )
     }
 
     private fun answer(id: Long, outcome: Outcome) = post(Answer.of(id, outcome))
