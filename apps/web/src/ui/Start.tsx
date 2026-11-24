@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import {
   type KeystoreOutcome,
@@ -174,7 +174,7 @@ function Locked({
 /**
  * The unlock card: the Keystore KEK, the unlock passkey or the local password. The ways out of a
  * locked vault (reset, replace, pair, erase) show only when given: the Android provider window
- * offers none (android.md §7.1).
+ * offers none, and gives its Cancel as `children` (android.md §7.1).
  */
 export function Unlock({
   controller,
@@ -183,6 +183,7 @@ export function Unlock({
   onPair,
   onReset,
   onErase,
+  children,
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
@@ -190,6 +191,7 @@ export function Unlock({
   readonly onPair?: () => void;
   readonly onReset?: () => void;
   readonly onErase?: () => void;
+  readonly children?: ReactNode;
 }) {
   const m = useMessages();
   const [password, setPassword] = useState('');
@@ -362,6 +364,7 @@ export function Unlock({
           {m.erase.choose}
         </Button>
       ) : null}
+      {children}
     </Card>
   );
 }

@@ -44,11 +44,11 @@ export function ProviderWindow({
         </Card>
       );
     case 'unlock':
+      // Inside the card, which fills the screen: below it, Cancel would be out of sight.
       return (
-        <div className="flex flex-col gap-3">
-          <Unlock controller={controller} working={status.kind === 'unlocking'} />
+        <Unlock controller={controller} working={status.kind === 'unlocking'}>
           {cancel}
-        </div>
+        </Unlock>
       );
     case 'confirm':
       return (
