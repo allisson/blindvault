@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 
 import { manifestHash } from '../app/build-info';
 import { useMessages } from '../i18n/context';
+import type { Messages } from '../i18n/messages';
 import { platform } from '../platform';
+import type { Platform } from '../platform/platform';
 
 export const RELEASES_URL = 'https://github.com/allisson/blindvault/releases';
 
@@ -20,6 +22,17 @@ function useRead(read: (() => Promise<string | undefined>) | undefined): string 
     };
   }, [read]);
   return value;
+}
+
+/**
+ * How to check a release outside the app: the served files on the web, the unzipped APK's
+ * `assets/web` in the Android app (android.md §10, D300), the unpacked store package in the
+ * extension (extension.md §8.2). The command is the same.
+ */
+export function aboutVerify(m: Messages, kind: Platform['kind']): string {
+  if (kind === 'android') return m.about.verifyApk;
+  if (kind === 'extension') return m.about.verifyPackage;
+  return m.about.verify;
 }
 
 /**
@@ -66,7 +79,7 @@ export function AboutBuild() {
       </dl>
       <p>{m.about.informational}</p>
       <p>
-        {m.about.verify}{' '}
+        {aboutVerify(m, platform.kind)}{' '}
         <code className="whitespace-nowrap">shasum -a 256 -c asset-manifest.txt</code>
       </p>
       <a

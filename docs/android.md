@@ -384,7 +384,9 @@ toward the caller that asked.
   installing the APK is the user's own confirmation, and Android installs over the app only an APK
   signed by the same key.
 - **About** shows the version, the hash of the APK's `asset-manifest.txt` and the SHA-256 of the
-  signing certificate, read from `PackageManager`.
+  signing certificate, read from `PackageManager`. Its check outside the app compares the hash with
+  the release body's Android section and runs `shasum -a 256 -c asset-manifest.txt` in the unzipped
+  APK's `assets/web`, where the web's About checks the served files.
 - **Developer verification** (D274, D295, D300). The release package is registered in the
   maintainer's Play Console account, with the release certificate's SHA-256; the console verified
   the key without a proof (D300). Should it ask for one, the proof is an APK of the same package,

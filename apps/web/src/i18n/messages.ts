@@ -26,6 +26,10 @@ const en = {
       'The app shows these values about itself, and a modified app can show any value. They do not prove which code runs.',
     verify:
       'Verify a release outside the app: compare this hash with the one published in the release, then check the served files against its manifest with',
+    verifyApk:
+      'Verify a release outside the app: compare this hash with the one in the release’s Android section, then unzip the APK and, in its assets/web folder, check the files against the manifest with',
+    verifyPackage:
+      'Verify a release outside the app: compare this hash with the one published in the release, then unpack the store’s package, remove _metadata/ (Chrome) or META-INF/ (Firefox), and check its files against the manifest with',
     releases: 'Releases on GitHub',
   },
   keystore: {
@@ -1163,7 +1167,7 @@ const en = {
     backupExporting: 'Exporting…',
     backupPasskey: 'Export with the unlock passkey instead',
     backupDone:
-      'Backup exported as {name}. It opens with the Recovery Phrase {id}, created on {date}. Keep it somewhere other than this device.',
+      'Backup exported. It opens with the Recovery Phrase {id}, created on {date}. Keep it somewhere other than this device.',
     backupWrong: 'Wrong password. No backup was made.',
     backupCorrupt:
       'A record failed verification, so no backup was made: {type} {id}. Nothing on this device was changed.',
@@ -1335,6 +1339,10 @@ const ptBR: Messages = {
       'O app mostra esses valores sobre si mesmo, e um app alterado pode mostrar qualquer valor. Eles não provam qual código está rodando.',
     verify:
       'Verifique uma versão fora do app: compare este hash com o publicado na versão e confira os arquivos servidos contra o manifesto dela com',
+    verifyApk:
+      'Verifique uma versão fora do app: compare este hash com o da seção Android da versão, depois descompacte o APK e, na pasta assets/web dele, confira os arquivos contra o manifesto com',
+    verifyPackage:
+      'Verifique uma versão fora do app: compare este hash com o publicado na versão, depois descompacte o pacote da loja, remova _metadata/ (Chrome) ou META-INF/ (Firefox) e confira os arquivos contra o manifesto com',
     releases: 'Versões no GitHub',
   },
   keystore: {
@@ -2489,7 +2497,7 @@ const ptBR: Messages = {
     backupExporting: 'Exportando…',
     backupPasskey: 'Exportar com a passkey de desbloqueio',
     backupDone:
-      'Backup exportado como {name}. Ele abre com a Frase de Recuperação {id}, criada em {date}. Guarde-o em outro lugar além deste dispositivo.',
+      'Backup exportado. Ele abre com a Frase de Recuperação {id}, criada em {date}. Guarde-o em outro lugar além deste dispositivo.',
     backupWrong: 'Senha incorreta. Nenhum backup foi feito.',
     backupCorrupt:
       'Um registro falhou na verificação, então nenhum backup foi feito: {type} {id}. Nada foi alterado neste dispositivo.',
