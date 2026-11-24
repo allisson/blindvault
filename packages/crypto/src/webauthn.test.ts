@@ -14,6 +14,7 @@ import {
   passkeyAlgorithm,
   passkeyPublicKey,
   signPasskeyAssertion,
+  signPasskeyAssertionHash,
 } from './webauthn';
 
 // WebCrypto, to the extent the tests verify with it (the package compiles without the DOM lib).
@@ -360,5 +361,70 @@ describe('signPasskeyAssertion', () => {
     await expect(signPasskeyAssertion(eddsa(RFC8032_SEED), '', clientDataJSON)).rejects.toThrow(
       EncodingError,
     );
+  });
+});
+
+describe('signPasskeyAssertionHash (android.md §7.3, D301)', () => {
+  // Computed once libsodium is ready.
+  let clientDataHash: Uint8Array;
+  beforeAll(() => {
+    clientDataHash = sha256(utf8('{"type":"webauthn.get","challenge":"AAEC"}'));
+  });
+
+  it('signs authenticatorData ‖ clientDataHash with an ES256 layout, as DER', async () => {
+    const key = es256(RFC6979_D);
+    const { authenticatorData: data, signature } = await signPasskeyAssertionHash(
+      key,
+      'example.com',
+      clientDataHash,
+    );
+    expect(data).toEqual(authenticatorData('example.com'));
+    const signed = concat(data, clientDataHash);
+    expect(await verifyEs256(passkeyPublicKey(key).spki, signature, signed)).toBe(true);
+    // Not a signature over the hash hashed again, as with a clientDataJSON.
+    expect(
+      await verifyEs256(
+        passkeyPublicKey(key).spki,
+        signature,
+        concat(data, sha256(clientDataHash)),
+      ),
+    ).toBe(false);
+  });
+
+  it('gives the EdDSA signature signPasskeyAssertion gives for the clientDataJSON of that hash', async () => {
+    const json = utf8('{"type":"webauthn.get","challenge":"AAEC"}');
+    const key = eddsa(RFC8032_SEED);
+    const overHash = await signPasskeyAssertionHash(key, 'example.com', sha256(json));
+    const overJson = await signPasskeyAssertion(key, 'example.com', json);
+    expect(overHash.signature).toEqual(overJson.signature);
+    expect(
+      lib().crypto_sign_verify_detached(
+        overHash.signature,
+        concat(overHash.authenticatorData, clientDataHash),
+        fromHex(RFC8032_PUBLIC),
+      ),
+    ).toBe(true);
+  });
+
+  it('refuses a hash that is not 32 bytes, a malformed key and an empty rpId (CRYPTO-INV-027)', async () => {
+    for (const length of [0, 31, 33, 64]) {
+      await expect(
+        signPasskeyAssertionHash(eddsa(RFC8032_SEED), 'example.com', new Uint8Array(length)),
+      ).rejects.toThrow(EncodingError);
+    }
+    await expect(
+      signPasskeyAssertionHash(es256('00'.repeat(32)), 'example.com', clientDataHash),
+    ).rejects.toThrow(EncodingError);
+    await expect(signPasskeyAssertionHash(eddsa(RFC8032_SEED), '', clientDataHash)).rejects.toThrow(
+      EncodingError,
+    );
+  });
+
+  it('leaves the stored key and the hash unchanged', async () => {
+    const key = eddsa(RFC8032_SEED);
+    const hash = clientDataHash.slice();
+    await signPasskeyAssertionHash(key, 'example.com', hash);
+    expect(key).toEqual(eddsa(RFC8032_SEED));
+    expect(hash).toEqual(clientDataHash);
   });
 });

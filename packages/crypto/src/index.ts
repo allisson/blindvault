@@ -195,4 +195,5 @@ export {
   createPasskey,
   passkeyAlgorithm,
   signPasskeyAssertion,
+  signPasskeyAssertionHash,
 } from './webauthn';
