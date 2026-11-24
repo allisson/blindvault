@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
 
-// android.md §7.3 and §7.7 (D301): who asks, what the window is told, what the window may answer, and the
+// android.md §7.3 to §7.7 (D301, D303): who asks, what the window is told, what the window may answer, and the
 // response JSON the shell writes for Credential Manager.
 class ProviderTest {
     private val browser = Caller.Browser("https://example.com", "com.android.chrome")
@@ -37,14 +37,19 @@ class ProviderTest {
         .put("userHandle", field(32, 7))
         .also { if (app) it.put("clientDataJSON", field(130, 5)) }
 
-    private fun parse(result: JSONObject, kind: RequestKind, caller: Caller) = parseCallerAnswer(result, kind, caller)
+    private fun parse(result: JSONObject, kind: RequestKind, caller: Caller, bound: Boolean = true) =
+        parseCallerAnswer(result, kind, caller, bound)
 
-    private fun refused(result: JSONObject, kind: RequestKind, caller: Caller) =
-        assertNull(result.toString(), parse(result, kind, caller))
+    private fun refused(result: JSONObject, kind: RequestKind, caller: Caller, bound: Boolean = true) =
+        assertNull(result.toString(), parse(result, kind, caller, bound))
+
+    private fun password(userName: Any = "ana", password: Any = "hunter2") =
+        JSONObject().put("kind", "password").put("userName", userName).put("password", password)
 
     // Caller
 
     private val certs = listOf(byteArrayOf(1, 2, 3), byteArrayOf(4, 5))
+    private val oneCert = listOf(byteArrayOf(1, 2, 3))
 
     @Test
     fun aBrowserThatSetAnOriginInTheAllowlistIsTrusted() {
@@ -95,19 +100,30 @@ class ProviderTest {
 
     @Test
     fun aCallerWithNoOriginIsAnAppWithItsCertificatesSha256() {
-        val caller = callerOf("org.example.app", certs, false) { null }
-        assertEquals(
-            Caller.App("org.example.app", listOf(sha256Hex(byteArrayOf(1, 2, 3)), sha256Hex(byteArrayOf(4, 5)))),
-            caller,
-        )
+        val caller = callerOf("org.example.app", oneCert, false) { null }
+        assertEquals(Caller.App("org.example.app", listOf(sha256Hex(byteArrayOf(1, 2, 3)))), caller)
         caller as Caller.App
         for (hash in caller.certSha256) assertTrue(hash, Regex("^[0-9a-f]{64}$").matches(hash))
     }
 
     @Test
-    fun inThisChangeOnlyABrowserIsServed() {
+    fun anAppWithNoSignerOrMoreThanOneIsRefused() {
+        assertEquals(Caller.Refused, callerOf("org.example.app", emptyList(), false) { null })
+        assertEquals(Caller.Refused, callerOf("org.example.app", certs, false) { null })
+        assertEquals(Caller.Refused, callerOf("org.example.app", certs + byteArrayOf(6), false) { null })
+        assertTrue(callerOf("org.example.app", oneCert, false) { null } is Caller.App)
+    }
+
+    @Test
+    fun aBrowserIsServedWhateverItsSigners() {
+        assertEquals(Caller.Browser("https://example.com", "p"), callerOf("p", certs, true) { "https://example.com" })
+        assertEquals(Caller.Browser("https://example.com", "p"), callerOf("p", emptyList(), true) { "https://example.com" })
+    }
+
+    @Test
+    fun aBrowserAndAnAppAreServedARefusedCallerIsNot() {
         assertTrue(servesCaller(browser))
-        assertFalse(servesCaller(app))
+        assertTrue(servesCaller(app))
         assertFalse(servesCaller(Caller.Refused))
     }
 
@@ -161,6 +177,27 @@ class ProviderTest {
     @Test
     fun refusesARefusedCaller() {
         assertNull(providerRequestOf(RequestKind.GET, Caller.Refused, "{}", hash))
+        assertNull(providerRequestOf(RequestKind.PASSWORD, Caller.Refused, null, null))
+    }
+
+    @Test
+    fun aPasswordRequestIgnoresTheJsonAndTheHashWhoeverAsks() {
+        for (caller in listOf(browser, app)) {
+            for ((json, h) in listOf<Pair<String?, ByteArray?>>(null to null, "{}" to hash, "x".repeat(REQUEST_JSON_MAX + 1) to ByteArray(3))) {
+                val request = providerRequestOf(RequestKind.PASSWORD, caller, json, h)!!
+                assertNull(request.requestJson)
+                assertNull(request.clientDataHash)
+                val fields = providerRequestFields(request)
+                assertEquals(setOf("kind", "caller"), fields.keys().asSequence().toSet())
+                assertEquals("password", fields.getString("kind"))
+            }
+        }
+    }
+
+    @Test
+    fun aPasskeyRequestNeedsItsJson() {
+        assertNull(providerRequestOf(RequestKind.GET, browser, null, hash))
+        assertNull(providerRequestOf(RequestKind.CREATE, app, null, null))
     }
 
     @Test
@@ -195,8 +232,8 @@ class ProviderTest {
     }
 
     @Test
-    fun acceptsErrorCancelledAndBrowserForBothKinds() {
-        for (kind in RequestKind.entries) {
+    fun acceptsErrorCancelledAndBrowserForBothPasskeyKinds() {
+        for (kind in listOf(RequestKind.GET, RequestKind.CREATE)) {
             assertEquals(
                 CallerAnswer.Dom(DomError.NOT_ALLOWED),
                 parse(JSONObject().put("kind", "error").put("name", "NotAllowedError"), kind, browser),
@@ -215,6 +252,71 @@ class ProviderTest {
         refused(created(), RequestKind.GET, browser)
         refused(asserted(), RequestKind.CREATE, browser)
         refused(JSONObject().put("kind", "error").put("name", "InvalidStateError"), RequestKind.GET, browser)
+    }
+
+    @Test
+    fun aPasswordRequestTakesCancelledAndBrowserOnly() {
+        for (caller in listOf(browser, app)) {
+            assertEquals(CallerAnswer.Cancelled, parse(JSONObject().put("kind", "cancelled"), RequestKind.PASSWORD, caller, bound = false))
+            assertEquals(CallerAnswer.UseAnother, parse(JSONObject().put("kind", "browser"), RequestKind.PASSWORD, caller, bound = false))
+            refused(JSONObject().put("kind", "error").put("name", "NotAllowedError"), RequestKind.PASSWORD, caller)
+            refused(JSONObject().put("kind", "error").put("name", "InvalidStateError"), RequestKind.PASSWORD, caller)
+            refused(created(app = caller is Caller.App), RequestKind.PASSWORD, caller)
+            refused(asserted(app = caller is Caller.App), RequestKind.PASSWORD, caller)
+        }
+    }
+
+    @Test
+    fun acceptsAPasswordForAPasswordRequest() {
+        val fromBrowser = parse(password(), RequestKind.PASSWORD, browser, bound = false) as CallerAnswer.Password
+        assertEquals("ana", fromBrowser.userName)
+        assertEquals("hunter2", fromBrowser.password)
+        val fromApp = parse(password(), RequestKind.PASSWORD, app, bound = true) as CallerAnswer.Password
+        assertEquals("ana", fromApp.userName)
+        assertEquals("hunter2", fromApp.password)
+        val longest = "p".repeat(16384)
+        assertNotNull(parse(password(longest, longest), RequestKind.PASSWORD, app))
+        assertNotNull(parse(password("u", "p"), RequestKind.PASSWORD, app))
+    }
+
+    @Test
+    fun refusesAPasswordForAPasskeyRequest() {
+        refused(password(), RequestKind.GET, browser)
+        refused(password(), RequestKind.CREATE, browser)
+        refused(password(), RequestKind.GET, app)
+        refused(password(), RequestKind.CREATE, app)
+    }
+
+    @Test
+    fun refusesAPasswordWithOtherKeysOrBadStrings() {
+        refused(password().put("extra", 1), RequestKind.PASSWORD, browser)
+        refused(password().apply { remove("userName") }, RequestKind.PASSWORD, browser)
+        refused(password().apply { remove("password") }, RequestKind.PASSWORD, browser)
+        refused(JSONObject().put("kind", "password"), RequestKind.PASSWORD, browser)
+        refused(password(userName = ""), RequestKind.PASSWORD, browser)
+        refused(password(password = ""), RequestKind.PASSWORD, browser)
+        refused(password(userName = "u".repeat(16385)), RequestKind.PASSWORD, browser)
+        refused(password(password = "p".repeat(16385)), RequestKind.PASSWORD, browser)
+        for (value in listOf<Any>(7, true, 1.5, JSONArray(), JSONObject(), JSONObject.NULL)) {
+            refused(password(userName = value), RequestKind.PASSWORD, browser)
+            refused(password(password = value), RequestKind.PASSWORD, browser)
+        }
+    }
+
+    @Test
+    fun anAppGetsNoCredentialUntilItsDomainAnsweredBound() {
+        refused(created(app = true), RequestKind.CREATE, app, bound = false)
+        refused(asserted(app = true), RequestKind.GET, app, bound = false)
+        refused(password(), RequestKind.PASSWORD, app, bound = false)
+        assertNotNull(parse(created(app = true), RequestKind.CREATE, app, bound = true))
+        assertNotNull(parse(asserted(app = true), RequestKind.GET, app, bound = true))
+        // A browser's origin is the site's: no binding to check.
+        assertNotNull(parse(created(), RequestKind.CREATE, browser, bound = false))
+        assertNotNull(parse(asserted(), RequestKind.GET, browser, bound = false))
+        // What is not a credential needs no binding: an app may still decline.
+        assertNotNull(parse(JSONObject().put("kind", "error").put("name", "NotAllowedError"), RequestKind.GET, app, bound = false))
+        assertEquals(CallerAnswer.Cancelled, parse(JSONObject().put("kind", "cancelled"), RequestKind.GET, app, bound = false))
+        assertEquals(CallerAnswer.UseAnother, parse(JSONObject().put("kind", "browser"), RequestKind.CREATE, app, bound = false))
     }
 
     @Test
@@ -327,6 +429,7 @@ class ProviderTest {
         refused(created(), RequestKind.CREATE, Caller.Refused)
         refused(asserted(), RequestKind.GET, Caller.Refused)
         refused(JSONObject().put("kind", "cancelled"), RequestKind.GET, Caller.Refused)
+        refused(password(), RequestKind.PASSWORD, Caller.Refused)
     }
 
     // The response JSON for Credential Manager
@@ -427,7 +530,7 @@ class ProviderTest {
 
     @Test
     fun theWireNamesAreThoseOfTheDocument() {
-        assertEquals(listOf("get", "create"), RequestKind.entries.map { it.wire })
+        assertEquals(listOf("get", "create", "password"), RequestKind.entries.map { it.wire })
         assertEquals(listOf("NotAllowedError", "InvalidStateError"), DomError.entries.map { it.wire })
     }
 }

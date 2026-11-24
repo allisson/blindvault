@@ -1,8 +1,8 @@
 // The credential provider service (android.md §7.2, D290, D301): it holds no session, so it cannot know
 // what the vault holds. It answers each begin call at once, since Android gives each 3 s, with one
-// BlindVault entry per passkey option, and one create entry, for a privileged browser only in this
-// change; its PendingIntent opens ProviderActivity, which unlocks and asks the user. Nothing is read
-// from the vault, logged or stored here.
+// BlindVault entry per passkey or password option, and one create entry for a passkey, for a privileged
+// browser or an app (D303: whether an app is bound to the domain is checked in the window); its PendingIntent
+// opens ProviderActivity, which unlocks and asks the user. Nothing is read from the vault, logged or stored here.
 package io.github.allisson.blindvault
 
 import android.app.PendingIntent
@@ -18,10 +18,12 @@ import androidx.credentials.provider.BeginCreateCredentialResponse
 import androidx.credentials.provider.BeginCreatePublicKeyCredentialRequest
 import androidx.credentials.provider.BeginGetCredentialRequest
 import androidx.credentials.provider.BeginGetCredentialResponse
+import androidx.credentials.provider.BeginGetPasswordOption
 import androidx.credentials.provider.BeginGetPublicKeyCredentialOption
 import androidx.credentials.provider.CreateEntry
 import androidx.credentials.provider.CredentialEntry
 import androidx.credentials.provider.CredentialProviderService
+import androidx.credentials.provider.PasswordCredentialEntry
 import androidx.credentials.provider.ProviderClearCredentialStateRequest
 import androidx.credentials.provider.PublicKeyCredentialEntry
 import java.util.concurrent.atomic.AtomicInteger
@@ -49,9 +51,10 @@ class ProviderService : CredentialProviderService() {
         val entries = mutableListOf<CredentialEntry>()
         if (served(request.callingAppInfo)) {
             for (option in request.beginGetCredentialOptions) {
-                // A password option gets no entry in this change (D301 "Order").
                 if (option is BeginGetPublicKeyCredentialOption) {
                     entries += PublicKeyCredentialEntry.Builder(this, ENTRY_NAME, entryIntent(this, RequestKind.GET), option).build()
+                } else if (option is BeginGetPasswordOption) {
+                    entries += PasswordCredentialEntry.Builder(this, ENTRY_NAME, entryIntent(this, RequestKind.PASSWORD), option).build()
                 }
             }
         }

@@ -133,7 +133,7 @@ class MainActivity : Activity() {
             Request.BuildInfo -> reply(shellBuildInfo(this))
             Request.LifecycleWatch -> reply(Outcome.Ok(JSONObject().put("state", if (visibility.hidden) "hidden" else "shown")))
             // The provider types come from the provider window only (§9): the parser has refused them.
-            Request.ProviderRequest, is Request.ProviderResult -> reply(Outcome.Error(ShellError.INVALID))
+            Request.ProviderRequest, is Request.ProviderAssetLinks, is Request.ProviderResult -> reply(Outcome.Error(ShellError.INVALID))
         }
     }
 
