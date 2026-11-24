@@ -56,6 +56,9 @@ sealed interface Request {
     /** `provider-request` (§7.7): no key; the shell answers from the request Credential Manager passed. */
     data object ProviderRequest : Request
 
+    /** `provider-assetlinks` (§7.4, D303): `domain` is one `assetLinksDomain` accepted. */
+    class ProviderAssetLinks(val domain: String) : Request
+
     /** `provider-result` (§7.7): an object, checked against the pending request by `parseCallerAnswer`. */
     class ProviderResult(val result: JSONObject) : Request
 }
@@ -155,6 +158,9 @@ private val TYPES: Map<String, Type> = mapOf(
     "build-info" to Type(emptySet()) { Request.BuildInfo },
     "lifecycle-watch" to Type(emptySet()) { Request.LifecycleWatch },
     "provider-request" to Type(emptySet(), PROVIDER_ONLY) { Request.ProviderRequest },
+    "provider-assetlinks" to Type(setOf("domain"), PROVIDER_ONLY) {
+        Request.ProviderAssetLinks(assetLinksDomain(string(it, "domain")) ?: throw Invalid())
+    },
     "provider-result" to Type(setOf("result"), PROVIDER_ONLY) {
         Request.ProviderResult(it.opt("result") as? JSONObject ?: throw Invalid())
     },

@@ -1,10 +1,11 @@
-// The credential provider's decisions that need no Android object (android.md §7.3, §7.7, D301): who asks,
-// what the provider window is told about the request, what it may answer, and the response JSON written
-// for Credential Manager. Pure Kotlin on org.json, so the JVM tests run it as the app does. The shell
+// The credential provider's decisions that need no Android object (android.md §7.3 to §7.7, D301, D303): who
+// asks, what the provider window is told about the request, what it may answer, whether an app is bound to
+// a domain by its `assetlinks.json`, and the response JSON written for Credential Manager. Pure Kotlin on org.json, so the JVM tests run it as the app does. The shell
 // never sees a key: a signed response passes through it toward the caller that asked.
 package io.github.allisson.blindvault
 
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 /** The most UTF-8 bytes of the WebAuthn options JSON the window is given (§7.7). */
@@ -16,6 +17,9 @@ const val CLIENT_DATA_HASH_LENGTH = 32
 enum class RequestKind(val wire: String) {
     GET("get"),
     CREATE("create"),
+
+    /** A password of a Login item (§7.6, D303). */
+    PASSWORD("password"),
 }
 
 /** The public-key DOM exceptions the window may ask for (§7.1 "Ending"). */
@@ -40,7 +44,8 @@ sealed interface Caller {
  * The caller, from `CallingAppInfo.getOrigin(allowlist)` as `getOrigin`. An origin it returns is the
  * privileged browser's; `IllegalStateException`, an origin set by a caller outside the allowlist, and
  * `IllegalArgumentException`, a bad allowlist, refuse; `null` is an app, unless the caller did set an
- * origin (`originPopulated`), which is refused.
+ * origin (`originPopulated`), which is refused. An app that does not have exactly one current signer is
+ * refused too: its `android:apk-key-hash` origin would name one of them (§7.3, D303).
  */
 fun callerOf(
     packageName: String,
@@ -60,29 +65,36 @@ fun callerOf(
         return if (site.isEmpty()) Caller.Refused else Caller.Browser(site, packageName)
     }
     if (originPopulated) return Caller.Refused
+    if (signingCertificates.size != 1) return Caller.Refused
     return Caller.App(packageName, signingCertificates.map { sha256Hex(it) })
 }
 
-/** Who gets entries and credentials: a privileged browser only, until apps are bound by `assetlinks.json` (D301 "Order"). */
-fun servesCaller(caller: Caller): Boolean = caller is Caller.Browser
+/**
+ * Who gets entries and credentials: a privileged browser or an app, never a refused caller (§7.2, D303). Whether
+ * an app is bound to a domain is checked in the window (§7.4), not here.
+ */
+fun servesCaller(caller: Caller): Boolean = caller !== Caller.Refused
 
 /** The request the window is told about. */
 class ProviderRequest(
     val kind: RequestKind,
     val caller: Caller,
-    val requestJson: String,
+    /** The WebAuthn options JSON of a passkey request; `null` for a password (§7.7). */
+    val requestJson: String?,
     /** 32 bytes, from a privileged browser only. */
     val clientDataHash: ByteArray?,
 )
 
 /**
- * The request for the window, `null` when the caller is refused, the options JSON is over its bound, or a
- * browser passed no `clientDataHash` of 32 bytes: the activity then answers `NotAllowedError` without
- * loading the window. An app's `clientDataJSON` is the window's own, so it gets no hash.
+ * The request for the window, `null` when the caller is refused, the options JSON of a passkey request is
+ * missing or over its bound, or a browser passed no `clientDataHash` of 32 bytes: the activity then answers
+ * `NotAllowedError` without loading the window. An app's `clientDataJSON` is the window's own, so it gets no
+ * hash. A password request has neither options JSON nor hash: both are ignored, whoever asks (§7.7).
  */
-fun providerRequestOf(kind: RequestKind, caller: Caller, requestJson: String, clientDataHash: ByteArray?): ProviderRequest? {
+fun providerRequestOf(kind: RequestKind, caller: Caller, requestJson: String?, clientDataHash: ByteArray?): ProviderRequest? {
     if (caller === Caller.Refused) return null
-    if (requestJson.toByteArray(Charsets.UTF_8).size > REQUEST_JSON_MAX) return null
+    if (kind == RequestKind.PASSWORD) return ProviderRequest(kind, caller, null, null)
+    if (requestJson == null || requestJson.toByteArray(Charsets.UTF_8).size > REQUEST_JSON_MAX) return null
     val hash = if (caller is Caller.Browser) {
         if (clientDataHash == null || clientDataHash.size != CLIENT_DATA_HASH_LENGTH) return null
         clientDataHash
@@ -92,7 +104,7 @@ fun providerRequestOf(kind: RequestKind, caller: Caller, requestJson: String, cl
     return ProviderRequest(kind, caller, requestJson, hash)
 }
 
-/** The answer to `provider-request` (§7.7). */
+/** The answer to `provider-request` (§7.7): `requestJson` is absent for a password. */
 fun providerRequestFields(request: ProviderRequest): JSONObject {
     val caller = JSONObject()
     when (val c = request.caller) {
@@ -103,7 +115,7 @@ fun providerRequestFields(request: ProviderRequest): JSONObject {
     val fields = JSONObject()
         .put("kind", request.kind.wire)
         .put("caller", caller)
-        .put("requestJson", request.requestJson)
+    request.requestJson?.let { fields.put("requestJson", it) }
     request.clientDataHash?.let { fields.put("clientDataHash", base64url(it)) }
     return fields
 }
@@ -127,6 +139,9 @@ sealed interface CallerAnswer {
         val userHandle: String,
         val clientDataJson: String?,
     ) : CallerAnswer
+
+    /** The user name and password of the login the user picked, for a `GetCredentialResponse` (§7.6, D303). */
+    class Password(val userName: String, val password: String) : CallerAnswer
 
     /** The public-key DOM exception of that name. */
     data class Dom(val error: DomError) : CallerAnswer
@@ -155,19 +170,25 @@ private val ALGORITHMS = setOf(-7L, -8L)
 
 private const val CLIENT_DATA_JSON = "clientDataJSON"
 
+/** The characters of a `password` result's `userName` and `password` (§7.7). */
+private const val CREDENTIAL_TEXT_MAX = 16384
+
 /**
  * `provider-result`'s `result` checked against the pending request and its caller (§7.7): the kind, each
- * key, every byte field canonical and bounded, `clientDataJSON` present for an app only. `null` for
- * anything else; the activity then answers `invalid` and ends with a cancellation.
+ * key, every byte field canonical and bounded, `clientDataJSON` present for an app only. `bound` is whether
+ * this request already got a `bound` answer to `provider-assetlinks` (§7.4): an app gets no credential
+ * without it, whatever it asked. A `password` result belongs to a password request, which takes no
+ * `created`, `asserted` or `error`. `null` for anything else; the activity then answers `invalid` and ends
+ * with a cancellation.
  */
-fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller): CallerAnswer? {
+fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller, bound: Boolean): CallerAnswer? {
     if (caller === Caller.Refused) return null
     val keys = result.keys().asSequence().toSet()
     val app = caller is Caller.App
     val clientData = if (app) setOf(CLIENT_DATA_JSON) else emptySet()
     return when (result.opt("kind") as? String) {
         "created" -> {
-            if (kind != RequestKind.CREATE) return null
+            if (kind != RequestKind.CREATE || (app && !bound)) return null
             if (keys != setOf("kind", "id", "attestationObject", "authenticatorData", "publicKey", "publicKeyAlgorithm") + clientData) return null
             CallerAnswer.Created(
                 id = field(result, "id", ID_BYTES) ?: return null,
@@ -179,7 +200,7 @@ fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller): Ca
             )
         }
         "asserted" -> {
-            if (kind != RequestKind.GET) return null
+            if (kind != RequestKind.GET || (app && !bound)) return null
             if (keys != setOf("kind", "id", "authenticatorData", "signature", "userHandle") + clientData) return null
             CallerAnswer.Asserted(
                 id = field(result, "id", ID_BYTES) ?: return null,
@@ -189,8 +210,16 @@ fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller): Ca
                 clientDataJson = if (app) field(result, CLIENT_DATA_JSON, CLIENT_DATA_JSON_BYTES) ?: return null else null,
             )
         }
+        "password" -> {
+            if (kind != RequestKind.PASSWORD || (app && !bound)) return null
+            if (keys != setOf("kind", "userName", "password")) return null
+            CallerAnswer.Password(
+                userName = credentialText(result, "userName") ?: return null,
+                password = credentialText(result, "password") ?: return null,
+            )
+        }
         "error" -> {
-            if (keys != setOf("kind", "name")) return null
+            if (kind == RequestKind.PASSWORD || keys != setOf("kind", "name")) return null
             when (result.opt("name") as? String) {
                 DomError.NOT_ALLOWED.wire -> CallerAnswer.Dom(DomError.NOT_ALLOWED)
                 // A create only: a get has no excluded credential to name.
@@ -204,10 +233,87 @@ fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller): Ca
     }
 }
 
+/** The text of a user name or password: 1 to 16384 characters. */
+private fun credentialText(result: JSONObject, key: String): String? =
+    (result.opt(key) as? String)?.takeIf { it.length in 1..CREDENTIAL_TEXT_MAX }
+
 /** The text of a byte field when it is canonical base64url without padding and within `bytes`. */
 private fun field(result: JSONObject, key: String, bytes: IntRange): String? {
     val text = result.opt(key) as? String ?: return null
     return if (decodeBase64url(text, bytes.first, bytes.last) != null) text else null
+}
+
+private val DOMAIN_LABEL = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+private val ASSETLINKS_DOMAIN = Regex("$DOMAIN_LABEL(\\.$DOMAIN_LABEL)+")
+private const val DOMAIN_MAX = 253
+private val ALL_DIGITS = Regex("[0-9]+")
+
+/**
+ * `domain` when the shell may fetch its `assetlinks.json` (§7.4, D303): a lowercase ASCII host name with a
+ * dot, at most 253 characters, no trailing dot, and not an IP address (a last label of digits only). `null`
+ * for anything else: the bridge then answers `invalid`.
+ */
+fun assetLinksDomain(text: String): String? {
+    if (text.length > DOMAIN_MAX || !ASSETLINKS_DOMAIN.matches(text)) return null
+    if (ALL_DIGITS.matches(text.substringAfterLast('.'))) return null
+    return text
+}
+
+private const val GET_LOGIN_CREDS = "delegate_permission/common.get_login_creds"
+
+/** The strings of a JSON array, anything else in it skipped; empty when `value` is no array. */
+private fun strings(value: Any?): List<String> {
+    val array = value as? JSONArray ?: return emptyList()
+    return (0 until array.length()).mapNotNull { array.opt(it) as? String }
+}
+
+/**
+ * Whether the `assetlinks.json` text binds the app (§7.4): a statement with the relation
+ * `delegate_permission/common.get_login_creds` whose `android_app` target names `packageName` and lists
+ * every one of `certSha256` (lowercase hex) among its `sha256_cert_fingerprints`, written with colons or not.
+ * Anything that is not a JSON array of such statements binds nothing, and never throws.
+ */
+fun bindsApp(json: String, packageName: String, certSha256: List<String>): Boolean {
+    if (certSha256.isEmpty()) return false
+    val statements = try {
+        JSONArray(json)
+    } catch (e: JSONException) {
+        return false
+    }
+    return (0 until statements.length()).any { i ->
+        val statement = statements.opt(i) as? JSONObject ?: return@any false
+        val target = statement.opt("target") as? JSONObject ?: return@any false
+        GET_LOGIN_CREDS in strings(statement.opt("relation")) &&
+            target.opt("namespace") == "android_app" &&
+            target.opt("package_name") == packageName &&
+            strings(target.opt("sha256_cert_fingerprints")).map { it.replace(":", "").lowercase() }.containsAll(certSha256)
+    }
+}
+
+/** What the window is told of an app's binding to a domain (§7.4). */
+enum class Binding(val wire: String) {
+    BOUND("bound"),
+    UNBOUND("unbound"),
+    REDIRECT("redirect"),
+    NETWORK("network"),
+}
+
+/** Whether a `Content-Type` header names `application/json`, whatever its parameters or case. */
+fun isJsonMediaType(contentType: String?): Boolean =
+    contentType != null && contentType.substringBefore(';').trim().equals("application/json", ignoreCase = true)
+
+/**
+ * The binding from the response of the `assetlinks.json` fetch (§7.4): a `3xx` is a redirect, another status
+ * or media type binds nothing, and a `null` body, which the fetcher passes when the size or the read failed,
+ * is the network's. The fetcher fetches no body for a status other than `200`.
+ */
+fun bindingOf(status: Int, contentType: String?, body: String?, packageName: String, certSha256: List<String>): Binding = when {
+    status in 300..399 -> Binding.REDIRECT
+    status != 200 -> Binding.UNBOUND
+    !isJsonMediaType(contentType) -> Binding.UNBOUND
+    body == null -> Binding.NETWORK
+    bindsApp(body, packageName, certSha256) -> Binding.BOUND
+    else -> Binding.UNBOUND
 }
 
 private val TRANSPORTS = listOf("internal", "hybrid")

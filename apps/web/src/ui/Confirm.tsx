@@ -116,10 +116,13 @@ export function Confirm({
  */
 export function ConfirmRequest({
   state,
+  app,
   busy,
   choose,
 }: {
   readonly state: Exclude<ConfirmState, { kind: 'locked' }>;
+  /** An Android app's package, shown in place of the site (android.md §7.5, D303). */
+  readonly app?: string | undefined;
   readonly busy: boolean;
   readonly choose: (choice: ConfirmChoice) => void;
 }) {
@@ -152,7 +155,7 @@ export function ConfirmRequest({
     return (
       <>
         <h1 className="text-title">{m.confirm.getTitle}</h1>
-        <Origins state={state} />
+        <Origins state={state} app={app} />
         {state.passkeys.length === 0 ? (
           <p className="text-sm">{format(m.confirm.none, { rpId: state.rpId })}</p>
         ) : (
@@ -190,7 +193,7 @@ export function ConfirmRequest({
   return (
     <>
       <h1 className="text-title">{m.confirm.createTitle}</h1>
-      <Origins state={state}>
+      <Origins state={state} app={app}>
         <Row label={m.confirm.user}>
           {state.displayName === '' || state.displayName === state.userName
             ? state.userName
@@ -237,32 +240,43 @@ export function ConfirmRequest({
   );
 }
 
-/** The site's origin as the browser reported it, the frame's top origin, and the `rpId`. */
+/**
+ * The site's origin as the browser reported it, the frame's top origin, and the `rpId`; for an
+ * Android app, its package in place of the site.
+ */
 function Origins({
   state,
+  app,
   children,
 }: {
   readonly state: Exclude<ConfirmState, { kind: 'locked' }>;
+  readonly app?: string | undefined;
   readonly children?: ReactNode;
 }) {
   const m = useMessages();
   return (
     <dl className="flex flex-col gap-2">
-      <Row label={m.confirm.site}>
-        <span data-testid="confirm-origin">{state.origin}</span>
-        {state.topOrigin === undefined ? null : (
-          <span className="block text-xs text-muted">
-            {format(m.confirm.frame, { origin: state.topOrigin })}
-          </span>
-        )}
-      </Row>
+      {app === undefined ? (
+        <Row label={m.confirm.site}>
+          <span data-testid="confirm-origin">{state.origin}</span>
+          {state.topOrigin === undefined ? null : (
+            <span className="block text-xs text-muted">
+              {format(m.confirm.frame, { origin: state.topOrigin })}
+            </span>
+          )}
+        </Row>
+      ) : (
+        <Row label={m.confirm.app}>
+          <span data-testid="confirm-app">{app}</span>
+        </Row>
+      )}
       <Row label={m.confirm.rpId}>{state.rpId}</Row>
       {children}
     </dl>
   );
 }
 
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+export function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="flex flex-col">
       <dt className="text-xs font-semibold text-muted">{label}</dt>

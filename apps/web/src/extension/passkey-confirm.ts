@@ -41,6 +41,17 @@ export interface CarryOutDeps {
    * in place of `SHA-256(clientDataJSON)` (android.md §7.3, D301).
    */
   readonly clientDataHash?: Uint8Array;
+  /**
+   * The origin `clientDataJSON` carries in place of the call's: an app's `android:apk-key-hash`, whose
+   * call is at `https://<rpId>` for the checks (android.md §7.3, D303).
+   */
+  readonly clientOrigin?: string;
+}
+
+/** `clientDataJSON` of `call`, at `deps.clientOrigin` when one is given. */
+function clientData(call: PasskeyCall, deps: CarryOutDeps): Uint8Array {
+  const origin = deps.clientOrigin;
+  return clientDataJSON(origin === undefined ? call : { ...call, origin, topOrigin: origin });
 }
 
 /** What the confirmation shows of a call, on an unlocked vault (extension.md §7.7 Window). */
@@ -116,7 +127,7 @@ async function assert(
     (c) => c.credentialId === credentialId,
   );
   if (!chosen) return 'not-found';
-  const data = clientDataJSON(call);
+  const data = clientData(call, deps);
   const signed = deps.clientDataHash
     ? await signPasskeyAssertionHash(chosen.value.privateKey, checked.rpId, deps.clientDataHash)
     : await signPasskeyAssertion(chosen.value.privateKey, checked.rpId, data);
@@ -191,7 +202,7 @@ async function create(
   return {
     kind: 'created',
     id: toBase64url(created.credentialId),
-    clientDataJSON: toBase64url(clientDataJSON(call)),
+    clientDataJSON: toBase64url(clientData(call, deps)),
     attestationObject: toBase64url(created.attestationObject),
     authenticatorData: toBase64url(created.authenticatorData),
     publicKey: toBase64url(created.publicKey),

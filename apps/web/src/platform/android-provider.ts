@@ -1,12 +1,16 @@
-// The provider window's messages to the Android shell (android.md §7.7, D301): the request the shell
-// took from Credential Manager, checked key by key, and the result the window hands back. Until apps
-// bound by assetlinks.json land (D301 Order), only a privileged browser's request is taken.
+// The provider window's messages to the Android shell (android.md §7.7, D301, D303): the request the
+// shell took from Credential Manager, checked key by key, and the result the window hands back. A
+// privileged browser's request carries its origin; an app's is bound to a domain only by that domain's
+// assetlinks.json, which the window asks the shell to check (§7.4).
+
+import { registrableDomain } from '@blindvault/vault';
 
 import {
   type PasskeyCall,
   fromBase64url,
   parseCreateOptions,
   parseGetOptions,
+  toBase64url,
 } from '../extension/passkey-options';
 import { type PasskeyResult } from '../extension/rpc';
 import { type ShellAnswer } from './android-bridge';
@@ -18,6 +22,12 @@ const CLIENT_DATA_HASH_LENGTH = 32;
 const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const PACKAGE_MAX = 255;
 const ORIGIN_MAX = 2048;
+const CERT_SHA256 = /^[0-9a-f]{64}$/;
+/** A lowercase ASCII host name, as the shell takes one for `provider-assetlinks` (§7.4, D303). */
+const HOST =
+  /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+/** The longest user name or password `provider-result` carries (§7.7, D303). */
+export const PASSWORD_MAX = 16384;
 
 export interface BrowserCaller {
   readonly kind: 'browser';
@@ -25,22 +35,53 @@ export interface BrowserCaller {
   readonly packageName: string;
 }
 
-export interface ProviderRequest {
-  readonly call: PasskeyCall;
-  readonly caller: BrowserCaller;
-  /** The hash the browser built `clientDataJSON` for; the window signs over it (§7.3). */
-  readonly clientDataHash: Uint8Array;
+/** A native app, with the SHA-256 of its one signing certificate, lowercase hex (§7.3, D303). */
+export interface AppCaller {
+  readonly kind: 'app';
+  readonly packageName: string;
+  readonly certSha256: string;
 }
 
-/** How the window ends a request: the extension's results, or the user's cancellation. */
-export type ProviderOutcome = PasskeyResult | { readonly kind: 'cancelled' };
+export type Caller = BrowserCaller | AppCaller;
+
+export type ProviderRequest =
+  | {
+      readonly kind: 'passkey';
+      readonly call: PasskeyCall;
+      readonly caller: BrowserCaller;
+      /** The hash the browser built `clientDataJSON` for; the window signs over it (§7.3). */
+      readonly clientDataHash: Uint8Array;
+    }
+  | {
+      /**
+       * An app's: `call.origin` is `https://<rpId>`, for the checks and the matching, and the window
+       * builds `clientDataJSON` with `clientOrigin`, the app's `android:apk-key-hash` (§7.3, D303).
+       */
+      readonly kind: 'passkey';
+      readonly call: PasskeyCall;
+      readonly caller: AppCaller;
+      readonly clientOrigin: string;
+    }
+  | { readonly kind: 'password'; readonly caller: Caller };
+
+export interface PasswordResult {
+  readonly kind: 'password';
+  readonly userName: string;
+  readonly password: string;
+}
+
+/** How the window ends a request: the extension's results, a password, or the user's cancellation. */
+export type ProviderOutcome = PasskeyResult | PasswordResult | { readonly kind: 'cancelled' };
 
 type WithoutClientData<T> = T extends { readonly clientDataJSON: string }
   ? Omit<T, 'clientDataJSON'>
   : T;
 
-/** What the window sends in `provider-result` for a privileged browser (§7.7). */
-export type ProviderResult = WithoutClientData<ProviderOutcome>;
+/**
+ * What the window sends in `provider-result` (§7.7): a privileged browser's passkey result without
+ * `clientDataJSON`, an app's with it.
+ */
+export type ProviderResult = ProviderOutcome | WithoutClientData<ProviderOutcome>;
 
 type Fields = Record<string, unknown>;
 
@@ -113,17 +154,49 @@ function httpsOrigin(value: unknown): value is string {
   }
 }
 
-function browserCaller(value: unknown): BrowserCaller | undefined {
-  if (!plain(value)) return undefined;
+function hasKeys(value: Fields, expected: readonly string[]): boolean {
   const keys = Object.keys(value);
-  if (keys.length !== 3 || !['kind', 'origin', 'packageName'].every((k) => keys.includes(k))) {
-    return undefined;
+  return keys.length === expected.length && expected.every((k) => keys.includes(k));
+}
+
+function packageName(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= PACKAGE_MAX && PACKAGE.test(value);
+}
+
+function callerOf(value: unknown): Caller | undefined {
+  if (!plain(value)) return undefined;
+  if (value.kind === 'browser') {
+    if (!hasKeys(value, ['kind', 'origin', 'packageName'])) return undefined;
+    const { origin, packageName: name } = value;
+    if (!httpsOrigin(origin) || !packageName(name)) return undefined;
+    return { kind: 'browser', origin, packageName: name };
   }
-  const { kind, origin, packageName } = value;
-  if (kind !== 'browser' || !httpsOrigin(origin)) return undefined;
-  if (typeof packageName !== 'string' || packageName.length > PACKAGE_MAX) return undefined;
-  if (!PACKAGE.test(packageName)) return undefined;
-  return { kind, origin, packageName };
+  if (value.kind === 'app') {
+    if (!hasKeys(value, ['kind', 'packageName', 'certSha256'])) return undefined;
+    const { packageName: name, certSha256 } = value;
+    // One signer only: the `android:apk-key-hash` origin names one certificate (D303).
+    if (!packageName(name) || !Array.isArray(certSha256) || certSha256.length !== 1) {
+      return undefined;
+    }
+    const [cert] = certSha256 as unknown[];
+    if (typeof cert !== 'string' || !CERT_SHA256.test(cert)) return undefined;
+    return { kind: 'app', packageName: name, certSha256: cert };
+  }
+  return undefined;
+}
+
+/**
+ * A domain the shell may check `assetlinks.json` of (§7.4, D303): a lowercase ASCII host name under a
+ * registrable domain, so never an IP address, a public suffix or `localhost`.
+ */
+export function bindableDomain(value: string): boolean {
+  return HOST.test(value) && !/^[0-9.]+$/.test(value) && registrableDomain(value) !== null;
+}
+
+/** `android:apk-key-hash:` and the base64url of the certificate's SHA-256 (§7.3). */
+export function apkKeyHashOrigin(certSha256: string): string {
+  const bytes = Uint8Array.from(certSha256.match(/../g) ?? [], (b) => parseInt(b, 16));
+  return `android:apk-key-hash:${toBase64url(bytes)}`;
 }
 
 /**
@@ -131,17 +204,19 @@ function browserCaller(value: unknown): BrowserCaller | undefined {
  * the window then ends the request with `NotAllowedError`.
  */
 export function parseProviderRequest(answer: ShellAnswer): ProviderRequest | undefined {
-  const keys = Object.keys(answer).filter((k) => k !== 'v' && k !== 'id' && k !== 'ok');
-  const expected = ['kind', 'caller', 'requestJson', 'clientDataHash'];
-  if (keys.length !== expected.length || !expected.every((k) => keys.includes(k))) {
-    return undefined;
-  }
-  const { kind, requestJson, clientDataHash } = answer;
-  if (kind !== 'create' && kind !== 'get') return undefined;
-  const caller = browserCaller(answer.caller);
+  const fields = Object.fromEntries(
+    Object.entries(answer).filter(([k]) => k !== 'v' && k !== 'id' && k !== 'ok'),
+  );
+  const { kind, requestJson, clientDataHash } = fields;
+  const caller = callerOf(fields.caller);
   if (!caller) return undefined;
-  const hash = typeof clientDataHash === 'string' ? fromBase64url(clientDataHash) : undefined;
-  if (hash?.length !== CLIENT_DATA_HASH_LENGTH) return undefined;
+  if (kind === 'password') {
+    return hasKeys(fields, ['kind', 'caller']) ? { kind: 'password', caller } : undefined;
+  }
+  if (kind !== 'create' && kind !== 'get') return undefined;
+  const browser = caller.kind === 'browser';
+  const expected = ['kind', 'caller', 'requestJson', ...(browser ? ['clientDataHash'] : [])];
+  if (!hasKeys(fields, expected)) return undefined;
   if (typeof requestJson !== 'string' || requestJson.length > REQUEST_JSON_MAX) return undefined;
   let json: unknown;
   try {
@@ -149,25 +224,45 @@ export function parseProviderRequest(answer: ShellAnswer): ProviderRequest | und
   } catch {
     return undefined;
   }
-  const picked = pickOptions(kind, json);
-  const origins = { origin: caller.origin, topOrigin: caller.origin };
+  const call = callOf(kind, pickOptions(kind, json));
+  if (!call) return undefined;
+  if (caller.kind === 'browser') {
+    const hash = typeof clientDataHash === 'string' ? fromBase64url(clientDataHash) : undefined;
+    if (hash?.length !== CLIENT_DATA_HASH_LENGTH) return undefined;
+    return { kind: 'passkey', call: at(call, caller.origin), caller, clientDataHash: hash };
+  }
+  // An app sets no origin: its request names the rpId, which assetlinks.json must bind (D303).
+  const rpId = call.kind === 'create' ? call.options.rp.id : call.options.rpId;
+  if (rpId === undefined || !bindableDomain(rpId)) return undefined;
+  return {
+    kind: 'passkey',
+    call: at(call, `https://${rpId}`),
+    caller,
+    clientOrigin: apkKeyHashOrigin(caller.certSha256),
+  };
+}
+
+/** The call of the checked options, its origin still to set. */
+function callOf(kind: 'create' | 'get', picked: Fields | undefined): PasskeyCall | undefined {
   if (kind === 'create') {
     const options = parseCreateOptions(picked);
-    return options
-      ? { call: { kind, ...origins, options }, caller, clientDataHash: hash }
-      : undefined;
+    return options && { kind, origin: '', topOrigin: '', options };
   }
   const options = parseGetOptions(picked);
-  return options
-    ? { call: { kind, ...origins, options }, caller, clientDataHash: hash }
-    : undefined;
+  return options && { kind, origin: '', topOrigin: '', options };
+}
+
+/** `call` at `origin`, in the top frame. */
+function at(call: PasskeyCall, origin: string): PasskeyCall {
+  return { ...call, origin, topOrigin: origin };
 }
 
 /**
  * The `result` of `provider-result`: a privileged browser writes `clientDataJSON` itself, so it is
- * left out (§7.3, D301).
+ * left out (§7.3, D301); an app gets the window's.
  */
-export function providerResult(result: ProviderOutcome): ProviderResult {
+export function providerResult(result: ProviderOutcome, caller?: Caller): ProviderResult {
+  if (caller?.kind === 'app') return result;
   if (result.kind === 'asserted') {
     const { id, authenticatorData, signature, userHandle } = result;
     return { kind: 'asserted', id, authenticatorData, signature, userHandle };

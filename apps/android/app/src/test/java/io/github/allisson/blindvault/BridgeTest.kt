@@ -114,6 +114,27 @@ class BridgeTest {
     fun refusesTheProviderTypesFromTheMainWindow() {
         refused(message("provider-request"))
         refused(message("provider-result", "result" to result))
+        refused(message("provider-assetlinks", "domain" to "example.com"))
+    }
+
+    @Test
+    fun acceptsAProviderAssetLinksFromTheProviderWindow() {
+        val parsed = accepted(message("provider-assetlinks", "domain" to "a-b.example.co.uk"), provider) as Request.ProviderAssetLinks
+        assertEquals("a-b.example.co.uk", parsed.domain)
+    }
+
+    @Test
+    fun refusesAProviderAssetLinksWithABadDomainOrKeys() {
+        for (domain in listOf<Any?>("", "localhost", "Example.com", "1.2.3.4", "example.com.", "example.com:443", "example.com/x", "ex\u00e4mple.com", 7, true, null, JSONArray())) {
+            refused(message("provider-assetlinks", "domain" to domain), provider)
+        }
+        refused(message("provider-assetlinks"), provider)
+        refused(message("provider-assetlinks", "domain" to "example.com", "extra" to 1), provider)
+        refused(message("provider-assetlinks", "host" to "example.com"), provider)
+        assertEquals(
+            Parsed.Refused(7, "provider-assetlinks"),
+            Bridge.parse(message("provider-assetlinks", "domain" to "localhost"), provider),
+        )
     }
 
     @Test

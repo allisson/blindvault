@@ -12,7 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { fromBase64url, toBase64url } from '../extension/passkey-options';
 import { type ProviderResult } from '../platform/android-provider';
 import { hex } from './ids';
-import { type ProviderApp, ProviderFlow } from './provider-flow';
+import { type Binding, type ProviderApp, ProviderFlow } from './provider-flow';
 
 beforeAll(initCrypto);
 beforeEach(() => {
@@ -79,7 +79,13 @@ async function stored(rpId: string) {
 /** A flow over a fake shell and a fake app window holding one session. */
 function harness(
   request: unknown,
-  options: { status?: string; writable?: boolean; items?: ItemView[] } = {},
+  options: {
+    status?: string;
+    writable?: boolean;
+    items?: ItemView[];
+    /** The shell's `provider-assetlinks` answer per domain; `unbound` for any other. */
+    bindings?: Record<string, Binding>;
+  } = {},
 ) {
   let items = options.items ?? [];
   const session = {
@@ -117,16 +123,20 @@ function harness(
     lock,
   };
   const results: ProviderResult[] = [];
+  const assetlinks = vi.fn((domain: string) =>
+    Promise.resolve(options.bindings?.[domain] ?? ('unbound' as const)),
+  );
   const flow = new ProviderFlow({
     app,
     shell: {
       request: () =>
         request instanceof Error ? Promise.reject(request) : Promise.resolve(request as never),
+      assetlinks,
       result: (r) => results.push(r),
     },
     now: () => 1_790_000_000_000,
   });
-  return { flow, takeOver, lock, session, set, results, items: () => items };
+  return { flow, takeOver, lock, session, set, results, assetlinks, items: () => items };
 }
 
 const settle = () => vi.advanceTimersByTimeAsync(0);
@@ -324,5 +334,227 @@ describe('ProviderFlow: ending (android.md §7.1 Ending, D301)', () => {
     h.flow.end();
     expect(h.results).toEqual([{ kind: 'cancelled' }]);
     expect(h.lock).toHaveBeenCalled();
+  });
+});
+
+const CERT = 'cd'.repeat(32);
+const APP = { kind: 'app', packageName: 'com.example.app', certSha256: [CERT] };
+const APP_ORIGIN = `android:apk-key-hash:${toBase64url(new Uint8Array(32).fill(0xcd))}`;
+
+function appAnswer(kind: 'get' | 'create', options: Record<string, unknown>) {
+  return { v: 1, id: 1, ok: true, kind, caller: APP, requestJson: JSON.stringify(options) };
+}
+
+function passwordAnswer(caller: unknown) {
+  return { v: 1, id: 1, ok: true, kind: 'password', caller };
+}
+
+/** An app's result's `clientDataJSON`, or a failed test. */
+function clientDataOf(result: ProviderResult | undefined): string {
+  const value = result && 'clientDataJSON' in result ? result.clientDataJSON : undefined;
+  if (typeof value !== 'string') throw new Error(`no clientDataJSON: ${JSON.stringify(result)}`);
+  return value;
+}
+
+const decode = (text: string) => {
+  const bytes = fromBase64url(text);
+  if (!bytes) throw new Error('not base64url');
+  return bytes;
+};
+
+describe('ProviderFlow: an app’s passkey (android.md §7.4, §7.5, D303, CRYPTO-INV-029)', () => {
+  it('checks the rpId’s assetlinks.json before the unlock, and takes nothing over until it binds', async () => {
+    const h = harness(appAnswer('get', GET), { status: 'elsewhere' });
+    void h.flow.start();
+    await settle();
+    expect(h.assetlinks.mock.calls).toEqual([['example.com']]);
+    expect(h.flow.getState()).toMatchObject({
+      kind: 'unbound',
+      packageName: 'com.example.app',
+      unbound: { domains: ['example.com'], binding: 'unbound' },
+    });
+    expect(h.takeOver).not.toHaveBeenCalled();
+    expect(h.results).toEqual([]);
+    h.flow.choose({ choice: 'cancel' });
+    expect(h.results).toEqual([{ kind: 'cancelled' }]);
+  });
+
+  it('says why: a redirect, the network', async () => {
+    for (const binding of ['redirect', 'network'] as const) {
+      const h = harness(appAnswer('get', GET), { bindings: { 'example.com': binding } });
+      void h.flow.start();
+      await settle();
+      expect(h.flow.getState()).toMatchObject({ kind: 'unbound', unbound: { binding } });
+    }
+  });
+
+  it('signs a bound app’s get over its own clientDataJSON, at android:apk-key-hash', async () => {
+    const { value, publicKey } = await stored('example.com');
+    const items = [view(1, login('Example', [{ type: 'passkey', value }]))];
+    const h = harness(appAnswer('get', GET), {
+      items,
+      bindings: { 'example.com': 'bound' },
+    });
+    void h.flow.start();
+    await settle();
+    expect(h.flow.getState().kind).toBe('unlock');
+    h.set('unlocked');
+    expect(h.flow.getState()).toMatchObject({
+      kind: 'confirm',
+      app: 'com.example.app',
+      state: { kind: 'get', rpId: 'example.com' },
+    });
+    h.flow.choose({ choice: 'use', credentialId: hex(Uint8Array.of(5)) });
+    await settle();
+    const [result] = h.results;
+    if (result?.kind !== 'asserted') throw new Error(`not asserted: ${JSON.stringify(result)}`);
+    const clientData = decode(clientDataOf(result));
+    expect(JSON.parse(new TextDecoder().decode(clientData))).toEqual({
+      type: 'webauthn.get',
+      challenge: CHALLENGE,
+      origin: APP_ORIGIN,
+      crossOrigin: false,
+    });
+    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(clientData)));
+    const key = await crypto.subtle.importKey('spki', new Uint8Array(publicKey), 'Ed25519', false, [
+      'verify',
+    ]);
+    const signed = new Uint8Array([...decode(result.authenticatorData), ...hash]);
+    expect(
+      await crypto.subtle.verify('Ed25519', key, new Uint8Array(decode(result.signature)), signed),
+    ).toBe(true);
+  });
+
+  it('saves a bound app’s create, with clientDataJSON at android:apk-key-hash', async () => {
+    const h = harness(appAnswer('create', CREATE), {
+      status: 'unlocked',
+      bindings: { 'example.com': 'bound' },
+    });
+    void h.flow.start();
+    await settle();
+    h.flow.choose({ choice: 'save-new' });
+    vi.useRealTimers();
+    await vi.waitFor(() => {
+      expect(h.results).toHaveLength(1);
+    });
+    const [result] = h.results;
+    expect(result?.kind).toBe('created');
+    expect(JSON.parse(new TextDecoder().decode(decode(clientDataOf(result))))).toMatchObject({
+      type: 'webauthn.create',
+      origin: APP_ORIGIN,
+    });
+  });
+
+  it('ends with NotAllowedError, asking nothing, when an app’s rpId is not a registrable domain', async () => {
+    const h = harness(appAnswer('get', { ...GET, rpId: 'com' }));
+    void h.flow.start();
+    await settle();
+    expect(h.assetlinks).not.toHaveBeenCalled();
+    expect(h.results).toEqual([{ kind: 'error', name: 'NotAllowedError' }]);
+  });
+});
+
+const PASSWORD_ITEMS = () => [
+  view(
+    1,
+    login('Example', [
+      { type: 'text', role: 'username', value: 'ana' },
+      { type: 'secret', role: 'password', value: 'pw-1' },
+      { type: 'url', role: 'url', value: 'https://login.example.com' },
+    ]),
+  ),
+  view(
+    2,
+    login('No password', [
+      { type: 'text', role: 'username', value: 'bia' },
+      { type: 'url', role: 'url', value: 'https://login.example.com' },
+    ]),
+  ),
+  view(
+    3,
+    login('Other', [
+      { type: 'text', role: 'username', value: 'caio' },
+      { type: 'secret', role: 'password', value: 'pw-3' },
+      { type: 'url', role: 'url', value: 'http://insecure.example.net' },
+      { type: 'url', role: 'url', value: '10.0.0.1' },
+      { type: 'url', role: 'url', value: 'https://www.example.net/login' },
+      { type: 'url', role: 'url', value: 'https://app.example.net' },
+    ]),
+  ),
+];
+
+describe('ProviderFlow: a password (android.md §7.6, D303, CRYPTO-INV-029)', () => {
+  it('lists a browser’s logins of its origin, with a user name and a password, and hands one over on the tap', async () => {
+    const h = harness(passwordAnswer(BROWSER), { status: 'unlocked', items: PASSWORD_ITEMS() });
+    void h.flow.start();
+    await settle();
+    expect(h.flow.getState()).toMatchObject({
+      kind: 'password',
+      logins: [{ itemId: hex(id(1)), title: 'Example', userName: 'ana' }],
+    });
+    expect(h.results).toEqual([]);
+    await h.flow.pick(hex(id(1)));
+    expect(h.results).toEqual([{ kind: 'password', userName: 'ana', password: 'pw-1' }]);
+    expect(h.assetlinks).not.toHaveBeenCalled();
+    expect(h.lock).toHaveBeenCalled();
+  });
+
+  it('refuses a login the window did not list', async () => {
+    const h = harness(passwordAnswer(BROWSER), { status: 'unlocked', items: PASSWORD_ITEMS() });
+    void h.flow.start();
+    await settle();
+    for (const n of [2, 3, 9]) await h.flow.pick(hex(id(n)));
+    expect(h.results).toEqual([]);
+    expect(h.flow.getState()).toMatchObject({ kind: 'password', note: 'not-found' });
+  });
+
+  it('searches for an app, and hands a login over only when the host of one of its https URLs binds it', async () => {
+    const h = harness(passwordAnswer(APP), {
+      status: 'unlocked',
+      items: PASSWORD_ITEMS(),
+      bindings: { 'app.example.net': 'bound' },
+    });
+    void h.flow.start();
+    await settle();
+    expect(h.flow.getState()).toMatchObject({ kind: 'password', query: '' });
+    h.flow.search('other');
+    expect(h.flow.getState()).toMatchObject({
+      kind: 'password',
+      query: 'other',
+      logins: [{ itemId: hex(id(3)), userName: 'caio' }],
+    });
+    await h.flow.pick(hex(id(3)));
+    // The exact hosts, in order; no http URL, no IP address, never the registrable domain.
+    expect(h.assetlinks.mock.calls).toEqual([['www.example.net'], ['app.example.net']]);
+    expect(h.results).toEqual([{ kind: 'password', userName: 'caio', password: 'pw-3' }]);
+  });
+
+  it('hands nothing to an app no host binds, and says which hosts it asked', async () => {
+    const h = harness(passwordAnswer(APP), {
+      status: 'unlocked',
+      items: PASSWORD_ITEMS(),
+      bindings: { 'login.example.com': 'redirect' },
+    });
+    void h.flow.start();
+    await settle();
+    await h.flow.pick(hex(id(1)));
+    expect(h.results).toEqual([]);
+    expect(h.flow.getState()).toMatchObject({
+      kind: 'password',
+      busy: false,
+      note: { domains: ['login.example.com'], binding: 'redirect' },
+    });
+  });
+
+  it('asks the unlock first, and ends with a cancellation after 300 s', async () => {
+    const h = harness(passwordAnswer(APP), { items: PASSWORD_ITEMS() });
+    void h.flow.start();
+    await settle();
+    expect(h.flow.getState().kind).toBe('unlock');
+    expect(h.assetlinks).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(299_999);
+    expect(h.results).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.results).toEqual([{ kind: 'cancelled' }]);
   });
 });

@@ -1,8 +1,10 @@
-// The provider window (android.md §7.1, §9, D301): `ProviderActivity` runs apps/web's provider.html in the
-// same WebView as the main window's, for one request Credential Manager passed. The window unlocks, asks
+// The provider window (android.md §7.1, §9, D301, D303): `ProviderActivity` runs apps/web's provider.html in
+// the same WebView as the main window's, for one passkey or password request Credential Manager passed, from
+// a privileged browser or an app. The window unlocks, asks
 // the user and answers with `provider-result`; the shell checks it against the request and its caller,
 // answers Credential Manager and finishes. Exactly one answer per activity: Back, the window stopped or
-// destroyed without one, or a newer request, answers a cancellation. The shell holds no key and logs
+// destroyed without one, or a newer request, answers a cancellation. An app gets a credential only after the window's `provider-assetlinks` was answered
+// `bound` (§7.4). The shell holds no key and logs
 // nothing of the request or the response.
 package io.github.allisson.blindvault
 
@@ -23,7 +25,9 @@ import android.net.Uri
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.GetCredentialResponse
+import androidx.credentials.GetPasswordOption
 import androidx.credentials.GetPublicKeyCredentialOption
+import androidx.credentials.PasswordCredential
 import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.CreateCredentialCancellationException
 import androidx.credentials.exceptions.CreateCredentialUnknownException
@@ -38,7 +42,7 @@ import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 
-/** The entry's PendingIntent names its kind, `get` or `create`, so the activity knows which request to read. */
+/** The entry's PendingIntent names its kind, `get`, `create` or `password`, so the activity knows which request to read. */
 const val EXTRA_REQUEST_KIND = "io.github.allisson.blindvault.REQUEST_KIND"
 
 class ProviderActivity : Activity() {
@@ -54,6 +58,12 @@ class ProviderActivity : Activity() {
 
     /** Credential Manager answered: exactly one answer per activity. */
     private var ended = false
+
+    /** `provider-assetlinks` fetches started: the window gets `MAX_ASSETLINKS_FETCHES`. */
+    private var fetches = 0
+
+    /** This request got a `bound` answer: an app's credential is checked against it (§7.4). */
+    private var bound = false
 
     /** The window's frame, from its last message: where answers and `lifecycle` go. */
     private var frame: JavaScriptReplyProxy? = null
@@ -75,6 +85,7 @@ class ProviderActivity : Activity() {
         kind = when (intent.getStringExtra(EXTRA_REQUEST_KIND)) {
             RequestKind.GET.wire -> RequestKind.GET
             RequestKind.CREATE.wire -> RequestKind.CREATE
+            RequestKind.PASSWORD.wire -> RequestKind.PASSWORD
             // Not an entry of ours: nothing to answer.
             else -> return end(CallerAnswer.UseAnother)
         }
@@ -114,6 +125,19 @@ class ProviderActivity : Activity() {
                 Read(
                     if (!servesCaller(caller) || option == null) null
                     else providerRequestOf(RequestKind.GET, caller, option.requestJson, option.clientDataHash),
+                )
+            }
+        }
+        RequestKind.PASSWORD -> {
+            val passed = PendingIntentHandler.retrieveProviderGetCredentialRequest(intent)
+            if (passed == null) {
+                null
+            } else {
+                val caller = callerOf(this, passed.callingAppInfo)
+                val option = passed.credentialOptions.filterIsInstance<GetPasswordOption>().firstOrNull()
+                Read(
+                    if (!servesCaller(caller) || option == null) null
+                    else providerRequestOf(RequestKind.PASSWORD, caller, null, null),
                 )
             }
         }
@@ -178,6 +202,7 @@ class ProviderActivity : Activity() {
             Request.BuildInfo -> reply(shellBuildInfo(this))
             Request.LifecycleWatch -> reply(Outcome.Ok(JSONObject().put("state", if (visibility.hidden) "hidden" else "shown")))
             Request.ProviderRequest -> providerRequest(id)
+            is Request.ProviderAssetLinks -> providerAssetLinks(id, message.domain)
             is Request.ProviderResult -> providerResult(id, message.result)
             // The file types come from the main window only (§9): the parser has refused them.
             is Request.FileSave, is Request.FileChunk, Request.FileEnd, Request.FileAbort -> reply(Outcome.Error(ShellError.INVALID))
@@ -195,10 +220,32 @@ class ProviderActivity : Activity() {
         answer(id, Outcome.Ok(providerRequestFields(asked)))
     }
 
+    /**
+     * `provider-assetlinks`: only an app's window, after `provider-request`, and at most `MAX_ASSETLINKS_FETCHES`
+     * times (the next is answered `invalid`). The binding is answered on the main thread, unless the request ended;
+     * a `bound` one is what lets an app's credential through (§7.4, D303).
+     */
+    private fun providerAssetLinks(id: Long, domain: String) {
+        val caller = request?.caller as? Caller.App
+        if (!requested || caller == null) {
+            answer(id, Outcome.Error(ShellError.INVALID))
+            return end(CallerAnswer.Cancelled)
+        }
+        if (fetches >= MAX_ASSETLINKS_FETCHES) return answer(id, Outcome.Error(ShellError.INVALID))
+        fetches++
+        fetchAssetLinks(domain, caller.packageName, caller.certSha256) { binding ->
+            runOnUiThread {
+                if (ended) return@runOnUiThread
+                if (binding == Binding.BOUND) bound = true
+                answer(id, Outcome.Ok(JSONObject().put("result", binding.wire)))
+            }
+        }
+    }
+
     /** `provider-result` is checked against the request and its caller; a malformed one ends with a cancellation. */
     private fun providerResult(id: Long, result: JSONObject) {
         val asked = request
-        val answered = if (!requested || asked == null) null else parseCallerAnswer(result, asked.kind, asked.caller)
+        val answered = if (!requested || asked == null) null else parseCallerAnswer(result, asked.kind, asked.caller, bound)
         if (answered == null) {
             answer(id, Outcome.Error(ShellError.INVALID))
             return end(CallerAnswer.Cancelled)
@@ -220,8 +267,13 @@ class ProviderActivity : Activity() {
                 PendingIntentHandler.setGetCredentialResponse(data, GetCredentialResponse(PublicKeyCredential(responseJson(answer))))
                 RESULT_OK
             }
+            is CallerAnswer.Password -> {
+                PendingIntentHandler.setGetCredentialResponse(data, GetCredentialResponse(PasswordCredential(answer.userName, answer.password)))
+                RESULT_OK
+            }
             is CallerAnswer.Dom -> {
-                if (kind == RequestKind.GET) {
+                // A password request takes the get exceptions; the parser refuses a `Dom` for it.
+                if (kind != RequestKind.CREATE) {
                     PendingIntentHandler.setGetCredentialException(data, GetPublicKeyCredentialDomException(NotAllowedError()))
                 } else {
                     PendingIntentHandler.setCreateCredentialException(
@@ -234,7 +286,7 @@ class ProviderActivity : Activity() {
                 RESULT_OK
             }
             CallerAnswer.Cancelled -> {
-                if (kind == RequestKind.GET) {
+                if (kind != RequestKind.CREATE) {
                     PendingIntentHandler.setGetCredentialException(data, GetCredentialCancellationException())
                 } else {
                     PendingIntentHandler.setCreateCredentialException(data, CreateCredentialCancellationException())
@@ -242,7 +294,7 @@ class ProviderActivity : Activity() {
                 RESULT_OK
             }
             CallerAnswer.Unknown -> {
-                if (kind == RequestKind.GET) {
+                if (kind != RequestKind.CREATE) {
                     PendingIntentHandler.setGetCredentialException(data, GetCredentialUnknownException())
                 } else {
                     PendingIntentHandler.setCreateCredentialException(data, CreateCredentialUnknownException())
@@ -286,6 +338,9 @@ class ProviderActivity : Activity() {
     }
 
     private companion object {
+        /** The most `provider-assetlinks` fetches one window may start: an app's search tap tries each URL's host. */
+        const val MAX_ASSETLINKS_FETCHES = 16
+
         /** The activity open now: a newer request cancels it. */
         var current: ProviderActivity? = null
     }

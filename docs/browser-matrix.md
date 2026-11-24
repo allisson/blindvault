@@ -161,6 +161,7 @@ provider and autofill rows come with their task.
 | An update installs over the app and keeps the vault (§10) | by hand 1.0.0-rc.3 (same version) |
 | Passkey create and get on `webauthn.io` in Chrome and Firefox, through the provider window (§7, D301) | by hand, debug build |
 | "Use another authenticator" shows the system sheet again; Cancel, before or after the unlock, and Back end the call (§7.1) | by hand, debug build |
+| An app `webauthn.io`'s `assetlinks.json` does not bind gets no password and no passkey; the passkey's refusal comes before the unlock (§7.4, D303) | by hand, debug build |
 
 What each source covers, on Android 16 with WebView 158.0.8127.46, the app driven over ADB and read
 with `uiautomator`:
@@ -186,6 +187,16 @@ with `uiautomator`:
   hands the same cancellation to the page as `AbortError` ("ceremony was sent an abort signal"), on
   Cancel before the unlock and on Back after it; the page's own 60 s timeout ends the call the same
   way.
+- **by hand, debug build (D303).** On 2026-11-24, the debug build of the change serving apps and
+  passwords, and a throwaway debug app, `com.example.bvprobe`, built outside the repository and
+  uninstalled after, asking Credential Manager for a password and for a passkey of `webauthn.io`. The
+  sheet listed BlindVault for each. The password: after the unlock, the window listed the test vault's
+  Login of `https://webauthn.io`, and the tap on it said the app is not bound to `webauthn.io`, whose
+  `assetlinks.json` does not name it; Cancel gave the app `GetCredentialCancellationException`. The
+  passkey: the window said so before asking for the unlock; "Use another authenticator" showed the
+  sheet again. Chrome 158.0.8127.42 still logged in on `webauthn.io` with its passkey. The run found
+  `provider.xml` declaring passkeys only, so Android never asked BlindVault for a password; fixed
+  before the change landed.
 
 To check it, on a release's signed APK, installed over ADB (`adb install`), with a PWA on another
 device:

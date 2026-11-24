@@ -264,6 +264,8 @@ The services hold no session, so they cannot know what the vault holds:
   the window says so after the unlock and answers no credential.
 - `onBeginCreateCredential` answers one create entry, BlindVault, for a passkey. Creating a password
   is out of v1 (§12).
+- Every caller but a refused one (§7.3) gets these entries, a privileged browser or an app: whether
+  an app is bound to the domain is checked in the window (§7.4, D303).
 - Each `PendingIntent` is `FLAG_MUTABLE`, so Android appends the request, never `FLAG_ONE_SHOT`, with
   a request code of its own. The services answer at once: Android gives each begin call 3 s (D301).
 - `onClearCredentialState` does nothing: the provider keeps no state.
@@ -280,6 +282,8 @@ the build ships:
 - **App.** No origin set: the caller is a native app. It gets a passkey of an `rpId`, or a password of
   an item, only when the app is bound to that domain (§7.4). `clientDataJSON` is built by the window
   with the origin `android:apk-key-hash:<base64url of the SHA-256 of the app's signing certificate>`.
+  An app with more than one current signer (`apkContentsSigners`) is refused, for passkeys and
+  passwords: that origin would name one of them (D303).
 - **Refused.** An origin set by a caller outside the allowlist, which any app can do, since
   `CREDENTIAL_MANAGER_SET_ORIGIN` is a normal permission: the request gets no credential.
   `getOrigin` reports it by throwing `IllegalStateException`; it returns `null` for an app.
@@ -311,6 +315,18 @@ answer stays in the window's memory for its request and is never stored. A netwo
 redirect or a missing statement binds nothing, and the window says which. The fetch tells the site
 that its app is used, and carries no vault data (D269).
 
+**Fetch** (D303). The shell takes `domain` only as a lowercase ASCII host name with a dot, not an IP
+address, at most 253 characters, and answers `invalid` otherwise. It fetches without redirects or
+cache, within 10 s for the whole and 256 KiB, with the `User-Agent` `BlindVault` and nothing about
+the device, at most 16 times per window, and answers:
+
+| Answer | When |
+| --- | --- |
+| `bound` | `200`, `application/json`, and a statement of the relation for the caller's package and every signer |
+| `unbound` | another status, another media type, JSON that does not parse, or no such statement |
+| `redirect` | a `3xx` |
+| `network` | no answer: DNS, TLS, the time, the size |
+
 ### 7.5 Passkeys
 
 The window reuses the extension's code for the vault's side (`extension.md` §7.2 to §7.6, D288):
@@ -319,6 +335,13 @@ attestation `none`, `excludeCredentials` answered `InvalidStateError` only after
 a create that saves into a matching Login item or a new one, and the history notice. It differs
 only in who asks (§7.3) and in where the confirmation happens (§7.1). `credProps` is answered; no
 other extension, `prf` included.
+
+**An app's passkeys** (D303). The request names its `rpId` (`rp.id` on create): a registrable domain,
+never an IP address, a public suffix or `localhost`, checked as `extension.md` §7.2 checks the origin
+`https://<rpId>`. The window asks `provider-assetlinks` for the `rpId` as soon as it reads the
+request, before the unlock, so the user types nothing for an app that is not bound; it then says why,
+and Cancel ends the call. The passkeys and the items to save in are those of `https://<rpId>`, and the
+window shows the app's package and the domain it is bound to in place of the site.
 
 ### 7.6 Passwords
 
@@ -330,15 +353,20 @@ A password request lists the Login items that match the caller:
 
 The password is handed to Credential Manager as the response; nothing is written in the vault.
 
+Details (D303): only a Login with a user name and a password is listed. An app's tap asks
+`provider-assetlinks` for the host of each of the login's `https:` URLs, in order, until one binds:
+the exact host, never its registrable domain. When none binds, the window says so, and the user picks
+another login or cancels. The request's time is 300 s (`extension.md` §7.4's default).
+
 ### 7.7 Messages (D301)
 
 **`provider-request`**, which the window sends once, at start, answered with:
 
 | Key | Value |
 | --- | --- |
-| `kind` | `get` or `create` |
+| `kind` | `get`, `create` or `password` (D303) |
 | `caller` | `{kind: "browser", origin, packageName}`, a privileged browser and the origin it set (§7.3); or `{kind: "app", packageName, certSha256}`, the SHA-256 of every signing certificate, lowercase hex |
-| `requestJson` | the WebAuthn options JSON as the caller sent it, at most 64 KiB |
+| `requestJson` | the WebAuthn options JSON as the caller sent it, at most 64 KiB; absent for `password` |
 | `clientDataHash` | 32 bytes, base64url, from a privileged browser only |
 
 The window copies from `requestJson` only the keys of `extension.md` §7.7, each credential reduced
@@ -355,6 +383,7 @@ answers Credential Manager and finishes the activity:
 | `asserted` | `id`, `authenticatorData`, `signature`, `userHandle`, and `clientDataJSON` for an app | `GetCredentialResponse` with a `PublicKeyCredential` |
 | `error` | `name`: `NotAllowedError` or `InvalidStateError` (create only) | the public-key DOM exception of that name |
 | `cancelled` | — | a cancellation exception |
+| `password` | `userName`, `password`, each 1 to 16384 characters; a `password` request only (D303) | `GetCredentialResponse` with a `PasswordCredential` |
 | `browser` | — | `RESULT_CANCELED` |
 
 Bytes are base64url without padding, each bounded. The shell writes the response JSON: `id` and
@@ -409,7 +438,7 @@ package, and the user enables both in Settings › Passwords & accounts.
 | window | `build-info` | `{versionName, versionCode, certSha256}` (§10) |
 | window | `lifecycle-watch` | `{state: "shown" \| "hidden"}`, the state now (§4.2, D293) |
 | shell, to the window | `lifecycle` `{state: "hidden" \| "shown" \| "screen-off"}` | none (§4.2) |
-| provider window | `provider-request` | `{kind, caller, requestJson, clientDataHash?}` (§7.7) |
+| provider window | `provider-request` | `{kind, caller, requestJson?, clientDataHash?}` (§7.7) |
 | provider window | `provider-assetlinks` `{domain}` | `bound`, `unbound`, `network` or `redirect` (§7.4) |
 | provider window | `provider-result` `{result}` | none; the shell answers the caller and finishes the activity (§7.7) |
 
@@ -496,8 +525,9 @@ layout beyond the app's own responsive one.
   and sync with the PWA; the Keystore KEK's setup, unlock, and invalidation by a new fingerprint; the
   locks of §4.2, behind the pickers too (D294); FLAG_SECURE; no autofill service offering to save
   the local password or an item's secret (D297); saving a backup and an attachment;
-  About; a passkey create and get on `webauthn.io` in Chrome and Firefox; a password filled in Chrome and in an app bound by
-  `assetlinks.json`; a refused app that is not bound.
+  About; a passkey create and get on `webauthn.io` in Chrome and Firefox; a password filled in Chrome
+  (§8); an app that is not bound, a throwaway debug app asking a password and a passkey of
+  `webauthn.io`, refused (D303).
 
 Negative tests, each named in `security-invariants.md` under CRYPTO-INV-028 (Keystore KEK) and
 CRYPTO-INV-029 (provider and autofill).
