@@ -533,7 +533,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [ ] External cryptographic and protocol review of the whole app (the PWA, attachments, the extension, stored passkeys and the Android app) complete, findings resolved (D276)
 - [x] Every invariant in `security-invariants.md` has an associated passing test, the new ones included
 - [ ] Reproducible build validated on the release candidate for the PWA, the extension and the APK
-- [ ] `threat-model.md`: the planned entries of attachments, the extension and Android reviewed against what was implemented
+- [x] `threat-model.md`: the planned entries of attachments, the extension and Android reviewed against what was implemented
 
 ---
 
