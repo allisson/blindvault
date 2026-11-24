@@ -371,9 +371,10 @@ toward the caller that asked.
   (schemes v2 and v3), through `apps/android/build/sign.sh`, which checks the unsigned APK's
   attestation against the tag, the signer against `apps/android/release-cert.sha256`, and that
   `apksigcopier` gives the signed APK back from the unsigned one and the signature. The maintainer
-  then attaches `blindvault-android-<version>.apk` and adds its SHA-256 and the certificate's to the
-  release body. `docs/build.md` gives the rebuild's commands: build the unsigned APK, copy the
-  published signature onto it with `apksigcopier`, and compare the bytes with the published APK.
+  then attaches `blindvault-android-<version>.apk` and adds its SHA-256, the certificate's and the
+  hash of the APK's asset manifest, which About shows, to the release body (D300). `docs/build.md`
+  gives the rebuild's commands: build the unsigned APK, copy the published signature onto it with
+  `apksigcopier`, and compare the bytes with the published APK.
 - **Release key.** RSA 4096, valid 30 years, in a keystore kept offline by the maintainer. Android
   installs an update only under the same key, so its loss ends updates of installed apps: users would
   reinstall, losing the app's data, and restore from a backup or pair again.
@@ -384,13 +385,13 @@ toward the caller that asked.
   signed by the same key.
 - **About** shows the version, the hash of the APK's `asset-manifest.txt` and the SHA-256 of the
   signing certificate, read from `PackageManager`.
-- **Developer verification** (D274, D295). The release package is registered in the maintainer's
-  Play Console account as an app distributed outside Google Play, with the release certificate's
-  SHA-256. The proof that the account holds the key is an APK of the same package, signed with the
-  release key, holding only the console's snippet in `assets/adi-registration.properties`
-  (`apps/android/build/registration-apk.sh`), uploaded to the console and never published. Android
-  checks the registration at install, for direct installs from 2027 (D295); the app makes no call
-  for it.
+- **Developer verification** (D274, D295, D300). The release package is registered in the
+  maintainer's Play Console account, with the release certificate's SHA-256; the console verified
+  the key without a proof (D300). Should it ask for one, the proof is an APK of the same package,
+  signed with the release key, holding only the console's snippet in
+  `assets/adi-registration.properties` (`apps/android/build/registration-apk.sh`), uploaded to the
+  console and never published. Android checks the registration at install, for direct installs
+  from 2027 (D295); the app makes no call for it.
 
 ## 11. Onboarding, pairing and sync
 

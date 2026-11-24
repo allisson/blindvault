@@ -193,19 +193,20 @@ apps/android/build/sign.sh <tag> <keystore>
 It downloads the unsigned APK, checks its attestation against the tag, signs it with `apksigner`
 (schemes v2 and v3, asking for the keystore's password), checks the signer against
 `release-cert.sha256` and the `apksigcopier` round trip above, and prints the commands that attach
-the signed APK and add the `## Android` section, its SHA-256 and the certificate's, to the release
-body. It runs none of them.
+the signed APK and add the `## Android` section, its SHA-256, the certificate's and the hash of the
+APK's asset manifest, to the release body. It runs none of them.
 
-**Developer verification** (D274, D295), once, before the first Android release:
+**Developer verification** (D274, D295, D300), once, before the first Android release: in the Play
+Console account, Android developer verification › Register package name, the package
+`io.github.allisson.blindvault`, then Add key with the SHA-256 of `release-cert.sha256`. Done on
+2026-11-24: the console verified the key and registered the package without asking for a proof.
 
-1. In the Play Console account, register the package `io.github.allisson.blindvault` as an app
-   distributed outside Google Play, with the SHA-256 of `release-cert.sha256`.
-2. Copy the console's snippet into a file, and build the proof APK:
-   `apps/android/build/registration-apk.sh <snippet file> <keystore> adi-registration.apk`. It holds
-   the package, no code and only `assets/adi-registration.properties`, signed with the release key,
-   and checks the signer against `release-cert.sha256`.
-3. Upload `adi-registration.apk` in the console. It is never published; the release APK carries no
-   snippet.
+If the console asks for one, for this key or a later one, it gives a snippet to put in an APK of
+the package signed with that key: copy it into a file, build the proof APK with
+`apps/android/build/registration-apk.sh <snippet file> <keystore> adi-registration.apk`, which holds
+the package, no code and only `assets/adi-registration.properties`, and checks the signer against
+`release-cert.sha256`, and upload it in the console. It is never published; the release APK carries
+no snippet.
 
 ## Validation on the release candidate
 
