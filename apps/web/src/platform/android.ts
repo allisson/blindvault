@@ -284,8 +284,8 @@ export function androidSigningCertificate(bridge: Bridge): () => Promise<string 
 
 let bridge: ShellBridge | undefined;
 
-/** The shell's bridge, made once, on first use. */
-function shell(): ShellBridge | undefined {
+/** The shell's bridge, made once, on first use; the provider window sends its own messages on it. */
+export function shell(): ShellBridge | undefined {
   if (!bridge) {
     const object = androidShell();
     if (object) bridge = shellBridge(object);

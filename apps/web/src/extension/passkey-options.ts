@@ -44,18 +44,32 @@ export interface GetOptions {
   readonly allowCredentials?: readonly Credential[];
 }
 
+/**
+ * A passkey call as the vault's side handles it, in the extension and in the Android provider
+ * window (android.md §7.5): its options, and the origin and top frame's origin the browser reported.
+ */
+export type PasskeyCall =
+  | {
+      readonly kind: 'create';
+      readonly origin: string;
+      readonly topOrigin: string;
+      readonly options: CreateOptions;
+    }
+  | {
+      readonly kind: 'get';
+      readonly origin: string;
+      readonly topOrigin: string;
+      readonly options: GetOptions;
+    };
+
 /** What the service worker forwards (§7.7 Route): every key but the first two from `MessageSender`. */
 interface Forwarded {
   readonly request: string;
   readonly tabId: number;
   readonly frameId: number;
-  readonly origin: string;
-  readonly topOrigin: string;
 }
 
-export type PasskeyRequest =
-  | (Forwarded & { readonly kind: 'create'; readonly options: CreateOptions })
-  | (Forwarded & { readonly kind: 'get'; readonly options: GetOptions });
+export type PasskeyRequest = Forwarded & PasskeyCall;
 
 type Fields = Record<string, unknown>;
 

@@ -22,9 +22,10 @@ describe('the Android build (android.md §2)', () => {
     expect(androidHeaders().endsWith('}\n')).toBe(true);
   });
 
-  it('builds the main window only', () => {
+  it('builds the main window and the provider window (android.md §7.1)', () => {
     const input = androidInput(new URL('../', import.meta.url));
-    expect(Object.keys(input)).toEqual(['index']);
+    expect(Object.keys(input)).toEqual(['index', 'provider']);
     expect(input.index).toMatch(/[/\\]index\.html$/);
+    expect(input.provider).toMatch(/[/\\]provider\.html$/);
   });
 });

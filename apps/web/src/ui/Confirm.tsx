@@ -23,7 +23,6 @@ export function Confirm({
 }) {
   const m = useMessages();
   const [state, setState] = useState<ConfirmState | 'ended' | 'loading'>('loading');
-  const [picked, setPicked] = useState<string>();
   const [note, setNote] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -97,9 +96,60 @@ export function Confirm({
         {others}
       </>
     );
-  } else if (state !== 'loading' && state.kind === 'get') {
+  } else if (state !== 'loading') {
+    body = <ConfirmRequest state={state} busy={busy} choose={choose} />;
+  }
+
+  return (
+    <main data-testid="confirm" className="flex min-h-dvh flex-col gap-3 bg-surface p-4 text-fg">
+      <header className="text-sm font-semibold">{m.app.name}</header>
+      {body}
+      {note === undefined ? null : <Notice>{note}</Notice>}
+    </main>
+  );
+}
+
+/**
+ * A get or create waiting for the user (extension.md §7.4): who asks, the passkeys or the items to
+ * save in, Confirm, another authenticator and Cancel. Shared by the extension's confirmation window
+ * and the Android provider window (android.md §7.1); the click on Confirm is the user presence.
+ */
+export function ConfirmRequest({
+  state,
+  busy,
+  choose,
+}: {
+  readonly state: Exclude<ConfirmState, { kind: 'locked' }>;
+  readonly busy: boolean;
+  readonly choose: (choice: ConfirmChoice) => void;
+}) {
+  const m = useMessages();
+  const [picked, setPicked] = useState<string>();
+  const others = (
+    <>
+      <Button
+        variant="secondary"
+        disabled={busy}
+        onClick={() => {
+          choose({ choice: 'browser' });
+        }}
+      >
+        {m.confirm.browser}
+      </Button>
+      <Button
+        variant="quiet"
+        disabled={busy}
+        onClick={() => {
+          choose({ choice: 'cancel' });
+        }}
+      >
+        {m.confirm.cancel}
+      </Button>
+    </>
+  );
+  if (state.kind === 'get') {
     const chosen = picked ?? state.passkeys[0]?.credentialId;
-    body = (
+    return (
       <>
         <h1 className="text-title">{m.confirm.getTitle}</h1>
         <Origins state={state} />
@@ -135,64 +185,55 @@ export function Confirm({
         {others}
       </>
     );
-  } else if (state !== 'loading') {
-    const target = picked ?? 'new';
-    body = (
-      <>
-        <h1 className="text-title">{m.confirm.createTitle}</h1>
-        <Origins state={state}>
-          <Row label={m.confirm.user}>
-            {state.displayName === '' || state.displayName === state.userName
-              ? state.userName
-              : `${state.displayName} (${state.userName})`}
-          </Row>
-        </Origins>
-        <fieldset className="flex flex-col gap-1">
-          <legend className="text-xs font-semibold text-muted">{m.confirm.saveIn}</legend>
-          {state.items.map((item) => (
-            <Choice
-              key={item.itemId}
-              name="target"
-              checked={target === item.itemId}
-              onChange={() => {
-                setPicked(item.itemId);
-              }}
-              title={item.title}
-              detail={item.username}
-            />
-          ))}
-          <Choice
-            name="target"
-            checked={target === 'new'}
-            onChange={() => {
-              setPicked('new');
-            }}
-            title={m.confirm.newItem}
-            detail={state.rpName === '' ? state.rpId : state.rpName}
-          />
-        </fieldset>
-        {state.replaces ? <Notice>{m.confirm.replaces}</Notice> : null}
-        <Button
-          variant="primary"
-          disabled={busy}
-          onClick={() => {
-            choose(target === 'new' ? { choice: 'save-new' } : { choice: 'save', itemId: target });
-          }}
-          data-testid="confirm-save"
-        >
-          {m.confirm.confirm}
-        </Button>
-        {others}
-      </>
-    );
   }
-
+  const target = picked ?? 'new';
   return (
-    <main data-testid="confirm" className="flex min-h-dvh flex-col gap-3 bg-surface p-4 text-fg">
-      <header className="text-sm font-semibold">{m.app.name}</header>
-      {body}
-      {note === undefined ? null : <Notice>{note}</Notice>}
-    </main>
+    <>
+      <h1 className="text-title">{m.confirm.createTitle}</h1>
+      <Origins state={state}>
+        <Row label={m.confirm.user}>
+          {state.displayName === '' || state.displayName === state.userName
+            ? state.userName
+            : `${state.displayName} (${state.userName})`}
+        </Row>
+      </Origins>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="text-xs font-semibold text-muted">{m.confirm.saveIn}</legend>
+        {state.items.map((item) => (
+          <Choice
+            key={item.itemId}
+            name="target"
+            checked={target === item.itemId}
+            onChange={() => {
+              setPicked(item.itemId);
+            }}
+            title={item.title}
+            detail={item.username}
+          />
+        ))}
+        <Choice
+          name="target"
+          checked={target === 'new'}
+          onChange={() => {
+            setPicked('new');
+          }}
+          title={m.confirm.newItem}
+          detail={state.rpName === '' ? state.rpId : state.rpName}
+        />
+      </fieldset>
+      {state.replaces ? <Notice>{m.confirm.replaces}</Notice> : null}
+      <Button
+        variant="primary"
+        disabled={busy}
+        onClick={() => {
+          choose(target === 'new' ? { choice: 'save-new' } : { choice: 'save', itemId: target });
+        }}
+        data-testid="confirm-save"
+      >
+        {m.confirm.confirm}
+      </Button>
+      {others}
+    </>
   );
 }
 

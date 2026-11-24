@@ -171,7 +171,12 @@ function Locked({
   );
 }
 
-function Unlock({
+/**
+ * The unlock card: the Keystore KEK, the unlock passkey or the local password. The ways out of a
+ * locked vault (reset, replace, pair, erase) show only when given: the Android provider window
+ * offers none (android.md §7.1).
+ */
+export function Unlock({
   controller,
   working,
   onReplace,
@@ -181,10 +186,10 @@ function Unlock({
 }: {
   readonly controller: VaultController;
   readonly working: boolean;
-  readonly onReplace: () => void;
-  readonly onPair: () => void;
-  readonly onReset: () => void;
-  readonly onErase: () => void;
+  readonly onReplace?: () => void;
+  readonly onPair?: () => void;
+  readonly onReset?: () => void;
+  readonly onErase?: () => void;
 }) {
   const m = useMessages();
   const [password, setPassword] = useState('');
@@ -317,23 +322,46 @@ function Unlock({
           {working ? m.unlock.working : m.unlock.submit}
         </Button>
       </form>
-      <Button variant="quiet" className="self-start text-left" disabled={working} onClick={onReset}>
-        {m.reset.forgot}
-      </Button>
-      <Button
-        variant="quiet"
-        className="self-start text-left"
-        disabled={working}
-        onClick={onReplace}
-      >
-        {m.replace.choose}
-      </Button>
-      <Button variant="quiet" className="self-start text-left" disabled={working} onClick={onPair}>
-        {m.replace.pairChoose}
-      </Button>
-      <Button variant="quiet" className="self-start text-left" disabled={working} onClick={onErase}>
-        {m.erase.choose}
-      </Button>
+      {onReset ? (
+        <Button
+          variant="quiet"
+          className="self-start text-left"
+          disabled={working}
+          onClick={onReset}
+        >
+          {m.reset.forgot}
+        </Button>
+      ) : null}
+      {onReplace ? (
+        <Button
+          variant="quiet"
+          className="self-start text-left"
+          disabled={working}
+          onClick={onReplace}
+        >
+          {m.replace.choose}
+        </Button>
+      ) : null}
+      {onPair ? (
+        <Button
+          variant="quiet"
+          className="self-start text-left"
+          disabled={working}
+          onClick={onPair}
+        >
+          {m.replace.pairChoose}
+        </Button>
+      ) : null}
+      {onErase ? (
+        <Button
+          variant="quiet"
+          className="self-start text-left"
+          disabled={working}
+          onClick={onErase}
+        >
+          {m.erase.choose}
+        </Button>
+      ) : null}
     </Card>
   );
 }

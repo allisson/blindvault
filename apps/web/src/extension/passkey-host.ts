@@ -3,27 +3,11 @@
 // sent in `passkey-answer`. The page's call waits on it; nothing is signed or written before the
 // user's click in the window, which is the user presence.
 
-import { COSE_ALGORITHM, createPasskey, signPasskeyAssertion } from '@blindvault/crypto';
-import {
-  type ItemView,
-  type PasskeyValue,
-  type VaultSession,
-  passkeyUserName,
-} from '@blindvault/vault';
+import { type VaultSession } from '@blindvault/vault';
 
-import { hex } from '../app/ids';
-import {
-  type Checked,
-  candidates,
-  checkRequest,
-  clientDataJSON,
-  holders,
-  holdsExcluded,
-  saveTargets,
-  timeoutOf,
-  withPasskey,
-} from './passkey';
-import { type PasskeyRequest, toBase64url } from './passkey-options';
+import { checkRequest, timeoutOf, type Checked } from './passkey';
+import { NOT_ALLOWED, carryOut, confirmState } from './passkey-confirm';
+import { type PasskeyRequest } from './passkey-options';
 import { type ConfirmChoice, type ConfirmState, type PasskeyResult, type Refusal } from './rpc';
 
 /** The confirmation window, as the browser opens and closes it. */
@@ -68,7 +52,6 @@ interface Pending {
   busy: boolean;
 }
 
-const NOT_ALLOWED: PasskeyResult = { kind: 'error', name: 'NotAllowedError' };
 const BROWSER: PasskeyResult = { kind: 'browser' };
 
 function unlocked(app: PasskeyApp): VaultSession | undefined {
@@ -143,43 +126,7 @@ export class PasskeyHost {
     if (p?.token !== token) return 'not-found';
     const s = unlocked(this.#deps.app);
     if (!s) return { kind: 'locked' };
-    const { request, checked } = p;
-    const origins = {
-      origin: request.origin,
-      ...(request.topOrigin === request.origin ? {} : { topOrigin: request.topOrigin }),
-      rpId: checked.rpId,
-    };
-    const items = s.items();
-    if (request.kind === 'get') {
-      return {
-        kind: 'get',
-        ...origins,
-        passkeys: candidates(items, checked.rpId, request.options.allowCredentials).map(
-          ({ credentialId, title, userName }) => ({
-            credentialId,
-            title,
-            ...(userName === undefined ? {} : { userName }),
-          }),
-        ),
-      };
-    }
-    const { rp, user } = request.options;
-    return {
-      kind: 'create',
-      ...origins,
-      rpName: rp.name,
-      userName: user.name,
-      displayName: user.displayName,
-      items: saveTargets(items, request.origin).map((view) => {
-        const username = view.item.fields.find((f) => f.role === 'username')?.value;
-        return {
-          itemId: hex(view.id),
-          title: view.item.title,
-          ...(typeof username === 'string' && username !== '' ? { username } : {}),
-        };
-      }),
-      replaces: holders(items, checked.rpId, user.id).length > 0,
-    };
+    return confirmState(s, p.request, p.checked);
   }
 
   /** Carries out the user's choice in the window with `token`. */
@@ -195,10 +142,7 @@ export class PasskeyHost {
     p.busy = true;
     let result: PasskeyResult | Refusal;
     try {
-      result =
-        choice.choice === 'use'
-          ? await this.#get(p, s, choice.credentialId)
-          : await this.#create(p, s, choice);
+      result = await carryOut(s, p.request, p.checked, choice, { now: this.#deps.now });
     } catch {
       // The vault locked, or a write failed: the page learns only that it was not allowed.
       result = NOT_ALLOWED;
@@ -207,93 +151,6 @@ export class PasskeyHost {
     }
     if (typeof result === 'string') return result;
     return this.#end(p, result);
-  }
-
-  async #get(p: Pending, s: VaultSession, credentialId: string): Promise<PasskeyResult | Refusal> {
-    const { request, checked } = p;
-    if (request.kind !== 'get') return 'invalid';
-    const chosen = candidates(s.items(), checked.rpId, request.options.allowCredentials).find(
-      (c) => c.credentialId === credentialId,
-    );
-    if (!chosen) return 'not-found';
-    const data = clientDataJSON(request);
-    const signed = await signPasskeyAssertion(chosen.value.privateKey, checked.rpId, data);
-    return {
-      kind: 'asserted',
-      id: toBase64url(chosen.value.credentialId),
-      clientDataJSON: toBase64url(data),
-      authenticatorData: toBase64url(signed.authenticatorData),
-      signature: toBase64url(signed.signature),
-      userHandle: toBase64url(chosen.value.userHandle),
-    };
-  }
-
-  async #create(
-    p: Pending,
-    s: VaultSession,
-    choice: Exclude<ConfirmChoice, { choice: 'use' | 'browser' | 'cancel' }>,
-  ): Promise<PasskeyResult | Refusal> {
-    const { request, checked } = p;
-    if (request.kind !== 'create' || checked.kind !== 'create') return 'invalid';
-    const items = s.items();
-    const target =
-      choice.choice === 'save'
-        ? saveTargets(items, request.origin).find((v) => hex(v.id) === choice.itemId)
-        : undefined;
-    if (choice.choice === 'save' && !target) return 'not-found';
-    // Known only after the click, so a page learns from it only what the user allowed (§7.4).
-    if (holdsExcluded(items, request.options.excludeCredentials ?? [])) {
-      return { kind: 'error', name: 'InvalidStateError' };
-    }
-    const { user, rp } = request.options;
-    const held = holders(items, checked.rpId, user.id);
-    // A write that would touch a read-only item is not made at all (overview §6).
-    if (!s.writable || held.some((v: ItemView) => v.readOnly !== undefined)) return NOT_ALLOWED;
-    const created = await createPasskey(checked.rpId, checked.algorithm);
-    try {
-      const userName = passkeyUserName(user.name);
-      const value: PasskeyValue = {
-        privateKey: created.privateKey,
-        credentialId: created.credentialId,
-        rpId: checked.rpId,
-        userHandle: user.id,
-        ...(userName === undefined ? {} : { userName }),
-        createdAt: this.#deps.now(),
-      };
-      // Every item holding the replaced passkey, the chosen one included, gets the new one.
-      for (const view of held) {
-        if (target && hex(view.id) === hex(target.id)) continue;
-        await s.updateItem(view.id, withPasskey(view.item, value));
-      }
-      if (target) {
-        await s.updateItem(target.id, withPasskey(target.item, value));
-      } else {
-        await s.createItem({
-          templateId: 'login',
-          templateVersion: 1,
-          title: rp.name.trim() === '' ? checked.rpId : rp.name.trim(),
-          fields: [
-            ...(userName === undefined
-              ? []
-              : [{ type: 'text' as const, role: 'username', value: userName }]),
-            { type: 'url', role: 'url', value: `https://${checked.rpId}` },
-            { type: 'passkey', value },
-          ],
-          tags: [],
-        });
-      }
-    } finally {
-      created.privateKey.fill(0);
-    }
-    return {
-      kind: 'created',
-      id: toBase64url(created.credentialId),
-      clientDataJSON: toBase64url(clientDataJSON(request)),
-      attestationObject: toBase64url(created.attestationObject),
-      authenticatorData: toBase64url(created.authenticatorData),
-      publicKey: toBase64url(created.publicKey),
-      publicKeyAlgorithm: COSE_ALGORITHM[checked.algorithm],
-    };
   }
 
   /** The vault locked or unlocked while a request waits. */
