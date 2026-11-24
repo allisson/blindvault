@@ -1,7 +1,7 @@
 # BlindVault — Android app
 
 > Normative for the Android app; `overview.md` prevails on design. Implements D269, D270, D271,
-> D274, D282, D290, D292, D293, D294 and D295. Measurements behind it are in `docs/spikes/android.md`. Terms follow
+> D274, D282, D290, D292, D293, D294, D295 and D301. Measurements behind it are in `docs/spikes/android.md`. Terms follow
 > `GLOSSARY.md` (app window, Keystore KEK, provider window, privileged browser, passkey).
 
 ## 1. Model
@@ -238,9 +238,18 @@ Every request the user picks opens `ProviderActivity`, which loads `provider.htm
 4. The user's tap on Confirm is the user presence (UP); for a get, the tap on one passkey or login.
 5. It answers through the shell (`provider-result`), locks, and finishes.
 
-The window ends with `cancelled` when the user leaves it (`onStop`), presses Back or Cancel, or the
-vault locks; it holds no session after its answer. A vault read-only for its clock (D73) answers a
-create with an error, as the extension hands it to the browser (`extension.md` §7.2).
+**Ending** (D301). "Use another authenticator" finishes with `RESULT_CANCELED`, and Android shows its
+sheet again, where the user picks another provider. Cancel, Back, the window stopped (`onStop`), a
+lock or the request's time, bounded as in `extension.md` §7.4, answer a cancellation exception
+(`GetCredentialCancellationException`, `CreateCredentialCancellationException`), which ends the
+caller's call. `InvalidStateError` and `NotAllowedError` are answered as the public-key DOM
+exceptions of those names. The window holds no session after its answer. A vault read-only for its
+clock (D73) answers a create with `NotAllowedError`.
+
+**Activity.** `ProviderActivity` runs in the app's process, so its WebView shares the main window's
+data, in a task of its own (`taskAffinity` empty, out of Recents). A request that arrives while one
+is open finishes the open one with a cancellation. Its WebView is set up as §3's, autofill included
+(D297).
 
 ### 7.2 Entries
 
@@ -251,6 +260,8 @@ The services hold no session, so they cannot know what the vault holds:
   the window says so after the unlock and answers no credential.
 - `onBeginCreateCredential` answers one create entry, BlindVault, for a passkey. Creating a password
   is out of v1 (§12).
+- Each `PendingIntent` is `FLAG_MUTABLE`, so Android appends the request, never `FLAG_ONE_SHOT`, with
+  a request code of its own. The services answer at once: Android gives each begin call 3 s (D301).
 - `onClearCredentialState` does nothing: the provider keeps no state.
 
 ### 7.3 Who asks
@@ -267,11 +278,18 @@ the build ships:
   with the origin `android:apk-key-hash:<base64url of the SHA-256 of the app's signing certificate>`.
 - **Refused.** An origin set by a caller outside the allowlist, which any app can do, since
   `CREDENTIAL_MANAGER_SET_ORIGIN` is a normal permission: the request gets no credential.
+  `getOrigin` reports it by throwing `IllegalStateException`; it returns `null` for an app.
+
+**Client data** (D301). With a privileged browser, the window signs `authenticatorData ‖
+clientDataHash` with the hash the browser passed, and the response leaves `clientDataJSON` out:
+Chromium puts its own in its place (Google's guide and sample do the same). With an app, the window
+builds `clientDataJSON`, hashes it and returns it.
 
 **Allowlist.** Google's published list of privileged browsers
 (`https://www.gstatic.com/gpm-passkeys-privileged-apps/apps.json`), kept in the repository as
 `apps/android/app/src/main/assets/privileged-apps.json`, filtered to its `release` signatures, pinned
-by date and SHA-256 in a header file, and updated before each release. The app never fetches it: that
+by date and SHA-256 in a header file, and updated before each release. `getOrigin` takes the
+file's JSON as it is. The app never fetches it: that
 call would tell Google who uses BlindVault.
 
 ### 7.4 Binding an app to a domain
@@ -307,6 +325,38 @@ A password request lists the Login items that match the caller:
   the user picks is handed over only when the app is bound to the host of its URL (§7.4).
 
 The password is handed to Credential Manager as the response; nothing is written in the vault.
+
+### 7.7 Messages (D301)
+
+**`provider-request`**, which the window sends once, at start, answered with:
+
+| Key | Value |
+| --- | --- |
+| `kind` | `get` or `create` |
+| `caller` | `{kind: "browser", origin, packageName}`, a privileged browser and the origin it set (§7.3); or `{kind: "app", packageName, certSha256}`, the SHA-256 of every signing certificate, lowercase hex |
+| `requestJson` | the WebAuthn options JSON as the caller sent it, at most 64 KiB |
+| `clientDataHash` | 32 bytes, base64url, from a privileged browser only |
+
+The window copies from `requestJson` only the keys of `extension.md` §7.7, each credential reduced
+to `{type, id}`, and checks them with the same bounds; a request that fails a check ends with
+`NotAllowedError`. A `provider-request` answered with an error, or sent a second time, ends the
+window.
+
+**`provider-result`** `{result}`, sent once; the shell checks it against the request and the caller,
+answers Credential Manager and finishes the activity:
+
+| `result.kind` | Keys | Credential Manager |
+| --- | --- | --- |
+| `created` | `id`, `attestationObject`, `authenticatorData`, `publicKey`, `publicKeyAlgorithm`, and `clientDataJSON` for an app | `CreatePublicKeyCredentialResponse` |
+| `asserted` | `id`, `authenticatorData`, `signature`, `userHandle`, and `clientDataJSON` for an app | `GetCredentialResponse` with a `PublicKeyCredential` |
+| `error` | `name`: `NotAllowedError` or `InvalidStateError` (create only) | the public-key DOM exception of that name |
+| `cancelled` | — | a cancellation exception |
+| `browser` | — | `RESULT_CANCELED` |
+
+Bytes are base64url without padding, each bounded. The shell writes the response JSON: `id` and
+`rawId`, `type` `public-key`, `authenticatorAttachment` `platform`, the `response` keys above,
+`transports` `["internal", "hybrid"]` on create, and `clientExtensionResults`, with `credProps.rk`
+true on create.
 
 ## 8. Autofill (D269, D290)
 
@@ -355,9 +405,9 @@ package, and the user enables both in Settings › Passwords & accounts.
 | window | `build-info` | `{versionName, versionCode, certSha256}` (§10) |
 | window | `lifecycle-watch` | `{state: "shown" \| "hidden"}`, the state now (§4.2, D293) |
 | shell, to the window | `lifecycle` `{state: "hidden" \| "shown" \| "screen-off"}` | none (§4.2) |
-| provider window | `provider-request` | the request: its kind, the caller (§7.3), the options, and for autofill the fields found |
+| provider window | `provider-request` | `{kind, caller, requestJson, clientDataHash?}` (§7.7) |
 | provider window | `provider-assetlinks` `{domain}` | `bound`, `unbound`, `network` or `redirect` (§7.4) |
-| provider window | `provider-result` | none; the shell answers the caller and finishes the activity |
+| provider window | `provider-result` `{result}` | none; the shell answers the caller and finishes the activity (§7.7) |
 
 The shell never holds the Master Key, a record key or an item's content: the Keystore secret passes
 through it at setup and unlock, and a password, a user name or a signed response passes through it
