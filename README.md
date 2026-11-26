@@ -36,6 +36,24 @@ you make, and your devices sync with each other directly.
 - Paired devices sync peer to peer. Each one holds a complete encrypted copy of the vault.
 - Retire a lost device, and see when each device last synced.
 
+**In the browser and on Android**
+
+- A browser extension for Chrome 127+ and Firefox 149+ fills logins from its popup or a keyboard
+  shortcut.
+- An Android app, for Android 14 and later, offers your logins and passkeys to other apps and
+  browsers through Credential Manager and autofill, and unlocks with biometrics.
+- Store passkeys in items and sign in with them through the browser extension or the Android app.
+  The web app shows and syncs them, but cannot sign in with them.
+- The extension and the app are devices of the vault like any other: pair them, and they sync with
+  the rest.
+- Get the extension packages and the Android app from
+  [GitHub Releases](https://github.com/allisson/blindvault/releases/latest);
+  [docs/android.md](docs/android.md) explains how to install the APK.
+- The extension is not yet in the Chrome Web Store or on Firefox Add-ons. Until it is, Chrome loads
+  it from the release's zip (`chrome://extensions` › Developer mode › Load unpacked, without
+  automatic updates), and Firefox only as a temporary add-on, removed when Firefox restarts, so for
+  trying it out only.
+
 **Recovery you control**
 
 - A 24-word Recovery Phrase, confirmed at creation, opens your backups and resets a forgotten local
@@ -50,6 +68,8 @@ you make, and your devices sync with each other directly.
   and Document.
 - Ten field types, including TOTP with live codes, seed phrases, dates and long text. Add any field
   to any item.
+- Attach files of up to 10 MiB to any item. Each file is encrypted on its own, reaches every paired
+  device and goes into your backups.
 - Nested folders, tags, search, item history and a trash kept for 30 days.
 - Password generator: random characters or BIP39 words, with the entropy shown in bits.
 - Secrets stay masked until you reveal them. A copied secret is cleared from the clipboard after
@@ -138,11 +158,15 @@ which prevails over every other document:
 - [docs/sync-protocol.md](docs/sync-protocol.md): reconnection and sync between paired devices.
 - [docs/backup-format.md](docs/backup-format.md): the encrypted `.bvault` backup file.
 - [docs/record-content.md](docs/record-content.md): what an encrypted record holds.
+- [docs/attachments.md](docs/attachments.md): how a file attached to an item is encrypted, synced
+  and backed up.
+- [docs/extension.md](docs/extension.md): the browser extension, filling and stored passkeys.
+- [docs/android.md](docs/android.md): the Android app, its credential provider and autofill.
 - [docs/security-invariants.md](docs/security-invariants.md): each invariant and the tests that
   cover it.
 - [docs/build.md](docs/build.md): the reproducible build and the asset manifest.
-- [docs/roadmap.md](docs/roadmap.md): what comes next. Attachments, a browser extension and an
-  Android app come before v1.0.
+- [docs/roadmap.md](docs/roadmap.md): what comes next. What remains before v1.0 is one external
+  review of the whole app.
 - [GLOSSARY.md](GLOSSARY.md): the domain terms.
 
 Send design findings and questions as GitHub issues. Report a vulnerability privately, as
