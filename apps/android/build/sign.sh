@@ -63,7 +63,7 @@ cat > "$work/android.md" <<EOF
 - Signing certificate SHA-256: \`$pinned\`
 - Asset manifest SHA-256, as About shows it: \`$manifest\`
 
-Install it by hand, or through Obtainium; Android installs over the app only an APK signed by the same key. To check it against this tag, rebuild the unsigned APK and copy this APK's signature onto it, as in [docs/build.md](https://github.com/$repo/blob/$tag/docs/build.md#android).
+Install \`$signed\` by hand, or through Obtainium; Android installs over the app only an APK signed by the same key. \`$unsigned\` is for verification only and does not install; in Obtainium, filter the APKs by the regular expression \`^blindvault-android-[0-9.]+(-rc\.[0-9]+)?\.apk$\`. The first install of a release may show Play Protect's "App scan recommended" screen: scanning sends the APK to Google, which holds no vault data. To check it against this tag, rebuild the unsigned APK and copy this APK's signature onto it, as in [docs/build.md](https://github.com/$repo/blob/$tag/docs/build.md#android).
 EOF
 
 echo "Signed and checked: $work/$signed"

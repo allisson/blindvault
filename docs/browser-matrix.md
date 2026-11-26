@@ -148,6 +148,7 @@ provider and autofill rows come with their task.
 | Capability | Samsung A54 |
 | --- | --- |
 | Installs, opens on the first screen (§11) | by hand, test build; by hand 1.0.0-rc.3 |
+| Installs as a user does: downloaded in Chrome, opened in the file manager, through Play Protect (§10) | by hand 1.0.0-rc.3 (App Scan Recommended, then judged safe) |
 | Create a vault, lock, unlock by password | by hand, test build; by hand 1.0.0-rc.3 |
 | Pair with the PWA by QR (camera) and sync both ways | by hand, test build |
 | Keystore KEK: setup, unlock, StrongBox or TEE shown (§5) | by hand, test build (TEE) |
@@ -176,6 +177,15 @@ with `uiautomator`:
   existed, so the update was the same APK installed again (`adb install -r`) over an unlocked vault:
   the process ended, and the app reopened locked with its note. An update to a newer version is
   checked at the next release.
+- **by hand 1.0.0-rc.3, as a user installs it.** On 2026-11-26, over the release app installed by
+  ADB. Chrome warned on the download, as for any APK. The release's
+  `blindvault-android-1.0.0-rc.3-unsigned.apk`, opened in the file manager, did not install: Android
+  installs no unsigned APK. The signed `blindvault-android-1.0.0-rc.3.apk`, its SHA-256 the release
+  body's, showed Play Protect's App Scan Recommended screen, in Portuguese "A verificação do app é
+  recomendada" ("Este app ainda não foi analisado pelo Play Protect"); "Verificar app" sent it to
+  Google and answered "Este app parece seguro", and the update installed (`installerPackageName` `com.google.android.packageinstaller`). The ADB
+  installs before had skipped Play Protect. The release body now names the APK that installs
+  (`build.md`).
 - **by hand, debug build.** On 2026-11-24, the debug build of the credential provider's change
   (`io.github.allisson.blindvault.debug`), installed beside the release app, with Chrome
   158.0.8127.42. It was turned on as an additional service in Settings › Passwords, passkeys and
@@ -211,10 +221,11 @@ with `uiautomator`:
   the service, so `getPackageInfo` failed and no dataset was answered: measured with a throwaway build
   that could see the probe, then fixed with `QUERY_ALL_PACKAGES` before the change landed.
 
-To check it, on a release's signed APK, installed over ADB (`adb install`), with a PWA on another
-device:
+To check it, on a release's signed APK, with a PWA on another device:
 
-1. **Install** and open: the first screen says the app is a separate device of the vault.
+1. **Install** as a user does, not over ADB, which skips Play Protect: download the signed APK from
+   the release in Chrome and open it in the file manager. Record Play Protect's screen. Open: the
+   first screen says the app is a separate device of the vault.
 2. **Create a vault**, lock, unlock with the password.
 3. **Pair** with the PWA: scan its QR code with the camera, confirm the SAS on both, then sync once
    from each side; an item made on each appears on the other.
@@ -232,7 +243,7 @@ device:
 9. **Files:** download the attachment; lock, erase the vault, and restore the saved backup.
 10. **About:** the version, the manifest hash and the certificate SHA-256 equal the release body's
     Android section (D300) and `release-cert.sha256`.
-11. **Update:** install the next APK over it (`adb install -r`): the vault reopens locked, with its
+11. **Update:** install the next APK over it, as in step 1: the vault reopens locked, with its
     items.
 
 Record the Android version, the WebView version and the result in the table above.

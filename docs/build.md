@@ -161,7 +161,8 @@ APK.
 The release of a tag attaches, with the same attestation:
 
 - `blindvault-android-<version>-unsigned.apk`, the APK CI built, and `asset-manifest-android.txt`,
-  its `assets/web/asset-manifest.txt`;
+  its `assets/web/asset-manifest.txt`; it is for verification only, since Android installs no
+  unsigned APK;
 - `blindvault-android-<version>.apk`, the same APK signed by the maintainer with the release key
   (`android.md` §10), attached after the workflow, without an attestation: its SHA-256 and the
   signing certificate's are in the release body.
@@ -194,7 +195,10 @@ It downloads the unsigned APK, checks its attestation against the tag, signs it 
 (schemes v2 and v3, asking for the keystore's password), checks the signer against
 `release-cert.sha256` and the `apksigcopier` round trip above, and prints the commands that attach
 the signed APK and add the `## Android` section, its SHA-256, the certificate's and the hash of the
-APK's asset manifest, to the release body. It runs none of them.
+APK's asset manifest, to the release body. It runs none of them. The section names the APK to
+install, says the unsigned one does not install, gives Obtainium the regular expression
+`^blindvault-android-[0-9.]+(-rc\.[0-9]+)?\.apk$` that matches only the signed one, and says that
+the first install of a release may show Play Protect's "App scan recommended" screen (`browser-matrix.md`, Android).
 
 **Developer verification** (D274, D295, D300), once, before the first Android release: in the Play
 Console account, Android developer verification › Register package name, the package
