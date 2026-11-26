@@ -1,10 +1,10 @@
 # Cryptographic and protocol review — brief
 
 For the external reviewer of the Release Gate item "External cryptographic and protocol review of
-the whole app" (`roadmap.md`, Phase 10, D276). It covers the PWA; each later part is added before
-the review. It says what to review, where the specification and the
-code of each part live, what the project already checks, and how to report a finding. It introduces
-no decision: `overview.md` prevails.
+the whole app" (`roadmap.md`, Phase 10, D276). It covers the PWA, attachments, the browser
+extension, stored passkeys and the Android app. It says what to review, where the specification and
+the code of each part live, what the project already checks, and how to report a finding. It
+introduces no decision: `overview.md` prevails.
 
 ## The system in one paragraph
 
@@ -14,33 +14,46 @@ devices sync peer to peer over a WebRTC DataChannel, after a pairing confirmed b
 authentication string. Every primitive comes from libsodium (`libsodium-wrappers-sumo` 0.8.4); the
 Noise handshakes run on a copied, ported `noise-protocol` state machine.
 
+An item can hold attachments, each file encrypted as an immutable blob under a key of its own. The
+browser extension (Chrome, Firefox) and the Android app are full installations of the same `apps/web`
+build, each a separate device of the vault joined by pairing. The extension fills passwords and
+signs with passkeys stored in items; the Android app unlocks with a key held in the Android Keystore
+behind a biometric, and answers Credential Manager and autofill requests.
+
 ## Scope
 
 **In scope**
 
-| Part | Specification | Code (lines, excluding tests) |
+| Part | Specification | Code at `3510f97` (lines, excluding tests) |
 | --- | --- | --- |
-| Primitives, layout encoding, key hierarchy, Argon2id, AEAD, AAD, record format, Vault Key, Recovery Envelope, Local Config wraps, transcripts and MACs, CBOR | `crypto-spec.md` §1–§15 | `packages/crypto/src` (4,493, of which `noise/` 1,178) |
+| Primitives, layout encoding, key hierarchy, Argon2id, AEAD, AAD, record format, Vault Key, Recovery Envelope, Local Config wraps, transcripts and MACs, CBOR | `crypto-spec.md` §1–§15 | `packages/crypto/src` (5,366, of which `noise/` 1,178) |
 | Noise state machine (copied, D157, D200) | `architecture.md`, "Noise copy as built" | `packages/crypto/src/noise/`, `src/noise.ts` |
-| Pairing: payload, `Noise_XX`, commitment and SAS, re-admission | `pairing-protocol.md` | `packages/sync/src` (3,504 for the whole package) |
+| Pairing: payload, `Noise_XX`, commitment and SAS, re-admission | `pairing-protocol.md` | `packages/sync/src` (4,020 for the whole package) |
 | Sync: reconnection payload (`Noise_K`), `Noise_KK`, summaries, transfer, merge, retired peers, replay | `sync-protocol.md` | `packages/sync/src`, `packages/vault/src/session.ts`, `merge.ts`, `hlc.ts` |
-| Backup: header, keyslots, Argon2id parameters, `secretstream`, restore | `backup-format.md` | `packages/backup/src` (697), `packages/crypto/src/backup-stream.ts`, `keyslot.ts` |
-| Verification on receipt and merge rules | `crypto-spec.md` §9.5, `sync-protocol.md` §1 | `packages/vault/src` (5,340 without the import parsers) |
-| Storage boundary: only encrypted records and Local Config reach IndexedDB (D82) | overview §6, §7 | `packages/storage/src` (586) |
+| Backup: header, keyslots, Argon2id parameters, `secretstream`, restore | `backup-format.md` | `packages/backup/src` (890), `packages/crypto/src/backup-stream.ts`, `keyslot.ts` |
+| Verification on receipt and merge rules | `crypto-spec.md` §9.5, `sync-protocol.md` §1 | `packages/vault/src` (6,354 without the import parsers and the Public Suffix List data) |
+| Storage boundary: only encrypted records, blobs and Local Config reach IndexedDB (D82) | overview §6, §7, `attachments.md` §4 | `packages/storage/src` (703) |
 | Local Config (cleartext and encrypted parts) | `record-content.md` §9, `crypto-spec.md` §12 | `packages/vault/src/local-config.ts`, `packages/crypto/src/local-config.ts` |
+| Attachments: blob stream and `blobId`, the `attachment` field, the blob phase of sync and admission, backup format version 2, collection, download (D273, D277–D279) | `attachments.md`, `record-content.md` §4, `sync-protocol.md` §10.1, `pairing-protocol.md` §8–§9, `backup-format.md` | `packages/crypto/src/blob.ts` (129), `packages/sync/src/blobs.ts` and `blob-messages.ts` (321), `packages/vault/src/attachment.ts`, `session.ts`, `packages/storage/src/database.ts`, `apps/web/src/app/attachments.ts` |
+| Extension: the session host, RPC senders, matching and the Public Suffix List, filling, locks, the version lock (D267, D270, D282–D287) | `extension.md` §1–§6, §8 | `apps/extension/src` (753), `apps/extension/build` (284), `apps/web/src/extension` (2,191, passkeys included), `apps/web/src/platform/extension*.ts` (320), `packages/vault/src/match.ts`, `psl/psl.ts` |
+| Stored passkeys: interception, the `rpId` check, `clientDataJSON`, authenticator data, ES256 and EdDSA, the PKCS#8 layouts, the confirmation window, messages (D268, D288, D289) | `extension.md` §7, `record-content.md` §4 (`passkey`) | `packages/crypto/src/webauthn.ts` (300), `apps/web/src/extension/passkey*.ts`, `apps/extension/src/passkey-main.js`, `passkey-isolated.js`, `background.js` |
+| Android Keystore KEK: derivation, the Master Key wrap, the bridge's part, invalidation (D271, D290, D292) | `crypto-spec.md` §5.3, §12, `android.md` §5 | `packages/crypto/src/keystore.ts`, `apps/web/src/app/keystore.ts`, `ShellKeystore.kt` |
+| Android shell: the WebView, the bridge, the credential provider, `assetlinks.json` binding, autofill (D269, D290, D297, D301–D304) | `android.md` §3, §6–§9 | `apps/android/app/src/main/java/` (2,219, Kotlin), `apps/web/src/platform/android*.ts`, `apps/web/src/app/provider-flow.ts`, `keystore.ts` (2,043 together) |
 
 **Out of scope** (unless a finding leads there): the UI and its copy, the import parsers other than
-`.blindpass` decryption, the build and release pipeline (a separate gate item), and the documented
-out-of-scope attackers of `threat-model.md` (compromised OS or browser, malicious extensions, an
-unlocked device in hand, the first load).
+`.blindpass` decryption, the build and release pipeline (a separate gate item), the platforms the
+threat model trusts (the browser's extension APIs, Android's Keystore, Credential Manager and
+WebView), and the documented out-of-scope attackers of `threat-model.md` (compromised OS or
+browser, malicious extensions, an unlocked device in hand, the first load).
 
 ## Read first
 
-1. `threat-model.md`: assets, trust assumptions, attackers A1–A8 and the status of each threat.
-2. `security-invariants.md`: CRYPTO-INV-001 to 024, each with the test that checks it.
+1. `threat-model.md`: assets, trust assumptions, attackers A1–A10 and the status of each threat.
+2. `security-invariants.md`: CRYPTO-INV-001 to 029, each with the test that checks it.
 3. `crypto-spec.md`, then `pairing-protocol.md`, `sync-protocol.md` and `backup-format.md`.
-4. `overview.md` §3 (threat model), §5–§10, and the decision log (§21) for any `Dn` cited.
-5. `limitations.md`: what the project tells users it cannot do.
+4. `attachments.md`, `extension.md` and `android.md`, each with its threat-model section.
+5. `overview.md` §3 (threat model), §5–§10, and the decision log (§21) for any `Dn` cited.
+6. `limitations.md`: what the project tells users it cannot do.
 
 ## What the project already checks
 
@@ -55,6 +68,14 @@ unlocked device in hand, the first load).
 - **Negative tests** for tampered ciphertext, wrong AAD, wrong key epoch, replay and malformed input,
   per package; cross-package protocol and recovery tests in `tests/`.
 - **Coverage** of 95% enforced on `packages/*` (`pnpm test:coverage`).
+- **Blob vectors.** `blob-v1.json`, from the same independent generator, with edited blobs to
+  refuse (`attachments.md` §10).
+- **The Android shell's rules** in Kotlin unit tests on the JVM: the bridge's validation, the
+  privileged-browser allowlist, `assetlinks.json` parsing and binding, autofill's fields and domains
+  (`android.md` §13).
+- **By hand**, where automation cannot reach: passkeys on `webauthn.io` in the extension (Chrome,
+  Firefox) and on Android, the Keystore KEK and its invalidation, autofill, recorded in
+  `browser-matrix.md`.
 
 ## Where a reviewer's attention is most useful
 
@@ -88,6 +109,32 @@ for attention, not because a weakness is known.
 10. **Accepted limits** to confirm as stated: no revocation and a Master Key never rotated (D11, §20),
     re-founding as the response (D28), best-effort wiping in JavaScript (CRYPTO-INV-010), the
     metadata left visible (§3).
+11. **Blobs without additional data** (`attachments.md` §2, §9, D278): a random key used for one
+    file, held only inside its authenticated item, binds the blob to its identity; a received blob is
+    accepted only when its BLAKE2b-256 equals a `blobId` asked for (CRYPTO-INV-025). A blob's length
+    reveals its file's size in storage.
+12. **Who asks for a passkey or a fill in the extension** (`extension.md` §4, §5.5, §7.2, D283,
+    D287): the origin, frame and top origin come only from `MessageSender`, the `rpId` is checked
+    against a Public Suffix List pinned in the repository, and the session host acts only on the
+    extension's own pages and service worker (CRYPTO-INV-026, 027).
+13. **The authenticator the extension emulates** (`extension.md` §7.3, §7.4, D268, D288): UP is the
+    click in a `popup`-type window of the extension's origin, UV is reported because the vault is
+    unlocked, `signCount` is always 0 with BE and BS set, attestation is `none`; the ES256 key is
+    generated extractable, exported once to the fixed PKCS#8 layout and imported non-extractable
+    only to sign; a removed or replaced passkey stays in history until it is purged.
+14. **The version lock is transparency, not protection** (`extension.md` §8.2, D285): the new code
+    shows its own confirmation; what holds is that an update waits until the vault locks.
+15. **The Keystore KEK** (`crypto-spec.md` §5.3, `android.md` §5, D271, D292): a change to the key
+    hierarchy; the Master Key never crosses the bridge, only a 32-byte Keystore secret released after
+    a strong-biometric prompt (CRYPTO-INV-028). A lost phone is then protected by its biometric
+    instead of the local password and Argon2id, as with the unlock passkey (D75).
+16. **Who asks on Android** (`android.md` §7.3, §7.4, §8, D301, D303, D304): `getOrigin` against the
+    shipped privileged-browser allowlist, an app's origin `android:apk-key-hash:` bound to a domain
+    by its `assetlinks.json` `get_login_creds` statement, a browser's `clientDataHash` signed as
+    given, autofill's web domain trusted only from an allowlisted browser, and the autofill request
+    kept in the shell under a random token (CRYPTO-INV-029).
+17. **The bridge** (`android.md` §9, D290): `addWebMessageListener` for the app's origin and main
+    frame only, closed message types per window, and the secrets that pass through the shell.
 
 ## Running it
 
@@ -101,6 +148,9 @@ pnpm --filter @blindvault/crypto exec vitest run src/record.test.ts   # one file
 uv run tests/vectors/generate.py            # regenerates the vectors, independently of the TypeScript
 uv run tests/vectors/noise.py               # downloads and checks the official Noise vectors
 pnpm test:e2e                               # Playwright, Chromium, Firefox and WebKit
+pnpm --filter @blindvault/extension build   # the extension packages, in apps/extension/dist
+pnpm --filter @blindvault/android test:kotlin   # the shell's Kotlin unit tests (JDK 21, Android SDK)
+pnpm --filter @blindvault/android build     # the unsigned APK (build tools 36.0.0, platform 36)
 ```
 
 ## Reporting a finding
