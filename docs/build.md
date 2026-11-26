@@ -193,9 +193,11 @@ apps/android/build/sign.sh <tag> <keystore>
 
 It downloads the unsigned APK, checks its attestation against the tag, signs it with `apksigner`
 (schemes v2 and v3, asking for the keystore's password), checks the signer against
-`release-cert.sha256` and the `apksigcopier` round trip above, and prints the commands that attach
-the signed APK and add the `## Android` section, its SHA-256, the certificate's and the hash of the
-APK's asset manifest, to the release body. It runs none of them. The section names the APK to
+`release-cert.sha256` and the `apksigcopier` round trip above, then shows the signed APK's SHA-256
+and the `## Android` section, its SHA-256, the certificate's and the hash of the APK's asset
+manifest. On a typed `y` it attaches the signed APK and appends the section to the release body;
+any other answer publishes nothing. It refuses, before asking for the password, a release that
+already has the signed APK or an Android section. The section names the APK to
 install, says the unsigned one does not install, gives Obtainium the regular expression
 `^blindvault-android-[0-9.]+(-rc\.[0-9]+)?\.apk$` that matches only the signed one, and says that
 the first install of a release may show Play Protect's "App scan recommended" screen (`browser-matrix.md`, Android).
