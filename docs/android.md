@@ -486,9 +486,10 @@ toward the caller that asked.
   The maintainer signs it locally with the release key, kept offline and out of CI, with `apksigner`
   (schemes v2 and v3), through `apps/android/build/sign.sh`, which checks the unsigned APK's
   attestation against the tag, the signer against `apps/android/release-cert.sha256`, and that
-  `apksigcopier` gives the signed APK back from the unsigned one and the signature. The maintainer
-  then attaches `blindvault-android-<version>.apk` and adds its SHA-256, the certificate's and the
-  hash of the APK's asset manifest, which About shows, to the release body (D300). `docs/build.md`
+  `apksigcopier` gives the signed APK back from the unsigned one and the signature. On the
+  maintainer's confirmation it then attaches `blindvault-android-<version>.apk` and adds its
+  SHA-256, the certificate's and the hash of the APK's asset manifest, which About shows, to the
+  release body (D300). `docs/build.md`
   gives the rebuild's commands: build the unsigned APK, copy the published signature onto it with
   `apksigcopier`, and compare the bytes with the published APK.
 - **Release key.** RSA 4096, valid 30 years, in a keystore kept offline by the maintainer. Android
