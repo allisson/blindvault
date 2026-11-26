@@ -221,3 +221,27 @@ no snippet.
   release, in a rebuild of the tag on macOS 26.6.2 (arm64), and at `https://blindvault.allisson.dev`.
 - `sw.js` was `18cbc9bfe950c747e35e269c56770ef069db4b44bb6f7d1efaabadcf0da6fd60` in the release
   and in the rebuild.
+
+`v1.0.0-rc.4` (`8f27bd0`, release workflow run 45898425734), for the Release Gate on 2026-11-26,
+rebuilt on macOS 26.6.2 (arm64, Node 26.13.0, pnpm 10.33.0, Temurin 21.0.13+9, build tools 36.0.0):
+
+- The attestations of the nine files the workflow attached verified with `gh attestation verify
+  --signer-workflow allisson/blindvault/.github/workflows/release.yml --source-ref
+  refs/tags/v1.0.0-rc.4`.
+- **PWA.** The manifest hash was `1335f728501a16baa97ea262497fceff06db5502eb688fbdb2bc7c22c46e25cb`
+  in the release, in the rebuild and at `https://blindvault.allisson.dev`, and `sw.js`
+  `18cbc9bfe950c747e35e269c56770ef069db4b44bb6f7d1efaabadcf0da6fd60` in all three. Every file of
+  the release's archive passed `shasum -a 256 -c asset-manifest.txt`.
+- **Extension.** Both archives and both packages' manifests were byte for byte the rebuild's:
+  `blindvault-chrome-1.0.0-rc.4.zip`
+  `b5c9771a1cdec4d6b7eb7a60d1c9c5f707131610c032784fe3a7f50352e08bcc` (manifest hash
+  `3ac29ba7db4df9c1d21034aedf99c34771386b2c3a54a62c2546fbe1aeb21304`),
+  `blindvault-firefox-1.0.0-rc.4.zip`
+  `b1ec558843347902cb4da3ca3ebd015d99be0b98a39a9b2bd952457e6e654d47` (manifest hash
+  `14d49218a6c45ddbf336d44b8b79ffb0883180f166d98e83a0c7d19ad284a23b`).
+- **APK.** The unsigned APK, `9e7e9cd46f2d2e7497c4c95f65cca31e7eda89ae1653c6bccddc6329329081aa`,
+  and its asset manifest, hash `78639db70e0d1b17636a49cf5d85c65a87c532a2a523d3fefaa0eb2b5da24272`,
+  were byte for byte the rebuild's. `sign.sh` signed it; the signed APK,
+  `aa11f2d46b8405750af5ee6e4898be0ce07fecb1f5bfc01dff907c6ccfd96cb5`, has one signer, the pinned
+  certificate, and its signature copied onto the rebuilt APK with `apksigcopier` gave it byte for
+  byte.

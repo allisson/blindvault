@@ -147,8 +147,8 @@ provider and autofill rows come with their task.
 
 | Capability | Samsung A54 |
 | --- | --- |
-| Installs, opens on the first screen (§11) | by hand, test build; by hand 1.0.0-rc.3 |
-| Installs as a user does: downloaded in Chrome, opened in the file manager, through Play Protect (§10) | by hand 1.0.0-rc.3 (App Scan Recommended, then judged safe) |
+| Installs, opens on the first screen (§11) | by hand, test build; by hand 1.0.0-rc.3; by hand 1.0.0-rc.4 |
+| Installs as a user does: downloaded in Chrome, opened in the file manager, through Play Protect (§10) | by hand 1.0.0-rc.3 (App Scan Recommended, then judged safe); by hand 1.0.0-rc.4 (the same) |
 | Create a vault, lock, unlock by password | by hand, test build; by hand 1.0.0-rc.3 |
 | Pair with the PWA by QR (camera) and sync both ways | by hand, test build |
 | Keystore KEK: setup, unlock, StrongBox or TEE shown (§5) | by hand, test build (TEE) |
@@ -158,8 +158,8 @@ provider and autofill rows come with their task.
 | FLAG_SECURE: no screenshot, blank in Recents (§3) | by hand, test build |
 | Copy a password: hidden in the clipboard preview, cleared after the set time (§6.1) | by hand, test build |
 | Save a backup and an attachment; restore the backup (§6.2) | by hand, test build |
-| About: version, manifest hash, certificate SHA-256 equal to the release's (§10) | by hand 1.0.0-rc.3 |
-| An update installs over the app and keeps the vault (§10) | by hand 1.0.0-rc.3 (same version) |
+| About: version, manifest hash, certificate SHA-256 equal to the release's (§10) | by hand 1.0.0-rc.3; by hand 1.0.0-rc.4 |
+| An update installs over the app and keeps the vault (§10) | by hand 1.0.0-rc.3 (same version); by hand 1.0.0-rc.4 (from 1.0.0-rc.3) |
 | Passkey create and get on `webauthn.io` in Chrome and Firefox, through the provider window (§7, D301) | by hand, debug build |
 | "Use another authenticator" shows the system sheet again; Cancel, before or after the unlock, and Back end the call (§7.1) | by hand, debug build |
 | An app `webauthn.io`'s `assetlinks.json` does not bind gets no password and no passkey; the passkey's refusal comes before the unlock (§7.4, D303) | by hand, debug build |
@@ -186,6 +186,14 @@ with `uiautomator`:
   Google and answered "Este app parece seguro", and the update installed (`installerPackageName` `com.google.android.packageinstaller`). The ADB
   installs before had skipped Play Protect. The release body now names the APK that installs
   (`build.md`).
+- **by hand 1.0.0-rc.4.** On 2026-11-26, over the release app 1.0.0-rc.3, as a user installs it.
+  Chrome warned on the download of `blindvault-android-1.0.0-rc.4.apk`, its SHA-256 the release
+  body's; the file manager asked to update the app; Play Protect showed "A verificação do app é
+  recomendada" again, since the APK was new, and after "Verificar app" answered "Este app parece
+  seguro", with the credential provider and the autofill service in the APK; the app updated
+  (`versionCode` 1000004, `installerPackageName` `com.google.android.packageinstaller`). It opened
+  locked on the 1.0.0-rc.3 vault, and About, read over ADB with `uiautomator`, showed 1.0.0-rc.4, the
+  hash of the attached `asset-manifest-android.txt` and the pinned certificate.
 - **by hand, debug build.** On 2026-11-24, the debug build of the credential provider's change
   (`io.github.allisson.blindvault.debug`), installed beside the release app, with Chrome
   158.0.8127.42. It was turned on as an additional service in Settings › Passwords, passkeys and
