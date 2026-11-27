@@ -141,6 +141,45 @@ describe('blob phase of an admission (sync-protocol.md §10.1, pairing-protocol.
     expect(sent('a-to-b').filter((m) => m.t === 'blob-missing')).toHaveLength(16_385);
   }, 30_000);
 
+  it('keeps the order of its IDs on the wire when two asks overlap past 16,384 IDs (S-01)', async () => {
+    const { a, b } = pairing();
+    const store = memoryBlobStore();
+    const numbered = (from: number, count: number) =>
+      Array.from({ length: count }, (_, i) => {
+        const id = new Uint8Array(32);
+        new DataView(id.buffer).setUint32(0, from + i);
+        return id;
+      });
+    store.cite(...numbered(0, 16_385));
+    const phase = new BlobPhase(b, asking(store));
+    const answeredAll = admissionBlobs(a, new BlobPhase(a, answering(memoryBlobStore())), false);
+    // A second ask, after a merge, starts while the first still sends its messages.
+    const first = phase.ask();
+    store.cite(...numbered(20_000, 1));
+    const second = phase.ask();
+    await Promise.all([first, second]);
+    await phase.end();
+    while (!phase.done) await phase.receive(await b.receive());
+    await answeredAll;
+    expect(b.error).toBeNull();
+    expect(phase.answered).toBe(true);
+  }, 30_000);
+
+  it.each<[string, Uint8Array[][]]>([
+    ['twice in one blobs-want', [[blobId(small), blobId(small)]]],
+    ['again in a later blobs-want', [[blobId(small)], [blobId(other), blobId(small)]]],
+  ])('aborts on an ID asked for %s, answering it once at most (S-02)', async (_name, wants) => {
+    const { a, b } = pairing();
+    const store = memoryBlobStore(small, other);
+    const reads = vi.spyOn(store, 'read');
+    const answeringA = admissionBlobs(a, new BlobPhase(a, answering(store)), false);
+    for (const ids of wants) await b.send({ t: 'blobs-want', ids }).catch(() => undefined);
+    expect(await failure(answeringA)).toBe('protocol-error');
+    expect(
+      reads.mock.calls.filter(([id]) => toHex(id) === toHex(blobId(small))).length,
+    ).toBeLessThanOrEqual(1);
+  });
+
   it('rejects and reports a blob that does not match its blobId, then goes on (D278)', async () => {
     const { a, b } = pairing();
     const joined = joining(b, blobId(small), blobId(other));

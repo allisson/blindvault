@@ -521,10 +521,13 @@ and no merge. A device asks for the blobs it lacks and the peer sends them, one 
   knows no more will come.
 
 An ID is asked for at most once per session. One the peer answers with `blob-missing`, or one
-rejected below, is asked for again at the next session.
+rejected below, is asked for again at the next session. The messages of one ask leave together, so
+two asks never interleave on the wire, whose order is the order of the IDs (D307).
 
 **Answering.** The device answers every ID of every `blobs-want` it receives, in the order received,
-each with one unit:
+each with one unit. An ID the peer already asked for in the session, in the same `blobs-want` or an
+earlier one, aborts (`protocol-error`) before any of that message's IDs is answered, so a paired
+peer cannot make it read and send one blob without bound (D307):
 
 - `blob-begin` with the `blobId` and the blob's length, then the blob in `blob-chunk` messages of
   exactly 1,048,576 bytes each but the last, which holds 1 to 1,048,576 bytes, then `blob-end`; or
@@ -533,7 +536,8 @@ each with one unit:
 Before sending, it reads the blob from storage and checks its length and its hash; a held blob that
 fails either is deleted and answered with `blob-missing`. Units and transfers leave one at a time,
 in the order they are queued, so the messages of two never interleave, and each passes the check of
-section 6: nothing is sent to a retired peer but its record (CRYPTO-INV-015).
+section 6, in a sync, a pairing and a re-admission alike: nothing is sent to a retired peer but its
+record (CRYPTO-INV-015, D307).
 
 **Receiving.** The receiver expects the answers in the order of its IDs. It aborts
 (`protocol-error`) on an answer for any other ID, a length outside 42 to 10,488,521, a chunk that is
@@ -543,7 +547,9 @@ of the received bytes:
 
 - equal to the `blobId`: the blob is written in its own storage transaction, unless already held;
 - different: the blob is rejected and reported, naming the items that cite it, like a rejected
-  record (section 9); the session goes on.
+  record (section 9); the session goes on. B in a pairing neither writes nor reports it: the blob
+  shows as waiting for sync, and the next sync asks for it again and reports it there
+  (`pairing-protocol.md` §8 step 8, D307).
 
 A unit cut by the end of the session is dropped: no partial blob is written. The receiver holds one
 blob in memory at a time.
@@ -582,7 +588,8 @@ type or length, or a message out of the order of sections 6 to 10 aborts (`proto
 `records-begin` before the peer's `summary-end` has been received by the sender, no second
 `summary-begin`, no second `committed`, no transfer of section 10 before the sender's `committed`,
 nothing but a transfer of section 10, a message of section 10.1 or `retired` after it, no
-`blobs-want` before the sender's `committed`.
+`blobs-want` before the sender's `committed`, no `blobs-want` holding an ID the sender already asked
+for in the session (D307).
 
 ### 11.2 Abort
 

@@ -276,8 +276,11 @@ After both confirmations (section 6.4):
 7. B sends `committed`. A records the completed sync with B on receiving it (D34).
 8. B asks A for the blobs its new records cite (`sync-protocol.md` §10.1): its `blobs-want`
    messages, then `blobs-end`. A answers each ID, and the session ends once B has every answer
-   (D279). B writes each blob that matches its `blobId` in its own transaction; a blob A lacks, or
-   one cut by the end of the session, shows as waiting for sync, and the pairing still completed.
+   (D279). B writes each blob that matches its `blobId` in its own transaction; a blob A lacks, one
+   that does not match its `blobId`, or one cut by the end of the session, is not written and shows
+   as waiting for sync, and the pairing still completed; the next sync asks for it again, and
+   reports there one that does not match (D307). A checks before each unit that B's Device record
+   is not retired (`sync-protocol.md` §6).
 
 B holds the identity, the Device KEK, the Master Key and the received records only in memory until
 step 6, and discards them on any abort: an interruption before the commit leaves its storage

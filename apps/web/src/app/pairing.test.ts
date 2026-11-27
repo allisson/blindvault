@@ -11,12 +11,13 @@ import {
   UnlockRejectedError,
   VaultLockedError,
 } from '@blindvault/vault';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   FORMAT_VERSIONS,
   RECORD_TYPES,
   STUN_SERVERS,
+  checkedPeer,
   endingOf,
   iceServers,
   refusal,
@@ -47,6 +48,19 @@ describe('the pairing as the app runs it (pairing-protocol.md, D203)', () => {
     // Anything else is left as it is: the transfer aborts with protocol-error.
     const other = new UnlockRejectedError();
     expect(refusal(other)).toBe(other);
+  });
+
+  it('ends the session as retired-peer when the peer is retired, before a blob unit too (S-03)', async () => {
+    const session = { refuse: vi.fn(() => Promise.resolve()) };
+    await checkedPeer(session, () => undefined);
+    expect(session.refuse).not.toHaveBeenCalled();
+    const retired = new JoinRejectedError('retired-peer');
+    await expect(
+      checkedPeer(session, () => {
+        throw retired;
+      }),
+    ).rejects.toBe(retired);
+    expect(session.refuse).toHaveBeenCalledWith('retired-peer', retired);
   });
 
   it('says why a session ended, and who ended it', () => {

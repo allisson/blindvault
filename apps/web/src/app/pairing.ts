@@ -114,6 +114,24 @@ export function refusal(error: unknown): unknown {
   return error;
 }
 
+/**
+ * Runs `check`, the vault's test of the peer's Device record, and when it throws ends `session`
+ * with the reason it stands for, as `retired-peer` (D45, D49): before the nonces of a
+ * re-admission, and before each blob unit of an admission (`sync-protocol.md` §6, §10.1, S-03).
+ */
+export async function checkedPeer(
+  session: { refuse(reason: TransferRefusal['reason'], cause?: unknown): Promise<unknown> },
+  check: () => void,
+): Promise<void> {
+  try {
+    check();
+  } catch (error) {
+    const refused = refusal(error);
+    if (refused instanceof TransferRefusal) await session.refuse(refused.reason, error);
+    throw error;
+  }
+}
+
 function mapped<T>(run: () => Promise<T>): Promise<T> {
   return run().catch((error: unknown) => {
     throw refusal(error);
@@ -269,13 +287,9 @@ abstract class Flow {
     }
     if (checkPeer) {
       // Re-admission §9 step 1: before the nonces, a retired peer is refused (D45, D49).
-      try {
+      await checkedPeer(session, () => {
         checkPeer(result.peerPublicKey);
-      } catch (error) {
-        const refused = refusal(error);
-        if (refused instanceof TransferRefusal) await session.refuse(refused.reason, error);
-        throw error;
-      }
+      });
     }
     const sas = await exchangeNonces(session, nonces(result.handshakeHash));
     this.set({ kind: 'sas', sas: sas.sas, confirmed: false });
@@ -472,6 +486,10 @@ export class Inviting extends Flow {
             () => grant.blobs,
             () => undefined,
           ),
+          check: () =>
+            checkedPeer(session, () => {
+              grant.checkPeer(peerPublicKey);
+            }),
         },
       });
       this.succeeded({ kind: 'done', name, readmit: this.#readmit });
@@ -778,6 +796,10 @@ export class Readmitting extends Flow {
             () => grant.blobs,
             (records) => rejected.push(...records),
           ),
+          check: () =>
+            checkedPeer(session, () => {
+              grant.checkPeer(peerPublicKey);
+            }),
         },
       });
       const { peerCommitted } = readmitted;
