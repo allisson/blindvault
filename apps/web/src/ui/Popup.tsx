@@ -196,13 +196,20 @@ export function Popup({
             </section>
           ) : null}
           {items?.length === 0 ? <p className="text-sm text-muted">{m.popup.none}</p> : null}
-          <ul data-testid="popup-items" className="flex flex-col gap-2">
-            {items?.map((item) => (
-              <Row key={item.itemId} item={item}>
-                <CopyButtons item={item} copyField={copyField} />
-              </Row>
-            ))}
-          </ul>
+          <section className="flex flex-col gap-2">
+            {/* Under the page's matches, every Login item: named, so a match listed twice reads as
+                such (D313). */}
+            {query === '' && items !== undefined && items.length > 0 ? (
+              <h2 className="text-xs font-semibold text-muted">{m.popup.all}</h2>
+            ) : null}
+            <ul data-testid="popup-items" className="flex flex-col gap-2">
+              {items?.map((item) => (
+                <Row key={item.itemId} item={item}>
+                  <CopyButtons item={item} copyField={copyField} />
+                </Row>
+              ))}
+            </ul>
+          </section>
         </>
       ) : null}
       {note === undefined ? null : <Notice>{note}</Notice>}
