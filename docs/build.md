@@ -93,6 +93,11 @@ Then compare the manifest hash with the one the About screen shows and with your
 To publish a release: set the version in `apps/web/package.json` and the root `package.json`,
 write `docs/releases/v<version>.md`, merge, then tag the merge commit and push the tag.
 
+**Frozen backups** (D310). v1.0.0, and after it every release that changes the `.bvault` format or
+the content of a record, adds a backup exported by its published app to `tests/fixtures/backups`,
+as `tests/fixtures/backups/README.md` says, and keeps every earlier one: a file there is never
+edited, replaced or regenerated, and `tests/frozen-backups.test.ts` must restore all of them.
+
 ## Extension
 
 The extension's packages wrap a build of `apps/web` (`extension.md` §2, D285). Each package has an

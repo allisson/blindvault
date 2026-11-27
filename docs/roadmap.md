@@ -538,6 +538,7 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Every invariant in `security-invariants.md` has an associated passing test, the new ones included
 - [x] Reproducible build validated on the release candidate for the PWA, the extension and the APK (v1.0.0-rc.4, `build.md`)
 - [x] `threat-model.md`: the planned entries of attachments, the extension and Android reviewed against what was implemented
+- [ ] A `.bvault` exported by the published v1.0.0 app frozen in `tests/fixtures/backups`, with its manifest, restored by `tests/frozen-backups.test.ts` with the phrase and the export password (D310); one of v1.0.0-rc.4 too
 
 ---
 
