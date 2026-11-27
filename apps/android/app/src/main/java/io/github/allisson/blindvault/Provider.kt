@@ -174,21 +174,80 @@ private const val CLIENT_DATA_JSON = "clientDataJSON"
 private const val CREDENTIAL_TEXT_MAX = 16384
 
 /**
- * `provider-result`'s `result` checked against the pending request and its caller (§7.7): the kind, each
- * key, every byte field canonical and bounded, `clientDataJSON` present for an app only. `bound` is whether
- * this request already got a `bound` answer to `provider-assetlinks` (§7.4): an app gets no credential
- * without it, whatever it asked. A `password` result belongs to a password request, which takes no
- * `created`, `asserted` or `error`. `null` for anything else; the activity then answers `invalid` and ends
- * with a cancellation.
+ * The packages of Google's privileged list that are not browsers (`privileged-apps.txt`): trusted for
+ * passkeys as listed, but never for the `webDomain` autofill reads, which only a browser sets for a site
+ * (android.md §8, D309).
  */
-fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller, bound: Boolean): CallerAnswer? {
+val NOT_BROWSERS = setOf(
+    "com.google.android.gms",
+    "com.fido.fido2client",
+    "com.oplus.credential",
+    "com.citrix.Receiver",
+    "io.github.jqssun.helium",
+)
+
+/** The allowlist's JSON without the entries of `NOT_BROWSERS`, in the same structure `getOrigin` takes. */
+fun browsersOnly(allowlist: String): String {
+    val json = JSONObject(allowlist)
+    val apps = json.getJSONArray("apps")
+    val kept = JSONArray()
+    for (i in 0 until apps.length()) {
+        val app = apps.getJSONObject(i)
+        if (app.getJSONObject("info").getString("package_name") !in NOT_BROWSERS) kept.put(app)
+    }
+    return json.put("apps", kept).toString()
+}
+
+/** The `rpId` a passkey request's `requestJson` names: `rpId` for a get, `rp.id` for a create; `null` without one. */
+fun requestRpId(kind: RequestKind, requestJson: String?): String? {
+    val json = try {
+        JSONObject(requestJson ?: return null)
+    } catch (e: JSONException) {
+        return null
+    }
+    val rpId = when (kind) {
+        RequestKind.GET -> json.opt("rpId")
+        RequestKind.CREATE -> json.optJSONObject("rp")?.opt("id")
+        RequestKind.PASSWORD -> null
+    }
+    return (rpId as? String)?.takeIf { it.isNotEmpty() }
+}
+
+/**
+ * Whether an app's credential may go out (§7.4, AND-1): for a passkey, the `rpId` its request names is one of
+ * the domains this request got `bound` for; for a password, whose result names no domain, any of them. A
+ * browser's origin is the site's: nothing to check.
+ */
+private fun appBound(kind: RequestKind, caller: Caller, bound: Set<String>, requestJson: String?): Boolean {
+    if (caller !is Caller.App) return true
+    if (kind == RequestKind.PASSWORD) return bound.isNotEmpty()
+    val rpId = requestRpId(kind, requestJson) ?: return false
+    return rpId.lowercase() in bound
+}
+
+/**
+ * `provider-result`'s `result` checked against the pending request and its caller (§7.7): the kind, each
+ * key, every byte field canonical and bounded, `clientDataJSON` present for an app only. `bound` holds the
+ * domains this request got a `bound` answer to `provider-assetlinks` for (§7.4): an app gets a passkey only
+ * for the `rpId` its `requestJson` names, when bound, and a password only once a domain is bound. A
+ * `password` result belongs to a password request, which takes no `created`, `asserted` or `error`. `null`
+ * for anything else; the activity then answers `invalid` and ends with a cancellation.
+ */
+fun parseCallerAnswer(
+    result: JSONObject,
+    kind: RequestKind,
+    caller: Caller,
+    bound: Set<String>,
+    requestJson: String?,
+): CallerAnswer? {
     if (caller === Caller.Refused) return null
     val keys = result.keys().asSequence().toSet()
     val app = caller is Caller.App
+    val allowed = appBound(kind, caller, bound, requestJson)
     val clientData = if (app) setOf(CLIENT_DATA_JSON) else emptySet()
     return when (result.opt("kind") as? String) {
         "created" -> {
-            if (kind != RequestKind.CREATE || (app && !bound)) return null
+            if (kind != RequestKind.CREATE || !allowed) return null
             if (keys != setOf("kind", "id", "attestationObject", "authenticatorData", "publicKey", "publicKeyAlgorithm") + clientData) return null
             CallerAnswer.Created(
                 id = field(result, "id", ID_BYTES) ?: return null,
@@ -200,7 +259,7 @@ fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller, bou
             )
         }
         "asserted" -> {
-            if (kind != RequestKind.GET || (app && !bound)) return null
+            if (kind != RequestKind.GET || !allowed) return null
             if (keys != setOf("kind", "id", "authenticatorData", "signature", "userHandle") + clientData) return null
             CallerAnswer.Asserted(
                 id = field(result, "id", ID_BYTES) ?: return null,
@@ -211,7 +270,7 @@ fun parseCallerAnswer(result: JSONObject, kind: RequestKind, caller: Caller, bou
             )
         }
         "password" -> {
-            if (kind != RequestKind.PASSWORD || (app && !bound)) return null
+            if (kind != RequestKind.PASSWORD || !allowed) return null
             if (keys != setOf("kind", "userName", "password")) return null
             CallerAnswer.Password(
                 userName = credentialText(result, "userName") ?: return null,

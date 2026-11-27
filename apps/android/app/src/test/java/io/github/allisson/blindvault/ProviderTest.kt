@@ -37,11 +37,28 @@ class ProviderTest {
         .put("userHandle", field(32, 7))
         .also { if (app) it.put("clientDataJSON", field(130, 5)) }
 
-    private fun parse(result: JSONObject, kind: RequestKind, caller: Caller, bound: Boolean = true) =
-        parseCallerAnswer(result, kind, caller, bound)
+    /** The `requestJson` of a passkey request for `rpId`, as Credential Manager passes it; none for a password. */
+    private fun requestJson(kind: RequestKind, rpId: String? = "example.com"): String? = when (kind) {
+        RequestKind.PASSWORD -> null
+        RequestKind.GET -> JSONObject().put("challenge", "AA").also { if (rpId != null) it.put("rpId", rpId) }.toString()
+        RequestKind.CREATE -> JSONObject().put("rp", JSONObject().also { if (rpId != null) it.put("id", rpId) }).toString()
+    }
 
-    private fun refused(result: JSONObject, kind: RequestKind, caller: Caller, bound: Boolean = true) =
-        assertNull(result.toString(), parse(result, kind, caller, bound))
+    private fun parse(
+        result: JSONObject,
+        kind: RequestKind,
+        caller: Caller,
+        bound: Set<String> = setOf("example.com"),
+        json: String? = requestJson(kind),
+    ) = parseCallerAnswer(result, kind, caller, bound, json)
+
+    private fun refused(
+        result: JSONObject,
+        kind: RequestKind,
+        caller: Caller,
+        bound: Set<String> = setOf("example.com"),
+        json: String? = requestJson(kind),
+    ) = assertNull(result.toString(), parse(result, kind, caller, bound, json))
 
     private fun password(userName: Any = "ana", password: Any = "hunter2") =
         JSONObject().put("kind", "password").put("userName", userName).put("password", password)
@@ -257,8 +274,8 @@ class ProviderTest {
     @Test
     fun aPasswordRequestTakesCancelledAndBrowserOnly() {
         for (caller in listOf(browser, app)) {
-            assertEquals(CallerAnswer.Cancelled, parse(JSONObject().put("kind", "cancelled"), RequestKind.PASSWORD, caller, bound = false))
-            assertEquals(CallerAnswer.UseAnother, parse(JSONObject().put("kind", "browser"), RequestKind.PASSWORD, caller, bound = false))
+            assertEquals(CallerAnswer.Cancelled, parse(JSONObject().put("kind", "cancelled"), RequestKind.PASSWORD, caller, bound = emptySet()))
+            assertEquals(CallerAnswer.UseAnother, parse(JSONObject().put("kind", "browser"), RequestKind.PASSWORD, caller, bound = emptySet()))
             refused(JSONObject().put("kind", "error").put("name", "NotAllowedError"), RequestKind.PASSWORD, caller)
             refused(JSONObject().put("kind", "error").put("name", "InvalidStateError"), RequestKind.PASSWORD, caller)
             refused(created(app = caller is Caller.App), RequestKind.PASSWORD, caller)
@@ -268,10 +285,10 @@ class ProviderTest {
 
     @Test
     fun acceptsAPasswordForAPasswordRequest() {
-        val fromBrowser = parse(password(), RequestKind.PASSWORD, browser, bound = false) as CallerAnswer.Password
+        val fromBrowser = parse(password(), RequestKind.PASSWORD, browser, bound = emptySet()) as CallerAnswer.Password
         assertEquals("ana", fromBrowser.userName)
         assertEquals("hunter2", fromBrowser.password)
-        val fromApp = parse(password(), RequestKind.PASSWORD, app, bound = true) as CallerAnswer.Password
+        val fromApp = parse(password(), RequestKind.PASSWORD, app, bound = setOf("example.com")) as CallerAnswer.Password
         assertEquals("ana", fromApp.userName)
         assertEquals("hunter2", fromApp.password)
         val longest = "p".repeat(16384)
@@ -305,18 +322,34 @@ class ProviderTest {
 
     @Test
     fun anAppGetsNoCredentialUntilItsDomainAnsweredBound() {
-        refused(created(app = true), RequestKind.CREATE, app, bound = false)
-        refused(asserted(app = true), RequestKind.GET, app, bound = false)
-        refused(password(), RequestKind.PASSWORD, app, bound = false)
-        assertNotNull(parse(created(app = true), RequestKind.CREATE, app, bound = true))
-        assertNotNull(parse(asserted(app = true), RequestKind.GET, app, bound = true))
+        refused(created(app = true), RequestKind.CREATE, app, bound = emptySet())
+        refused(asserted(app = true), RequestKind.GET, app, bound = emptySet())
+        refused(password(), RequestKind.PASSWORD, app, bound = emptySet())
+        assertNotNull(parse(created(app = true), RequestKind.CREATE, app, bound = setOf("example.com")))
+        assertNotNull(parse(asserted(app = true), RequestKind.GET, app, bound = setOf("example.com")))
         // A browser's origin is the site's: no binding to check.
-        assertNotNull(parse(created(), RequestKind.CREATE, browser, bound = false))
-        assertNotNull(parse(asserted(), RequestKind.GET, browser, bound = false))
+        assertNotNull(parse(created(), RequestKind.CREATE, browser, bound = emptySet()))
+        assertNotNull(parse(asserted(), RequestKind.GET, browser, bound = emptySet()))
         // What is not a credential needs no binding: an app may still decline.
-        assertNotNull(parse(JSONObject().put("kind", "error").put("name", "NotAllowedError"), RequestKind.GET, app, bound = false))
-        assertEquals(CallerAnswer.Cancelled, parse(JSONObject().put("kind", "cancelled"), RequestKind.GET, app, bound = false))
-        assertEquals(CallerAnswer.UseAnother, parse(JSONObject().put("kind", "browser"), RequestKind.CREATE, app, bound = false))
+        assertNotNull(parse(JSONObject().put("kind", "error").put("name", "NotAllowedError"), RequestKind.GET, app, bound = emptySet()))
+        assertEquals(CallerAnswer.Cancelled, parse(JSONObject().put("kind", "cancelled"), RequestKind.GET, app, bound = emptySet()))
+        assertEquals(CallerAnswer.UseAnother, parse(JSONObject().put("kind", "browser"), RequestKind.CREATE, app, bound = emptySet()))
+    }
+
+    @Test
+    fun anAppGetsAPasskeyOnlyForTheRpIdItsRequestNamesAndThatAnsweredBound() {
+        // Bound for another domain than the request's `rpId` (AND-1).
+        refused(created(app = true), RequestKind.CREATE, app, bound = setOf("other.com"))
+        refused(asserted(app = true), RequestKind.GET, app, bound = setOf("other.com"))
+        assertNotNull(parse(asserted(app = true), RequestKind.GET, app, bound = setOf("other.com", "example.com")))
+        // A request that names no `rpId` binds nothing.
+        refused(asserted(app = true), RequestKind.GET, app, json = requestJson(RequestKind.GET, rpId = null))
+        refused(created(app = true), RequestKind.CREATE, app, json = requestJson(RequestKind.CREATE, rpId = null))
+        refused(asserted(app = true), RequestKind.GET, app, json = "not json")
+        // A password names no domain in its result: any domain bound for this request lets it through (§7.4).
+        assertNotNull(parse(password(), RequestKind.PASSWORD, app, bound = setOf("other.com")))
+        // A browser's origin is the site's: no binding to check.
+        assertNotNull(parse(asserted(), RequestKind.GET, browser, bound = emptySet(), json = requestJson(RequestKind.GET, rpId = null)))
     }
 
     @Test
