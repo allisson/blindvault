@@ -327,6 +327,16 @@ test.describe('on a coarse pointer', () => {
     );
   }
 
+  test('keeps the search without its shortcut and the lock state as a padlock on a phone (D314)', async ({
+    page,
+  }) => {
+    await create(page, 390);
+    await expect(page.getByTestId('search')).toHaveAttribute('placeholder', 'Search');
+    const lock = page.getByTestId('lock-state');
+    await expect(lock).toHaveText('Unlocked');
+    expect((await lock.boundingBox())?.width).toBeLessThan(40);
+  });
+
   test('makes every control at least 44 px tall, in every layout (D197)', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto('/');

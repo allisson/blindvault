@@ -94,6 +94,10 @@ Both windows set up their WebView the same way:
   also `IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS`, for the framework's own path. The local
   password cannot be filled by another manager either, and the app does not show the warning of
   D175 (D297).
+- **Theme** (D314). The activities' theme is `Theme.DeviceDefault.DayNight`, which the WebView reads
+  for `prefers-color-scheme`, so the app follows the system's dark theme as a browser does. Since the
+  windows handle a `uiMode` change themselves (§4.1), each sets its system bar icons and its window
+  background, the page's surface color, at creation and on every configuration change.
 - **Camera.** `onPermissionRequest` grants only `RESOURCE_VIDEO_CAPTURE`, only to the app's origin,
   after the Android `CAMERA` permission is granted at runtime; every other resource is denied. The
   spike read the app's QR codes this way (D282).
@@ -531,7 +535,9 @@ toward the caller that asked.
 - The app shows its own texts where the browser's would be wrong (D298): the storage state says the
   vault goes only with the app or its data and offers no request to keep it; the export does not
   warn that the save dialog may lock the vault (D294); a file step names its types with no "or drop
-  it here"; the default device name is "BlindVault app on Android".
+  it here"; the default device name is "BlindVault app on Android"; Devices names the app's data, not
+  the browser's storage, when this is the only device, and a URL field's "Match the whole domain"
+  says the app offers the login in a browser, not that the extension fills it (D314).
 - TalkBack reads a checkable control's name only from the control itself (D299). Measured on the
   Samsung A54, WebView 158.0.8127.46, with probes on the unlock screen: a checkbox named by a
   wrapping `<label>`, a `<label for>` or `aria-labelledby`, and a button with `aria-pressed` named

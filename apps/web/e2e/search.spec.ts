@@ -39,6 +39,8 @@ test('searches in memory, never over secrets, and forgets the query on lock (D13
   await expect(page.getByRole('heading', { name: 'Garden plan', level: 1 })).toBeVisible();
 
   const search = page.getByTestId('search');
+  // A mouse or a trackpad: the shortcut shows (D314).
+  await expect(search).toHaveAttribute('placeholder', 'Search (Ctrl/⌘ K)');
   const results = page.getByRole('region', { name: 'Results' });
   // Ctrl/⌘ + K focuses search.
   await page.keyboard.press('ControlOrMeta+k');

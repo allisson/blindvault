@@ -926,6 +926,8 @@ const en = {
     matchDomain: 'Match the whole domain',
     matchDomainHint:
       'The extension also fills this login on the other sites of the domain, such as login.example.com.',
+    matchDomainHintAndroid:
+      'In a browser, the app also offers this login on the other sites of the domain, such as login.example.com.',
     monthFormat: 'YYYY-MM',
     invalid: 'Fix the fields marked above.',
     tooLarge: 'This item is too large to save.',
@@ -1214,6 +1216,8 @@ const en = {
       'This device is not registered: it was restored from a backup, and the other devices do not know it. Until one of the devices below re-admits it, it exchanges data with them only through backups.',
     devicesOnly:
       'This is the only device of this vault. If this browser loses its storage, only a backup and the Recovery Phrase bring the vault back: make a backup, and pair another device.',
+    devicesOnlyAndroid:
+      'This is the only device of this vault. If the app is uninstalled or its data is cleared, only a backup and the Recovery Phrase bring the vault back: make a backup, and pair another device.',
     devicesRetire: 'Retire',
     devicesRetireWarning:
       'Retire {name}? Retirement cannot be undone. It is not revocation: whatever that device already holds stays readable to whoever has it. If it may be in someone else’s hands, re-found the vault.',
@@ -2272,6 +2276,8 @@ const ptBR: Messages = {
     matchDomain: 'Casar o domínio inteiro',
     matchDomainHint:
       'A extensão também preenche este login nos outros sites do domínio, como login.example.com.',
+    matchDomainHintAndroid:
+      'Num navegador, o app também oferece este login nos outros sites do domínio, como login.example.com.',
     monthFormat: 'AAAA-MM',
     invalid: 'Corrija os campos marcados acima.',
     tooLarge: 'Este item é grande demais para salvar.',
@@ -2562,6 +2568,8 @@ const ptBR: Messages = {
       'Este dispositivo não está registrado: ele foi restaurado de um backup, e os outros dispositivos não o conhecem. Até que um dos dispositivos abaixo o readmita, ele troca dados com eles só por backups.',
     devicesOnly:
       'Este é o único dispositivo deste cofre. Se este navegador perder o armazenamento, só um backup e a Frase de Recuperação trazem o cofre de volta: faça um backup e pareie outro dispositivo.',
+    devicesOnlyAndroid:
+      'Este é o único dispositivo deste cofre. Se o app for desinstalado ou os dados dele forem apagados, só um backup e a Frase de Recuperação trazem o cofre de volta: faça um backup e pareie outro dispositivo.',
     devicesRetire: 'Aposentar',
     devicesRetireWarning:
       'Aposentar {name}? Não dá para desfazer. Aposentar não é revogar: o que esse dispositivo já tem continua legível para quem estiver com ele. Se ele pode estar nas mãos de outra pessoa, refunde o cofre.',

@@ -1148,7 +1148,9 @@ function DeviceSettings({
       ) : null}
       {devices.advice === 'only-device' ? (
         <Notice>
-          <span data-testid="devices-only">{m.settings.devicesOnly}</span>
+          <span data-testid="devices-only">
+            {platform.kind === 'android' ? m.settings.devicesOnlyAndroid : m.settings.devicesOnly}
+          </span>
         </Notice>
       ) : null}
       <ul className="divide-y divide-line rounded-card border border-line bg-raised">

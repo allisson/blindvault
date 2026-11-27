@@ -517,7 +517,8 @@ describe('PasskeyHost: create (extension.md §7.4)', () => {
     const h = harness({ items: [a, b] });
     h.host.start(createRequest());
     await settle();
-    expect(h.host.details(h.token())).toMatchObject({ replaces: true });
+    // The listed item holding it is picked first; the unlisted copy is not offered (D314).
+    expect(h.host.details(h.token())).toMatchObject({ replaces: true, holder: hex(id(1)) });
     await h.host.choose(h.token(), { choice: 'save', itemId: hex(id(1)) });
     expect(h.writes.map((w) => hex(w.id ?? new Uint8Array()))).toEqual([hex(id(2)), hex(id(1))]);
     for (const w of h.writes) {
@@ -527,6 +528,18 @@ describe('PasskeyHost: create (extension.md §7.4)', () => {
       expect(value.credentialId).not.toEqual(old.credentialId);
     }
     expect(result(h.answers).kind).toBe('created');
+  });
+
+  it('picks no item first when no listed item holds the replaced passkey (D314)', async () => {
+    const old = (await stored('example.com', 'EdDSA', 1)).value;
+    const mail = view(1, login('Mail', [URL_FIELD]));
+    const copy = view(2, login('Mail copy', [{ type: 'passkey', value: old }]));
+    const h = harness({ items: [mail, copy] });
+    h.host.start(createRequest());
+    await settle();
+    const details = h.host.details(h.token());
+    expect(details).toMatchObject({ replaces: true, items: [{ itemId: hex(id(1)) }] });
+    expect(details).not.toHaveProperty('holder');
   });
 
   it('answers InvalidStateError only after the click when excludeCredentials lists a held one', async () => {

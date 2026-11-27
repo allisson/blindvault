@@ -22,3 +22,18 @@ export function useLayout(): Layout {
     return desktop ? 'desktop' : tablet ? 'tablet' : 'mobile';
   });
 }
+
+const FINE = '(pointer: fine)';
+
+function subscribeFine(onChange: () => void): () => void {
+  const list = window.matchMedia(FINE);
+  list.addEventListener('change', onChange);
+  return () => {
+    list.removeEventListener('change', onChange);
+  };
+}
+
+/** Whether the main pointer is fine, a mouse or a trackpad: keyboard hints show only then (D314). */
+export function useFinePointer(): boolean {
+  return useSyncExternalStore(subscribeFine, () => window.matchMedia(FINE).matches);
+}

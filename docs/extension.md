@@ -355,7 +355,8 @@ details (`confirm-details`) and shows:
   item titled with `rp.name`, with the URL `https://<rpId>` and `user.name` as its user name
   (D288). When the vault already holds a passkey of that `rpId` and `userHandle`, the window says
   it will be replaced, and Confirm replaces it in every item holding it, as an authenticator
-  overwrites a credential of the same account;
+  overwrites a credential of the same account. The choice starts on the first listed item holding
+  it, else on the new item (D314);
 - "Use another authenticator", which hands the call back to the browser;
 - Cancel, which answers `NotAllowedError`.
 
@@ -458,8 +459,9 @@ sends:
   - `get`: `origin`, `topOrigin` when it differs, `rpId` and `passkeys` `[{credentialId, title,
     userName?}]`, each `credentialId` (hexadecimal) once (§7.4);
   - `create`: `origin`, `topOrigin` when it differs, `rpId`, `rpName`, `userName`, `displayName`,
-    `items` `[{itemId, title, username?}]`, the matching Login items (§5), and `replaces`, whether
-    Confirm replaces a held passkey of the `rpId` and `userHandle`.
+    `items` `[{itemId, title, username?}]`, the matching Login items (§5), `replaces`, whether
+    Confirm replaces a held passkey of the `rpId` and `userHandle`, and `holder`, the `itemId` of the
+    first listed item holding it, when one does (D314).
 - `confirm-choice` `{token, choice}`, with `choice` `use` and `credentialId` (get), `save` and
   `itemId` (create into that item), `save-new` (create into a new item), `browser` or `cancel`;
   `credentialId` and `itemId` are keys of the message beside `choice`. The session host answers

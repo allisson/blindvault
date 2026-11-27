@@ -325,6 +325,8 @@ export type ConfirmState =
         readonly username?: string;
       }[];
       readonly replaces: boolean;
+      /** The listed item holding the passkey a create replaces, picked first (D314). */
+      readonly holder?: string;
     };
 
 /** How a passkey request ends (§7.7 Result): bytes in base64url without padding. */

@@ -11,7 +11,10 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.view.View
+import android.view.WindowInsetsController
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -23,6 +26,23 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
+
+private const val SURFACE_LIGHT = 0xFFFAFAFA.toInt()
+private const val SURFACE_DARK = 0xFF09090B.toInt()
+
+/**
+ * Dark system bar icons over the light theme, light ones over the dark, on the window's background in the
+ * page's surface color, `--bv-surface` of apps/web's index.css (D314). The window handles a `uiMode` change
+ * itself so the vault stays open, so the theme's attributes are not applied again: each window calls this at
+ * creation and on every configuration change.
+ */
+fun Activity.followSystemBars() {
+    val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    val light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+    // `decorView` creates the decor first: `window.insetsController` throws before `setContentView`.
+    window.decorView.windowInsetsController?.setSystemBarsAppearance(if (night) 0 else light, light)
+    window.setBackgroundDrawable(ColorDrawable(if (night) SURFACE_DARK else SURFACE_LIGHT))
+}
 
 /** `assets/web/`, apps/web's Android build, with the headers of every response. */
 private class AppAssets(activity: Activity, private val headers: Map<String, String>) : WebViewAssetLoader.PathHandler {

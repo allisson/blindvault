@@ -160,7 +160,7 @@ function Header({
           <PreviewBadge />
         </>
       )}
-      <LockState unlocked className="ms-auto shrink-0 whitespace-nowrap" />
+      <LockState unlocked compact={mobile} className="ms-auto shrink-0 whitespace-nowrap" />
       {!mobile && screen.name !== 'settings' ? (
         <Button
           variant="quiet"

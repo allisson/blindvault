@@ -204,7 +204,9 @@ function FieldEditor({
           <span className="flex flex-col">
             {m.items.matchDomain}
             <span id={matchDomainHint} className="text-muted">
-              {m.items.matchDomainHint}
+              {platform.kind === 'android'
+                ? m.items.matchDomainHintAndroid
+                : m.items.matchDomainHint}
             </span>
           </span>
         </label>
