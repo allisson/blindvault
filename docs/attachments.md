@@ -83,7 +83,11 @@ version upgrade adds it, with no data migration. `packages/storage` accepts a bl
   saved (D278).
 - A blob received in a sync, an admission or a restore is written in its own transaction, only once
   complete and matching its `blobId`.
-- A blob already held is not written again.
+- A blob already held is not written again, unless what is held does not match its `blobId`: the
+  good copy replaces it (D308).
+- A held blob found not to match its `blobId`, when it is downloaded or exported, is deleted, so
+  the attachment shows as waiting for sync and the next sync asks for a good copy (D308). A blob
+  that matches its `blobId` but does not open with its field stays: the field is at fault.
 
 **Missing blob.** An attachment whose blob is not held shows as waiting for sync and cannot be
 downloaded. It is asked for at every sync until it arrives (`sync-protocol.md` §10.1).
@@ -104,7 +108,9 @@ read-only for newer content keeps its blobs.
 
 - after every commit that can drop a last citation: the purge (D7), the history cut (D6), a sync or
   admission merge, a backup merge, an edit that removes an attachment field;
-- at unlock, after the Item Versions are verified (D277).
+- at unlock, after the Item Versions are verified (D277);
+- after the blob phase writes a blob that no record cites any more, its last citation gone with a
+  merge committed before the blob arrived (D308).
 
 It waits for the Item Version pass of D277, since a version not yet verified cites nothing known,
 and it does not run while any Item or Item Version is kept aside as corrupt, whose citations are
@@ -124,8 +130,9 @@ one does. A session cut during the phase keeps every committed record and every 
 written; the rest is asked for at the next sync.
 
 **Backup** (`backup-format.md`, format version 2). A `.bvault` carries every held blob after the
-envelopes. An export with an attachment whose blob is not held still makes the file, and warns,
-naming each such item, that the backup lacks its attachment (D279). A restore authenticates the
+envelopes, each checked against its `blobId` first: one that does not match is left out and deleted
+(D308). An export with an attachment whose blob is not held, or was left out, still makes the file,
+and warns, naming each such item, that the backup lacks its attachment (D279). A restore authenticates the
 whole file first, commits the records, then writes each cited blob in its own transaction; an
 attachment whose blob is not in the file shows as waiting for sync (D279). A version-1 file still
 restores.
@@ -186,4 +193,6 @@ named in the item's notes.
   B holding every blob A holds; a re-admission in both directions.
 - **Backup.** Export and restore with blobs; a blob no record cites dropped; a duplicate blob and a
   `blobCount` that does not match refused; a version-1 file still restores; an export with a
-  missing blob warns.
+  missing blob warns; a held blob that does not match its `blobId` left out of the export, named
+  missing and deleted, deleted on a download too, and replaced by a good copy (D308); a blob the
+  blob phase writes once uncited collected (D308).

@@ -379,16 +379,19 @@ export class VaultDatabase {
 
   /**
    * Writes a received blob in its own transaction, once checked as `commit` checks one; a blob
-   * already held is not written again (attachments.md §4).
+   * already held is not written again (attachments.md §4), unless what is held does not match its
+   * `blobId`, which the good copy then replaces (A-01).
    */
   async putBlob(blob: StoredBlob): Promise<void> {
     checkBlob(blob);
     const tx = this.#transaction('readwrite', [BLOBS]);
     const store = tx.objectStore(BLOBS);
     const key = own(blob.blobId).buffer;
-    const held = store.getKey(key);
+    const held = store.get(key);
     held.onsuccess = () => {
-      if (held.result === undefined) store.put(own(blob.blob), key);
+      const value: unknown = held.result;
+      const sound = value instanceof Uint8Array && blobMatches(value, blob.blobId);
+      if (!sound) store.put(own(blob.blob), key);
     };
     await settled(tx);
   }

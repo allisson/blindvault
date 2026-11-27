@@ -33,6 +33,7 @@ import {
   type Sealed,
   type SymmetricKey,
   TAG_LENGTH,
+  blobMatches,
   checkKdfParams,
   checkReadmissionMac,
   checkRecoveryEnvelope,
@@ -1982,9 +1983,18 @@ export class VaultSession {
         }
         this.#unlocked();
         const exportedAt = Math.floor(this.#now());
-        // Inside the queue: no collection deletes a blob between this list and its read.
-        const blobIds = await this.#store.blobIds();
+        // Inside the queue: no collection deletes a blob between this list and its read. A held
+        // blob that fails its hash is left out and dropped: its items are named missing, and the
+        // next sync asks for a good copy (A-01).
+        const blobIds: Uint8Array[] = [];
+        const unsound: Uint8Array[] = [];
+        for (const id of await this.#store.blobIds()) {
+          this.#unlocked();
+          const blob = await this.#store.blob(id);
+          (blob && blobMatches(blob, id) ? blobIds : unsound).push(id);
+        }
         this.#unlocked();
+        if (unsound.length > 0) await this.#store.deleteBlobs(unsound);
         const held = new Set(blobIds.map(idKey));
         const missing = this.#citing([...this.#cited().keys()].filter((k) => !held.has(k)));
         const parts = await sealBackup(
@@ -1995,7 +2005,8 @@ export class VaultSession {
           blobIds.map((id) => async () => {
             this.#unlocked();
             const blob = await this.#store.blob(id);
-            if (!blob) throw new Error('a blob was deleted during the export');
+            if (!blob || !blobMatches(blob, id))
+              throw new Error('a blob changed during the export');
             return blob;
           }),
         );
@@ -3913,6 +3924,9 @@ export class VaultSession {
       write: async (blobId, blob) => {
         this.#unlocked();
         await this.#store.putBlob({ blobId: blobId.slice(), blob });
+        // Its last citation may have left with a merge committed before it arrived, whose
+        // collection did not see it: collected now, not at the next commit or unlock (A-02).
+        if (!this.#cited().has(idKey(blobId))) void this.#runCollection().catch(() => undefined);
       },
       citing: (blobId) => {
         this.#unlocked();
@@ -3942,6 +3956,12 @@ export class VaultSession {
     const blob = await this.#store.blob(value.blobId);
     this.#unlocked();
     if (!blob) return undefined;
+    if (!blobMatches(blob, value.blobId)) {
+      // Bytes that are not the blob of its `blobId`: dropped, so the next sync asks for a good
+      // copy (A-01). A blob that matches but does not open is the field's fault, and stays.
+      await this.#store.deleteBlobs([value.blobId]);
+      throw new AttachmentCorruptError();
+    }
     try {
       return openBlob(value.key, value.size, blob);
     } catch {
