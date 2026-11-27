@@ -428,6 +428,30 @@ describe('vault database (D79, D82, D158)', () => {
       db.close();
     });
 
+    it.each([
+      [
+        'bytes that do not match',
+        (b: Uint8Array) => Object.assign(b.slice(), { [0]: (b[0] ?? 0) ^ 1 }),
+      ],
+      ['a value that is not bytes', () => 'not bytes'],
+    ])(
+      'writes over a held blob holding %s, so a good copy repairs it (A-01)',
+      async (_name, bad) => {
+        const db = await VaultDatabase.open(vaultId, factory);
+        const b = blob();
+        await db.putBlob(b);
+        const other = await openDatabase(factory, databaseName(vaultId));
+        const tx = other.transaction(['blobs'], 'readwrite');
+        tx.objectStore('blobs').put(bad(b.blob), b.blobId.slice().buffer);
+        await new Promise((resolve) => (tx.oncomplete = resolve));
+        other.close();
+        expect(await db.blob(b.blobId)).not.toEqual(b.blob);
+        await db.putBlob(b);
+        expect(await db.blob(b.blobId)).toEqual(b.blob);
+        db.close();
+      },
+    );
+
     it('deletes only the blobs named', async () => {
       const db = await VaultDatabase.open(vaultId, factory);
       const b = blob(1);

@@ -2,7 +2,7 @@
 // Like `packages/storage`, it deletes nothing but Item Versions (CRYPTO-INV-013, D224), and holds
 // blobs by `blobId`.
 
-import { RecordType } from '@blindvault/crypto';
+import { RecordType, blobMatches } from '@blindvault/crypto';
 
 import { idBytes, idKey } from './ids';
 import {
@@ -68,9 +68,13 @@ export class MemoryStore implements RecordStore {
     return Promise.resolve(this.blobs.get(idKey(blobId)));
   }
 
-  /** Writes a blob in its own transaction, as a sync or a restore does; a test calls it too. */
+  /**
+   * Writes a blob in its own transaction, as a sync or a restore does; a test calls it too. A held
+   * blob is kept unless it does not match its `blobId`, as in `packages/storage` (A-01).
+   */
   putBlob(b: StoredBlob): Promise<void> {
-    if (!this.blobs.has(idKey(b.blobId))) this.blobs.set(idKey(b.blobId), b.blob);
+    const held = this.blobs.get(idKey(b.blobId));
+    if (!held || !blobMatches(held, b.blobId)) this.blobs.set(idKey(b.blobId), b.blob);
     return Promise.resolve();
   }
 

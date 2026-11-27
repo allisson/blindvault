@@ -6854,6 +6854,14 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
       expect(await grant.lacking()).toEqual([]);
     });
 
+    it('collects a blob the blob phase writes once no record cites it any more (A-02)', async () => {
+      const { session, store } = await create();
+      const stray = sealed(7);
+      await session.blobGrant().write(stray.blobId, stray.stored.blob);
+      await drained(session);
+      expect(held(store)).toEqual([]);
+    });
+
     it('names each item that cites a blob, by itself or by a version, once', async () => {
       const { session } = await create();
       const [a, b] = [sealed(1), sealed(2)];
@@ -6964,6 +6972,24 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
       opened.wipeAll();
     });
 
+    it('leaves out a held blob that fails its hash, naming its items, and drops it (A-01)', async () => {
+      const { session, store, keyring, words } = await create();
+      const [a, b] = [sealed(1), sealed(2)];
+      const passport = await session.createItem(attached('Passport', a), [a.stored]);
+      const visa = await session.createItem(attached('Visa', b), [b.stored]);
+      const tampered = a.stored.blob.slice();
+      tampered[30] = (must(tampered[30]) + 1) % 256;
+      store.blobs.set(idKey(a.blobId), tampered);
+      // What the database reads back for a stored value that is not bytes.
+      store.blobs.set(idKey(b.blobId), new Uint8Array(0));
+      const file = await session.exportBackup({ kek: kek(keyring), method: 'password' });
+      expect(items(file.missing)).toEqual([idKey(passport), idKey(visa)].sort());
+      const { backup, keyring: opened } = await validated(file, words);
+      expect(backup.blobIds).toEqual([]);
+      opened.wipeAll();
+      expect(held(store)).toEqual([]);
+    });
+
     it('waits for the Item Versions to be verified before it starts (D277)', async () => {
       const { session, store } = await create();
       const a = sealed(1);
@@ -6991,13 +7017,13 @@ describe('blob collection (attachments.md §4, §5, D278)', () => {
       );
     });
 
-    it('stops an export whose blob was deleted after it was listed', async () => {
+    it('stops an export whose blob was deleted after it was checked', async () => {
       const { session, store, keyring } = await create();
       const a = sealed(1);
       await session.createItem(attached('Passport', a), [a.stored]);
-      vi.spyOn(store, 'blob').mockResolvedValue(undefined);
+      vi.spyOn(store, 'blob').mockResolvedValueOnce(a.stored.blob).mockResolvedValue(undefined);
       await expect(session.exportBackup({ kek: kek(keyring), method: 'password' })).rejects.toThrow(
-        'a blob was deleted during the export',
+        'a blob changed during the export',
       );
       expect(session.lastBackupAt).toBeUndefined();
     });
@@ -7182,6 +7208,24 @@ describe('attachments in the UI (attachments.md §2, §3, §7, D278)', () => {
     tampered[30] = (must(tampered[30]) + 1) % 256;
     store.blobs.set(idKey(value.blobId), tampered);
     await expect(session.openAttachment(value)).rejects.toThrow(AttachmentCorruptError);
+  });
+
+  it('drops a held blob that fails its hash, so the next sync asks for it again (A-01)', async () => {
+    const { session, store } = await create();
+    const sealed = sealAttachment({ name: 'scan.pdf', type: '', bytes: bytes(3) });
+    const id = await session.createItem(holding('Passport', sealed.value), [sealed.blob]);
+    const value = attachmentOf(session.item(id));
+    // A wrong key is the field's fault, not the blob's: the blob stays.
+    await expect(
+      session.openAttachment({ ...value, key: new Uint8Array(32).fill(9) }),
+    ).rejects.toThrow(AttachmentCorruptError);
+    expect(await session.holdsBlob(value.blobId)).toBe(true);
+    const tampered = must(store.blobs.get(idKey(value.blobId))).slice();
+    tampered[30] = (must(tampered[30]) + 1) % 256;
+    store.blobs.set(idKey(value.blobId), tampered);
+    await expect(session.openAttachment(value)).rejects.toThrow(AttachmentCorruptError);
+    expect(await session.holdsBlob(value.blobId)).toBe(false);
+    expect((await session.blobGrant().lacking()).map(idKey)).toEqual([idKey(value.blobId)]);
   });
 
   it('returns nothing once the vault locks during a read', async () => {
