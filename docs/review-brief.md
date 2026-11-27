@@ -173,6 +173,9 @@ R-01 to R-11 and the notes N-01 to N-14 come from a pre-review of `27d3fdd` by C
 asked by the owner. It is not the external review this gate item requires. V-01 was found while
 checking those resolutions.
 
+E-, P-, B-, C-, S-, A-, RC- and AND- findings come from a review of `fe017a8` by Claude (Opus 5.5),
+asked by the owner. It is not the external review this gate item requires either.
+
 | ID | Severity | Where | Summary | Resolution |
 | --- | --- | --- | --- | --- |
 | R-01 | medium | `packages/crypto/src/record.ts:300-304`, `packages/vault/src/session.ts:2073-2090` | An Item with a `trashOperationId` of about 1 MiB passed verification, then failed every later merge holding it once it lost a conflict | Fixed: D260 (#215) |
@@ -201,3 +204,10 @@ checking those resolutions.
 | N-13 | note | `packages/crypto/src/noise.test.ts:237-239`, `:513-519`, backup vectors | Tests that pass without the check they name, the nonce carry and edited backup headers not covered | Fixed: tests and vectors added (D266) |
 | N-14 | note | `packages/sync/src/payload.ts:116-124`, `transfer.ts:59-65`, `apps/web/src/app/controller.ts` (`start()`), `handshake-state.ts:45` | Small items: 0 in a payload list, `known-device` after the Master Key, the first of two vault databases, a token's name | Accepted: D266 |
 | V-01 | low | `packages/storage/src/cleanup.ts:105`, `apps/web/src/app/controller.ts` (`start()`) | With a replaced database skipped because another app window held it (D154), startup could open the replaced vault, which the next startup deletes with what was written to it | Fixed: the cleanup lists only the replacement as a vault |
+| E-01 | medium | `apps/web/src/extension/host.ts:272`, `apps/web/src/main.tsx:137-139` | Every message the session host took counted as activity, a passkey request any page makes included, so a site could keep the auto-lock from ever firing | Fixed: D305 |
+| P-01 | low | `apps/web/src/extension/passkey.ts:157-161` | `excludeCredentials` matched passkeys of any `rpId`, so a site holding a credential ID of another site learned whether the browser had that account | Fixed: D305 |
+| P-02 | low | `apps/web/src/ui/Confirm.tsx:178-187`, `:228-237` | Confirm took a click as soon as the window showed, so a page could draw a click onto it | Fixed: D305 |
+| P-03 | note | `apps/extension/src/passkey-main.js:248-251` | A call the page aborted left its request pending in the session host, so a later Confirm wrote a passkey the site never registered | Fixed: D305 |
+| P-04 | note | `apps/web/src/extension/passkey-host.ts:94-96` | A request pending in a background tab made every other tab's call fail with `NotAllowedError` | Fixed: D305 |
+| P-05 | note | `apps/web/src/extension/passkey.ts:84`, `apps/extension/src/background.js:190-196`, `passkey.ts:40-47` | `crossOrigin` without a chain of ancestors, the `sender.url` fallback, an IP address as `rpId`, the extension detectable by a page | Fixed: the fallback and the IP address (D305); accepted: `crossOrigin` and detection (D305) |
+| E-03 | note | `apps/web/src/extension/inject.ts:51-58` | Transparent, zero-size fields counted as usable for a fill | Fixed: D305; a field outside the viewport stays usable |

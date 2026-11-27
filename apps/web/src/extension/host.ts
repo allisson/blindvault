@@ -23,6 +23,7 @@ import {
   type Found,
   HOST_SENDERS,
   HOST_TYPES,
+  type HostType,
   type Matched,
   POPUP_PAGE,
   type Request,
@@ -56,6 +57,23 @@ export interface HostDeps {
 }
 
 const LOGIN = 'login';
+
+/**
+ * The types that are the user's interaction, each taken only from its sender (`HOST_SENDERS`), so
+ * the only ones that restart the auto-lock (§3.2, D284). A passkey request comes from any page the
+ * user visits, and the window's details from its loading: never activity, or a site would hold the
+ * vault open (E-01).
+ */
+const ACTIVITY: ReadonlySet<HostType> = new Set<HostType>([
+  'status',
+  'search',
+  'copy',
+  'matches',
+  'fill',
+  'lock',
+  'command-fill',
+  'confirm-choice',
+]);
 
 function session(app: HostApp): VaultSession | undefined {
   return app.status.kind === 'unlocked' ? app.status.session : undefined;
@@ -220,6 +238,10 @@ export async function answer(request: Request, deps: HostDeps): Promise<Answer> 
       if (!deps.passkeys) return refusal(id, 'invalid');
       deps.passkeys.start(request.passkey);
       return { v: 1, id, ok: true };
+    case 'passkey-cancel':
+      // The page aborted its call: its request ends, if still pending (§7.7 Route, P-03).
+      deps.passkeys?.cancel(request.tabId, request.frameId, request.request);
+      return { v: 1, id, ok: true };
     case 'confirm-details': {
       const state = deps.passkeys?.details(request.token) ?? 'not-found';
       return state === 'not-found' ? refusal(id, state) : { v: 1, id, ok: true, state };
@@ -269,7 +291,7 @@ export function serveHost(runtime: HostRuntime, deps: HostDeps): void {
       respond(refusal(parsed.kind === 'invalid' ? parsed.id : parsed.request.id, 'invalid'));
       return false;
     }
-    deps.activity();
+    if (ACTIVITY.has(parsed.request.type as HostType)) deps.activity();
     answer(parsed.request, deps).then(respond, () => {
       respond(refusal(parsed.request.id, 'invalid'));
     });

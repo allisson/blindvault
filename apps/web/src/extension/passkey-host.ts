@@ -90,9 +90,10 @@ export class PasskeyHost {
         result,
       });
     };
-    // One request at a time, from any tab (D289).
+    // One request at a time, from any tab (D289); another goes back to the browser, without a
+    // window or the focus (P-04).
     if (this.#pending) {
-      answer(NOT_ALLOWED);
+      answer(BROWSER);
       return;
     }
     const checked = checkRequest(request);
@@ -118,6 +119,18 @@ export class PasskeyHost {
     };
     this.#pending = p;
     void this.#open(p);
+  }
+
+  /**
+   * The page aborted the call it made from `tabId` and `frameId` (§7.7 Route): its request ends,
+   * and the window closes, so no later Confirm writes a passkey the site never registered (P-03).
+   * Another tab's or frame's request is left as it is.
+   */
+  cancel(tabId: number, frameId: number, request: string): void {
+    const p = this.#pending;
+    if (p?.request.tabId !== tabId || p.request.frameId !== frameId) return;
+    if (p.request.request !== request) return;
+    this.#end(p, NOT_ALLOWED);
   }
 
   /** What the window with `token` shows (§7.7 Window). */

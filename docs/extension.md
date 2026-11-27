@@ -108,7 +108,7 @@ both archives and both manifest hashes; `docs/build.md` describes how to check a
 
 | Lock | Extension | Web, as before |
 | --- | --- | --- |
-| Auto-lock | 1 to 60 min without activity; activity is an interaction with the session host, the popup or a fill, never browsing | 1 to 60 min (D151) |
+| Auto-lock | 1 to 60 min without activity; activity is an interaction with the session host, the popup, a fill or a choice in the confirmation window, never browsing, and never a passkey request a page makes or a window loading its details (D305) | 1 to 60 min (D151) |
 | Hidden-app lock | the browser as a whole without focus (`windows.onFocusChanged` reports `WINDOW_ID_NONE`) for the set time, immediately to 15 min | the page hidden (D54, D151) |
 | Operating-system lock | at once, when `idle.onStateChanged` reports `locked` | — |
 | Manual | the popup's Lock button, or the session host's | the app's |
@@ -144,6 +144,7 @@ timer.
 | session host, to the service worker | `clipboard-clear` | done; carries nothing (§6.3) |
 | session host, to the popup | `locked` | none; the popup closes (§3.2) |
 | service worker | `passkey-create`, `passkey-get` | accepted at once; the result follows in `passkey-answer` (§7.7, D289) |
+| service worker | `passkey-cancel` `{request, tabId, frameId}` | done; the page aborted its call, and the pending request of that frame ends (§7.7, D305) |
 | session host, to the service worker | `passkey-answer` | none; the service worker hands the result to the page's frame (§7.7) |
 | confirmation window | `confirm-details`, `confirm-choice` | §7.4, §7.7 |
 
@@ -224,8 +225,10 @@ reviewed change, never a fetch at run time.
    into the user name's field, each when the item has one, through the native value setter, then
    dispatches `input` and `change` on each. It never submits a form, clicks a button or presses a
    key. The fields (D287):
-   - a usable field has a rendered box, and is not `visibility: hidden`, disabled or read-only;
-     open shadow roots are searched, closed ones cannot be;
+   - a usable field has a rendered box of some width and height, and is not `visibility: hidden`,
+     disabled or read-only, nor fully transparent (`opacity: 0`), it or an ancestor across open
+     shadow roots; a field outside the viewport stays usable, since a sign-in form below the fold
+     is filled (D305); open shadow roots are searched, closed ones cannot be;
    - the password field is the focused one, else the first usable one whose `autocomplete` is not
      `new-password`, so a sign-up page has none;
    - the user name's field is the one with `autocomplete="username"`, else the last text, email or
@@ -290,13 +293,15 @@ session host's views when the switch is off: they are fields of items.
   `runtime.sendMessage`.
 - The service worker takes the origin, `frameId` and top frame's origin only from `MessageSender`
   (`sender.origin`, `sender.frameId`, `sender.tab.url`), never from the message, and forwards the
-  request to the session host. Where the browser gives no `sender.origin`, the origin of
-  `sender.url`, also the browser's, stands for it; a frame of an opaque origin then reports `null`,
-  which the session host hands to the browser. A message whose sender has no tab is dropped.
+  request to the session host. A message whose sender has no tab, or no `sender.origin`, is
+  dropped: `sender.url` names a sandboxed frame's URL, not its opaque origin, and every browser of
+  §10 gives `sender.origin` (D305). A frame of an opaque origin reports `null`, which the session
+  host hands to the browser.
 - The session host checks, in order, and hands the call back to the browser on the first failure:
   1. the origin is `https:`, or `http://localhost`;
   2. `rpId` (absent: the origin's host) equals the origin's host, or is a registrable suffix of it
-     that is not itself a public suffix (§5.5);
+     that is not itself a public suffix (§5.5), and is not an IP address, which browsers refuse
+     (D305);
   3. for `create`, `pubKeyCredParams` lists ES256 (`-7`) or EdDSA (`-8`);
   4. for `create`, `authenticatorSelection.authenticatorAttachment` is not `cross-platform` (D288).
 - Handing back means the isolated script tells the MAIN-world script to call the original with the
@@ -304,7 +309,8 @@ session host's views when the switch is off: they are fields of items.
   window had taken the focus (`docs/spikes/extension.md` §3); the implementation tests it by hand.
 - The answer travels back the same way. A call whose answer never comes (the session host closed)
   ends with `NotAllowedError` 5 s after its bounded timeout (§7.4); the page's `signal` aborts the
-  call with its reason, and a later answer is ignored. The MAIN-world script builds the
+  call with its reason, a later answer is ignored, and the MAIN-world script sends `passkey-cancel`,
+  which ends the request in the session host and closes its window (§7.7, D305). The MAIN-world script builds the
   `PublicKeyCredential` the page receives, as the spike measured: `instanceof PublicKeyCredential` true,
   `getClientExtensionResults()` with `credProps.rk: true` on create, `toJSON()` complete.
 - The credential reports `authenticatorAttachment: "platform"`, and on create `getTransports()`
@@ -315,7 +321,10 @@ session host's views when the switch is off: they are fields of items.
 ### 7.3 Credentials
 
 - `clientDataJSON` is built by the session host with `type`, the page's `challenge`, the origin from
-  `MessageSender`, and, in a cross-origin iframe, `crossOrigin: true` and `topOrigin`.
+  `MessageSender`, and, in a cross-origin iframe, `crossOrigin: true` and `topOrigin`. A frame is
+  cross-origin when its origin differs from the top frame's: the browser gives no chain of
+  ancestors, so a frame of A inside a frame of B inside A reports `crossOrigin: false` (accepted,
+  D305).
 - Authenticator data: `SHA-256(rpId)`, flags UP, UV, BE and BS set (AT on create), `signCount` 0;
   on create, attested credential data with a zero AAGUID, a random 16-byte `credentialId` and the
   COSE public key. Attestation is `none` (`fmt: "none"`, empty `attStmt`).
@@ -351,17 +360,21 @@ details (`confirm-details`) and shows:
 - Cancel, which answers `NotAllowedError`.
 
 The click on Confirm is the user presence (UP). UV is reported because the vault is unlocked.
+Confirm stays disabled for 500 ms after the request shows and after each time the window takes the
+focus, as a browser's permission prompt, so a click a page drew onto the spot where the window
+appears is not the user presence (D305).
 
 **Cases.**
 
 | Case | Answer |
 | --- | --- |
 | Vault locked, or no session host | with no session host, the service worker creates it, pinned and in the background, and forwards the request; the window says BlindVault is locked and offers "Open and unlock" (focuses the session host; once the vault unlocks, the window opens again with the request) or "Use another authenticator"; the page's call waits until its `timeout` (D289) |
-| A second request while one is pending, from any tab | `NotAllowedError` at once, with no window (D289) |
+| A second request while one is pending, from any tab | handed to the browser at once, with no window and no focus taken, so a tab in the background does not break passkeys in the others (D305) |
+| The page aborts its call (`signal`) | the request ends with `NotAllowedError`, sent to a frame no longer waiting; the window closes (D305) |
 | `timeout` elapses (the page's, bounded to 30 s to 600 s; 300 s without one), or the window closes | `NotAllowedError`; the window closes |
 | get with no passkey for the `rpId` | the window says so and offers another authenticator |
 | create on a read-only vault (D73) | handed to the browser at once, with no window |
-| create whose `excludeCredentials` lists a held `credentialId` | the window shows the request as usual; after Confirm, `InvalidStateError`, so a page learns it only from the user's click |
+| create whose `excludeCredentials` lists a held `credentialId` of its `rpId` | the window shows the request as usual; after Confirm, `InvalidStateError`, so a page learns it only from the user's click; a held `credentialId` of another `rpId` is not matched, as by an authenticator, so a site learns nothing of an account on another (D305) |
 | a lock while the window is open | the window closes; `NotAllowedError` |
 | create whose replaced passkey is in a read-only item (D52, D74) | after Confirm, `NotAllowedError`, and nothing is written, since a write touching a read-only record is blocked as a whole |
 
@@ -420,6 +433,12 @@ which gives the page its own error.
    result}` to the service worker, which hands `{request, result}` to that frame with
    `tabs.sendMessage(tabId, …, {frameId})`. The isolated script takes it only from the extension
    and passes it to the MAIN-world script that drew `request`.
+5. A call the page aborts: the MAIN-world script sends `passkey-cancel` `{request}` to the isolated
+   script, which forwards it to the service worker only for a request it relayed and not yet
+   answered. The service worker drops it when its sender has no tab, and otherwise hands
+   `{request, tabId, frameId}`, `tabId` and `frameId` from `MessageSender`, to an existing session
+   host, creating none. The session host ends the pending request only when all three match, so a
+   page ends no other frame's request (D305).
 
 **Result.**
 
@@ -543,19 +562,24 @@ Negative tests, each named in `security-invariants.md` (CRYPTO-INV-026 for filli
   public suffix; a private-section suffix (`github.io`); punycode host; unparsable URL field;
   trashed item.
 - **PSL.** Every line of `test_psl.txt`.
-- **Filling.** A cross-origin iframe with a focused password field is not a target; a navigation
-  between probe and fill writes nothing; a fill never submits; a `matches` or `fill` message from
+- **Filling.** A cross-origin iframe with a focused password field is not a target; a transparent
+  or zero-size field is not usable (D305); a navigation between probe and fill writes nothing; a fill never submits; a `matches` or `fill` message from
   a content script is ignored; a `fill` for an item that does not match the tab is refused.
 - **RPC.** Unknown `v`, `type` or key refused; a message without the extension's sender refused.
 - **Locks.** Browser without focus for the hidden-app time locks; the OS lock locks; browsing does
-  not reset auto-lock; closing the session host locks; a lock closes the confirmation window.
+  not reset auto-lock, nor does a passkey request or a window loading its details; closing the
+  session host locks; a lock closes the confirmation window.
 - **Passkeys.** A forged origin in the message is ignored; an `rpId` of another site, a public
   suffix, or on `http:` goes to the browser; `excludeCredentials` answers only after the click;
   `signCount` 0 and the flags; create on a read-only vault goes to the browser; conditional
   mediation goes to the browser; a create asking for `cross-platform` goes to the browser; a create
   for a held `rpId` and `userHandle` replaces it in every item; a malformed PKCS#8 layout makes the
-  item read-only (`record-content.md` §2); search never matches a private key or `userHandle`.
-  Each named in `security-invariants.md` under CRYPTO-INV-027.
+  item read-only (`record-content.md` §2); search never matches a private key or `userHandle`;
+  `excludeCredentials` never matches another `rpId`'s passkey; an IP address as `rpId` goes to the
+  browser; a sender without `sender.origin` is dropped; Confirm is disabled for 500 ms after it
+  shows and after each focus; a second request goes to the browser; an aborted call ends its
+  request, and only that frame's (D305). Each named in `security-invariants.md` under
+  CRYPTO-INV-027.
 - **Version lock.** A changed hash shows the confirmation before unlock; `onUpdateAvailable` with
   the vault unlocked does not reload.
 

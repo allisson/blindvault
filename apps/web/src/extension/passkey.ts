@@ -34,10 +34,11 @@ export type Checked =
 
 /**
  * Whether `rpId` may serve `host` (§7.2 step 2): the host itself, or a suffix of it that is a
- * registrable domain, so neither a public suffix nor another site's domain. An IP address serves
- * only itself.
+ * registrable domain, so neither a public suffix nor another site's domain. An IP address is never
+ * an `rpId`, as browsers refuse one (P-05).
  */
 export function rpIdServes(rpId: string, host: string): boolean {
+  if (rpId.startsWith('[') || /^[0-9]+(?:\.[0-9]+){3}$/u.test(rpId)) return false;
   if (rpId === host) return true;
   return (
     host.endsWith(`.${rpId}`) &&
@@ -153,10 +154,20 @@ export function candidates(
   return out;
 }
 
-/** Whether the vault holds a `credentialId` the create's `excludeCredentials` lists (§7.4). */
-export function holdsExcluded(items: readonly ItemView[], exclude: readonly Credential[]): boolean {
+/**
+ * Whether the vault holds a passkey of `rpId` whose `credentialId` the create's
+ * `excludeCredentials` lists (§7.4). Only of `rpId`, as an authenticator matches, so a site cannot
+ * learn of an account on another (P-01).
+ */
+export function holdsExcluded(
+  items: readonly ItemView[],
+  rpId: string,
+  exclude: readonly Credential[],
+): boolean {
   return items.some(
-    (view) => live(view) && passkeysOf(view.item).some((p) => listed(exclude, p.credentialId)),
+    (view) =>
+      live(view) &&
+      passkeysOf(view.item).some((p) => p.rpId === rpId && listed(exclude, p.credentialId)),
   );
 }
 

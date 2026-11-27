@@ -151,6 +151,7 @@ const KEYS = /** @type {const} */ ({
   'passkey-answer': ['tabId', 'frameId', 'request', 'result'],
   'passkey-create': ['request', 'options'],
   'passkey-get': ['request', 'options'],
+  'passkey-cancel': ['request'],
 });
 /** Every type of the extension's messages: the others are answered by another page. */
 const TYPES = [
@@ -166,6 +167,7 @@ const TYPES = [
   'locked',
   'passkey-create',
   'passkey-get',
+  'passkey-cancel',
   'passkey-answer',
   'confirm-details',
   'confirm-choice',
@@ -183,17 +185,13 @@ function index(value) {
 }
 
 /**
- * A page's origin as the browser reports it: `sender.origin`, or the origin of `sender.url` where
- * the browser gives none. Never a value of the message (§7.2).
+ * A page's origin as the browser reports it: `sender.origin`, never a value of the message, nor the
+ * origin of `sender.url`, which names a sandboxed frame's URL and not its opaque origin (§7.2, P-05).
+ * Every browser the extension supports gives it (§10).
  * @param {Sender} sender
  */
 function senderOrigin(sender) {
-  if (typeof sender.origin === 'string') return sender.origin;
-  try {
-    return sender.url === undefined ? undefined : new URL(sender.url).origin;
-  } catch {
-    return undefined;
-  }
+  return typeof sender.origin === 'string' ? sender.origin : undefined;
 }
 
 /** @param {string | undefined} url */
@@ -209,7 +207,8 @@ function originOf(url) {
  * @typedef {{ type: 'open-host' | 'clipboard-clear' }
  *   | { type: 'passkey-answer', tabId: number, frameId: number, request: string, result: Record<string, unknown> }
  *   | { type: 'passkey-create' | 'passkey-get', request: string, options: Record<string, unknown>,
- *       tabId: number, frameId: number, origin: string, topOrigin: string }} Handled
+ *       tabId: number, frameId: number, origin: string, topOrigin: string }
+ *   | { type: 'passkey-cancel', request: string, tabId: number, frameId: number }} Handled
  */
 
 /**
@@ -244,6 +243,15 @@ export function parseRequest(message, sender, api) {
       return null;
     }
     return { type: t, request, options, tabId, frameId, origin, topOrigin };
+  }
+  if (t === 'passkey-cancel') {
+    const { request } = m;
+    const tabId = sender.tab?.id;
+    const { frameId } = sender;
+    if (typeof request !== 'string' || !REQUEST.test(request)) return null;
+    // From a content script only, and for its own frame, which the browser names.
+    if (!index(tabId) || !index(frameId)) return null;
+    return { type: t, request, tabId, frameId };
   }
   // The page without its query or fragment; `URL.origin` is "null" for an extension's scheme
   // outside a browser.
@@ -292,6 +300,17 @@ export async function forwardPasskey(api, request, wait = pause) {
     await wait(FORWARD_PAUSE);
   }
   return false;
+}
+
+/**
+ * Tells the session host the page aborted its call (§7.7 Route, P-03). With no session host there
+ * is no request to end, and none is created.
+ * @param {Api} api
+ * @param {Extract<Handled, { type: 'passkey-cancel' }>} cancel
+ */
+export async function cancelPasskey(api, cancel) {
+  if (!(await findHost(api))) return;
+  await api.runtime.sendMessage({ v: 1, id: 0, ...cancel });
 }
 
 /**
@@ -349,6 +368,10 @@ export function start(api, clipboard) {
         // The frame may be gone: its page's call ended with it.
         deliverAnswer(api, request).catch(() => undefined);
         return false;
+      }
+      if (request.type === 'passkey-cancel') {
+        cancelPasskey(api, request).then(ok, refuse);
+        return true;
       }
       if (request.type === 'passkey-create' || request.type === 'passkey-get') {
         forwardPasskey(api, request).then((accepted) => {

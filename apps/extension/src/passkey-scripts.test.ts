@@ -73,7 +73,7 @@ function main() {
   const answer = (request: string, result: unknown) => {
     win.postMessage({ channel: 'blindvault-passkey', to: 'main', request, result });
   };
-  return { nav, original, sent, answer, win };
+  return { nav, original, sent, answer, win, posted };
 }
 
 const bytes = (...b: number[]) => new Uint8Array(b);
@@ -276,13 +276,19 @@ describe('the MAIN-world script (extension.md §7.2, §7.7)', () => {
     await expect(call).rejects.toMatchObject({ name: 'NotAllowedError' });
   });
 
-  it('rejects with the signal’s reason when the page aborts', async () => {
-    const { nav, sent, answer } = main();
+  it('rejects with the signal’s reason when the page aborts, and ends the request (P-03)', async () => {
+    const { nav, sent, answer, posted } = main();
     const controller = new AbortController();
     const call = nav.get({ publicKey: { challenge: CHALLENGE }, signal: controller.signal });
     const { request } = await sent();
     controller.abort(new DOMException('stop', 'AbortError'));
     await expect(call).rejects.toMatchObject({ name: 'AbortError' });
+    expect(posted.at(-1)).toEqual({
+      channel: 'blindvault-passkey',
+      to: 'isolated',
+      type: 'passkey-cancel',
+      request,
+    });
     answer(request, ASSERTED);
     const aborted = new AbortController();
     aborted.abort(new DOMException('before', 'AbortError'));
@@ -398,6 +404,31 @@ describe('the isolated content script (extension.md §7.7)', () => {
       expect(runtime.sendMessage).toHaveBeenCalled();
     });
     deliver(message, sender);
+    expect(toMain()).toEqual([]);
+  });
+
+  it('tells the service worker of a call the page aborted, and drops its answer (P-03)', async () => {
+    const { win, deliver, toMain, runtime } = isolated();
+    win.postMessage(FROM_MAIN);
+    await vi.waitFor(() => {
+      expect(runtime.sendMessage).toHaveBeenCalledTimes(1);
+    });
+    const cancel = { channel: 'blindvault-passkey', to: 'isolated', type: 'passkey-cancel' };
+    win.postMessage({ ...cancel, request: 'f'.repeat(32) });
+    win.postMessage({ ...cancel, request: REQUEST });
+    win.postMessage({ ...cancel, request: REQUEST });
+    await vi.waitFor(() => {
+      expect(runtime.sendMessage).toHaveBeenCalledTimes(2);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runtime.sendMessage).toHaveBeenCalledTimes(2);
+    expect(runtime.sendMessage).toHaveBeenLastCalledWith({
+      v: 1,
+      type: 'passkey-cancel',
+      id: 1,
+      request: REQUEST,
+    });
+    deliver(ANSWER, WORKER);
     expect(toMain()).toEqual([]);
   });
 

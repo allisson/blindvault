@@ -156,7 +156,7 @@ async function create(
       : undefined;
   if (choice.choice === 'save' && !target) return 'not-found';
   // Known only after the click, so a page learns from it only what the user allowed (§7.4).
-  if (holdsExcluded(items, call.options.excludeCredentials ?? [])) {
+  if (holdsExcluded(items, checked.rpId, call.options.excludeCredentials ?? [])) {
     return { kind: 'error', name: 'InvalidStateError' };
   }
   const { user, rp } = call.options;

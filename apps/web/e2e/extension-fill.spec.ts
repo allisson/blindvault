@@ -118,6 +118,21 @@ test('skips hidden, invisible, disabled and read-only fields', async ({ page }) 
   expect(await value(page, '[name=ok]')).toBe('p');
 });
 
+test('skips transparent and zero-size fields, but fills one below the fold (E-03)', async ({
+  page,
+}) => {
+  await open(
+    page,
+    `<input name="t1" type="password" style="opacity:0">
+     <div style="opacity:0"><input name="t2" type="password"></div>
+     <input name="z1" type="password" style="width:0;height:0;padding:0;border:0">
+     <input name="ok" type="password" style="margin-top:3000px">`,
+  );
+  await expect(fill(page, { password: 'p' })).resolves.toBe('filled');
+  for (const name of ['t1', 't2', 'z1']) expect(await value(page, `[name=${name}]`)).toBe('');
+  expect(await value(page, '[name=ok]')).toBe('p');
+});
+
 test('finds the fields of an open shadow root', async ({ page }) => {
   await open(
     page,
