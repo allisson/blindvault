@@ -35,7 +35,8 @@ them is overwritten: copies made by the JavaScript engine, the browser or the op
 (swap, crash reports, hibernation files) can remain until that memory is reused. Someone who can
 read the memory of your device, through malware or forensic tools, may recover data from a session
 that was unlocked recently. Auto-lock and the lock when the app is hidden limit how long the vault
-stays unlocked; they do not erase memory.
+stays unlocked; they do not erase memory. The cryptographic library itself copies keys and data
+into memory it frees without overwriting, so even the keys the app wipes leave copies behind.
 
 Copying a secret puts it in the system clipboard. The app tries to clear it after 30 seconds, but it
 cannot guarantee that, and clipboard history or a clipboard synced to the cloud are outside its

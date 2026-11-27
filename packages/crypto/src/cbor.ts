@@ -28,12 +28,15 @@ const DECODE_OPTIONS: DecodeOptions = {
 
 /**
  * Walks a value without recursion, so deep nesting cannot exhaust the stack, and rejects anything
- * core deterministic content does not allow: tags, `undefined`, simple values, other objects.
+ * core deterministic content does not allow: tags, `undefined`, simple values, other objects; and
+ * -0, which passes every check of an unsigned integer as 0 while encoded as a float, so the same
+ * value would have two encodings (crypto-spec.md §14, C-01).
  */
 function check(root: unknown): asserts root is CborValue {
   const pending: unknown[] = [root];
   while (pending.length > 0) {
     const value = pending.pop();
+    if (Object.is(value, -0)) throw new EncodingError('-0 is not allowed in CBOR content');
     if (
       value === null ||
       typeof value === 'boolean' ||

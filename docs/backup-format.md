@@ -123,7 +123,10 @@ that MUST pull with `TAG_FINAL`. Rejected (D95):
 - a chunk that fails to authenticate, including the first under a changed header;
 - `TAG_FINAL` on any chunk but the last, or a last chunk without it (truncation);
 - bytes after the `TAG_FINAL` chunk, or fewer than 17 bytes where a chunk must be;
-- `TAG_PUSH` or `TAG_REKEY` on any chunk.
+- `TAG_PUSH` or `TAG_REKEY` on any chunk;
+- a `TAG_FINAL` chunk of more than 65,552 bytes, so of more than 65,535 bytes of plaintext, which a
+  reader that sizes the chunks from the file's length could take as one: the same payload would
+  then have two encodings (D306).
 
 ## 6. Payload
 
