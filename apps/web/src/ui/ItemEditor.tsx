@@ -19,6 +19,7 @@ import {
   type SealedDraft,
   addAttachment,
   addField,
+  clearEdited,
   draftChanged,
   draftOf,
   inputOf,
@@ -383,6 +384,8 @@ export function ItemEditor({
   const folders = folderRows(session.tree(new Intl.Collator(language).compare));
   const folderKey = draft.folderId ? hex(draft.folderId) : '';
   const update = (next: Draft) => {
+    // An error goes once its own input changes, not only at the next Save (D312).
+    if (errors) setErrors(clearEdited(errors, draft, next));
     setDraft(next);
     setFailure(undefined);
   };

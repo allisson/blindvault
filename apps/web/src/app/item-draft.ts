@@ -160,11 +160,20 @@ export function draftOf(item: Item): Draft {
           : { value: '', totp: f.value }),
     ...(f.match === 'domain' ? { matchDomain: true } : {}),
   }));
+  // A role the item does not hold goes, empty, before the first field of a later role, or after
+  // the last field of an earlier one: the editor shows the template's order (D312).
+  const roles = template(item.templateId)?.roles ?? [];
+  const rank = (f: DraftField) => roles.findIndex((r) => r.role === f.role);
   const held = new Set(item.fields.map((f) => f.role));
-  for (const r of template(item.templateId)?.roles ?? []) {
-    if (!held.has(r.role)) {
-      fields.push({ key: key(), type: r.type, role: r.role, label: '', value: '' });
+  for (const [i, r] of roles.entries()) {
+    if (held.has(r.role)) continue;
+    const later = fields.findIndex((f) => rank(f) > i);
+    let at = later;
+    if (at < 0) {
+      at = 0;
+      for (const [n, f] of fields.entries()) if (rank(f) >= 0) at = n + 1;
     }
+    fields.splice(at, 0, { key: key(), type: r.type, role: r.role, label: '', value: '' });
   }
   return {
     templateId: item.templateId,
@@ -174,6 +183,23 @@ export function draftOf(item: Item): Draft {
     tags: item.tags.join(', '),
     notes: item.notes ?? '',
     ...(item.folderId ? { folderId: item.folderId } : {}),
+  };
+}
+
+/** `errors` without those of the inputs that changed from `prev` to `next` (D312). */
+export function clearEdited(errors: DraftErrors, prev: Draft, next: Draft): DraftErrors {
+  const before = new Map(prev.fields.map((f) => [f.key, f]));
+  const fields = new Map(
+    [...errors.fields].filter(([k]) => {
+      const was = before.get(k);
+      const now = next.fields.find((f) => f.key === k);
+      return was !== undefined && now?.value === was.value && now.label === was.label;
+    }),
+  );
+  return {
+    ...(errors.title !== undefined && prev.title === next.title ? { title: errors.title } : {}),
+    ...(errors.tags !== undefined && prev.tags === next.tags ? { tags: errors.tags } : {}),
+    fields,
   };
 }
 

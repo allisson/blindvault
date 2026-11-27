@@ -109,7 +109,7 @@ test('shows a passkey without its key, finds it by site, and removes it with the
   await field.getByRole('button', { name: 'Remove', exact: true }).click();
   const dialog = page.getByTestId('passkey-remove-confirm');
   await expect(dialog).toContainText(
-    `The passkey for ${RP_ID} leaves this item when you save, but it stays in the item's history`,
+    `The passkey for ${RP_ID} leaves this item when you save, but it stays in the item’s history`,
   );
   await expect(dialog).toContainText(`Remove the passkey on ${RP_ID} too`);
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();

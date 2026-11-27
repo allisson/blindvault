@@ -158,7 +158,7 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
     .trim();
   expect(nameB).not.toBe('');
   await switchSettingsPage(b, 'erase');
-  const named = `Afterwards, retire this device's Device record, "${nameB}", from another device: until then they keep offering it as a sync peer.`;
+  const named = `Afterwards, retire this device’s Device record, "${nameB}", from another device: until then they keep offering it as a sync peer.`;
   await button(b, 'Erase this vault from this device…').click();
   await expect(b.getByTestId('erase-warning').getByText(named, { exact: true })).toBeVisible();
   await b.getByTestId('erase-understood').check();
@@ -365,7 +365,7 @@ test('a hidden-app lock at 0 says it locks at once, in Settings, the export and 
   await expect(a.getByTestId('pairing-text')).not.toHaveValue('', { timeout: 30_000 });
   await expect(
     a.getByText(
-      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
+      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock in Settings → Locking.',
     ),
   ).toBeVisible();
   await a.getByTestId('pairing-cancel').click();

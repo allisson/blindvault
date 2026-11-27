@@ -170,7 +170,7 @@ describe('an Argon2id the device cannot run (R-10)', () => {
   it('a restore keeps the file for the Recovery Phrase, and the export says to try again', () => {
     expect(kept({ kind: 'kdf-failed' })).toBe(true);
     expect(openingError(m, { kind: 'kdf-failed' }, 'password')).toBe(
-      "This device could not derive the export password's key, perhaps for lack of memory. Use the Recovery Phrase.",
+      'This device could not derive the export password’s key, perhaps for lack of memory. Use the Recovery Phrase.',
     );
     expect(exportError(m, { kind: 'kdf-failed' })).toBe(
       'This device could not derive a key, perhaps for lack of memory. Close other tabs and apps, then try again.',

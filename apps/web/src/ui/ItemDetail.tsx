@@ -116,7 +116,8 @@ function AttachmentView({
     <span className="flex flex-col gap-1">
       <span className="flex items-center gap-1">
         <span className="min-w-0 flex-1 break-words" data-testid="attachment-file">
-          {`${value.name} · ${bytes(language, value.size)} · ${value.mediaType}`}
+          {/* The name once: as the field's label when it has none (attachments.md §7, D312). */}
+          {`${name === value.name ? '' : `${value.name} · `}${bytes(language, value.size)} · ${value.mediaType}`}
         </span>
         {held === true ? (
           <button

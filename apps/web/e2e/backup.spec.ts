@@ -52,7 +52,7 @@ test('exports a backup, asking for the local password again, then one under a ge
   ).toBeVisible();
   await expect(
     page.getByText(
-      "A backup holds the vault's Master Key, so exporting asks for your local password again.",
+      'A backup holds the vault’s Master Key, so exporting asks for your local password again.',
       { exact: true },
     ),
   ).toBeVisible();
@@ -88,7 +88,7 @@ test('exports a backup, asking for the local password again, then one under a ge
   // An export password: the Master Key warning, a weak one refused, a generated one shown.
   await page.getByTestId('backup-protect').check();
   await expect(page.getByTestId('backup-master-key')).toHaveText(
-    "Whoever opens this backup with its export password holds the vault's Master Key for good. If the export password and a copy of the backup are ever exposed together, the vault must be re-founded.",
+    'Whoever opens this backup with its export password holds the vault’s Master Key for good. If the export password and a copy of the backup are ever exposed together, the vault must be re-founded.',
   );
   await page.getByTestId('export-password').fill('harbor1234');
   await expect(page.getByTestId('export-password')).toHaveAttribute('aria-invalid', 'true');

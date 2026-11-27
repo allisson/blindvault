@@ -162,7 +162,7 @@ test('checks the Recovery Phrase while unlocked, keeping the typed words nowhere
   await check(Array(24).fill('abandon').join(' '));
   await expect(formAlert(page)).toHaveText(/not a valid Recovery Phrase/);
   await check(`${Array(23).fill('abandon').join(' ')} art`);
-  await expect(formAlert(page)).toHaveText("This is not this vault's current Recovery Phrase.");
+  await expect(formAlert(page)).toHaveText('This is not this vault’s current Recovery Phrase.');
 
   const found = traces(words).filter((t) => logged.some((v) => v.includes(t)));
   expect(found).toEqual([]);

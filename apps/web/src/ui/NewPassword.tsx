@@ -76,7 +76,7 @@ export function NewPassword({
                 ? acceptable
                   ? 'bg-success'
                   : 'bg-warning'
-                : 'bg-subtle'
+                : 'bg-line'
             }`}
           />
         ))}
