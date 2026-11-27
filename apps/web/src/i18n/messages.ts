@@ -281,7 +281,7 @@ const en = {
     leaving:
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the pairing ends.',
     leavingImmediate:
-      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
+      'This vault locks as soon as BlindVault is hidden, which ends the pairing: copy and paste without leaving the app, or change the hidden-app lock in Settings → Locking.',
     answerPaste: 'The other device’s answer',
     connect: 'Connect',
     connecting: 'Connecting…',
@@ -362,7 +362,7 @@ const en = {
   join: {
     title: 'Pair with an existing device',
     intro:
-      'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a device”.',
+      'This device gets the vault of a device that holds it. First create this device’s local password; then, on the other device, open Settings → Devices → “Pair a device…”.',
     submit: 'Start pairing',
     scanIntro: 'Scan the code the other device shows, or paste its pairing text here.',
     offerPaste: 'The other device’s pairing text',
@@ -381,7 +381,7 @@ const en = {
     },
     other: {
       password:
-        'On the device that holds the vault, open Settings › Devices › “Pair a device…” and enter its local password.',
+        'On the device that holds the vault, open Settings → Devices → “Pair a device…” and enter its local password.',
       scan: 'It shows a code: scan it, or paste its text here.',
       answer: 'Scan or paste this answer there.',
       done: 'It shows the pairing done.',
@@ -513,7 +513,7 @@ const en = {
     leaving:
       'Leaving BlindVault to copy or paste counts as hiding it: if it stays hidden for {seconds} seconds, the sync ends.',
     leavingImmediate:
-      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
+      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock in Settings → Locking.',
     paste: {
       malformed: 'This is not a whole BlindVault sync text. Copy it again, whole.',
       version: 'This text comes from another version of BlindVault: update both devices.',
@@ -592,7 +592,7 @@ const en = {
     wrongPassword: 'The backup did not open with this export password.',
     noPasswordKeyslot: 'This backup has no export password: use its Recovery Phrase.',
     kdfFailed:
-      "This device could not derive the export password's key, perhaps for lack of memory. Use the Recovery Phrase.",
+      'This device could not derive the export password’s key, perhaps for lack of memory. Use the Recovery Phrase.',
     corrupt: 'This backup is damaged or incomplete. It cannot be restored.',
     corruptRecord:
       'This backup holds a record that does not verify: {type} {id}. It cannot be restored.',
@@ -628,7 +628,7 @@ const en = {
     passwordIntro: 'Now choose the new local password for this device.',
     submit: 'Reset the password',
     working: 'Resetting the password…',
-    wrongPhrase: "This phrase does not open this vault's Recovery Envelope.",
+    wrongPhrase: 'This phrase does not open this vault’s Recovery Envelope.',
     masterKey:
       'This phrase opens the Recovery Envelope held here, but not this vault: the storage is damaged, or someone holding the Master Key changed it. Replace the vault with a backup.',
     noEnvelope: 'This vault has no Recovery Envelope to open. Replace it with a backup.',
@@ -640,7 +640,7 @@ const en = {
     warning:
       'The vault on this device is deleted and replaced by the backup, whether it is of this vault or of another one. Changes that exist only on this device are lost. If you can still unlock the vault, make a backup first, in Settings.',
     retire:
-      "Afterwards, retire this device's Device record from another device of the replaced vault: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.",
+      'Afterwards, retire this device’s Device record from another device of the replaced vault: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.',
     pairChoose: 'Replace by pairing with another device…',
     pairTitle: 'Replace this vault by pairing',
     pairWarning:
@@ -661,9 +661,9 @@ const en = {
       'Changes that exist only on this device are lost. Make a backup first, if you can still unlock the vault.',
     onlyDevice: 'This is the only device holding the vault: without a backup, it is lost for good.',
     named:
-      'Afterwards, retire this device\'s Device record, "{name}", from another device: until then they keep offering it as a sync peer.',
+      'Afterwards, retire this device’s Device record, "{name}", from another device: until then they keep offering it as a sync peer.',
     locked:
-      "Afterwards, retire this device's Device record from another device: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.",
+      'Afterwards, retire this device’s Device record from another device: until then they keep offering it as a sync peer. Its name cannot be shown while the vault is locked.',
     unregistered: 'This device has no Device record left to retire.',
     understand: 'I understand that the vault on this device will be erased',
     submit: 'Erase',
@@ -694,10 +694,10 @@ const en = {
     immutable:
       'This backup holds a changed copy of a record that never changes: {type} {id}. It cannot be merged: only someone holding the Master Key, or a bug, makes one.',
     futureClock:
-      "This backup holds records dated ahead of this device's clock. It can be merged from {date}.",
+      'This backup holds records dated ahead of this device’s clock. It can be merged from {date}.',
     locked: 'The merge stopped before anything was saved. Open the file again.',
     phraseChanged:
-      'The Recovery Phrase was regenerated on another device: the new one, {id}, was created on {date}. New backups open only with it: check yours in Settings › Recovery Phrase.',
+      'The Recovery Phrase was regenerated on another device: the new one, {id}, was created on {date}. New backups open only with it: check yours in Settings → Recovery Phrase.',
     phraseSuperseded:
       'The Recovery Phrase you wrote down for this device, {id}, created on {date}, was replaced by one regenerated on another device. Backups made with it open only with it, so keep it until you have a new backup. New backups open only with the new phrase.',
     backupNow: 'Make a backup now',
@@ -827,7 +827,7 @@ const en = {
     allFolders: 'All folders',
     copyPassword: 'Copy password',
     clockBehind:
-      "This device's clock went back, so the vault is read-only until {date}. Sync still receives records.",
+      'This device’s clock went back, so the vault is read-only until {date}. Sync still receives records.',
     clockFar:
       'Changes made while the clock was wrong exist only on this device, since your other devices rejected them, and stay readable so you can copy them by hand. To write before then, re-found the vault.',
     clockPairAgain:
@@ -881,14 +881,14 @@ const en = {
     readOnlyNewer:
       'This item was saved by a newer version of BlindVault. Update the app to edit or duplicate it.',
     readOnlyClock:
-      "This item is dated ahead of this device's clock. It can be changed once the clock reaches that date.",
+      'This item is dated ahead of this device’s clock. It can be changed once the clock reaches that date.',
     inTrash: 'In the trash. It can only be restored from the trash; it is purged on {date}.',
     multiLine: 'Show the value to enter several lines.',
     checksum: 'The checksum of this seed phrase does not match. Check the words.',
     duplicate: 'Duplicate',
     copySuffix: ' (copy)',
     copyTitleTooLong:
-      "The duplicate's title would be longer than 512 characters. Shorten the title first.",
+      'The duplicate’s title would be longer than 512 characters. Shorten the title first.',
     history: 'History',
     moreActions: 'More actions',
     saved: 'Saved.',
@@ -907,7 +907,7 @@ const en = {
     restoreVersion: 'Restore this version',
     versionNewer: 'Saved by a newer version of BlindVault: it cannot be restored here.',
     versionClock:
-      "Dated ahead of this device's clock: it can be restored once the clock reaches that date.",
+      'Dated ahead of this device’s clock: it can be restored once the clock reaches that date.',
     copy: 'Copy',
     copyCode: 'Copy code',
     copied:
@@ -921,7 +921,7 @@ const en = {
     passkeyCreated: 'Created on {date}',
     passkeyRemove: 'Remove the passkey',
     passkeyRemoveWarning:
-      "The passkey for {rpId} leaves this item when you save, but it stays in the item's history, with its private key, until that history is purged. Remove the passkey on {rpId} too, in your account's settings there.",
+      'The passkey for {rpId} leaves this item when you save, but it stays in the item’s history, with its private key, until that history is purged. Remove the passkey on {rpId} too, in your account’s settings there.',
     matchDomain: 'Match the whole domain',
     matchDomainHint:
       'The extension also fills this login on the other sites of the domain, such as login.example.com.',
@@ -946,7 +946,7 @@ const en = {
     restoreNamed: 'Restore {name} from the trash',
     blocked: 'Nothing was changed: these items or folders are read-only.',
     'newer-content': 'saved by a newer version of BlindVault',
-    'future-clock': "dated ahead of this device's clock",
+    'future-clock': 'dated ahead of this device’s clock',
     nameRequired: 'Enter a folder name.',
     nameTooLong: 'The name is longer than 256 characters.',
     nameSingleLine: 'The name takes a single line.',
@@ -1061,14 +1061,14 @@ const en = {
     passkeyIntro:
       'An unlock passkey opens the vault on this device without typing the local password. The password keeps working.',
     passkeyLostDevice:
-      "With an unlock passkey, whoever holds this device needs only its screen lock, fingerprint or face, or the security key's PIN, not the local password. Use a strong device PIN.",
+      'With an unlock passkey, whoever holds this device needs only its screen lock, fingerprint or face, or the security key’s PIN, not the local password. Use a strong device PIN.',
     passkeyPassword: 'Local password',
     passkeySetUp: 'Set up unlock passkey',
     passkeySettingUp: 'Setting up the unlock passkey…',
     passkeyOn: 'An unlock passkey is set up on this device.',
     passkeyDone: 'Unlock passkey set up.',
     passkeySynced:
-      "This unlock passkey is synced by a platform account, such as iCloud Keychain or Google Password Manager. Whoever controls that account and gets a copy of this device's storage can unlock the vault without this device: the vault now also depends on the security of that account.",
+      'This unlock passkey is synced by a platform account, such as iCloud Keychain or Google Password Manager. Whoever controls that account and gets a copy of this device’s storage can unlock the vault without this device: the vault now also depends on the security of that account.',
     passkeyRemove: 'Remove unlock passkey',
     passkeyRemoved: 'Unlock passkey removed. Your passkey manager was asked to delete it.',
     passkeyRemovedByHand:
@@ -1090,7 +1090,7 @@ const en = {
     recovery: 'Recovery Phrase',
     recoveryCreated: 'The current Recovery Phrase was created on {date} ({id}).',
     recoveryNoBackup:
-      'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings › Backup.',
+      'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings → Backup.',
     regenSteps: {
       warn: 'Read the warning',
       phrase: 'Write down the new phrase',
@@ -1127,15 +1127,15 @@ const en = {
     regenNewer:
       'The Recovery Envelope was written by a newer version of BlindVault. Update the app to regenerate the Recovery Phrase.',
     regenFutureClock:
-      "The Recovery Envelope is dated ahead of this device's clock. The Recovery Phrase can be regenerated from {date}.",
+      'The Recovery Envelope is dated ahead of this device’s clock. The Recovery Phrase can be regenerated from {date}.',
     regenReadOnly:
-      "This device's clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from {date}.",
+      'This device’s clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from {date}.',
     recoveryIntro:
       'Type the 24 words you wrote down to confirm that they open this vault and its backups. Nothing you type is stored.',
     recoveryInput: 'Your 24 words',
     recoveryCheck: 'Check Recovery Phrase',
     recoveryOpens: 'This phrase opens this vault and its backups.',
-    recoveryWrong: "This is not this vault's current Recovery Phrase.",
+    recoveryWrong: 'This is not this vault’s current Recovery Phrase.',
     recoveryPublicKey:
       'This phrase opens the vault, but backups cannot be opened with it. Regenerate the Recovery Phrase, then make a new backup.',
     recoveryMasterKey:
@@ -1167,7 +1167,7 @@ const en = {
     backupMissing:
       'This backup lacks the attachments of: {titles}. Their files are not on this device yet: sync with a device that holds them, then make a new backup.',
     backupMasterKey:
-      "Whoever opens this backup with its export password holds the vault's Master Key for good. If the export password and a copy of the backup are ever exposed together, the vault must be re-founded.",
+      'Whoever opens this backup with its export password holds the vault’s Master Key for good. If the export password and a copy of the backup are ever exposed together, the vault must be re-founded.',
     exportPassword: 'Export password',
     exportConfirm: 'Repeat the export password',
     exportGenerate: 'Generate a passphrase',
@@ -1178,7 +1178,7 @@ const en = {
     exportStrong: 'Strong enough for a backup.',
     backupAuth: 'Local password',
     backupAuthIntro:
-      "A backup holds the vault's Master Key, so exporting asks for your local password again.",
+      'A backup holds the vault’s Master Key, so exporting asks for your local password again.',
     backupExport: 'Export',
     backupExporting: 'Exporting…',
     backupPasskey: 'Export with the unlock passkey instead',
@@ -1615,7 +1615,7 @@ const ptBR: Messages = {
     leaving:
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, o pareamento termina.',
     leavingImmediate:
-      'Este cofre bloqueia assim que o BlindVault fica oculto, o que termina o pareamento: copie e cole sem sair do app, ou mude o bloqueio do app oculto em Configurações › Bloqueio.',
+      'Este cofre bloqueia assim que o BlindVault fica oculto, o que termina o pareamento: copie e cole sem sair do app, ou mude o bloqueio do app oculto em Configurações → Bloqueio.',
     answerPaste: 'Resposta do outro dispositivo',
     connect: 'Conectar',
     connecting: 'Conectando…',
@@ -1698,7 +1698,7 @@ const ptBR: Messages = {
   join: {
     title: 'Parear com um dispositivo existente',
     intro:
-      'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo”.',
+      'Este dispositivo recebe o cofre de um dispositivo que o tem. Primeiro crie a senha local deste dispositivo; depois, no outro dispositivo, abra Configurações → Dispositivos → “Parear um dispositivo…”.',
     submit: 'Começar o pareamento',
     scanIntro:
       'Escaneie o código que o outro dispositivo mostra, ou cole aqui o texto de pareamento dele.',
@@ -1718,7 +1718,7 @@ const ptBR: Messages = {
     },
     other: {
       password:
-        'No dispositivo que tem o cofre, abra Configurações › Dispositivos › “Parear um dispositivo…” e digite a senha local dele.',
+        'No dispositivo que tem o cofre, abra Configurações → Dispositivos → “Parear um dispositivo…” e digite a senha local dele.',
       scan: 'Ele mostra um código: escaneie-o, ou cole aqui o texto dele.',
       answer: 'Escaneie ou cole esta resposta lá.',
       done: 'Ele mostra o pareamento concluído.',
@@ -1855,7 +1855,7 @@ const ptBR: Messages = {
     leaving:
       'Sair do BlindVault para copiar ou colar conta como ocultá-lo: se ele ficar oculto por {seconds} segundos, a sincronização termina.',
     leavingImmediate:
-      'Este cofre bloqueia assim que o BlindVault fica oculto, o que encerra a sincronização: copie e cole sem sair do app, ou mude o bloqueio do app oculto em Configurações › Bloqueio.',
+      'Este cofre bloqueia assim que o BlindVault fica oculto, o que encerra a sincronização: copie e cole sem sair do app, ou mude o bloqueio do app oculto em Configurações → Bloqueio.',
     paste: {
       malformed:
         'Este não é um texto de sincronização do BlindVault inteiro. Copie-o de novo, inteiro.',
@@ -2043,7 +2043,7 @@ const ptBR: Messages = {
       'Este backup contém registros com data à frente do relógio deste dispositivo. Ele pode ser mesclado a partir de {date}.',
     locked: 'A mesclagem parou antes de salvar qualquer coisa. Abra o arquivo de novo.',
     phraseChanged:
-      'A Frase de Recuperação foi regenerada em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Configurações › Frase de Recuperação.',
+      'A Frase de Recuperação foi regenerada em outro dispositivo: a nova, {id}, foi criada em {date}. Os novos backups só abrem com ela: confira a sua em Configurações → Frase de Recuperação.',
     phraseSuperseded:
       'A Frase de Recuperação que você anotou para este dispositivo, {id}, criada em {date}, foi substituída por uma regenerada em outro dispositivo. Os backups feitos com ela só abrem com ela, então guarde-a até ter um novo backup. Os novos backups só abrem com a frase nova.',
     backupNow: 'Fazer um backup agora',
@@ -2436,7 +2436,7 @@ const ptBR: Messages = {
     recovery: 'Frase de Recuperação',
     recoveryCreated: 'A Frase de Recuperação atual foi criada em {date} ({id}).',
     recoveryNoBackup:
-      'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Configurações › Backup.',
+      'Nenhum backup feito neste dispositivo abre com a Frase de Recuperação atual ainda: faça um em Configurações → Backup.',
     regenSteps: {
       warn: 'Ler o aviso',
       phrase: 'Anotar a nova frase',
@@ -2683,7 +2683,7 @@ export type Language = (typeof LANGUAGES)[number];
 
 export const MESSAGES: Record<Language, Messages> = { en, 'pt-BR': ptBR };
 
-/** The first supported language of the browser's list, by primary subtag; `en` otherwise. */
+/** The first supported language of the browser’s list, by primary subtag; `en` otherwise. */
 export function pickLanguage(preferred: readonly string[]): Language {
   for (const tag of preferred) {
     const primary = tag.toLowerCase().split('-')[0];

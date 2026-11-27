@@ -37,6 +37,15 @@ describe('UI copy (D165)', () => {
     expect(Object.keys(MESSAGES.en.roles).sort()).toEqual(known);
   });
 
+  it('writes apostrophes as ’ and a path in the app with →, in every language (D312)', () => {
+    for (const language of LANGUAGES) {
+      for (const [path, value] of leaves(MESSAGES[language])) {
+        expect(String(value), path).not.toMatch(/\p{L}'\p{L}/u);
+        expect(String(value), path).not.toContain(' › ');
+      }
+    }
+  });
+
   it('picks the first supported language of the browser, en otherwise', () => {
     expect(pickLanguage(['pt-BR', 'en'])).toBe('pt-BR');
     expect(pickLanguage(['pt-PT'])).toBe('pt-BR');

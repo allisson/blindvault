@@ -133,7 +133,7 @@ test('two paired devices connect from their sync codes, each with the other pick
   await syncB.getByTestId('sync-read').click();
   await expect(
     syncB.getByText(
-      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock in Settings › Locking.',
+      'This vault locks as soon as BlindVault is hidden, which ends the sync: copy and paste without leaving the app, or change the hidden-app lock in Settings → Locking.',
     ),
   ).toBeVisible();
   await syncB.getByTestId('pairing-paste').fill(offerText);

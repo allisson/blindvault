@@ -123,7 +123,7 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   ).toBeVisible();
   // The backup made before opens only with the previous phrase.
   await expect(page.getByTestId('recovery-no-backup')).toHaveText(
-    'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings › Backup.',
+    'No backup made on this device opens with the current Recovery Phrase yet: make one in Settings → Backup.',
   );
 
   // "Make a backup now" leads to the export, which names the new phrase.
@@ -138,7 +138,7 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   await check(page, words);
   await expect(page.getByText('This phrase opens this vault and its backups.')).toBeVisible();
   await check(page, old);
-  await expect(page.getByText("This is not this vault's current Recovery Phrase.")).toBeVisible();
+  await expect(page.getByText('This is not this vault’s current Recovery Phrase.')).toBeVisible();
 
   // The vault contents did not change.
   await button(page, 'Back').click();

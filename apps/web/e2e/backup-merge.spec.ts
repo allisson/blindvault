@@ -212,7 +212,7 @@ test("refuses to merge a backup holding records dated ahead of this device's clo
   );
   await expect(
     a.getByText(
-      `This backup holds records dated ahead of this device's clock. It can be merged from ${date}.`,
+      `This backup holds records dated ahead of this device’s clock. It can be merged from ${date}.`,
       { exact: true },
     ),
   ).toBeVisible({ timeout: 30_000 });

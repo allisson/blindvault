@@ -20,7 +20,7 @@ const T0 = new Date(2026, 2, 4, 12).getTime();
 const AHEAD = T0 + 400 * DAY;
 const UNTIL = AHEAD - FUTURE_CLOCK_BOUND_MS;
 
-const BEHIND = `This device's clock went back, so the vault is read-only until ${new Intl.DateTimeFormat(
+const BEHIND = `This device’s clock went back, so the vault is read-only until ${new Intl.DateTimeFormat(
   'en',
   { dateStyle: 'long', timeStyle: 'short' },
 ).format(UNTIL)}. Sync still receives records.`;
@@ -28,7 +28,7 @@ const FAR =
   'Changes made while the clock was wrong exist only on this device, since your other devices rejected them, and stay readable so you can copy them by hand. To write before then, re-found the vault.';
 const PAIR_AGAIN = 'Or replace this device’s vault by pairing with another device';
 const ITEM_CLOCK =
-  "This item is dated ahead of this device's clock. It can be changed once the clock reaches that date.";
+  'This item is dated ahead of this device’s clock. It can be changed once the clock reaches that date.';
 
 function button(page: Page, name: string) {
   return page.getByRole('button', { name, exact: true });
@@ -84,7 +84,7 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   await button(page, 'Back').click();
   await page.getByTestId('settings-recovery').click();
   await expect(page.getByTestId('regenerate')).toContainText(
-    "This device's clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from",
+    'This device’s clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from',
   );
   await expect(page.getByTestId('regenerate-start')).toHaveCount(0);
   await button(page, 'Back').click();

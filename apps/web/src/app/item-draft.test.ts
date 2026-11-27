@@ -15,6 +15,7 @@ import {
   type DraftField,
   addAttachment,
   addField,
+  clearEdited,
   draftChanged,
   draftOf,
   inputOf,
@@ -93,6 +94,54 @@ describe('item drafts (record-content.md §3, §4)', () => {
     const input = ok(set(draft, 'secret', '-----BEGIN-----\nabc\n-----END-----'));
     expect(input.fields[0]?.value).toBe('-----BEGIN-----\nabc\n-----END-----');
     expect(input.notes).toBe('line 1\nline 2');
+  });
+
+  it("keeps an item's own order, roles placed among them by the template (D312)", () => {
+    const item: Item = {
+      templateId: 'login',
+      templateVersion: 1,
+      title: 'Bank',
+      fields: [
+        { type: 'text', label: 'PIN hint', value: 'h' },
+        { type: 'url', role: 'url', value: 'https://bank.example' },
+        { type: 'text', role: 'username', value: 'ana' },
+      ],
+      tags: [],
+    };
+    // The user's order stays; the missing password goes before the first later role.
+    expect(draftOf(item).fields.map((f) => f.role ?? f.label)).toEqual([
+      'PIN hint',
+      'password',
+      'url',
+      'username',
+    ]);
+    expect(ok(draftOf(item))).toEqual(item);
+  });
+
+  it('drops an error once its own input changes, and keeps the others (D312)', () => {
+    const draft = { ...login(), title: '', tags: 'a' };
+    const found = errors(draft);
+    const titled = { ...draft, title: 'Bank' };
+    expect(clearEdited(found, draft, titled).title).toBeUndefined();
+    // Another input changing keeps the title's error.
+    const tagged = { ...draft, tags: 'b' };
+    expect(clearEdited(found, draft, tagged).title).toBe('required');
+    expect(clearEdited({ ...found, tags: 'too-many' }, draft, tagged).tags).toBeUndefined();
+    // A field's error goes when that field's value or label changes, not another's.
+    const [a, b] = draft.fields;
+    if (!a || !b) throw new Error('no fields');
+    const withFields = {
+      ...found,
+      fields: new Map([
+        [a.key, 'label-required' as const],
+        [b.key, 'label-required' as const],
+      ]),
+    };
+    const edited = {
+      ...draft,
+      fields: draft.fields.map((f) => (f.key === a.key ? { ...f, value: 'x' } : f)),
+    };
+    expect([...clearEdited(withFields, draft, edited).fields.keys()]).toEqual([b.key]);
   });
 
   it('refuses an empty or too long title', () => {
@@ -193,13 +242,13 @@ describe('item drafts (record-content.md §3, §4)', () => {
       folderId: new Uint8Array(16).fill(7),
     };
     const draft = draftOf(item);
-    // The roles the item does not hold come after its own fields, empty.
+    // The roles the item does not hold take their place in the template's order, empty (D312).
     expect(draft.fields.map((f) => f.role ?? f.label)).toEqual([
+      'username',
       'password',
+      'url',
       'Branch',
       '2FA',
-      'username',
-      'url',
     ]);
     const input = ok(draft);
     expect(input).toEqual(item);
@@ -218,7 +267,8 @@ describe('item drafts (record-content.md §3, §4)', () => {
       tags: [],
     };
     const draft = draftOf(item);
-    expect(draft.fields.map((f) => f.matchDomain ?? false)).toEqual([true, false, false, false]);
+    // username and password, held by no field, come first, in the template's order (D312).
+    expect(draft.fields.map((f) => f.matchDomain ?? false)).toEqual([false, false, true, false]);
     expect(ok(draft)).toEqual(item);
 
     const off = { ...draft, fields: draft.fields.map((f) => ({ ...f, matchDomain: false })) };

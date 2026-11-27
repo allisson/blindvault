@@ -43,8 +43,9 @@ test('adds an attachment, stores it encrypted, and downloads it from the item an
   );
   await button(page, 'Save').click();
   await expect(page.getByRole('heading', { name: 'Lease', level: 1 })).toBeVisible();
+  // Without a label, the name is the field's label and shows once (D312).
   await expect(page.getByTestId('attachment-file')).toHaveText(
-    `lease:v1.pdf · ${String(CONTENT.length)} byte · application/pdf`,
+    `${String(CONTENT.length)} byte · application/pdf`,
   );
 
   // Nothing of the file is stored in the clear (CRYPTO-INV-001).
@@ -65,6 +66,10 @@ test('adds an attachment, stores it encrypted, and downloads it from the item an
   await page.getByTestId('custom-label').fill('Signed lease');
   await button(page, 'Save').click();
   await expect(button(page, 'Download: Signed lease')).toBeVisible();
+  // With a label, the name joins the size and the type.
+  await expect(page.getByTestId('attachment-file')).toHaveText(
+    `lease:v1.pdf · ${String(CONTENT.length)} byte · application/pdf`,
+  );
   await button(page, 'History').click();
   await expect(page.getByRole('heading', { name: 'History of Lease' })).toBeVisible();
   const fromHistory = page.waitForEvent('download');

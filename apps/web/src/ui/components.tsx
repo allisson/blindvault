@@ -62,7 +62,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`${TARGET} rounded-control px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${PRESS} ${LOOK[variant]} ${className}`}
+      className={`${TARGET} rounded-control px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${PRESS} ${LOOK[variant]} ${className}`}
       disabled={disabled === true || busy}
       aria-busy={busy || undefined}
       {...props}
