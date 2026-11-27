@@ -371,7 +371,7 @@ describe('PasskeyHost: checks before any window (extension.md §7.2)', () => {
     expect(result(h.answers)).toEqual({ kind: 'browser' });
   });
 
-  it('answers a second request NotAllowedError at once, with no window (D289)', async () => {
+  it('hands a second request to the browser at once, with no window and no focus taken (P-04)', async () => {
     const h = harness();
     h.host.start(getRequest());
     await settle();
@@ -383,10 +383,36 @@ describe('PasskeyHost: checks before any window (extension.md §7.2)', () => {
         tabId: 9,
         frameId: 0,
         request: 'b'.repeat(32),
-        result: { kind: 'error', name: 'NotAllowedError' },
+        result: { kind: 'browser' },
       },
     ]);
     expect(h.host.details(h.token())).toMatchObject({ kind: 'get' });
+  });
+});
+
+describe('PasskeyHost: a call the page aborted (P-03)', () => {
+  it('ends the request of that frame, closing the window, and leaves any other', async () => {
+    const h = harness();
+    h.host.start(createRequest());
+    await settle();
+    h.host.cancel(5, 1, 'b'.repeat(32));
+    h.host.cancel(6, 0, 'b'.repeat(32));
+    h.host.cancel(5, 0, 'c'.repeat(32));
+    expect(h.answers).toEqual([]);
+    expect(h.host.details(h.token())).toMatchObject({ kind: 'create' });
+    h.host.cancel(5, 0, 'b'.repeat(32));
+    expect(h.closed).toHaveLength(1);
+    expect(h.answers).toEqual([
+      {
+        tabId: 5,
+        frameId: 0,
+        request: 'b'.repeat(32),
+        result: { kind: 'error', name: 'NotAllowedError' },
+      },
+    ]);
+    // A Confirm arriving after the cancel writes nothing.
+    expect(await h.host.choose(h.token(), { choice: 'save-new' })).toBe('not-found');
+    expect(h.writes).toEqual([]);
   });
 });
 

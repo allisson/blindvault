@@ -45,6 +45,14 @@ export type Request =
       readonly id: number;
       readonly passkey: PasskeyRequest;
     }
+  | {
+      readonly v: 1;
+      readonly type: 'passkey-cancel';
+      readonly id: number;
+      readonly request: string;
+      readonly tabId: number;
+      readonly frameId: number;
+    }
   | { readonly v: 1; readonly type: 'confirm-details'; readonly id: number; readonly token: string }
   | {
       readonly v: 1;
@@ -77,6 +85,7 @@ export const HOST_TYPES = [
   'command-fill',
   'passkey-create',
   'passkey-get',
+  'passkey-cancel',
   'confirm-details',
   'confirm-choice',
 ] as const;
@@ -96,6 +105,7 @@ const TYPES: ReadonlySet<string> = new Set<RequestType | 'passkey-answer'>([
   'locked',
   'passkey-create',
   'passkey-get',
+  'passkey-cancel',
   'passkey-answer',
   'confirm-details',
   'confirm-choice',
@@ -115,6 +125,7 @@ const KEYS: Readonly<Record<RequestType | 'passkey-answer', readonly string[]>> 
   locked: [],
   'passkey-create': PASSKEY_KEYS,
   'passkey-get': PASSKEY_KEYS,
+  'passkey-cancel': ['request', 'tabId', 'frameId'],
   'passkey-answer': ['tabId', 'frameId', 'request', 'result'],
   'confirm-details': ['token'],
   'confirm-choice': ['token', 'choice', 'credentialId', 'itemId'],
@@ -185,6 +196,12 @@ export function parseRequest(value: unknown, accepted: readonly RequestType[]): 
     case 'passkey-get': {
       const passkey = parsePasskeyRequest(t === 'passkey-create' ? 'create' : 'get', value);
       return passkey ? { kind: 'request', request: { v: 1, type: t, id, passkey } } : invalid;
+    }
+    case 'passkey-cancel': {
+      const { request, tabId, frameId } = value;
+      if (typeof request !== 'string' || !HEX_32.test(request)) return invalid;
+      if (!tabIdOf(tabId) || !tabIdOf(frameId)) return invalid;
+      return { kind: 'request', request: { v: 1, type: t, id, request, tabId, frameId } };
     }
     case 'confirm-details': {
       const token = value.token;
@@ -374,6 +391,7 @@ export const HOST_SENDERS: Readonly<Record<HostType, readonly string[]>> = {
   'command-fill': WORKER_PAGES,
   'passkey-create': WORKER_PAGES,
   'passkey-get': WORKER_PAGES,
+  'passkey-cancel': WORKER_PAGES,
   'confirm-details': [CONFIRM_PAGE],
   'confirm-choice': [CONFIRM_PAGE],
 };

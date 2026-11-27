@@ -6,6 +6,7 @@ import {
   command,
   deliverAnswer,
   findHost,
+  cancelPasskey,
   forwardPasskey,
   openHost,
   parseRequest,
@@ -285,10 +286,39 @@ describe('passkey requests (extension.md §7.2, §7.7, D289)', () => {
       ...FORWARDED,
       type: 'passkey-create',
     });
-    // Without `sender.origin`, the origin of the frame's URL, also the browser's.
-    expect(parseRequest(GET, { ...FRAME, origin: undefined }, a)).toMatchObject({
-      origin: 'https://ads.example',
+  });
+
+  it('refuses a sender without sender.origin, whose URL may name a sandboxed frame (P-05)', () => {
+    expect(parseRequest(GET, { ...FRAME, origin: undefined }, a)).toBeNull();
+  });
+
+  it('takes passkey-cancel from a content script, for its own tab and frame (P-03)', () => {
+    const CANCEL = { v: 1, type: 'passkey-cancel', id: 4, request: REQUEST };
+    expect(parseRequest(CANCEL, FRAME, a)).toEqual({
+      type: 'passkey-cancel',
+      request: REQUEST,
+      tabId: 9,
+      frameId: 4,
     });
+    expect(parseRequest({ ...CANCEL, tabId: 1 }, FRAME, a)).toBeNull();
+    expect(parseRequest(CANCEL, { ...FRAME, tab: undefined }, a)).toBeNull();
+    expect(parseRequest({ ...CANCEL, request: 'ABC' }, FRAME, a)).toBeNull();
+  });
+
+  it('hands a cancel to the session host, and creates none for it (P-03)', async () => {
+    const cancel = {
+      type: 'passkey-cancel' as const,
+      request: REQUEST,
+      tabId: 9,
+      frameId: 4,
+    };
+    const none = api([]);
+    await cancelPasskey(none, cancel);
+    expect(none.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(none.tabs.create).not.toHaveBeenCalled();
+    const held = api([HOST]);
+    await cancelPasskey(held, cancel);
+    expect(held.runtime.sendMessage).toHaveBeenCalledWith({ v: 1, id: 0, ...cancel });
   });
 
   it.each([

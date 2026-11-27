@@ -31,6 +31,13 @@
     const d = event.data;
     if (!object(d) || d.channel !== CHANNEL || d.to !== 'isolated') return;
     const { type, request, options } = d;
+    if (type === 'passkey-cancel') {
+      // The page aborted the call: the session host ends its request, and no answer is awaited
+      // (§7.7 Route, P-03).
+      if (typeof request !== 'string' || !relayed.delete(request)) return;
+      runtime.sendMessage({ v: 1, type, id: next++, request }).catch(() => undefined);
+      return;
+    }
     if (type !== 'passkey-create' && type !== 'passkey-get') return;
     if (typeof request !== 'string' || !REQUEST.test(request) || relayed.has(request)) return;
     relayed.add(request);

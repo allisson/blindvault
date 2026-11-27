@@ -70,9 +70,12 @@ describe('rpIdServes (extension.md §7.2 step 2)', () => {
     expect(rpIdServes('login.example.com', 'example.com')).toBe(false);
   });
 
-  it('lets an IP address serve only itself', () => {
-    expect(rpIdServes('1.2.3.4', '1.2.3.4')).toBe(true);
+  it('never lets an IP address be an rpId, as browsers refuse one (P-05)', () => {
+    expect(rpIdServes('1.2.3.4', '1.2.3.4')).toBe(false);
     expect(rpIdServes('3.4', '1.2.3.4')).toBe(false);
+    expect(rpIdServes('[::1]', '[::1]')).toBe(false);
+    expect(checkRequest(get('https://192.168.0.1'))).toBeUndefined();
+    expect(checkRequest(get('https://[::1]:8443'))).toBeUndefined();
   });
 });
 
@@ -234,9 +237,16 @@ describe('candidates (extension.md §7.4)', () => {
 
 describe('the create side (extension.md §7.4)', () => {
   it('finds a held credentialId of excludeCredentials, never one in the trash', () => {
-    expect(holdsExcluded(ITEMS, [{ type: 'public-key', id: Uint8Array.of(2) }])).toBe(true);
-    expect(holdsExcluded(ITEMS, [{ type: 'public-key', id: Uint8Array.of(4) }])).toBe(false);
-    expect(holdsExcluded(ITEMS, [])).toBe(false);
+    const listing = (n: number) => [{ type: 'public-key', id: Uint8Array.of(n) }];
+    expect(holdsExcluded(ITEMS, 'example.com', listing(2))).toBe(true);
+    expect(holdsExcluded(ITEMS, 'example.com', listing(4))).toBe(false);
+    expect(holdsExcluded(ITEMS, 'example.com', [])).toBe(false);
+  });
+
+  it('finds only a credentialId of the create’s rpId, so a site learns nothing of another (P-01)', () => {
+    const other = [{ type: 'public-key', id: Uint8Array.of(3) }];
+    expect(holdsExcluded(ITEMS, 'other.com', other)).toBe(true);
+    expect(holdsExcluded(ITEMS, 'example.com', other)).toBe(false);
   });
 
   it('finds every item holding the rpId and userHandle', () => {

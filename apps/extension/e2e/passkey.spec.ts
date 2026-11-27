@@ -88,6 +88,19 @@ async function create(): Promise<{ instance: boolean; json: Json; extensions: un
   };
 }
 
+/** Runs in the page: the attachment of the authenticator a create was answered by. */
+async function attachment(): Promise<string | null> {
+  const c = (await navigator.credentials.create({
+    publicKey: {
+      rp: { name: 'Site' },
+      user: { id: new Uint8Array([5]), name: 'cris', displayName: 'Cris' },
+      challenge: new Uint8Array(32).fill(2),
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+    },
+  })) as PublicKeyCredential;
+  return c.authenticatorAttachment;
+}
+
 /** Runs in the page: the error name a create ends with. */
 async function failedCreate(): Promise<string> {
   try {
@@ -203,7 +216,7 @@ test('a cross-origin frame’s request names its top origin, and Cancel answers 
   await expect(cancelled).resolves.toBe('NotAllowedError');
 });
 
-test('a second request while one waits is refused, and a lock closes the window', async ({
+test('a second request while one waits goes to the browser, and a lock closes the window', async ({
   context,
   worker,
   extensionId,
@@ -213,12 +226,27 @@ test('a second request while one waits is refused, and a lock closes the window'
   const page = await site(context);
   const frame = page.frames().find((f) => f.url().startsWith(ADS));
   if (!frame) throw new Error('no frame');
+  // The browser's own authenticator, which answers a call handed back to it.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('WebAuthn.enable');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      transport: 'usb',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  });
 
   const window = nextWindow(context);
-  const waiting = page.evaluate(failedCreate);
+  const waiting = frame.evaluate(failedCreate);
   const confirm = await window;
-  await expect(frame.evaluate(failedCreate)).resolves.toBe('NotAllowedError');
+  // Handed to the browser at once, with no second window (D305): its authenticator answers.
+  await expect(page.evaluate(attachment)).resolves.toBe('cross-platform');
   await expect(confirm.getByTestId('confirm-save')).toBeVisible();
+  expect(context.pages().filter((p) => p.url().includes('/confirm.html#'))).toHaveLength(1);
 
   const closed = confirm.waitForEvent('close');
   await worker.evaluate(() =>

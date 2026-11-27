@@ -615,6 +615,72 @@ describe('serveHost (extension.md §4)', () => {
     ]);
   });
 
+  it('counts no passkey request and no window details as activity, so no site holds off the auto-lock (E-01)', async () => {
+    const { r, send } = runtime();
+    const p = passkeys();
+    const d = { ...deps(), passkeys: p.host };
+    serveHost(r, d);
+    // A page of another site asking every 30 s: each request goes back to the browser unseen.
+    for (let i = 0; i < 3; i++) {
+      const { respond } = send(
+        {
+          ...passkeyGet('https://evil.example'),
+          options: { challenge: toBase64url(new Uint8Array(32)), rpId: 'unrelated.example' },
+        },
+        WORKER,
+      );
+      await vi.waitFor(() => {
+        expect(respond).toHaveBeenCalledWith({ v: 1, id: 3, ok: true });
+      });
+    }
+    send(passkeyGet('https://mail.example.com'), WORKER);
+    const details = send({ v: 1, type: 'confirm-details', id: 5, token: 'c'.repeat(32) }, CONFIRM);
+    await vi.waitFor(() => {
+      expect(details.respond).toHaveBeenCalled();
+    });
+    expect(p.opened).toHaveLength(1);
+    expect(d.activity).not.toHaveBeenCalled();
+    // The user's click in the window is activity.
+    send({ v: 1, type: 'confirm-choice', id: 6, token: 'c'.repeat(32), choice: 'cancel' }, CONFIRM);
+    expect(d.activity).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends a request the page aborted, on the service worker’s word only (P-03)', async () => {
+    const { r, send } = runtime();
+    const p = passkeys();
+    const d = { ...deps(), passkeys: p.host };
+    serveHost(r, d);
+    send(passkeyGet('https://mail.example.com'), WORKER);
+    const cancel = {
+      v: 1,
+      type: 'passkey-cancel',
+      id: 8,
+      request: 'a'.repeat(32),
+      tabId: 7,
+      frameId: 0,
+    };
+    expect(send(cancel, POPUP).respond).toHaveBeenCalledWith({
+      v: 1,
+      id: 8,
+      ok: false,
+      error: 'invalid',
+    });
+    expect(p.answers).toEqual([]);
+    const { respond } = send(cancel, WORKER);
+    await vi.waitFor(() => {
+      expect(respond).toHaveBeenCalledWith({ v: 1, id: 8, ok: true });
+    });
+    expect(p.answers).toEqual([
+      {
+        tabId: 7,
+        frameId: 0,
+        request: 'a'.repeat(32),
+        result: { kind: 'error', name: 'NotAllowedError' },
+      },
+    ]);
+    expect(d.activity).not.toHaveBeenCalled();
+  });
+
   it('takes a lock from the confirmation window', () => {
     const { r, send } = runtime();
     const d = deps();

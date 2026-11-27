@@ -48,12 +48,29 @@ export function inPage(order: InPageOrder): ProbeResult | FillResult {
     return found;
   }
 
+  /**
+   * Whether the user can see the field: a box of some size, and neither it nor an ancestor, across
+   * open shadow roots, fully transparent (E-03). A field outside the viewport is still visible: a
+   * sign-in form below the fold is filled.
+   */
+  function visible(el: HTMLInputElement): boolean {
+    const box = el.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return false;
+    let node: Element | null = el;
+    while (node) {
+      if (Number(getComputedStyle(node).opacity) === 0) return false;
+      node = node.parentElement ?? (node.getRootNode() as Partial<ShadowRoot>).host ?? null;
+    }
+    return true;
+  }
+
   function usable(el: HTMLInputElement): boolean {
     return (
       !el.disabled &&
       !el.readOnly &&
       el.getClientRects().length > 0 &&
-      getComputedStyle(el).visibility !== 'hidden'
+      getComputedStyle(el).visibility !== 'hidden' &&
+      visible(el)
     );
   }
 

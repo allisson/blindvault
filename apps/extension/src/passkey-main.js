@@ -247,6 +247,9 @@
       };
       const aborted = () => {
         done();
+        // The session host ends the request, so no later Confirm writes a passkey the site never
+        // registered (P-03).
+        post({ channel: CHANNEL, to: 'isolated', type: 'passkey-cancel', request }, '*');
         reject(signal?.reason);
       };
       /** @param {unknown} result */

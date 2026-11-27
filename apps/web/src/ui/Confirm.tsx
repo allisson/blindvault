@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useId, useState } from 'react';
 
+import { armAfterDelay } from '../app/input-delay';
 import { confirmChoice, confirmDetails } from '../extension/confirm-client';
 import { type PopupRuntime, openHost } from '../extension/popup-client';
 import { type ConfirmChoice, type ConfirmState } from '../extension/rpc';
@@ -128,6 +129,9 @@ export function ConfirmRequest({
 }) {
   const m = useMessages();
   const [picked, setPicked] = useState<string>();
+  // Confirm waits a moment after the request shows and after each focus (P-02).
+  const [armed, setArmed] = useState(false);
+  useEffect(() => armAfterDelay(window, setArmed), []);
   const others = (
     <>
       <Button
@@ -177,7 +181,7 @@ export function ConfirmRequest({
         )}
         <Button
           variant="primary"
-          disabled={busy || chosen === undefined}
+          disabled={busy || !armed || chosen === undefined}
           onClick={() => {
             if (chosen !== undefined) choose({ choice: 'use', credentialId: chosen });
           }}
@@ -227,7 +231,7 @@ export function ConfirmRequest({
       {state.replaces ? <Notice>{m.confirm.replaces}</Notice> : null}
       <Button
         variant="primary"
-        disabled={busy}
+        disabled={busy || !armed}
         onClick={() => {
           choose(target === 'new' ? { choice: 'save-new' } : { choice: 'save', itemId: target });
         }}
