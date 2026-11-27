@@ -129,6 +129,9 @@ It also has these limits:
   answer is not read (D296). Read its answer at once with the other device's camera, or start again.
   On the device that shows the first code, allow the camera: without it, on the same network, the
   other device may give up the same way.
+- **No lock with the screen in the Firefox extension.** Firefox does not tell extensions that the
+  screen locked, so locking your computer does not lock the vault there. The auto-lock and the lock
+  when the browser loses the focus still do: keep them short.
 - **Same network only, without a camera.** With "Same network only (no STUN server)", reconnecting
   two paired devices, and pairing by copy and paste, were not checked on real devices (D259). If
   pairing fails, pair by QR code; if either fails, turn the option off so a STUN server is used.

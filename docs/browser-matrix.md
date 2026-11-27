@@ -91,6 +91,7 @@ The extension's capabilities (`extension.md` §10, §12, D287), on its Chromium 
 | Passkey from a cross-origin frame names the top origin; Cancel, a second request, a lock | auto (test copy) | not checked |
 | Passkeys on `webauthn.io`, the switch of Settings › Passkeys | by hand 1.0.0-rc.2, passkeys (test copy) | by hand 1.0.0-rc.2, passkeys |
 | "Use another authenticator" hands the call to the browser | not checked | not checked |
+| Operating-system lock (`extension.md` §3.2) | not checked | none: Firefox's `idle` never reports `locked` (D311) |
 
 Edge and Brave install the Chrome package from the Chrome Web Store: not checked (`extension.md` §10).
 
