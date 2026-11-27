@@ -46,6 +46,7 @@ export {
   calibrateDeviceKek,
   deriveDeviceKek,
   derivePasswordKek,
+  handleKdfRequest,
 } from './kdf-worker';
 export {
   PHRASE_WORDS,

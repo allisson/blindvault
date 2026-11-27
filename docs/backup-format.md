@@ -264,6 +264,14 @@ blobs in order. Nothing is written before step 9, and no blob before the records
 
 ## 9. Test vectors
 
+**Frozen backups** (D310). The vectors below follow the current spec, and every run of the
+generator rewrites them, so a change made at once to this document, the generator and the reader
+passes them. `tests/fixtures/backups` holds instead `.bvault` files exported by published builds
+of the app, each with its Recovery Phrase, its export password and a summary of the vault it holds,
+never regenerated: `tests/frozen-backups.test.ts` restores each with the phrase and with the
+password, through IndexedDB, and compares the vault with the summary. A release that changes this
+format or the content of a record adds its own file and keeps every earlier one (`build.md`).
+
 `tests/vectors/generate.py` writes `packages/backup/test-vectors/backup-v2.json`, and keeps
 `backup-v1.json` for version 1, with PyNaCl
 (`crypto_secretstream_xchacha20poly1305_*`, `crypto_box_seal`, Argon2id), independently of the
