@@ -1,0 +1,91 @@
+{
+  "build": "v1.0.0-rc.4",
+  "phrase": "feel story engine erupt topic buffalo hurry fee citizen provide flag devote leaf rocket dice march special library layer minimum tortoise aisle exile sword",
+  "exportPassword": "orchid-ember-saddle-quiver-mosaic-7391",
+  "summary": {
+    "items": [
+      {
+        "title": "Ana Lima",
+        "templateId": "identity",
+        "inTrash": false,
+        "fields": ["text", "text", "date", "email", "phone", "long-text"],
+        "versions": 0
+      },
+      {
+        "title": "Client contract",
+        "templateId": "secure-note",
+        "inTrash": false,
+        "fields": ["attachment"],
+        "versions": 0
+      },
+      {
+        "title": "Cold wallet",
+        "templateId": "crypto-wallet",
+        "inTrash": false,
+        "fields": ["text", "text", "seed-phrase", "secret", "text", "text"],
+        "versions": 0
+      },
+      {
+        "title": "Example API key",
+        "templateId": "developer-credential",
+        "inTrash": false,
+        "fields": ["text", "url", "text", "secret"],
+        "versions": 0
+      },
+      {
+        "title": "Garage door code",
+        "templateId": "secure-note",
+        "inTrash": false,
+        "fields": [],
+        "versions": 0
+      },
+      {
+        "title": "Harbor Credit Union",
+        "templateId": "login",
+        "inTrash": false,
+        "fields": ["text", "secret", "url"],
+        "versions": 2
+      },
+      {
+        "title": "Passport",
+        "templateId": "document",
+        "inTrash": false,
+        "fields": ["text", "text", "text", "text", "date", "date"],
+        "versions": 0
+      },
+      {
+        "title": "Retired mail account",
+        "templateId": "login",
+        "inTrash": true,
+        "fields": ["text", "secret", "url"],
+        "versions": 1
+      },
+      {
+        "title": "Site Test",
+        "templateId": "login",
+        "inTrash": false,
+        "fields": ["text", "url", "passkey"],
+        "versions": 0
+      },
+      {
+        "title": "Site Test",
+        "templateId": "login",
+        "inTrash": false,
+        "fields": ["text", "url", "passkey"],
+        "versions": 0
+      },
+      {
+        "title": "Visa Harbor",
+        "templateId": "card",
+        "inTrash": false,
+        "fields": ["text", "secret", "date", "secret", "secret"],
+        "versions": 0
+      }
+    ],
+    "folders": ["Clients", "Work"],
+    "devices": 1,
+    "records": 20,
+    "blobs": 1,
+    "missing": 0
+  }
+}
