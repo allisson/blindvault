@@ -453,6 +453,11 @@ export interface PairingGrant {
   records(): Promise<Uint8Array[]>;
   /** Records the completed sync with the device `peerId` (D34). */
   completed(peerId: Uint8Array): Promise<void>;
+  /**
+   * `retired-peer` when the Device record of `peerPublicKey` held here is retired: the check before
+   * each blob unit leaves (`sync-protocol.md` §6, §10.1, S-03).
+   */
+  checkPeer(peerPublicKey: Uint8Array): void;
   /** The blobs A sends in the blob phase (pairing-protocol.md §8, D279). */
   readonly blobs: BlobGrant;
   wipe(): void;
@@ -2599,6 +2604,13 @@ export class VaultSession {
    * (D45) or a record is kept aside as corrupt; a device without its own Device record needs
    * `displayName` (D141), `RangeError` otherwise. `current.kek` is left to the caller.
    */
+  /** `retired-peer` when the Device record of `peerPublicKey` held here is retired (D45, D49). */
+  #checkPeer(peerPublicKey: Uint8Array): void {
+    this.#unlocked();
+    const peer = this.#state.devices.get(idKey(deviceId(peerPublicKey)));
+    if (peer?.device.value.retired) throw new JoinRejectedError('retired-peer');
+  }
+
   openPairing(current: OpenPairingOptions): PairingGrant {
     this.#unlocked();
     const [corrupt] = this.#state.corrupt;
@@ -2623,6 +2635,9 @@ export class VaultSession {
       masterKey,
       identity: this.#identity,
       blobs: this.blobGrant(),
+      checkPeer: (peerPublicKey) => {
+        this.#checkPeer(peerPublicKey);
+      },
       admit: (publicKey, displayName) => this.#admit(publicKey, displayName, ownName),
       records: () =>
         this.#run(async () => {
@@ -2896,9 +2911,7 @@ export class VaultSession {
         };
       },
       checkPeer: (peerPublicKey) => {
-        this.#unlocked();
-        const peer = this.#state.devices.get(idKey(deviceId(peerPublicKey)));
-        if (peer?.device.value.retired) throw new JoinRejectedError('retired-peer');
+        this.#checkPeer(peerPublicKey);
       },
       admit: (writes, peerPublicKey, peerName, ownName) =>
         this.#readmissionAdmit(writes, peerPublicKey, peerName, ownName),

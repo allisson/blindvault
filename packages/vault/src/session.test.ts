@@ -4922,6 +4922,16 @@ describe('pairing (pairing-protocol.md §8, D30, D33, D34, D141, D202)', () => {
     return { a, grant, keyringB, identityB, clock };
   }
 
+  it('refuses B once retired here, for the check before each blob unit (S-03)', async () => {
+    const s = await started();
+    await s.grant.admit(s.identityB.publicKey, B_NAME);
+    s.grant.checkPeer(s.identityB.publicKey);
+    await s.a.session.retireDevice(deviceId(s.identityB.publicKey));
+    expect(() => {
+      s.grant.checkPeer(s.identityB.publicKey);
+    }).toThrow(JoinRejectedError);
+  });
+
   /** B's side of the transfer: the Master Key as `importTransferKey` gives it, and the records. */
   async function transferred(clock = new Clock()) {
     const s = await started(clock);

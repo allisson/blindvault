@@ -88,6 +88,8 @@ export class BlobPhase {
   readonly #asked = new Set<string>();
   /** The IDs asked for and not yet answered, in the order asked. */
   readonly #pending: Uint8Array[] = [];
+  /** Every ID the peer asked for in this session, as hex: none is answered twice (S-02). */
+  readonly #wanted = new Set<string>();
   /** The unit being received: one blob in memory at a time. */
   #unit: { readonly id: Uint8Array; readonly blob: Uint8Array; at: number } | null = null;
   #peerEnded = false;
@@ -128,11 +130,15 @@ export class BlobPhase {
       this.#asked.add(key);
       fresh.push(id.slice());
     }
+    if (fresh.length === 0) return;
     this.#pending.push(...fresh);
-    for (let i = 0; i < fresh.length; i += MAX_BLOB_IDS) {
-      const ids = fresh.slice(i, i + MAX_BLOB_IDS);
-      await this.#outbox.run(() => this.#link.send({ t: 'blobs-want', ids }));
-    }
+    // One job for every message of this ask, queued with its IDs: another ask's messages cannot
+    // come between them, so the wire keeps the order of `#pending` (S-01).
+    await this.#outbox.run(async () => {
+      for (let i = 0; i < fresh.length; i += MAX_BLOB_IDS) {
+        await this.#link.send({ t: 'blobs-want', ids: fresh.slice(i, i + MAX_BLOB_IDS) });
+      }
+    });
   }
 
   /** Sends `blobs-end`, after this device's wants: an admission's asking is over. */
@@ -155,6 +161,13 @@ export class BlobPhase {
     switch (message.t) {
       case 'blobs-want':
         if (!this.#options.answers || this.#peerEnded) return this.#link.refuse('protocol-error');
+        // An ID is asked for at most once per session: a repeat would make this side read, hash
+        // and send the same blob again without bound (S-02).
+        for (const id of message.ids) {
+          const key = hex(id);
+          if (this.#wanted.has(key)) return this.#link.refuse('protocol-error');
+          this.#wanted.add(key);
+        }
         for (const id of message.ids) {
           this.#outbox.run(() => this.#answer(id)).catch(() => undefined);
         }
