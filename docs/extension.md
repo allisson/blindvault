@@ -110,7 +110,7 @@ both archives and both manifest hashes; `docs/build.md` describes how to check a
 | --- | --- | --- |
 | Auto-lock | 1 to 60 min without activity; activity is an interaction with the session host, the popup, a fill or a choice in the confirmation window, never browsing, and never a passkey request a page makes or a window loading its details (D305) | 1 to 60 min (D151) |
 | Hidden-app lock | the browser as a whole without focus (`windows.onFocusChanged` reports `WINDOW_ID_NONE`) for the set time, immediately to 15 min | the page hidden (D54, D151) |
-| Operating-system lock | at once, when `idle.onStateChanged` reports `locked` | — |
+| Operating-system lock | at once, when `idle.onStateChanged` reports `locked`; Firefox's `idle` never reports it, so in Firefox there is none and the auto-lock and the hidden-app lock remain (D311) | — |
 | Manual | the popup's Lock button, or the session host's | the app's |
 
 A lock follows D93 and D263: it aborts every operation in progress and clears the popup and any
@@ -531,6 +531,9 @@ file.
 | Safari | not in v1 (D267) | — |
 
 The spike measured Chrome 158 and Firefox 160 on macOS only (D282).
+
+Firefox's `idle` reports `idle` and `active` only, never `locked` (its `ext-idle.js`, read in
+Firefox 161): the Firefox extension has no operating-system lock (§3.2, D311).
 
 ## 11. Out of v1
 
