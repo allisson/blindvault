@@ -63,6 +63,28 @@ class AllowlistTest {
     }
 
     @Test
+    fun leavesOutEveryExcludedPackage() {
+        val packages = apps().map { it.getJSONObject("info").getString("package_name") }.toSet()
+        val excluded = recorded("excluded").split(" ")
+        assertEquals(listOf("com.duckduckgo.mobile.android.debug"), excluded)
+        for (name in excluded) assertTrue(name, name !in packages)
+    }
+
+    @Test
+    fun autofillTrustsBrowsersOnly() {
+        val notBrowsers = recorded("not-browsers").split(" ").toSet()
+        assertEquals(NOT_BROWSERS, notBrowsers)
+        val full = apps().map { it.getJSONObject("info").getString("package_name") }.toSet()
+        // Each is in Google's list, so leaving it out of autofill means something.
+        assertTrue(full.containsAll(notBrowsers))
+        val browsers = JSONObject(browsersOnly(asset.readText())).getJSONArray("apps").let { a ->
+            List(a.length()) { a.getJSONObject(it).getJSONObject("info").getString("package_name") }
+        }
+        assertEquals(full - notBrowsers, browsers.toSet())
+        assertTrue(browsers.contains("com.android.chrome"))
+    }
+
+    @Test
     fun endsWithOneNewline() {
         val text = asset.readText()
         assertTrue(text.endsWith("}\n") && !text.endsWith("\n\n"))

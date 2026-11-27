@@ -174,7 +174,9 @@ setup only when `available`, and Settings shows `strongBox`; nothing of it is st
    the secret. A setup that fails after the shell answered deletes the key.
 2. **Unlock.** The window sends the IV and ciphertext (`keystore-open`); the shell shows the
    BiometricPrompt, decrypts, and answers the secret, which the window turns into the Keystore KEK,
-   then wipes.
+   then wipes. The shell wipes the secret's bytes too, as best effort: the base64url text of the
+   answer and of `keystore-seal` is a `String`, which cannot be wiped and stays in memory until it is
+   collected (D309).
 3. **Removal.** The window removes the Keystore KEK state and asks the shell to delete the key
    (`keystore-delete`). Erase, re-founding and every replacement of the vault remove it too (D120),
    the key by the old `localConfigId`, after the commit. The window does not wait for the answer:
@@ -296,8 +298,10 @@ builds `clientDataJSON`, hashes it and returns it.
 **Allowlist.** Google's published list of privileged browsers
 (`https://www.gstatic.com/gpm-passkeys-privileged-apps/apps.json`), kept in the repository as
 `apps/android/app/src/main/assets/privileged-apps.json`, filtered to its `release` signatures, pinned
-by date and SHA-256 in a header file, and updated before each release. `getOrigin` takes the
-file's JSON as it is. The app never fetches it: that
+by date and SHA-256 in a header file, and updated before each release, every package reviewed. A
+package the header file names `excluded`, a debug build so far, is left out; the packages it names as
+not browsers stay for passkeys, as Google lists them, and are left out of autofill (§8, D309).
+`getOrigin` takes the file's JSON as it is. The app never fetches it: that
 call would tell Google who uses BlindVault.
 
 ### 7.4 Binding an app to a domain
@@ -340,7 +344,9 @@ other extension, `prf` included.
 never an IP address, a public suffix or `localhost`, checked as `extension.md` §7.2 checks the origin
 `https://<rpId>`. The window asks `provider-assetlinks` for the `rpId` as soon as it reads the
 request, before the unlock, so the user types nothing for an app that is not bound; it then says why,
-and Cancel ends the call. The passkeys and the items to save in are those of `https://<rpId>`, and the
+and Cancel ends the call. The shell keeps each domain answered `bound` for the request, and lets an
+app's passkey result through only when the `rpId` its `requestJson` names is one of them, so a result
+for another domain is refused even from the window (D309). The passkeys and the items to save in are those of `https://<rpId>`, and the
 window shows the app's package and the domain it is bound to in place of the site.
 
 ### 7.6 Passwords
@@ -403,7 +409,8 @@ with "Autofill using another service" chosen in its settings.
   activity.
 - **Who asks.** The package of the structure's activity, with its signing certificates from
   `PackageManager`. When a `CallingAppInfo` made of that package, its certificates and the origin
-  `https://<webDomain>` passes `getOrigin` with the allowlist (§7.3), and the focused field's
+  `https://<webDomain>` passes `getOrigin` with the allowlist's browsers (§7.3: the allowlist
+  without the packages `privileged-apps.txt` names as not browsers, D309), and the focused field's
   `getWebScheme()` is `https`, the request is the site's, with that origin. Otherwise it is the app's,
   and §7.4 applies: a web domain reported by any other app is ignored.
 - The window lists the matching logins (§7.6), and the user's tap on one answers the dataset with the

@@ -89,7 +89,7 @@ class FillService : AutofillService() {
             signing?.apkContentsSigners?.map { it.toByteArray() },
             found.webScheme,
             found.webDomain,
-        ) { origin -> CallingAppInfo(packageName, signing!!, origin).getOrigin(Allowlist.get(this)) }
+        ) { origin -> CallingAppInfo(packageName, signing!!, origin).getOrigin(Allowlist.browsers(this)) }
         if (!servesCaller(caller)) return callback.onSuccess(null)
 
         val token = autofillRequests.put(PendingAutofill(caller, found.userName, found.password))

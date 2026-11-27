@@ -68,8 +68,8 @@ class ProviderActivity : Activity() {
     /** `provider-assetlinks` fetches started: the window gets `MAX_ASSETLINKS_FETCHES`. */
     private var fetches = 0
 
-    /** This request got a `bound` answer: an app's credential is checked against it (§7.4). */
-    private var bound = false
+    /** The domains this request got a `bound` answer for: an app's credential is checked against them (§7.4, AND-1). */
+    private val bound = mutableSetOf<String>()
 
     /** The window's frame, from its last message: where answers and `lifecycle` go. */
     private var frame: JavaScriptReplyProxy? = null
@@ -253,7 +253,7 @@ class ProviderActivity : Activity() {
         fetchAssetLinks(domain, caller.packageName, caller.certSha256) { binding ->
             runOnUiThread {
                 if (ended) return@runOnUiThread
-                if (binding == Binding.BOUND) bound = true
+                if (binding == Binding.BOUND) bound += domain
                 answer(id, Outcome.Ok(JSONObject().put("result", binding.wire)))
             }
         }
@@ -262,7 +262,7 @@ class ProviderActivity : Activity() {
     /** `provider-result` is checked against the request and its caller; a malformed one ends with a cancellation. */
     private fun providerResult(id: Long, result: JSONObject) {
         val asked = request
-        val answered = if (!requested || asked == null) null else parseCallerAnswer(result, asked.kind, asked.caller, bound)
+        val answered = if (!requested || asked == null) null else parseCallerAnswer(result, asked.kind, asked.caller, bound, asked.requestJson)
         if (answered == null) {
             answer(id, Outcome.Error(ShellError.INVALID))
             return end(CallerAnswer.Cancelled)

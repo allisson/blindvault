@@ -1,7 +1,9 @@
 // The Keystore KEK's key (android.md §5, D271, D290, D292): an AES-256-GCM key per Local Config, in
 // StrongBox where present and the TEE otherwise, that needs a strong biometric on every use and is
 // destroyed when a biometric is enrolled. It encrypts the window's random Keystore secret and decrypts
-// it again behind the BiometricPrompt; the secret is wiped once answered and never stored or logged.
+// it again behind the BiometricPrompt; the secret's bytes are wiped once answered and never stored or
+// logged. Best effort only: the base64url `String` of the answer and of the `keystore-seal` message
+// cannot be wiped, and stays in memory until collected (android.md §5, D309).
 package io.github.allisson.blindvault
 
 import android.app.Activity

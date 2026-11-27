@@ -10,10 +10,15 @@ private const val ALLOWLIST_ASSET = "privileged-apps.json"
 
 internal object Allowlist {
     private var json: String? = null
+    private var browsers: String? = null
 
     @Synchronized
     fun get(context: Context): String =
         json ?: context.applicationContext.assets.open(ALLOWLIST_ASSET).bufferedReader().use { it.readText() }.also { json = it }
+
+    /** The allowlist without its packages that are not browsers: whose `webDomain` autofill trusts (§8, D309). */
+    @Synchronized
+    fun browsers(context: Context): String = browsers ?: browsersOnly(get(context)).also { browsers = it }
 }
 
 /** The caller of `info`, a privileged browser only when its package and certificate are in the allowlist. */

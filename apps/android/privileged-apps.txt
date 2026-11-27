@@ -1,10 +1,20 @@
-# The privileged-browser allowlist of the credential provider (docs/android.md §7.3, D301).
+# The privileged-browser allowlist of the credential provider (docs/android.md §7.3, D301, D309).
 # app/src/main/assets/privileged-apps.json is Google's file kept as published, filtered to the
-# `release` signatures: an entry left with none is dropped. It is pretty-printed with a 2-space indent
-# and a final newline. The app never fetches it. To update it, download the source again, filter it the
-# same way, and change every line below with it, before each release.
+# `release` signatures: an entry left with none is dropped, and so is each package named `excluded`
+# below. It is pretty-printed with a 2-space indent and a final newline. The app never fetches it. To
+# update it, download the source again, filter it the same way, review every package, and change every
+# line below with it, before each release.
+#
+# Excluded: a debug build, whose signing key is not a release key whatever the file says.
+#
+# Not browsers: Google lists them as privileged for passkeys, and the credential provider trusts them
+# for passkeys as listed; autofill trusts the `webDomain` of browsers only, so it leaves them out
+# (android.md §8, D309). io.github.jqssun.helium is not confirmed to be a browser, so it is left out
+# of autofill too.
 source: https://www.gstatic.com/gpm-passkeys-privileged-apps/apps.json
 upstream-last-modified: 2026-09-16
 fetched: 2026-11-24
 upstream-sha256: 0891ee2507894999ead3eb4f42e17936a2e8ed8f8fd95592535c9811ef319481
-file-sha256: 731e402f6b6b19de41189169f23892c52a878f294115f28de17a3df16a9f3ec8
+file-sha256: c128486d3c9e688fd542fac5db5a1fca517929316166bb76a2ccb04e731d812f
+excluded: com.duckduckgo.mobile.android.debug
+not-browsers: com.google.android.gms com.fido.fido2client com.oplus.credential com.citrix.Receiver io.github.jqssun.helium
