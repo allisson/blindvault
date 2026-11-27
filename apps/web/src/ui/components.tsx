@@ -499,11 +499,14 @@ export function TextArea({
   label,
   hint,
   error,
+  mono = false,
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & {
   readonly label: string;
   readonly hint?: ReactNode;
   readonly error?: string | undefined;
+  /** A Recovery Phrase is typed in the monospace face (overview §13.7, D315). */
+  readonly mono?: boolean;
 }) {
   const id = useId();
   return (
@@ -514,7 +517,7 @@ export function TextArea({
       <textarea
         id={id}
         rows={4}
-        className={`${INPUT} py-2`}
+        className={`${INPUT} py-2 ${mono ? 'font-mono' : ''}`}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(
           platform.kind,
@@ -530,12 +533,49 @@ export function TextArea({
   );
 }
 
-/** A notice in the item views: why something cannot be done, or a warning. */
-export function Notice({ children }: { readonly children: ReactNode }) {
+const NOTICE = {
+  neutral: 'bg-subtle text-fg',
+  warning: TONES.warning,
+  danger: TONES.danger,
+} as const;
+
+/**
+ * A notice: why something cannot be done, or a warning. A warning takes the warning tone and what
+ * cannot be undone the danger tone, with the `Banner` pairs (D315); an icon goes before the text.
+ */
+export function Notice({
+  tone = 'neutral',
+  icon,
+  children,
+}: {
+  readonly tone?: keyof typeof NOTICE;
+  readonly icon?: IconName;
+  readonly children: ReactNode;
+}) {
   return (
-    <p role="note" className="rounded-control bg-subtle px-3 py-2 text-sm text-fg">
-      {children}
+    <p
+      role="note"
+      className={`flex gap-2 rounded-control px-3 py-2 text-sm ${NOTICE[tone]}`}
+      data-tone={tone}
+    >
+      {icon ? (
+        <span className="flex h-5 items-center">
+          <Icon name={icon} />
+        </span>
+      ) : null}
+      <span>{children}</span>
     </p>
+  );
+}
+
+/** An error that names what went wrong, in a box of the danger tone (D315). */
+export function Alert({ className = '', ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      role="alert"
+      className={`rounded-control px-3 py-2 text-sm ${TONES.danger} ${className}`}
+      {...props}
+    />
   );
 }
 

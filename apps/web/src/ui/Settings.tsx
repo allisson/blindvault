@@ -997,6 +997,7 @@ function RecoveryPhraseSettings({
           <p className="text-sm">{m.settings.recoveryIntro}</p>
           <TextArea
             label={m.settings.recoveryInput}
+            mono
             autoCapitalize="none"
             value={input}
             onChange={(e) => {
