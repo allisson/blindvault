@@ -83,10 +83,17 @@ describe('strict CBOR decoding', () => {
     expect(() => decodeCbor(fromHex(hex))).toThrow(EncodingError);
   });
 
-  it('accepts canonical NaN, negative zero and the shortest floats', () => {
+  it('accepts canonical NaN and the shortest floats', () => {
     expect(Number.isNaN(decodeCbor(fromHex('f97e00')))).toBe(true);
-    expect(Object.is(decodeCbor(fromHex('f98000')), -0)).toBe(true);
     expect(decodeCbor(fromHex('f93e00'))).toBe(1.5);
+  });
+
+  it('refuses -0, which passes as an unsigned 0 and gives the value a second encoding (C-01)', () => {
+    expect(() => decodeCbor(fromHex('f98000'))).toThrow(EncodingError);
+    expect(() => decodeCbor(fromHex('83f9800000f98000'))).toThrow(EncodingError);
+    expect(() => decodeCbor(fromHex('a16178f98000'))).toThrow(EncodingError);
+    expect(() => encodeCbor(-0)).toThrow(EncodingError);
+    expect(() => encodeCbor(new Map([['x', [1, -0]]]))).toThrow(EncodingError);
   });
 
   it('decodes integers beyond 2^53 − 1 as bigint', () => {

@@ -283,8 +283,10 @@ class PayloadCursor {
     }
     const body = source.size - fileHeader.length;
     if (body < ABYTES) throw new DecryptionError();
-    // Every chunk but the last is full; the last holds 17 to FULL_CHUNK - 1 bytes.
+    // Every chunk but the last is full; the last holds 17 to FULL_CHUNK - 1 bytes, so at most
+    // 65,535 bytes of plaintext: a longer one would be a second encoding of the payload (B-01).
     const full = Math.floor((body - ABYTES) / FULL_CHUNK);
+    if (body - full * FULL_CHUNK >= FULL_CHUNK) throw new DecryptionError();
     // Outside the try: a wiped key is `KeyWipedError`, never a damaged file.
     const key = keyBytes(fileKey);
     try {

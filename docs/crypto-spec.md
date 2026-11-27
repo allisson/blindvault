@@ -15,7 +15,10 @@
 - Every comparison of a secret or of an authenticator (MAC, key, derived key) uses `sodium_memcmp`
   (constant time). Derived public identifiers (`recordId`, `deviceId`) MAY be compared normally.
 - Key buffers are wiped with `sodium_memzero` when released and on lock. JavaScript gives no
-  guarantee that no other copy exists (§7); this is best effort (CRYPTO-INV-010).
+  guarantee that no other copy exists (§7); this is best effort (CRYPTO-INV-010). The wiping covers
+  the buffers this code holds, not the copies `libsodium-wrappers-sumo` makes: it copies every
+  input, keys included, into the WebAssembly heap and frees it without wiping; a `secretstream`
+  state is never freed; and the plaintext a record verification decodes is not wiped (D306).
 
 ## 2. Primitives
 
@@ -462,6 +465,10 @@ the reconnection payload in `sync-protocol.md`, using the layout encoding.
   arrays, maps, `true`, `false`, `null`, and floats in their shortest form (NaN only as
   `0xf97e00`) whose value is not an integer: deterministic encoding writes an integral value as an
   integer, so the re-encode check refuses it as a float (`0xf93c00`, D266). Tags, `undefined` and other simple values are rejected. Text MUST be valid UTF-8.
+- **-0** (`0xf98000`) is rejected in every CBOR value, envelope, content, message and backup alike,
+  on encoding and decoding: it is integral, yet the re-encode check keeps it as a float, and every
+  check of an unsigned integer reads it as 0, so an envelope's HLC could take a second encoding
+  under the same AAD without any key (D306).
 
 ## 15. Test vectors
 

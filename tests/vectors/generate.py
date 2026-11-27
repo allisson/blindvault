@@ -264,7 +264,12 @@ def _decode(b: bytes, i: int = 0):
         fmt, size = {0xF9: (">e", 2), 0xFA: (">f", 4), 0xFB: (">d", 8)}[ib]
         if i + 1 + size > len(b):
             raise ValueError("truncated")
-        return struct.unpack(fmt, b[i + 1:i + 1 + size])[0], i + 1 + size
+        x = struct.unpack(fmt, b[i + 1:i + 1 + size])[0]
+        # -0 is refused in all CBOR: it passes as an unsigned 0 where a check reads the value, and gives
+        # the same value a second encoding (crypto-spec section 14, review C-01).
+        if x == 0 and math.copysign(1.0, x) < 0:
+            raise ValueError("negative zero")
+        return x, i + 1 + size
     if major == 7:
         raise ValueError("simple value or undefined")
     if info < 24:
@@ -1398,11 +1403,12 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
         m.update(over)
         return m
 
-    def seal_file(payload: bytes, slots=both, *, tags=None, ad_first=True, ad_later=False, hmap_over=None):
+    def seal_file(payload: bytes, slots=both, *, tags=None, ad_first=True, ad_later=False, hmap_over=None,
+                  parts=None):
         st = bindings.crypto_secretstream_xchacha20poly1305_state()
         sh = bindings.crypto_secretstream_xchacha20poly1305_init_push(st, BV_FILE_KEY)
         header = vh(hmap(slots, sh, **(hmap_over or {})))
-        parts = bv_chunks(payload)
+        parts = parts or bv_chunks(payload)
         tags = tags or [T_MESSAGE] * (len(parts) - 1) + [T_FINAL]
         body = b""
         for i, (part, tag) in enumerate(zip(parts, tags)):
@@ -1679,6 +1685,14 @@ def backup_vectors(real_records: list, keyslot_pk: bytes, phrase_created_at: int
          payload_file(two_payload, tags=[T_FINAL, T_FINAL])),
         ("corrupt", "last chunk tagged message", payload_file(small_payload, tags=[T_MESSAGE])),
         ("corrupt", "only chunk tagged push", payload_file(small_payload, tags=[T_PUSH])),
+        # The final chunk holds at most 65,535 bytes of plaintext: a longer one is a second encoding
+        # of the same payload (section 5, review B-01).
+        ("corrupt", "one final chunk of 65,537 bytes of plaintext",
+         payload_file(bv_filler(BV_CHUNK + 1), parts=[bv_filler(BV_CHUNK + 1)], tags=[T_FINAL])),
+        ("corrupt", "one final chunk of 65,552 bytes of plaintext",
+         payload_file(bv_filler(BV_CHUNK + 16), parts=[bv_filler(BV_CHUNK + 16)], tags=[T_FINAL])),
+        ("corrupt", "a full chunk, then a final chunk of 65,537 bytes of plaintext",
+         payload_file(bv_filler(2 * BV_CHUNK + 1), parts=[bv_filler(BV_CHUNK), bv_filler(BV_CHUNK + 1)])),
         ("corrupt", "only chunk tagged rekey", payload_file(small_payload, tags=[T_REKEY])),
         ("corrupt", "first chunk tagged push", payload_file(two_payload, tags=[T_PUSH, T_FINAL])),
         ("corrupt", "first chunk without the header as additional data", payload_file(small_payload, ad_first=False)),
@@ -3274,6 +3288,9 @@ def main() -> None:
     add(2, "indefinite-length map", b"\xbf" + good[1:] + b"\xff")
     add(2, "trailing byte", good + b"\x00")
     add(2, "duplicate key", _head(5, len(pairs) + 1) + b"".join(k + x for k, x in pairs[:1]) + b"".join(k + x for k, x in pairs))
+    # Sealed under the AAD of counter 0, which u32(-0) would also give: only the encoding rule refuses it.
+    e = item({"hlc": [HLC[0], 0, HLC[2]]}); add(2, "hlc counter as -0 (0xf98000)", cbor({**e, "hlc": [HLC[0], -0.0, HLC[2]]}))
+    e = item({"hlc": [0, HLC[1], HLC[2]]}); add(2, "hlc physicalMs as -0 (0xf98000)", cbor({**e, "hlc": [-0.0, HLC[1], HLC[2]]}))
     # step 3: structure
     add(3, "del as uint", cbor(item({"del": 0})))
     add(3, "unknown recordType 99", cbor(item({"t": 99})))
@@ -3324,7 +3341,7 @@ def main() -> None:
         cbor(item({"id": seq(0x70, 16)}, plaintext=pad(cbor(iv_content)), rtype=RT_ITEM_VERSION)))
     iv_ok = item({"id": version_id}, plaintext=pad(cbor(iv_content)), rtype=RT_ITEM_VERSION)
     v["records"]["itemVersion"] = {"contentCbor": h(cbor(iv_content)), "envelope": h(cbor(iv_ok))}
-    future = {**content, "x-future": [1.5, -3, None, 100000.5, 1e300, float("nan"), -0.0]}
+    future = {**content, "x-future": [1.5, -3, None, 100000.5, 1e300, float("nan")]}
     future_env = item(plaintext=pad(cbor(future)))
     v["records"]["itemWithFutureContent"] = {"contentCbor": h(cbor(future)), "envelope": h(cbor(future_env))}
     collision_env = item({"id": vk_record_id})
