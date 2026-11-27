@@ -37,7 +37,7 @@ const CREATE = {
 
 describe('the confirmation window’s messages (extension.md §7.7)', () => {
   it('reads each state, sending the token', async () => {
-    for (const state of [GET, CREATE, { kind: 'locked' }]) {
+    for (const state of [GET, CREATE, { ...CREATE, holder: '0'.repeat(32) }, { kind: 'locked' }]) {
       const { r, sent } = runtime((m) => ok(m, { state }));
       await expect(confirmDetails(r, TOKEN)).resolves.toEqual(state);
       expect(sent).toHaveBeenCalledWith({
@@ -54,6 +54,7 @@ describe('the confirmation window’s messages (extension.md §7.7)', () => {
       { ...GET, passkeys: [{ title: 'Mail' }] },
       { ...GET, origin: 1 },
       { ...CREATE, replaces: 'no' },
+      { ...CREATE, holder: 1 },
       { ...CREATE, items: [{ itemId: 1, title: 'x' }] },
       { kind: 'other' },
     ]) {

@@ -197,7 +197,8 @@ export function ConfirmRequest({
       </>
     );
   }
-  const target = picked ?? 'new';
+  // The item that already holds the replaced passkey first, so Confirm does not duplicate it (D314).
+  const target = picked ?? state.holder ?? 'new';
   return (
     <>
       <h1 className="text-title">{m.confirm.createTitle}</h1>

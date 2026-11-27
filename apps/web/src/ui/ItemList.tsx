@@ -18,7 +18,7 @@ import { useLanguage } from '../i18n/context';
 import { type Messages } from '../i18n/messages';
 import { platform } from '../platform';
 import { Button, INPUT, Pill, ROW, describedBy } from './components';
-import { useLayout } from './hooks';
+import { useFinePointer, useLayout } from './hooks';
 import { Icon } from './icons';
 import { FirstSteps } from './FirstSteps';
 import { FolderActions, FolderPane, TrashedFolder } from './Folders';
@@ -60,6 +60,7 @@ export function ItemList({
   const { messages: m, language } = useLanguage();
   const searchLabel = useId();
   const layout = useLayout();
+  const fine = useFinePointer();
   // In memory, kept across lists; a type the list shown lacks falls back to all (D245).
   const [type, setType] = useState<Template>();
   const { copy } = useCopy(session.preferences.clipboardClearSeconds);
@@ -174,7 +175,7 @@ export function ItemList({
               aria-label={m.vault.search}
               aria-describedby={describedBy(platform.kind, searchLabel)}
               title={m.vault.searchHint}
-              placeholder={`${m.vault.search} (Ctrl/⌘ K)`}
+              placeholder={fine ? `${m.vault.search} (Ctrl/⌘ K)` : m.vault.search}
               aria-keyshortcuts="Control+K Meta+K"
               autoComplete="off"
               spellCheck={false}

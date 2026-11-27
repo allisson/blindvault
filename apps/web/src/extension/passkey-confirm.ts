@@ -80,13 +80,16 @@ export function confirmState(
     };
   }
   const { rp, user } = call.options;
+  const targets = saveTargets(items, call.origin);
+  const held = new Set(holders(items, checked.rpId, user.id).map((view) => hex(view.id)));
+  const holder = targets.map((view) => hex(view.id)).find((id) => held.has(id));
   return {
     kind: 'create',
     ...origins,
     rpName: rp.name,
     userName: user.name,
     displayName: user.displayName,
-    items: saveTargets(items, call.origin).map((view) => {
+    items: targets.map((view) => {
       const username = view.item.fields.find((f) => f.role === 'username')?.value;
       return {
         itemId: hex(view.id),
@@ -94,7 +97,8 @@ export function confirmState(
         ...(typeof username === 'string' && username !== '' ? { username } : {}),
       };
     }),
-    replaces: holders(items, checked.rpId, user.id).length > 0,
+    replaces: held.size > 0,
+    ...(holder === undefined ? {} : { holder }),
   };
 }
 

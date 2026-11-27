@@ -539,12 +539,18 @@ export function Notice({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/** The always-visible lock state (overview §13.2), neutral with its padlock (D254). */
+/**
+ * The always-visible lock state (overview §13.2), neutral with its padlock (D254). `compact` keeps
+ * the padlock alone on a phone's header, its text for screen readers, so Back and a wizard's Cancel
+ * fit (D314).
+ */
 export function LockState({
   unlocked,
+  compact = false,
   className = '',
 }: {
   readonly unlocked: boolean;
+  readonly compact?: boolean;
   readonly className?: string;
 }) {
   const m = useMessages();
@@ -554,7 +560,9 @@ export function LockState({
       className={`inline-flex items-center gap-1 text-muted ${className}`}
     >
       <Icon name={unlocked ? 'lock-open' : 'lock'} className="size-3.5" />
-      {unlocked ? m.app.unlocked : m.app.locked}
+      <span className={compact ? 'sr-only' : undefined}>
+        {unlocked ? m.app.unlocked : m.app.locked}
+      </span>
     </Badge>
   );
 }

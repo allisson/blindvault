@@ -39,6 +39,7 @@ function confirmState(value: unknown): value is ConfirmState {
         typeof s.userName === 'string' &&
         typeof s.displayName === 'string' &&
         typeof s.replaces === 'boolean' &&
+        optional(s.holder) &&
         listOf(s.items, ['itemId', 'title'], 'username')
       );
     default:

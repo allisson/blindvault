@@ -30,7 +30,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="BlindVault"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+        android:theme="@style/Shell"
         android:usesCleartextTraffic="false">
 
         <meta-data
