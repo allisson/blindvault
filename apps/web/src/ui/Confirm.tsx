@@ -132,10 +132,11 @@ export function ConfirmRequest({
   // Confirm waits a moment after the request shows and after each focus (P-02).
   const [armed, setArmed] = useState(false);
   useEffect(() => armAfterDelay(window, setArmed), []);
+  const none = state.kind === 'get' && state.passkeys.length === 0;
   const others = (
     <>
       <Button
-        variant="secondary"
+        variant={none ? 'primary' : 'secondary'}
         disabled={busy}
         onClick={() => {
           choose({ choice: 'browser' });
@@ -179,16 +180,19 @@ export function ConfirmRequest({
             ))}
           </fieldset>
         )}
-        <Button
-          variant="primary"
-          disabled={busy || !armed || chosen === undefined}
-          onClick={() => {
-            if (chosen !== undefined) choose({ choice: 'use', credentialId: chosen });
-          }}
-          data-testid="confirm-use"
-        >
-          {m.confirm.confirm}
-        </Button>
+        {/* With no passkey, Confirm could do nothing: another authenticator leads (D313). */}
+        {chosen === undefined ? null : (
+          <Button
+            variant="primary"
+            disabled={busy || !armed}
+            onClick={() => {
+              choose({ choice: 'use', credentialId: chosen });
+            }}
+            data-testid="confirm-use"
+          >
+            {m.confirm.confirm}
+          </Button>
+        )}
         {others}
       </>
     );

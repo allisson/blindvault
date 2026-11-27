@@ -126,9 +126,27 @@ test('a create, then a get signed by the stored passkey, each confirmed in the w
   await host(context, extensionId);
   const page = await site(context);
 
+  // A get with no passkey saved offers no Confirm: another authenticator leads (D313).
   let window = nextWindow(context);
-  const creating = page.evaluate(create);
+  const none = page.evaluate(async () => {
+    try {
+      await navigator.credentials.get({
+        publicKey: { challenge: new Uint8Array(32), rpId: 'site.test' },
+      });
+      return 'none';
+    } catch (e) {
+      return (e as DOMException).name;
+    }
+  });
   let confirm = await window;
+  await expect(confirm.getByText('BlindVault holds no passkey for site.test.')).toBeVisible();
+  await expect(confirm.getByTestId('confirm-use')).toHaveCount(0);
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(none).resolves.toBe('NotAllowedError');
+
+  window = nextWindow(context);
+  const creating = page.evaluate(create);
+  confirm = await window;
   await expect(confirm.getByTestId('confirm-origin')).toHaveText(SITE);
   await expect(confirm.getByText('ana@site.test')).toBeVisible();
   await confirm.getByTestId('confirm-save').click();

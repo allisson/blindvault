@@ -105,12 +105,15 @@ test('searches the Login items and copies a password, which the session host cle
   const page = await popup(context, extensionId);
   const items = page.getByTestId('popup-items');
   await expect(items.getByText('Harbor Credit Union')).toBeVisible();
+  // Under the page's matches, the list of every Login item is named (D313).
+  await expect(page.getByRole('heading', { name: 'All logins' })).toBeVisible();
   // No secret travels in the list (D132, D286).
   expect(await page.content()).not.toContain(SECRET);
   await page.getByRole('searchbox', { name: 'Search logins' }).fill('nothing here');
   await expect(page.getByText('No login found.')).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search logins' }).fill('bank.example ana');
   await expect(items.getByText('ana.lima')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All logins' })).toHaveCount(0);
   // A search never reads a secret.
   await page.getByRole('searchbox', { name: 'Search logins' }).fill(SECRET);
   await expect(page.getByText('No login found.')).toBeVisible();
