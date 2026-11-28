@@ -848,12 +848,24 @@ export function InviteDevice({
       });
   };
   const reason = blocked(m, session);
+  // Not started, the card is one row: its title and intro beside Start (D315).
+  const idle = !stage && !reason && !open;
   return (
-    <div className={CARD} data-testid="invite">
-      <h3 className="flex items-center gap-2 font-semibold">
-        <Icon name="plus" />
-        {p.title}
-      </h3>
+    <div
+      className={
+        idle
+          ? 'flex flex-wrap items-center gap-3 rounded-card border border-line bg-raised p-4'
+          : CARD
+      }
+      data-testid="invite"
+    >
+      <div className={idle ? 'flex min-w-0 flex-1 basis-56 flex-col gap-1' : 'contents'}>
+        <h3 className="flex items-center gap-2 font-semibold">
+          <Icon name="plus" />
+          {p.title}
+        </h3>
+        {idle ? <p className="text-sm">{p.intro}</p> : null}
+      </div>
       {stage ? (
         <Stage
           controller={controller}
@@ -869,19 +881,15 @@ export function InviteDevice({
         />
       ) : reason ? (
         <Notice>{reason}</Notice>
-      ) : !open ? (
-        <>
-          <p className="text-sm">{p.intro}</p>
-          <Button
-            className="self-start"
-            onClick={() => {
-              setOpen(true);
-            }}
-            data-testid="invite-start"
-          >
-            {p.start}
-          </Button>
-        </>
+      ) : idle ? (
+        <Button
+          onClick={() => {
+            setOpen(true);
+          }}
+          data-testid="invite-start"
+        >
+          {p.start}
+        </Button>
       ) : (
         <Wizard
           steps={flowSteps(m, 'invite')}

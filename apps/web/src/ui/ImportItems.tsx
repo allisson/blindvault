@@ -275,7 +275,6 @@ export function ImportItems({
         <Notice>{m.import.readOnly}</Notice>
       ) : step.kind === 'idle' ? (
         <Button
-          variant="quiet"
           className="self-start"
           data-testid="import-start"
           onClick={() => {

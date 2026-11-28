@@ -27,7 +27,8 @@ test('renames this device from Settings, refusing an empty or too long name, and
   await field.fill('  Work laptop  ');
   await device.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(device.getByTestId('device-rename-form')).toHaveCount(0);
-  await expect(device.locator('span.font-medium')).toHaveText('Work laptop (this device)');
+  await expect(device.getByTestId('device-label')).toHaveText('Work laptop');
+  await expect(device.getByTestId('device-this')).toHaveText('This device');
 
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
@@ -35,6 +36,6 @@ test('renames this device from Settings, refusing an empty or too long name, and
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
   await openSettingsPage(page, 'devices');
   await expect(
-    page.getByTestId('devices').getByTestId('device').locator('span.font-medium'),
-  ).toHaveText('Work laptop (this device)');
+    page.getByTestId('devices').getByTestId('device').getByTestId('device-label'),
+  ).toHaveText('Work laptop');
 });

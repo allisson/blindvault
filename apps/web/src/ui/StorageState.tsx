@@ -172,15 +172,27 @@ export function DeviceStorage({
         </Button>
       ) : null}
       {refused && persisted === false ? <Notice>{m.storage.refused}</Notice> : null}
-      <p className="text-sm" data-testid="storage-usage">
-        {usage !== null && quota !== null && quota > 0
-          ? format(m.storage.usage, {
-              used: bytes(language, usage),
-              quota: bytes(language, quota),
-              percent: percent(language, usage, quota),
-            })
-          : m.storage.usageUnknown}
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="text-sm" data-testid="storage-usage">
+          {usage !== null && quota !== null && quota > 0
+            ? format(m.storage.usage, {
+                used: bytes(language, usage),
+                quota: bytes(language, quota),
+                percent: percent(language, usage, quota),
+              })
+            : m.storage.usageUnknown}
+        </p>
+        {/* The text above says it; the bar only shows it (D315). */}
+        {usage !== null && quota !== null && quota > 0 ? (
+          <div aria-hidden="true" className="h-1 overflow-hidden rounded-full bg-line">
+            <div
+              data-testid="storage-bar"
+              className={`h-full rounded-full ${warnings.includes('nearly-full') ? 'bg-warning' : 'bg-accent'}`}
+              style={{ width: `${String(Math.min(100, (usage / quota) * 100))}%` }}
+            />
+          </div>
+        ) : null}
+      </div>
       <p className="text-sm" data-testid="device-last-backup">
         {last === undefined
           ? m.settings.backupNever

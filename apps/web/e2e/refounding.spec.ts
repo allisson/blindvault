@@ -112,7 +112,7 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await button(page, 'Back').click();
   await page.getByTestId('settings-devices').click();
   await expect(page.getByTestId('devices').getByTestId('device')).toHaveCount(1);
-  await expect(page.getByTestId('devices').getByTestId('device')).toContainText('(this device)');
+  await expect(page.getByTestId('devices').getByTestId('device-this')).toHaveCount(1);
   await button(page, 'Back').click();
   await page.getByTestId('settings-recovery').click();
   await expect(page.getByTestId('recovery-current')).not.toHaveText(before);

@@ -42,6 +42,7 @@ import { platform } from '../platform';
 import type { Platform } from '../platform/platform';
 import { AboutBuild } from './About';
 import {
+  Badge,
   Button,
   ConfirmDialog,
   Field,
@@ -94,6 +95,9 @@ const PAGE_ICON: Readonly<Record<SettingsPage, IconName>> = {
   erase: 'trash-2',
   about: 'info',
 };
+
+/** A page's content, grouped in a card (D315). */
+const CARD = 'flex flex-col gap-4 rounded-card border border-line bg-raised p-4';
 
 const LANGUAGE_NAME: Readonly<Record<Language, string>> = {
   en: 'English',
@@ -258,7 +262,7 @@ function SettingsIndex({
               <button
                 type="button"
                 aria-current={page === current ? 'page' : undefined}
-                className={`${TARGET} flex w-full items-center gap-3 text-start hover:bg-subtle aria-[current]:bg-subtle aria-[current]:font-medium ${framed ? 'rounded-control px-2' : 'px-4 py-2'} ${group === 'danger' ? 'text-danger' : ''}`}
+                className={`${TARGET} flex w-full items-center gap-3 text-start hover:bg-subtle aria-[current]:font-medium ${framed ? 'rounded-control px-2' : 'px-4 py-2'} ${group === 'danger' ? 'text-danger aria-[current]:bg-danger-soft aria-[current]:text-danger-text' : 'aria-[current]:bg-accent-soft'}`}
                 onClick={() => {
                   // Beside a page, a row swaps it, so back still leads to the index (D252, D254).
                   if (current) nav.replace({ name: 'settings', page });
@@ -269,7 +273,11 @@ function SettingsIndex({
                 <Icon name={PAGE_ICON[page]} />
                 <span className="min-w-0 flex-1">{pageTitle(m, page, keystore)}</span>
                 {hint[page] ? (
-                  <span className="min-w-0 truncate text-sm text-muted">{hint[page]}</span>
+                  <span
+                    className={`min-w-0 truncate text-sm ${page === 'backup' && last === undefined ? 'text-danger' : 'text-muted'}`}
+                  >
+                    {hint[page]}
+                  </span>
                 ) : null}
                 {framed ? null : <Icon name="chevron-right" className="text-muted" />}
               </button>
@@ -388,7 +396,12 @@ function SettingsPageView({
       <h1 tabIndex={-1} className="text-title">
         {pageTitle(m, page, controller.keystoreSupported)}
       </h1>
-      {content[page]()}
+      {/* Devices and the Recovery Phrase lay out their own cards. */}
+      {page === 'devices' || page === 'recovery' ? (
+        content[page]()
+      ) : (
+        <div className={CARD}>{content[page]()}</div>
+      )}
     </div>
   );
 }
@@ -495,7 +508,11 @@ function ChangePassword({ controller }: { readonly controller: VaultController }
         confirmLabel={m.settings.confirm}
         onChange={onChange}
       />
-      <Button type="submit" disabled={current === '' || !next || state === 'working'}>
+      <Button
+        type="submit"
+        className="self-start"
+        disabled={current === '' || !next || state === 'working'}
+      >
         {state === 'working' ? m.settings.changing : m.settings.change}
       </Button>
       {state === 'done' ? <p role="status">{m.settings.changed}</p> : null}
@@ -562,7 +579,9 @@ function LockSettings({
         <p className="text-sm text-muted">{m.settings.hiddenImmediate}</p>
       ) : null}
       {field('clipboardClearSeconds', m.settings.clipboard, 10, 120)}
-      <Button type="submit">{m.settings.save}</Button>
+      <Button type="submit" className="self-start">
+        {m.settings.save}
+      </Button>
       {state === 'saved' ? <p role="status">{m.settings.saved}</p> : null}
       {state === 'invalid' ? (
         <p role="alert" className="text-sm text-danger">
@@ -741,7 +760,11 @@ function PasskeySettings({
             error={state.kind in error ? error[state.kind as keyof typeof error] : undefined}
             data-testid="passkey-password"
           />
-          <Button type="submit" disabled={password === '' || state.kind === 'working'}>
+          <Button
+            type="submit"
+            className="self-start"
+            disabled={password === '' || state.kind === 'working'}
+          >
             {state.kind === 'working' ? m.settings.passkeySettingUp : m.settings.passkeySetUp}
           </Button>
         </form>
@@ -847,7 +870,11 @@ function KeystoreSettings({
             error={state.kind in error ? error[state.kind as keyof typeof error] : undefined}
             data-testid="keystore-password"
           />
-          <Button type="submit" disabled={password === '' || state.kind === 'working'}>
+          <Button
+            type="submit"
+            className="self-start"
+            disabled={password === '' || state.kind === 'working'}
+          >
             {state.kind === 'working' ? k.settingUp : k.setUp}
           </Button>
         </form>
@@ -970,54 +997,58 @@ function RecoveryPhraseSettings({
   const last = session.lastBackupAt;
   return (
     <section className="flex flex-col gap-4" data-section="recovery">
-      {envelope === 'none' ? <Notice>{m.settings.recoveryNone}</Notice> : null}
-      {envelope === 'corrupt' ? <Notice>{m.settings.recoveryCorrupt}</Notice> : null}
-      {envelope === 'held' && recovery ? (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setCheck(controller.checkRecoveryPhrase(input));
-            setInput('');
-          }}
-        >
-          <p className="text-sm" data-testid="recovery-current">
-            {format(m.settings.recoveryCreated, {
-              date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(
-                recovery.phraseCreatedAt,
-              ),
-              id: phraseLabel(recovery.phraseId),
-            })}
-          </p>
-          {last !== undefined && last < recovery.phraseCreatedAt ? (
-            <Notice>
-              <span data-testid="recovery-no-backup">{m.settings.recoveryNoBackup}</span>
-            </Notice>
-          ) : null}
-          <p className="text-sm">{m.settings.recoveryIntro}</p>
-          <TextArea
-            label={m.settings.recoveryInput}
-            mono
-            autoCapitalize="none"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setCheck(undefined);
+      <div className={`${CARD} empty:hidden`}>
+        {envelope === 'none' ? <Notice>{m.settings.recoveryNone}</Notice> : null}
+        {envelope === 'corrupt' ? <Notice>{m.settings.recoveryCorrupt}</Notice> : null}
+        {envelope === 'held' && recovery ? (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setCheck(controller.checkRecoveryPhrase(input));
+              setInput('');
             }}
-            data-testid="check-phrase"
-          />
-          <Button type="submit" disabled={input.trim() === ''}>
-            {m.settings.recoveryCheck}
-          </Button>
-          {result?.ok ? <p role="status">{result.text}</p> : null}
-          {result && !result.ok && result.text !== '' ? (
-            <p role="alert" className="text-sm text-danger">
-              {result.text}
+          >
+            <p className="text-sm" data-testid="recovery-current">
+              {format(m.settings.recoveryCreated, {
+                date: new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(
+                  recovery.phraseCreatedAt,
+                ),
+                id: phraseLabel(recovery.phraseId),
+              })}
             </p>
-          ) : null}
-        </form>
-      ) : null}
-      <RegeneratePhrase controller={controller} session={session} />
+            {last !== undefined && last < recovery.phraseCreatedAt ? (
+              <Notice>
+                <span data-testid="recovery-no-backup">{m.settings.recoveryNoBackup}</span>
+              </Notice>
+            ) : null}
+            <p className="text-sm">{m.settings.recoveryIntro}</p>
+            <TextArea
+              label={m.settings.recoveryInput}
+              mono
+              autoCapitalize="none"
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                setCheck(undefined);
+              }}
+              data-testid="check-phrase"
+            />
+            <Button type="submit" className="self-start" disabled={input.trim() === ''}>
+              {m.settings.recoveryCheck}
+            </Button>
+            {result?.ok ? <p role="status">{result.text}</p> : null}
+            {result && !result.ok && result.text !== '' ? (
+              <p role="alert" className="text-sm text-danger">
+                {result.text}
+              </p>
+            ) : null}
+          </form>
+        ) : null}
+      </div>
+      <div className={CARD}>
+        <RegeneratePhrase controller={controller} session={session} />
+      </div>
     </section>
   );
 }
@@ -1165,8 +1196,11 @@ function DeviceSettings({
               data-testid="device"
             >
               <span className="flex flex-col">
-                <span className="font-medium">
-                  {d.own ? format(m.settings.devicesThis, { name }) : name}
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium" data-testid="device-label">
+                    {name}
+                  </span>
+                  {d.own ? <Badge data-testid="device-this">{m.settings.devicesThis}</Badge> : null}
                 </span>
                 <span className="text-muted">
                   {format(m.settings.devicesRegistered, {
@@ -1521,17 +1555,22 @@ function BackupSettings({
         run({ kind: 'password', password });
       }}
     >
+      <Notice
+        tone={last === undefined ? 'warning' : 'neutral'}
+        icon={last === undefined ? 'triangle-alert' : 'history'}
+      >
+        <span data-testid="last-backup">
+          {last === undefined
+            ? m.settings.backupNever
+            : format(m.settings.backupLast, {
+                date: new Intl.DateTimeFormat(language, {
+                  dateStyle: 'long',
+                  timeStyle: 'short',
+                }).format(last),
+              })}
+        </span>
+      </Notice>
       <p className="text-sm">{m.settings.backupIntro}</p>
-      <p className="text-sm" data-testid="last-backup">
-        {last === undefined
-          ? m.settings.backupNever
-          : format(m.settings.backupLast, {
-              date: new Intl.DateTimeFormat(language, {
-                dateStyle: 'long',
-                timeStyle: 'short',
-              }).format(last),
-            })}
-      </p>
       {session.backupMayBeIncomplete ? (
         <IncompleteBackup controller={controller} session={session} />
       ) : null}
@@ -1555,9 +1594,9 @@ function BackupSettings({
           <ExportPassword key={form} onChange={onExportPassword} />
         </>
       ) : null}
-      <p className="text-sm">{m.settings.backupAuthIntro}</p>
       <Field
         label={m.settings.backupAuth}
+        hint={m.settings.backupAuthIntro}
         type="password"
         autoComplete="current-password"
         value={password}
@@ -1570,7 +1609,7 @@ function BackupSettings({
       {warnsHiddenExport(platform.kind, session.preferences.hiddenLockSeconds) ? (
         <p className="text-sm text-muted">{m.settings.backupHidden}</p>
       ) : null}
-      <Button type="submit" disabled={!ready || password === ''}>
+      <Button type="submit" className="self-start" disabled={!ready || password === ''}>
         {working ? m.settings.backupExporting : m.settings.backupExport}
       </Button>
       {controller.hasPasskey ? (

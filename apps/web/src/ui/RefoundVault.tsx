@@ -133,7 +133,7 @@ export function RefoundVault({
         <>
           <p className="text-sm">{r.intro}</p>
           <Button
-            variant="quiet"
+            variant="danger"
             className="self-start"
             data-testid="refound-start"
             onClick={() => {
