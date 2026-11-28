@@ -2,7 +2,7 @@ import { RecordType } from '@blindvault/crypto';
 import { type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
-import { createVault, openSettingsPage } from './create';
+import { createVault, openSettingsPage, switchSettingsPage } from './create';
 
 // Records that fail verification at unlock are kept aside (D181): the vault opens, and each screen
 // that would hand them on or rely on them says why instead (D45, D202, D207), as does the
@@ -33,7 +33,7 @@ test('records kept aside at unlock block pairing and re-admission, a damaged Rec
   const envelopes = await corruptRecords(page, RecordType.recoveryEnvelope);
   expect(items).toBeGreaterThan(0);
   expect(envelopes).toBe(1);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
@@ -46,16 +46,14 @@ test('records kept aside at unlock block pairing and re-admission, a damaged Rec
   await expect(page.getByTestId('readmit-device')).toContainText(
     'This device holds a record it cannot read: re-admission would hand it on. Re-found the vault or restore a backup.',
   );
-  await button(page, 'Back').click();
-  await page.getByTestId('settings-recovery').click();
+  await openSettingsPage(page, 'recovery');
   await expect(
     page.getByText(
       'The Recovery Envelope on this device is damaged, so the Recovery Phrase cannot be checked. Regenerate the Recovery Phrase to replace it.',
     ),
   ).toBeVisible();
 
-  await button(page, 'Back').click();
-  await page.getByTestId('settings-refound').click();
+  await switchSettingsPage(page, 'refound');
   const refound = page.getByTestId('refound');
   await refound.getByTestId('refound-start').click();
   await expect(refound.getByTestId('refound-corrupt')).toHaveText(

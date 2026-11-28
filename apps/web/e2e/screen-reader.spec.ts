@@ -7,7 +7,14 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { WIDTHS } from './axe';
-import { answerConfirmation, createVault, openVault, readPhrase, startScreen } from './create';
+import {
+  answerConfirmation,
+  createVault,
+  openVault,
+  readPhrase,
+  startScreen,
+  toList,
+} from './create';
 import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9), and the unlock runs it again.
@@ -207,15 +214,12 @@ for (const [layout, width] of WIDTHS) {
     await createVault(page, PASSWORD);
     const main = page.getByRole('main');
     const body = page.locator('body');
-    const settings = page.getByRole('button', { name: 'Settings' }).first();
-    const toList = async () => {
-      while (!(await settings.isVisible())) await button(page, 'Back').click();
-    };
 
-    // The Preview badge: a button that expands into the note.
-    await page.getByTestId('preview-badge').click();
+    // The Preview badge: a button that expands into the note, in the header, or in the sidebar of a
+    // desktop (D316). A tablet's drawer holds a hidden copy.
+    await page.getByTestId('preview-badge').locator('visible=true').click();
     await expect(body).toMatchAriaSnapshot(`
-      - banner:
+      - ${layout === 'desktop' ? 'complementary' : 'banner'}:
         - text: BlindVault
         - button "Preview" [expanded]
         - note: /^Preview build. vaults and backups made here may not open in a later version/
@@ -258,7 +262,7 @@ for (const [layout, width] of WIDTHS) {
     await page.keyboard.press('Escape');
 
     // The rich row: the title names it, Copy names its item, and the toast is a status (D246, D250).
-    await toList();
+    await toList(page);
     await button(page, 'Copy password: Harbor').click();
     await expect(body).toMatchAriaSnapshot(`
       - main:
@@ -277,7 +281,7 @@ for (const [layout, width] of WIDTHS) {
     await page.getByTestId('item-title').fill('Memo');
     await button(page, 'Save').click();
     await expect(page.getByRole('heading', { name: 'Memo', level: 1 })).toBeVisible();
-    await toList();
+    await toList(page);
     await page.getByTestId('type-pill').click();
     await expect(main).toMatchAriaSnapshot(`
       - region "Items":
@@ -294,8 +298,8 @@ for (const [layout, width] of WIDTHS) {
         - region "Items":
           - button "All folders" [expanded]
           - navigation "Folders":
-            - heading "Folders" [level=2]
             - button "All items"
+            - heading "Folders" [level=2]
       `);
       await page.keyboard.press('Escape');
     }

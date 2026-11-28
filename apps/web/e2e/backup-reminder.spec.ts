@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, openNotices, toList } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9); the export and unlocks derive again.
 test.setTimeout(180_000);
@@ -15,10 +15,21 @@ function button(page: Page, name: string) {
 }
 
 async function relock(page: Page) {
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+}
+
+/**
+ * Whether the reminder is among the notices (D316): the Notices screen holds its card. The vault's
+ * storage warning keeps the screen reachable, as the browser does not keep its storage here.
+ */
+async function reminderDue(page: Page, due: boolean) {
+  await openNotices(page);
+  if (due) await expect(page.getByTestId('backup-reminder')).toBeVisible();
+  else await expect(page.getByTestId('backup-reminder')).toHaveCount(0);
+  await toList(page);
 }
 
 test('reminds to back up a new vault, then again 30 days after the last backup (§13.4, D188)', async ({
@@ -29,13 +40,16 @@ test('reminds to back up a new vault, then again 30 days after the last backup (
   await page.goto('/');
   await createVault(page, PASSWORD);
   const reminder = page.getByTestId('backup-reminder');
+  // The reminder is a notice, on the Notices screen (D316).
+  await openNotices(page);
   await expect(reminder).toContainText('No backup has been made on this device: make one');
 
   // Dismissed until the next lock, and back after it while due.
   await reminder.getByRole('button', { name: 'Dismiss' }).click();
   await expect(reminder).toHaveCount(0);
   await relock(page);
-  await expect(reminder).toBeVisible();
+  await reminderDue(page, true);
+  await openNotices(page);
 
   // "Make a backup" opens Settings with the cursor in the export's password field.
   await reminder.getByRole('button', { name: 'Make a backup' }).click();
@@ -45,16 +59,17 @@ test('reminds to back up a new vault, then again 30 days after the last backup (
     page.waitForEvent('download', { timeout: 60_000 }),
     button(page, 'Export').click(),
   ]);
-  await expect(reminder).toHaveCount(0);
-  await button(page, 'Back').click();
+  await toList(page);
+  await reminderDue(page, false);
 
   // A day short of 30, no reminder; at 30 days, the reminder names the last backup's date.
   await page.clock.setSystemTime(T0 + 29 * DAY);
   await relock(page);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
-  await expect(reminder).toHaveCount(0);
+  await reminderDue(page, false);
   await page.clock.setSystemTime(T0 + 31 * DAY);
   await relock(page);
+  await openNotices(page);
   await expect(reminder).toContainText(
     'The last backup made on this device is from March 4, 2026, more than 30 days ago',
   );

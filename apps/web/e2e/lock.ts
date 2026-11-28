@@ -1,8 +1,6 @@
 import { type Page } from '@playwright/test';
 
-/** Presses Lock: in the header, or on a phone in its "…" menu (D245). */
+/** Presses Lock: Lock now in the sidebar, Lock in a tablet's or a phone's header (D316). */
 export async function lock(page: Page): Promise<void> {
-  const more = page.getByRole('button', { name: 'More', exact: true });
-  if (await more.isVisible()) await more.click();
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
 }

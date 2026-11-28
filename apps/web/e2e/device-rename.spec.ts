@@ -30,7 +30,7 @@ test('renames this device from Settings, refusing an empty or too long name, and
   await expect(device.getByTestId('device-label')).toHaveText('Work laptop');
   await expect(device.getByTestId('device-this')).toHaveText('This device');
 
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Unlock' }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

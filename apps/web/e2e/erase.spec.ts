@@ -83,7 +83,7 @@ test('erases a locked vault without its password, from the unlock screen (D183, 
   const logged = watch(page);
   await page.goto('/');
   await createVault(page, PASSWORD);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
 
   await button(page, 'Erase this vault from this device…').click();
   await expect(page.getByText(INTRO)).toBeVisible();

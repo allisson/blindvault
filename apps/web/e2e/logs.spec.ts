@@ -62,7 +62,7 @@ test('logs nothing, and no secret, through a full use (CRYPTO-INV-005, 006)', as
   await expect(page.getByText(SECRET)).toBeVisible();
 
   // Lock, a wrong password, unlock, a password change refused and then made, lock.
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await unlock(page, WRONG);
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });
   await unlock(page, PASSWORD);
@@ -77,7 +77,7 @@ test('logs nothing, and no secret, through a full use (CRYPTO-INV-005, 006)', as
   await page.getByTestId('current-password').fill(PASSWORD);
   await change.click();
   await expect(page.getByText('Password changed.')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await unlock(page, NEXT);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
 

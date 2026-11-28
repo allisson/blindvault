@@ -41,7 +41,7 @@ test('unlocks 2,000 items × 20 versions (architecture.md)', async ({ page, brow
   await page.goto('/');
   await install(page, empty);
   const baseline = await timedUnlock(page);
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.evaluate((name) => indexedDB.deleteDatabase(name), empty.name);
 
   await page.goto('/');

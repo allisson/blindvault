@@ -192,6 +192,13 @@ const PATHS = {
       <path d="M7 11V7a5 5 0 0 1 9.9-1" />
     </>
   ),
+  menu: (
+    <>
+      <path d="M4 5h16" />
+      <path d="M4 12h16" />
+      <path d="M4 19h16" />
+    </>
+  ),
   'monitor-smartphone': (
     <>
       <path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8" />

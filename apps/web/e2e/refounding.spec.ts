@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { answerConfirmation, createVault, openSettingsPage } from './create';
+import { answerConfirmation, createVault, openNotices, openSettingsPage, toList } from './create';
 
 // Creation, the proof of the user and the new password each derive Argon2id at about 1 s (D9).
 test.setTimeout(240_000);
@@ -99,7 +99,11 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await refound.getByTestId('confirm-password').fill(NEW_PASSWORD);
   await button(page, 'Re-found').click();
 
-  // The new vault: the live item only, its own device only, a new phrase (D40, D72).
+  // The new vault: the live item only, its own device only, a new phrase (D40, D72). Its notice is
+  // on the Notices screen (D316), opened once the re-founding is done: leaving the page before drops
+  // it. The status counts the storage warning, the backup reminder and this notice.
+  await expect(page.getByTestId('notices-open')).toContainText('3 notices', { timeout: 60_000 });
+  await openNotices(page);
   await expect(page.getByTestId('refounded')).toContainText(
     'destroy the backups of the old vault',
     {
@@ -109,29 +113,28 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await page.getByTestId('refounded').getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('refounded')).toHaveCount(0);
   expect(await page.evaluate(async () => (await indexedDB.databases()).length)).toBe(1);
-  await button(page, 'Back').click();
-  await page.getByTestId('settings-devices').click();
+  await openSettingsPage(page, 'devices');
   await expect(page.getByTestId('devices').getByTestId('device')).toHaveCount(1);
   await expect(page.getByTestId('devices').getByTestId('device-this')).toHaveCount(1);
-  await button(page, 'Back').click();
-  await page.getByTestId('settings-recovery').click();
+  await openSettingsPage(page, 'recovery');
   await expect(page.getByTestId('recovery-current')).not.toHaveText(before);
   await button(page, 'Back').click();
   await page.getByTestId('settings-backup').click();
   await expect(page.getByTestId('last-backup')).toHaveText(
     'No backup has been made on this device yet.',
   );
-  await button(page, 'Back').click();
-  await button(page, 'Back').click();
+  await toList(page);
   await expect(button(page, 'ACME')).toBeVisible();
-  // The new vault also shows the backup reminder, at the top of the list (D188, D254).
+  // The new vault also has the backup reminder among its notices (D188, D316).
+  await openNotices(page);
   await expect(page.getByTestId('backup-reminder')).toBeVisible();
+  await toList(page);
   await expect(button(page, 'Discarded')).toHaveCount(0);
   await button(page, 'Trash').click();
   await expect(button(page, 'Discarded')).toHaveCount(0);
 
   // Only the new local password opens it.
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });

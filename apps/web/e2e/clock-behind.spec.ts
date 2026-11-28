@@ -2,7 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { FUTURE_CLOCK_BOUND_MS } from '@blindvault/vault';
 
-import { createVault, openSettingsPage } from './create';
+import { createVault, openNotices, openSettingsPage, toList } from './create';
 
 // The device clock goes back after the vault was written ahead (§9.2, D73, D149, D221): the vault is
 // read-only until the clock catches up, every screen that writes says why, and writing resumes on
@@ -35,7 +35,7 @@ function button(page: Page, name: string) {
 }
 
 async function relock(page: Page) {
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
@@ -60,11 +60,14 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   // so not pairing again.
   await page.clock.setSystemTime(T0);
   await relock(page);
+  // The notice is on the Notices screen (D316).
+  await openNotices(page);
   const notice = page.getByTestId('clock-behind');
   await expect(notice).toContainText(BEHIND);
   await expect(notice).toContainText(FAR);
   await expect(page.getByTestId('clock-refound')).toBeVisible();
   await expect(notice).not.toContainText(PAIR_AGAIN);
+  await toList(page);
   await expect(button(page, 'New item')).toHaveCount(0);
 
   // The item is dated ahead of the clock: read-only, saying until when.
@@ -72,7 +75,7 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   await expect(page.getByText(ITEM_CLOCK)).toBeVisible();
   await expect(button(page, 'Edit')).toHaveCount(0);
 
-  // Settings: no pairing, no re-admission and no new Recovery Phrase while read-only.
+  // Devices and Settings: no pairing, no re-admission and no new Recovery Phrase while read-only.
   await openSettingsPage(page, 'devices');
   await expect(page.getByTestId('invite')).toContainText(
     'The device clock went back, so the vault is read-only: pairing comes back once writing does.',
@@ -81,18 +84,17 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   await expect(page.getByTestId('readmit-device')).toContainText(
     'The device clock went back, so the vault is read-only: re-admission comes back once writing does.',
   );
-  await button(page, 'Back').click();
-  await page.getByTestId('settings-recovery').click();
+  await openSettingsPage(page, 'recovery');
   await expect(page.getByTestId('regenerate')).toContainText(
     'This device’s clock went back, so the vault is read-only. The Recovery Phrase can be regenerated from',
   );
   await expect(page.getByTestId('regenerate-start')).toHaveCount(0);
-  await button(page, 'Back').click();
-  await button(page, 'Back').click();
+  await toList(page);
 
   // A minute before writing resumes: within the bound, so only the date is shown.
   await page.clock.setSystemTime(UNTIL - MINUTE);
   await relock(page);
+  await openNotices(page);
   await expect(notice).toContainText(BEHIND);
   await expect(notice).not.toContainText(FAR);
   await expect(page.getByTestId('clock-refound')).toHaveCount(0);
@@ -101,6 +103,7 @@ test('a clock gone back makes the vault read-only, each screen says why, and wri
   // inactivity lock is minutes away).
   await page.clock.runFor(MINUTE + 1_000);
   await expect(notice).toHaveCount(0);
+  await toList(page);
   await expect(button(page, 'New item')).toBeVisible();
   await page.getByRole('button', { name: new RegExp(TITLE) }).click();
   await expect(button(page, 'Edit')).toBeVisible();

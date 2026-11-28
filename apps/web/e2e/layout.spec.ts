@@ -4,7 +4,7 @@
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault, startScreen } from './create';
+import { createVault, openDevices, openSettings, startScreen, toList } from './create';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9).
 test.setTimeout(120_000);
@@ -73,9 +73,9 @@ for (const [layout, width] of WIDTHS) {
       await expect(search).toBeVisible();
       await expect(heading).toBeVisible();
     } else if (layout === 'tablet') {
-      // The folder tree waits in its drawer.
+      // The folder tree waits in Menu's drawer (D316).
       await expect(folders(page)).toBeHidden();
-      await expect(page.getByRole('button', { name: 'Folders', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Menu', exact: true })).toBeVisible();
       await expect(search).toBeVisible();
       await expect(heading).toBeVisible();
     } else {
@@ -99,18 +99,20 @@ for (const [layout, width] of WIDTHS) {
     await noOverflow(page, 'the editor');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-    // Mobile has Settings in its bottom navigation, below the lists.
+    // Mobile has Settings in its bottom navigation, below the lists; a tablet, in Menu's drawer.
     if (layout === 'mobile') await page.getByRole('button', { name: 'Back', exact: true }).click();
-    await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
-    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await openSettings(page);
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
     await noOverflow(page, 'Settings');
-    // The densest pages (D252).
-    for (const row of ['devices', 'backup', 'storage']) {
+    // The densest pages (D252), and Devices, a main destination of its own (D316).
+    for (const row of ['backup', 'storage'] as const) {
       await page.getByTestId(`settings-${row}`).click();
       await noOverflow(page, `Settings, ${row}`);
       await page.getByRole('button', { name: 'Back', exact: true }).click();
     }
+    await openDevices(page);
+    await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
+    await noOverflow(page, 'Devices');
   });
 }
 
@@ -157,13 +159,13 @@ test('opens the tablet drawer over the list, and closes it by Escape, the backdr
   page,
 }) => {
   await create(page, 800);
-  const toggle = page.getByRole('button', { name: 'Folders', exact: true });
-  const allItems = folders(page).getByRole('button', { name: 'All items', exact: true });
+  const toggle = page.getByRole('button', { name: 'Menu', exact: true });
 
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(folders(page)).toBeVisible();
-  await expect(allItems).toBeFocused();
+  // The focus moves into the drawer, to its first control (the Preview badge, ahead of the folders).
+  await expect(page.locator('#sidebar-drawer').locator(':focus')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(folders(page)).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -352,7 +354,7 @@ test.describe('on a coarse pointer', () => {
         expect(await smallTargets(page), `${layout}: an item`).toEqual([]);
         await page.getByRole('button', { name: 'Back', exact: true }).click();
       } else if (layout === 'tablet') {
-        await page.getByRole('button', { name: 'Folders', exact: true }).click();
+        await page.getByRole('button', { name: 'Menu', exact: true }).click();
         await expect(folders(page)).toBeVisible();
         expect(await smallTargets(page), `${layout}: the drawer`).toEqual([]);
         await page.keyboard.press('Escape');
@@ -365,18 +367,19 @@ test.describe('on a coarse pointer', () => {
       expect(await smallTargets(page), `${layout}: the editor and its generator`).toEqual([]);
       await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
-      await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+      await openSettings(page);
       expect(await smallTargets(page), `${layout}: Settings`).toEqual([]);
-      for (const row of ['devices', 'backup', 'storage']) {
+      for (const row of ['backup', 'storage'] as const) {
         await page.getByTestId(`settings-${row}`).click();
         expect(await smallTargets(page), `${layout}: Settings, ${row}`).toEqual([]);
         await page.getByRole('button', { name: 'Back', exact: true }).click();
       }
-      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await openDevices(page);
+      expect(await smallTargets(page), `${layout}: Devices`).toEqual([]);
+      await toList(page);
     }
 
-    await page.getByRole('button', { name: 'Lock', exact: true }).click();
+    await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
     await expect(page.getByTestId('unlock-password')).toBeVisible();
     expect(await smallTargets(page), 'the unlock screen').toEqual([]);
   });

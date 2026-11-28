@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { answerConfirmation, createVault, openSettingsPage } from './create';
+import { answerConfirmation, createVault, openSettingsPage, toList } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9); exports and the regeneration derive
 // again.
@@ -141,8 +141,7 @@ test('regenerates the Recovery Phrase, keeping the vault, and asks for a new bac
   await expect(page.getByText('This is not this vault’s current Recovery Phrase.')).toBeVisible();
 
   // The vault contents did not change.
-  await button(page, 'Back').click();
-  await button(page, 'Back').click();
+  await toList(page);
   await expect(page.getByText('ACME').first()).toBeVisible();
   const traces = [...old, ...words].flatMap((w, i, all) =>
     i + 1 < all.length ? [`${w} ${all[i + 1] ?? ''}`] : [],

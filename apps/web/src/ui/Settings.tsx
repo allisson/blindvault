@@ -26,7 +26,12 @@ import {
 import { download, phraseLabel, recordIdPrefix } from '../app/backup-file';
 import { devicesOf, eraseAdvice, peerSyncState, rejectedPeersOf } from '../app/devices';
 import { folderNameOf } from '../app/folders';
-import { type Navigation, type SettingsFocus, type SettingsPage } from '../app/nav';
+import {
+  type DevicesFocus,
+  type Navigation,
+  type SettingsFocus,
+  type SettingsPage,
+} from '../app/nav';
 import {
   type BackupExport,
   type ExportAuth,
@@ -72,7 +77,6 @@ const GROUPS: readonly (readonly [
 ])[] = [
   ['preferences', ['appearance', 'language', 'locking']],
   ['security', ['password', 'passkey', 'sitePasskeys', 'recovery']],
-  ['devices', ['devices']],
   ['data', ['backup', 'merge', 'import', 'storage']],
   ['danger', ['refound', 'erase']],
   [undefined, ['about']],
@@ -86,7 +90,6 @@ const PAGE_ICON: Readonly<Record<SettingsPage, IconName>> = {
   passkey: 'fingerprint',
   sitePasskeys: 'globe',
   recovery: 'shield-check',
-  devices: 'monitor-smartphone',
   backup: 'upload',
   merge: 'git-merge',
   import: 'download',
@@ -144,8 +147,8 @@ export function Settings({
    */
   readonly focus?: SettingsFocus | undefined;
   /**
-   * Tablet and desktop: inside the vault frame, All items, Trash and the index on the left and the
-   * open page on the right (D254). A phone drills down from the index.
+   * Tablet and desktop: inside the vault frame, beside the sidebar, the index on the left and the
+   * open page on the right (D254, D316). A phone drills down from the index.
    */
   readonly framed?: boolean;
 }) {
@@ -176,26 +179,6 @@ export function Settings({
     <OpenBackup.Provider value={openBackup}>
       <div className="grid min-h-0 flex-1 grid-cols-[16rem_1fr] grid-rows-[minmax(0,1fr)]">
         <div className="flex flex-col gap-4 overflow-y-auto border-r border-line p-2">
-          <div className="flex flex-col">
-            {(
-              [
-                ['list', m.vault.allItems, 'vault'],
-                ['trash-2', m.vault.trash, 'trash'],
-              ] as const
-            ).map(([icon, label, list]) => (
-              <Button
-                key={list}
-                variant="quiet"
-                className="flex items-center gap-3 text-start"
-                onClick={() => {
-                  nav.showList({ name: list });
-                }}
-              >
-                <Icon name={icon} />
-                {label}
-              </Button>
-            ))}
-          </div>
           <SettingsIndex
             session={session}
             nav={nav}
@@ -241,7 +224,6 @@ function SettingsIndex({
       last === undefined
         ? s.hintNever
         : new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(last),
-    devices: String(devicesOf(session).listed.length),
   };
   const Title = framed ? 'h2' : 'h1';
   return (
@@ -339,8 +321,6 @@ function SettingsPageView({
   useEffect(() => {
     if (focus === 'backup') focusBackup();
     // The passkey page shows once support is known: it focuses itself.
-    else if (focus === 'pair') focusField('invite-password');
-    else if (focus === 'readmit') focusField('readmission-first');
     else if (focus === 'recovery' || focus === 'refound' || focus === 'import') focusPage();
     else if (focus !== 'passkey') focusHeading();
   }, [focus]);
@@ -376,13 +356,6 @@ function SettingsPageView({
       ),
     sitePasskeys: () => <SitePasskeySettings />,
     recovery: () => <RecoveryPhraseSettings controller={controller} session={session} />,
-    devices: () => (
-      <DeviceSettings
-        controller={controller}
-        session={session}
-        open={focus === 'pair' || focus === 'readmit' ? focus : undefined}
-      />
-    ),
     backup: () => <BackupSettings controller={controller} session={session} />,
     merge: () => <MergeBackup controller={controller} session={session} />,
     import: () => <ImportItems controller={controller} session={session} />,
@@ -396,13 +369,47 @@ function SettingsPageView({
       <h1 tabIndex={-1} className="text-title">
         {pageTitle(m, page, controller.keystoreSupported)}
       </h1>
-      {/* Devices and the Recovery Phrase lay out their own cards. */}
-      {page === 'devices' || page === 'recovery' ? (
-        content[page]()
-      ) : (
-        <div className={CARD}>{content[page]()}</div>
-      )}
+      {/* The Recovery Phrase lays out its own cards. */}
+      {page === 'recovery' ? content[page]() : <div className={CARD}>{content[page]()}</div>}
     </div>
+  );
+}
+
+/**
+ * Devices, a main destination of its own (D316): its heading, then the device list. Opened with a
+ * focus, the pairing or the re-admission starts open with the cursor in it (D234). It keeps the
+ * Settings page's mark, so a wizard opens on a screen of its own (D254).
+ */
+export function DevicesScreen({
+  controller,
+  session,
+  nav,
+  focus,
+}: {
+  readonly controller: VaultController;
+  readonly session: VaultSession;
+  readonly nav: Navigation;
+  readonly focus: DevicesFocus | undefined;
+}) {
+  const m = useLanguage().messages;
+  // "Make a backup now" in a sync's result leads to Settings' Backup page, as it does in Settings.
+  const openBackup = useCallback(() => {
+    nav.openSettings('backup');
+  }, [nav]);
+  useEffect(() => {
+    if (focus === 'pair') focusField('invite-password');
+    else if (focus === 'readmit') focusField('readmission-first');
+    else focusHeading();
+  }, [focus]);
+  return (
+    <OpenBackup.Provider value={openBackup}>
+      <div className="flex w-full max-w-md flex-col gap-6 p-4" data-settings-page="devices">
+        <h1 tabIndex={-1} className="text-title">
+          {m.settings.pages.devices}
+        </h1>
+        <DeviceSettings controller={controller} session={session} open={focus} />
+      </div>
+    </OpenBackup.Provider>
   );
 }
 

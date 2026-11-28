@@ -72,9 +72,11 @@ test('reflows at 320 px with no horizontal scroll: start, list, editor and Setti
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configurações', level: 1 })).toBeVisible();
   expect(await fits()).toBe(true);
-  for (const row of ['devices', 'backup']) {
-    await page.getByTestId(`settings-${row}`).click();
-    expect(await fits()).toBe(true);
-    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
-  }
+  await page.getByTestId('settings-backup').click();
+  expect(await fits()).toBe(true);
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  // Devices is a tab of its own (D316).
+  await page.getByTestId('nav-devices').click();
+  await expect(page.getByTestId('devices')).toBeVisible();
+  expect(await fits()).toBe(true);
 });

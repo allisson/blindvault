@@ -4,7 +4,14 @@ import { RecordType } from '@blindvault/crypto';
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { corruptRecords } from './corrupt';
-import { checkSameNetwork, createVault, openSettingsPage, openVault, startScreen } from './create';
+import {
+  checkSameNetwork,
+  createVault,
+  openSettingsPage,
+  openVault,
+  startScreen,
+  toList,
+} from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -96,8 +103,7 @@ async function restored(browser: Browser, logged: string[]) {
     button(a, 'Export').click(),
   ]);
   const backup = await readFile(await download.path());
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
 
   // B: a fresh restore of A's backup, unregistered, with an item of its own.
   const b = await device(browser, logged);
@@ -144,8 +150,7 @@ test('re-admits a restored device: both know each other and hold every item (§9
     await expect(page.getByTestId('device')).toHaveCount(2);
     await expect(page.getByTestId('device-last-sync')).not.toContainText('never');
     await expect(page.getByTestId('devices-readmit')).toHaveCount(0);
-    await button(page, 'Back').click();
-    await button(page, 'Back').click();
+    await toList(page);
     await expect(page.getByRole('button', { name: /Harbor Bank/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Copper Mail/ })).toBeVisible();
   }
@@ -251,8 +256,7 @@ test('numbers said to differ stop the re-admission on both, and nothing is merge
   await expect(a.getByTestId('device')).toHaveCount(1);
   await b.getByTestId('pairing-cancel').click();
   await expect(b.getByTestId('devices-readmit')).toBeVisible();
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });
 
@@ -279,7 +283,6 @@ test('a stored record of A that fails verification stops the re-admission on bot
   await expect(a.getByTestId('device-pending')).toHaveText(
     'Pairing not completed: this device never got the confirmation that the other one kept the vault.',
   );
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await expect(a.getByRole('button', { name: /Copper Mail/ })).toHaveCount(0);
 });

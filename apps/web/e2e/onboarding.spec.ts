@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { confirmPhrase, openVault, startScreen } from './create';
+import { confirmPhrase, openNotices, openVault, startScreen, toList } from './create';
 import { lock } from './lock';
 
 // The first screen, the three starts and "Vault ready" (overview §13.3, D198).
@@ -109,8 +109,7 @@ for (const width of [390, 1280] as const) {
     await button(page, 'Make a backup').click();
     await expect(page.getByTestId('backup-password')).toBeFocused();
     await expect(ready).toHaveCount(0);
-    await button(page, 'Back').click();
-    await button(page, 'Back').click();
+    await toList(page);
     await expect(ready).toBeVisible();
 
     // Pairing opens with its password step already shown, the cursor in it (D234).
@@ -122,14 +121,16 @@ for (const width of [390, 1280] as const) {
         { exact: true },
       ),
     ).toBeVisible();
-    await button(page, 'Back').click();
-    await button(page, 'Back').click();
+    await toList(page);
     await expect(ready).toBeVisible();
 
-    // Closed: the vault, with the backup reminder, and never again after an unlock.
+    // Closed: the vault, with the backup reminder among its notices (D316), and never again after
+    // an unlock.
     await openVault(page);
     await expect(page.getByTestId('panes')).toBeVisible();
+    await openNotices(page);
     await expect(page.getByTestId('backup-reminder')).toBeVisible();
+    await toList(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       width,
     );
@@ -155,8 +156,7 @@ test('"Vault ready" marks the backup done once made, and still offers it (D234)'
     page.waitForEvent('download', { timeout: 60_000 }),
     button(page, 'Export').click(),
   ]);
-  await button(page, 'Back').click();
-  await button(page, 'Back').click();
+  await toList(page);
   await expect(backup).toHaveAttribute('data-done', 'true');
   await expect(backup).toContainText('Done');
   await expect(backup.getByRole('button')).toHaveText('Make a backup');
@@ -164,7 +164,7 @@ test('"Vault ready" marks the backup done once made, and still offers it (D234)'
 
 test('a lock on "Vault ready" clears it (D198)', async ({ page }) => {
   await create(page);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();

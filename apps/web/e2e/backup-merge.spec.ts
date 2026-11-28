@@ -4,7 +4,15 @@ import { type Browser, type BrowserContext, type Page, expect, test } from '@pla
 
 import { FUTURE_CLOCK_BOUND_MS } from '@blindvault/vault';
 
-import { checkSameNetwork, createVault, openSettingsPage, openVault, startScreen } from './create';
+import {
+  checkSameNetwork,
+  createVault,
+  openNotices,
+  openSettingsPage,
+  openVault,
+  startScreen,
+  toList,
+} from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -51,8 +59,7 @@ async function exportBackup(page: Page, password: string): Promise<Buffer> {
     button(page, 'Export').click(),
   ]);
   const bytes = await readFile(await download.path());
-  await button(page, 'Back').click();
-  await button(page, 'Back').click();
+  await toList(page);
   return bytes;
 }
 
@@ -131,8 +138,7 @@ test('merges a backup made on another installation, keeping the losing edit in h
   await expect(a.getByTestId('wizard-step')).toHaveText('Step 4 of 4 · Done');
 
   // B's edit won; A's own edit is in the history, above the first state.
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await button(a, 'ACME').click();
   await button(a, 'Show').click();
   await expect(a.getByTestId('secret-Password')).toHaveText(ON_B);
@@ -255,6 +261,9 @@ test('a merge of a backup opened by its export password recommends Check Recover
   await expect(a.getByTestId('merge-confirm')).toContainText('verified.', { timeout: 30_000 });
   await button(a, 'Merge').click();
   await expect(a.getByTestId('merge-result')).toBeVisible();
+  // The notice is on the Notices screen (D316), which a phone reaches from its list.
+  await toList(a);
+  await openNotices(a);
   await expect(
     a
       .getByTestId('after-restore')
@@ -307,8 +316,7 @@ test.describe('devices a merge brings', () => {
     await button(b, 'Yes, the same').click();
     await expect(a.getByTestId('pairing-done')).toBeVisible({ timeout: 60_000 });
     await button(a, 'Close').click();
-    await button(a, 'Back').click();
-    await button(a, 'Back').click();
+    await toList(a);
   }
 
   test('a merge names a device this one never saw, then one retired elsewhere, as a sign of the Master Key held by someone else (§1.6, D182)', async ({
@@ -353,8 +361,7 @@ test.describe('devices a merge brings', () => {
     await a.getByTestId('device-retire').click();
     await a.getByRole('button', { name: /^Retire / }).click();
     await expect(a.getByTestId('device')).toHaveCount(1);
-    await button(a, 'Back').click();
-    await button(a, 'Back').click();
+    await toList(a);
     const retired = await exportBackup(a, PASSWORD);
 
     await openForMerge(c, retired, words);

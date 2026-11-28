@@ -1,9 +1,10 @@
-// The storage state (overview §7, §13.2, D55, D119, D196). The browser's answers are replaced before
-// the app loads, since a test cannot make a real browser refuse persistence or fill its quota.
+// The storage state (overview §7, §13.2, D55, D119, D196, D316). The browser's answers are replaced
+// before the app loads, since a test cannot make a real browser refuse persistence or fill its
+// quota. Inside the vault a storage warning is a notice, on the Notices screen.
 
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault, openSettingsPage } from './create';
+import { createVault, openNotices, openSettingsPage } from './create';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9).
 test.setTimeout(120_000);
@@ -12,6 +13,7 @@ const PASSWORD = 'quartz-lantern-velvet-harbor-9214';
 const SAFARI =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15';
 const WIDTHS = [390, 800, 1280] as const;
+const LAYOUT = { 390: 'mobile', 800: 'tablet', 1280: 'desktop' } as const;
 /** Playwright's WebKit names itself Safari, and is: the other tests take another browser's name. */
 const CHROME =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
@@ -75,6 +77,7 @@ test('shows the storage state in Settings and no warning while storage is kept w
   await createVault(page, PASSWORD);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
+    await expect(page.locator('[data-layout]')).toHaveAttribute('data-layout', LAYOUT[width]);
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
     await expect(page.getByTestId('storage-warning')).toHaveCount(0);
   }
@@ -104,17 +107,17 @@ test('warns while storage is not kept on the only device, in every layout, until
   await expect(page.getByTestId('storage-warning')).toHaveCount(0);
   await createVault(page, PASSWORD);
   const banner = page.getByTestId('storage-warning');
+  // The status card says it first of all, then the Notices screen holds its card.
+  await expect(page.getByTestId('status-card')).toContainText('Only this device holds the vault.');
+  await openNotices(page);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
+    await expect(page.locator('[data-layout]')).toHaveAttribute('data-layout', LAYOUT[width]);
     await expect(banner).toHaveAttribute('data-warning', 'not-kept');
     await expect(banner).toContainText('this is the only device of the vault');
-    // Nothing dismisses it: its one button shows the whole text (D254).
-    const details = banner.getByRole('button');
-    await expect(details).toHaveText('Details');
-    await details.click();
-    await expect(details).toHaveText('Less');
-    await expect(details).toHaveAttribute('aria-expanded', 'true');
-    await details.click();
+    // Nothing dismisses it, and its text is whole, with no Details to open (D316).
+    await expect(banner).toHaveAttribute('role', 'alert');
+    await expect(banner.getByRole('button')).toHaveCount(0);
   }
 
   await openSettings(page);
@@ -126,7 +129,9 @@ test('warns while storage is not kept on the only device, in every layout, until
   // Refused: the section says so, and the warning stays.
   await ask.click();
   await expect(section.getByText('The browser did not agree to keep the storage.')).toBeVisible();
+  await openNotices(page);
   await expect(banner).toHaveAttribute('data-warning', 'not-kept');
+  await openSettings(page);
   // Granted: the status reads kept, and the warning and the button go.
   await setStorage(page, { grant: true });
   await ask.click();
@@ -135,6 +140,8 @@ test('warns while storage is not kept on the only device, in every layout, until
   );
   await expect(banner).toHaveCount(0);
   await expect(ask).toHaveCount(0);
+  await openNotices(page);
+  await expect(banner).toHaveCount(0);
 });
 
 test('warns while storage is nearly full, and reads it again on return to visible (D196)', async ({
@@ -144,8 +151,10 @@ test('warns while storage is nearly full, and reads it again on return to visibl
   await page.goto('/');
   await createVault(page, PASSWORD);
   const banner = page.getByTestId('storage-warning');
+  await openNotices(page);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
+    await expect(page.locator('[data-layout]')).toHaveAttribute('data-layout', LAYOUT[width]);
     await expect(banner).toHaveAttribute('data-warning', 'nearly-full');
     await expect(banner).toContainText('BlindVault uses 80% of what the browser allows');
   }
@@ -164,14 +173,20 @@ test.describe('Safari', () => {
   }) => {
     await fakeStorage(page, { ...KEPT, persisted: false, grant: false, usage: 900_000 });
     await page.goto('/');
-    const banner = page.getByTestId('storage-warning');
+    // Inside the vault, the first of the notices' warnings: Safari's.
+    const banner = page.getByTestId('storage-warning').first();
     await expect(banner).toHaveAttribute('data-warning', 'safari-tab');
     // No vault yet: nothing to move, so start in the installed app (D198).
     await expect(banner).toContainText('start there');
     await createVault(page, PASSWORD);
+    await expect(page.getByTestId('status-card')).toContainText('Open in a plain Safari tab.');
+    await openNotices(page);
     await expect(banner).toContainText('installing does not take this vault along');
+    // The three, Safari's first (D196).
+    await expect(page.getByTestId('storage-warning')).toHaveCount(3);
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 800 });
+      await expect(page.locator('[data-layout]')).toHaveAttribute('data-layout', LAYOUT[width]);
       await expect(banner).toHaveAttribute('data-warning', 'safari-tab');
     }
     // Settings lists all three, in order.
