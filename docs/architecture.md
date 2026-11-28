@@ -346,6 +346,14 @@ every project through the references in the root `tsconfig.json`.
   card, above a phone's list and in a start card's footer, reopens it (`resume()`), a new offer
   opening it again. The changed service worker (`ui/ChangedWorker.tsx`) and the failure screen
   (`ui/ErrorBoundary.tsx`) take the prototype's card with its mark (`CardMark`).
+- **Screens before unlock (Phase 11, D316).** `Card` (`ui/components.tsx`) is a centered card on a
+  tablet and a computer and the whole screen on a phone, under the `Brand` (moved there from
+  `ui/Sidebar.tsx`); a title that is the app's name stays for screen readers only, so the name shows
+  once. Its `hero` goes beside the card on a computer and above it elsewhere: the start screen puts
+  there the headline, what having no server means and the two points, and the card holds the three
+  starts as option cards (`StartOption`), named by their title and described by their note. The
+  other window and the framed app (`ui/Framed.tsx`) show an `app-window` mark, in the accent and in
+  the warning tone.
 - **Onboarding (Phase 3, §13.3, D198).** `src/ui/Start.tsx` opens with what having no server
   means, then the three starts; the pair start explains today's path (a backup restored here) until
   Phase 4. On a Safari tab (`safariTab()`) the advice to install first comes before the starts, and

@@ -6,6 +6,14 @@
 import type { ReactNode } from 'react';
 
 const PATHS = {
+  'app-window': (
+    <>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M10 4v4" />
+      <path d="M2 8h20" />
+      <path d="M6 4v4" />
+    </>
+  ),
   check: <path d="M20 6 9 17l-5-5" />,
   'chevron-down': <path d="m6 9 6 6 6-6" />,
   'chevron-left': <path d="m15 18-6-6 6-6" />,
@@ -176,6 +184,12 @@ const PATHS = {
       <path d="M14 18h6" />
     </>
   ),
+  laptop: (
+    <>
+      <path d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z" />
+      <path d="M20.054 15.987H3.946" />
+    </>
+  ),
   list: (
     <>
       <path d="M3 5h.01" />
@@ -249,10 +263,23 @@ const PATHS = {
       <circle cx="12" cy="12" r="3" />
     </>
   ),
+  share: (
+    <>
+      <path d="M12 2v13" />
+      <path d="m16 6-4-4-4 4" />
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    </>
+  ),
   'shield-check': (
     <>
       <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
       <path d="m9 12 2 2 4-4" />
+    </>
+  ),
+  smartphone: (
+    <>
+      <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+      <path d="M12 18h.01" />
     </>
   ),
   'sticky-note': (
