@@ -1,11 +1,13 @@
 # Phase 11 prototype
 
-The UX prototype Phase 11 implements (D316), frozen from the Design artifact "BlindVault — nova UX",
-version `1795865325-5b25`. The PNGs are the reference; where a PNG and the overview disagree, the
+The UX prototype Phase 11 implements (D316), frozen from the Design artifact "BlindVault — nova UX":
+the 57 original artboards from version `1795865325-5b25`, and the 39 screens the prototype lacked,
+drawn on its "Telas novas" page and approved by the owner batch by batch, from version
+`1795870454-2772`. The PNGs are the reference; where a PNG and the overview disagree, the
 overview wins (D316's "Kept against the prototype").
 
-- `sources/`: the artifact's `.dc.html` artboards and `canvas.json` (positions, titles and the
-  canvas notes), byte for byte as published. Prettier skips this folder.
+- `sources/`: the artifact's `.dc.html` artboards and `canvas.json` (positions, titles, pages and
+  the canvas notes), byte for byte as published. Prettier skips this folder.
 - `light/` and `dark/`: one PNG per artboard and theme, at the artboard's size and a scale of 1,
   with the teal accent, the prototype's default.
 
@@ -109,3 +111,56 @@ The shell (sidebar, status card, bottom bar, status line) is drawn in `Cofre` an
 
 The prototype draws no Android screen: the Android task takes the phone artboards above, and the
 biometric unlock, provider window and About are drawn by the task for the missing screens.
+
+## Screens drawn in Phase 11
+
+Drawn in the prototype's visual language for the screens it lacked (Phase 11's third task), with
+the app's copy and "dispositivo" read as "aparelho" (D316). They keep what D316 keeps against the
+prototype: text on every security action, the copy toast saying clearing is not guaranteed, no
+device name while locked, import's format and plaintext warning, and no dismiss on the storage
+warning. A few strings are new and enter the catalogs with the copy task: the trash's intro and
+purge date per row, the status card's and Avisos' lines, "Agora não" on the update, "Até 10 MiB
+por arquivo.", the retired list's dates, "Menu", "Mais", "ou" between biometrics and password, and
+the bound state of the provider's link check.
+
+| Artboard | Title | Size | Task |
+| --- | --- | --- | --- |
+| `Lixeira` | Lixeira | 1280 × 800 | Vault and items |
+| `Pasta` | Pasta: ações | 1280 × 800 | Vault and items |
+| `Primeiros-passos` | Primeiros passos | 1280 × 800 | Vault and items |
+| `Mesclar` | Mesclar 3/4 | 1280 × 800 | Settings |
+| `Mesclar-pronto` | Mesclar: pronto, com avisos | 1280 × 800 | Settings |
+| `Regenerar` | Regenerar 1/5: aviso | 1280 × 800 | Settings |
+| `Refundar` | Refundar 1/5: avisos | 1280 × 800 | Settings |
+| `Apagar` | Apagar este cofre deste aparelho | 1280 × 800 | Settings |
+| `Importar-formato` | Importar 1/4: formato | 1280 × 800 | Settings |
+| `Importar-previa` | Importar 3/4: prévia | 1280 × 800 | Settings |
+| `Restaurar-2` | Restaurar 2/3: abrir o backup | 390 × 844 | Start, unlock and create |
+| `Restaurar-3` | Restaurar 3/3: senha local | 390 × 844 | Start, unlock and create |
+| `Substituir` | Substituir a partir do desbloqueio | 390 × 844 | Start, unlock and create |
+| `Instalar` | Instalar primeiro (Safari) | 390 × 844 | Start, unlock and create |
+| `Atualizar` | Atualizar | 1280 × 800 | Shell |
+| `Outra-janela` | Aberto em outra janela | 1280 × 800 | Start, unlock and create |
+| `Erro` | Algo deu errado | 1280 × 800 | Shell |
+| `Service-worker` | Service worker alterado | 1280 × 800 | Shell |
+| `Moldura` | Dentro de outra página | 1280 × 800 | Start, unlock and create |
+| `Avisos` | Avisos do cofre | 1280 × 800 | Shell |
+| `Avisos-celular` | Avisos no celular | 390 × 844 | Shell |
+| `Aposentados` | Aparelhos aposentados | 1280 × 800 | Devices |
+| `STUN` | Servidores STUN | 1280 × 800 | Devices |
+| `Gerador-palavras` | Gerador em palavras | 1280 × 800 | Vault and items |
+| `Editor-totp-anexos` | Editor: TOTP e anexos | 1280 × 800 | Vault and items |
+| `Item-anexos` | Item com anexos | 1280 × 800 | Vault and items |
+| `Historico-restaurar` | Histórico: restaurar uma versão | 1280 × 800 | Vault and items |
+| `Toast-celular` | Toast de cópia (celular) | 390 × 844 | Vault and items |
+| `Toast-computador` | Toast de cópia (computador) | 1280 × 800 | Vault and items |
+| `Sheet-acoes` | Bottom sheet: mais ações | 390 × 844 | Vault and items |
+| `Sheet-filtro` | Bottom sheet: filtrar por tipo | 390 × 844 | Vault and items |
+| `Tablet` | Tablet em 800 px | 800 × 1100 | Shell |
+| `Tablet-gaveta` | Tablet: gaveta aberta | 800 × 1100 | Shell |
+| `Android-biometria` | Android: desbloqueio por biometria | 390 × 844 | Android |
+| `Android-provedor` | Android: janela do provedor | 390 × 844 | Android |
+| `Android-sobre` | Android: Sobre | 390 × 844 | Android |
+| `Passkey-frame` | Passkey: pedido de dentro de um frame | 420 × 640 | Extension |
+| `Passkey-encerrado` | Passkey: pedido encerrado | 420 × 640 | Extension |
+| `Passkey-sem` | Passkey: nenhuma do site | 420 × 640 | Extension |
