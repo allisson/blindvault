@@ -53,14 +53,12 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   // The creator: its own record only, so it is the only device (D119), with nothing to retire.
   const devices = page.getByTestId('devices');
   await expect(devices.getByTestId('device')).toHaveCount(1);
-  await expect(devices.getByTestId('device')).toContainText('(this device)');
+  await expect(devices.getByTestId('device-this')).toHaveCount(1);
   await expect(devices.getByTestId('devices-only')).toBeVisible();
   await expect(devices.getByTestId('device-retire')).toHaveCount(0);
   const name = (
-    (await devices.getByTestId('device').locator('span.font-medium').textContent()) ?? ''
-  )
-    .replace(' (this device)', '')
-    .trim();
+    (await devices.getByTestId('device').getByTestId('device-label').textContent()) ?? ''
+  ).trim();
   expect(name).not.toBe('');
 
   await switchSettingsPage(page, 'backup');
@@ -99,7 +97,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(devices.getByTestId('devices-readmit')).toBeVisible();
   await expect(devices.getByTestId('device')).toHaveCount(1);
   await expect(devices.getByTestId('device')).toContainText(name);
-  await expect(devices.getByTestId('device')).not.toContainText('(this device)');
+  await expect(devices.getByTestId('device-this')).toHaveCount(0);
   // Erasing it now leaves no Device record of its own to retire (D205).
   await switchSettingsPage(page, 'erase');
   await button(page, 'Erase this vault from this device…').click();

@@ -1208,7 +1208,7 @@ const en = {
     backupHidden:
       'The vault locks as soon as the app is hidden: if the browser hides it while it saves the file, the vault locks, and the export must be repeated.',
     devices: 'Devices',
-    devicesThis: '{name} (this device)',
+    devicesThis: 'This device',
     devicesRegistered: 'Registered on {date}',
     devicesLastSync: 'Last synced with this device: {date}',
     devicesNeverSynced: 'Last synced with this device: never',
@@ -2567,7 +2567,7 @@ const ptBR: Messages = {
     backupHidden:
       'O cofre bloqueia assim que o app fica oculto: se o navegador o ocultar enquanto salva o arquivo, o cofre bloqueia e a exportação precisa ser repetida.',
     devices: 'Dispositivos',
-    devicesThis: '{name} (este dispositivo)',
+    devicesThis: 'Este dispositivo',
     devicesRegistered: 'Registrado em {date}',
     devicesLastSync: 'Última sincronização com este dispositivo: {date}',
     devicesNeverSynced: 'Última sincronização com este dispositivo: nunca',

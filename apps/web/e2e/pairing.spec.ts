@@ -152,10 +152,8 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
 
   // Erasing B names its Device record, to retire from A, before and after (D205).
   await openSettingsPage(b, 'devices');
-  const own = b.getByTestId('device').filter({ hasText: '(this device)' });
-  const nameB = ((await own.locator('span.font-medium').textContent()) ?? '')
-    .replace(' (this device)', '')
-    .trim();
+  const own = b.getByTestId('device').filter({ has: b.getByTestId('device-this') });
+  const nameB = ((await own.getByTestId('device-label').textContent()) ?? '').trim();
   expect(nameB).not.toBe('');
   await switchSettingsPage(b, 'erase');
   const named = `Afterwards, retire this device’s Device record, "${nameB}", from another device: until then they keep offering it as a sync peer.`;

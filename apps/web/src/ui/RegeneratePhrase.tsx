@@ -145,7 +145,7 @@ export function RegeneratePhrase({
           <>
             <p className="text-sm">{m.settings.regenIntro}</p>
             <Button
-              variant="quiet"
+              variant="secondary"
               className="self-start"
               data-testid="regenerate-start"
               onClick={() => {

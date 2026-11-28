@@ -137,7 +137,7 @@ export function MergeBackup({
       )}
       {step.kind === 'idle' ? (
         <Button
-          variant="quiet"
+          variant="secondary"
           className="self-start"
           data-testid="merge-start"
           onClick={() => {
