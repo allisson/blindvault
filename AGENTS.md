@@ -36,7 +36,7 @@ Rules for using it:
 
 ## Current phase
 
-Phase 10 — Extension and Android. Update this line when a gate passes.
+Phase 11 — New UX. Update this line when a gate passes.
 
 ## Repository layout
 

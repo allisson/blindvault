@@ -25,7 +25,9 @@ Phase 7 User experience ──► UX Gate
 Phase 7b Essential UX ──► Essential UX Gate
 Phase 8 Import and final review ──► Security Gate
 Phase 9 Attachments ──► Attachments Gate
-Phase 10 Extension and Android ──► Release Gate ──► v1.0
+Phase 10 Extension and Android ──► Extension and Android Gate
+Phase 11 New UX ──► New UX Gate
+Release ──► Release Gate ──► v1.0
 ```
 
 ---
@@ -531,7 +533,51 @@ and the password generator. Then `docs/record-content.md` vectors, `packages/vau
 - [x] Review of every screen of the extension in Chrome and Firefox (the popup, filling, the passkey confirmation window, pairing and unlock), in both themes; bugs fixed and improvements applied, recorded as a decision (D313, Chrome only; the Firefox review skipped)
 - [x] Review of every screen of the Android app on the A54 (the shell, the biometric unlock, the credential provider and autofill on other apps and browsers, pairing), in both themes; bugs fixed and improvements applied, recorded as a decision (D314)
 - [x] Visual pass over the existing screens from the UX prototypes (D315)
-- [ ] The extension in the Chrome Web Store and listed on AMO (D270): a hosted privacy policy (nothing collected, the vault local and encrypted, STUN sees the IP), a 128×128 icon in the manifest, store screenshots of the popup and the passkey confirmation window, the listing texts (single purpose, each permission's justification, data-use disclosures, reviewer notes on `<all_urls>` and the MAIN-world script), AMO's source package with build instructions for Node 26.13 and pnpm through corepack, and the publisher accounts with 2FA and the Web Store's trader declaration; after the first upload, the served CRX and XPI checked against `asset-manifest.txt` (`extension.md` §8), and decisions on how that check treats a rewritten `manifest.json` and on the Web Store's verified CRX uploads
+
+### Extension and Android Gate
+
+- [x] Every task above done; the store listing moved to the Release, after Phase 11 (D316)
+
+---
+
+## Phase 11 — New UX
+
+**Goal:** the app, the extension and the Android shell take the UX prototype as faithfully as the security rules allow (D316). Runs before the Release: the external review and the store listings see the UI that ships.
+
+### Tasks
+
+- [ ] Record the scope and every departure from the prototype in the overview (D316), amending §13 and the decisions it names
+- [ ] Freeze the prototype in `docs/prototypes/phase-11/`: a PNG of each artboard in both themes (the reference), the `.dc.html` sources, a `README.md` mapping each artboard to its task
+- [ ] Draw in the canvas the screens the prototype lacks, approved before their code: trash, folders, first steps; merge, regenerate, re-found and erase wizards; import format and preview; restore steps 2 and 3; replace from unlock; install, update, other-window and error screens; the vault notices; retired list, STUN editor; generator in words mode; attachments, TOTP editing, version restore; toasts and bottom sheets; tablet at 800 px; Android biometric unlock, provider window, About; passkey requests from a cross-origin frame, ended, or with no passkey
+- [ ] Tokens and fonts: neutrals, accents, radii, heights and shadows in `index.css`; Instrument Sans and IBM Plex Mono self-hosted with their OFL notice, justified in `docs/architecture.md`; `font-src 'self'` in `build/csp.ts`, Caddy, nginx and the extension manifest, the Android CSP test checked; precache and asset manifest; contrast test passing
+- [ ] Shell: sidebar (items, trash, folders, Devices, Settings, status card with the lock state, live sync, last backup, Lock now, notices in a warning tone); four-tab bottom bar on a phone with the status line above the list; unlocked state always visible, storage warning not dismissable
+- [ ] Start, unlock and create: three option cards; Can't unlock? kept after a wrong password, no device name while locked; Back to the phrase; the word counter; Vault ready's new order
+- [ ] Vault and items: desktop list and detail with type chips and labelled Copy on non-secret fields; phone list with pills and sync line; detail, TOTP card, history, template picker with descriptions and import link, editor and generator; secret Show and Copy with text; copy toast per D54; row Copy per D246
+- [ ] Devices: the main screen with three cards, list, badges, End, More actions, Retire, one-device state; pairing in four steps on both sides, Rename on the holder's last step, Vault received; reconnect and three-step sync; pairing error screens with their action
+- [ ] Settings: the grouped index with values (Preferences, Security, Data, Risk zone, About), each page, Backup with Merge, the Risk zone page
+- [ ] Extension, Chrome and Firefox: popup, passkey window, vault tab welcome, version lock, Settings → Passkeys with the shortcut row, same-computer pairing panel; labelled copy and Lock (D313); shortcut copy per D283
+- [ ] Android: shell, biometric unlock and provider window in the new language on the A54
+- [ ] Copy: pt-BR and en in `messages.ts`, the glossary's pt-BR terms through the catalogs, e2e specs and `warnings.test.ts`; the facts the prototype gets wrong corrected
+- [ ] Release v1.0.0-rc.6 for a hands-on test
+- [ ] Audit every screen at 375, 800 and 1280 px in both themes, the extension in Chrome and Firefox, the Android app on the A54, as in D312–D314: each finding fixed or recorded with its reason to stay
+- [ ] Release v1.0.0-rc.7 with the audit's fixes
+
+### New UX Gate
+
+- [ ] axe reports no violation on any screen in both themes at the three widths, the extension and the Android shell included
+- [ ] `keyboard.spec.ts`, `screen-reader.spec.ts`, `motion.spec.ts` and `layout.spec.ts` cover every new screen and control (sidebar, status card, bottom bar, Devices, pairing error screens)
+- [ ] Every security warning and confirmation still shown and asserted (exact text in the e2e specs or `warnings.test.ts`); the unlocked state visible on every vault screen; the storage warning not dismissable
+- [ ] CRYPTO-INV-024 and clipboard clearing (D54, D151) still asserted on the new rows and toasts
+- [ ] No request leaves for a font; the reproducible build covers the font files
+- [ ] The owner approves rc.6 after a hands-on test and rc.7 after the audit
+
+---
+
+## Release — v1.0
+
+### Tasks
+
+- [ ] The extension in the Chrome Web Store and listed on AMO (D270): a hosted privacy policy (nothing collected, the vault local and encrypted, STUN sees the IP), a 128×128 icon in the manifest, store screenshots of the new popup and the passkey confirmation window, the listing texts (single purpose, each permission's justification, data-use disclosures, reviewer notes on `<all_urls>` and the MAIN-world script), AMO's source package with build instructions for Node 26.13 and pnpm through corepack, and the publisher accounts with 2FA and the Web Store's trader declaration; after the first upload, the served CRX and XPI checked against `asset-manifest.txt` (`extension.md` §8), and decisions on how that check treats a rewritten `manifest.json` and on the Web Store's verified CRX uploads
 
 ### Release Gate → v1.0
 
