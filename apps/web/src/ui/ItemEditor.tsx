@@ -9,7 +9,7 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { checkPick } from '../app/attachments';
-import { folderRows } from '../app/folders';
+import { folderPath, folderRows } from '../app/folders';
 import { hex } from '../app/ids';
 
 import {
@@ -46,10 +46,13 @@ import { writeError } from './errors';
 import { Generator } from './Generator';
 import { Icon } from './icons';
 import { passkeyDate } from './ItemDetail';
+import { TEMPLATE_ICON, known } from './ItemRow';
 import { SecretInput } from './Secret';
 import { bytes, percent } from './StorageState';
 import { rated, useMeter } from './Strength';
 import { useToast } from './Toast';
+
+const CARD = 'flex flex-col gap-4 rounded-card border border-line bg-raised p-4';
 
 const INPUT_TYPES: Partial<Record<FieldType, string>> = {
   url: 'url',
@@ -302,18 +305,24 @@ function TemplatePicker({ onPick }: { readonly onPick: (draft: Draft) => void })
   return (
     <div className="flex w-full max-w-2xl flex-col gap-4 p-4">
       <h1 className="text-title">{m.items.chooseTemplate}</h1>
+      {/* Each template a card with its icon (D315). */}
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {TEMPLATES.map((t) => (
           <li key={t.id}>
-            <Button
-              variant="quiet"
-              className="w-full border border-line text-left"
+            <button
+              type="button"
+              className={`${TARGET} flex w-full items-center gap-3 rounded-card border border-line bg-raised p-3 text-left text-sm font-medium hover:bg-subtle`}
               onClick={() => {
                 onPick(newDraft(t));
               }}
             >
+              {known(t.id) ? (
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent-text">
+                  <Icon name={TEMPLATE_ICON[t.id]} />
+                </span>
+              ) : null}
               {m.templates[t.id as keyof Messages['templates']]}
-            </Button>
+            </button>
           </li>
         ))}
       </ul>
@@ -336,6 +345,7 @@ export function ItemEditor({
   const { messages: m, language } = useLanguage();
   const addFieldLabel = useId();
   const folderLabel = useId();
+  const folderPathId = useId();
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | undefined>(() => {
     const item = id ? session.item(id)?.item : undefined;
@@ -383,8 +393,11 @@ export function ItemEditor({
       />
     );
   }
-  const folders = folderRows(session.tree(new Intl.Collator(language).compare));
+  const tree = session.tree(new Intl.Collator(language).compare);
+  const folders = folderRows(tree);
   const folderKey = draft.folderId ? hex(draft.folderId) : '';
+  // The whole path of a subfolder, which the indented list does not say (D315).
+  const path = draft.folderId ? folderPath(tree, draft.folderId) : [];
   const update = (next: Draft) => {
     // An error goes once its own input changes, not only at the next Save (D312).
     if (errors) setErrors(clearEdited(errors, draft, next));
@@ -482,164 +495,193 @@ export function ItemEditor({
         });
       }}
     >
-      <h1 className="text-title">{m.templates[draft.templateId as keyof Messages['templates']]}</h1>
-      <Field
-        label={m.items.title}
-        value={draft.title}
-        error={
-          errors?.title === 'required'
-            ? m.errors.titleRequired
-            : errors?.title === 'too-long'
-              ? m.errors.titleTooLong
-              : undefined
-        }
-        onChange={(e) => {
-          update({ ...draft, title: e.target.value });
-        }}
-        autoFocus
-        data-testid="item-title"
-      />
-      {draft.fields.map((field) => {
-        const remove = () => {
-          update({ ...draft, fields: draft.fields.filter((f) => f.key !== field.key) });
-        };
-        return field.type === 'passkey' ? (
-          <PasskeyField key={field.key} field={field} onRemove={remove} />
-        ) : (
-          <FieldEditor
-            key={field.key}
-            draft={draft}
-            field={field}
-            error={fieldError(m, errors, field.key)}
-            onChange={(next) => {
-              update({
-                ...draft,
-                fields: draft.fields.map((f) => (f.key === next.key ? next : f)),
-              });
+      <h1 className="text-title">
+        {format(id ? m.items.editOf : m.items.newOf, {
+          template: m.templates[draft.templateId as keyof Messages['templates']],
+        })}
+      </h1>
+      {/* The fields in one card, where the item is filed in another (D315). */}
+      <div className={CARD}>
+        <Field
+          label={m.items.title}
+          value={draft.title}
+          error={
+            errors?.title === 'required'
+              ? m.errors.titleRequired
+              : errors?.title === 'too-long'
+                ? m.errors.titleTooLong
+                : undefined
+          }
+          onChange={(e) => {
+            update({ ...draft, title: e.target.value });
+          }}
+          autoFocus
+          data-testid="item-title"
+        />
+        {draft.fields.map((field) => {
+          const remove = () => {
+            update({ ...draft, fields: draft.fields.filter((f) => f.key !== field.key) });
+          };
+          return field.type === 'passkey' ? (
+            <PasskeyField key={field.key} field={field} onRemove={remove} />
+          ) : (
+            <FieldEditor
+              key={field.key}
+              draft={draft}
+              field={field}
+              error={fieldError(m, errors, field.key)}
+              onChange={(next) => {
+                update({
+                  ...draft,
+                  fields: draft.fields.map((f) => (f.key === next.key ? next : f)),
+                });
+              }}
+              onRemove={remove}
+            />
+          );
+        })}
+        <div className="flex items-end gap-2">
+          <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
+            <span id={addFieldLabel}>{m.items.addField}</span>
+            <select
+              className={INPUT}
+              aria-describedby={describedBy(platform.kind, addFieldLabel)}
+              value={adding}
+              onChange={(e) => {
+                const type = FIELD_TYPES.find((t) => t === e.target.value);
+                if (type) setAdding(type);
+              }}
+              data-testid="add-field-type"
+            >
+              {/* An attachment is added from a file (attachments.md §7), a passkey only by a site
+                (extension.md §7.6), never as an empty field. */}
+              {FIELD_TYPES.filter((t) => t !== 'attachment' && t !== 'passkey').map((t) => (
+                <option key={t} value={t}>
+                  {m.fieldTypes[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              update(addField(draft, adding));
             }}
-            onRemove={remove}
-          />
-        );
-      })}
-      <div className="flex items-end gap-2">
-        <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
-          <span id={addFieldLabel}>{m.items.addField}</span>
+          >
+            {m.items.add}
+          </Button>
+        </div>
+        {session.writable ? (
+          // One file at a time, checked when picked and read only when saved (attachments.md §7).
+          <div className="flex flex-col gap-1">
+            <input
+              ref={picker}
+              type="file"
+              hidden
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) pick(file);
+              }}
+              data-testid="attachment-input"
+            />
+            <Button
+              variant="quiet"
+              className="self-start"
+              onClick={() => {
+                picker.current?.click();
+              }}
+            >
+              <Icon name="upload" className="me-2" />
+              {m.items.addAttachment}
+            </Button>
+            {refused ? (
+              <p role="alert" className="text-sm text-danger">
+                {refused}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div className={CARD}>
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          <span id={folderLabel}>{m.folders.folder}</span>
           <select
             className={INPUT}
-            aria-describedby={describedBy(platform.kind, addFieldLabel)}
-            value={adding}
+            aria-describedby={describedBy(
+              platform.kind,
+              folderLabel,
+              path.length > 1 ? folderPathId : undefined,
+            )}
+            value={folderKey}
             onChange={(e) => {
-              const type = FIELD_TYPES.find((t) => t === e.target.value);
-              if (type) setAdding(type);
+              const picked = folders.find((r) => hex(r.folder.id) === e.target.value);
+              update({ ...draft, folderId: picked?.folder.id });
             }}
-            data-testid="add-field-type"
+            data-testid="item-folder"
           >
-            {/* An attachment is added from a file (attachments.md §7), a passkey only by a site
-                (extension.md §7.6), never as an empty field. */}
-            {FIELD_TYPES.filter((t) => t !== 'attachment' && t !== 'passkey').map((t) => (
-              <option key={t} value={t}>
-                {m.fieldTypes[t]}
+            <option value="">{m.folders.root}</option>
+            {folderKey !== '' && !folders.some((r) => hex(r.folder.id) === folderKey) ? (
+              // A folder not shown in the tree: kept unless the user picks another (D14).
+              <option value={folderKey}>{m.folders.root}</option>
+            ) : null}
+            {folders.map((r) => (
+              <option key={hex(r.folder.id)} value={hex(r.folder.id)}>
+                {`${'\u00a0\u00a0'.repeat(r.depth)}${r.folder.name}`}
               </option>
             ))}
           </select>
+          {path.length > 1 ? (
+            <span
+              id={folderPathId}
+              className="font-normal text-muted"
+              data-testid="item-folder-path"
+            >
+              {path.join(' / ')}
+            </span>
+          ) : null}
         </label>
-        <Button
-          variant="quiet"
-          onClick={() => {
-            update(addField(draft, adding));
-          }}
-        >
-          {m.items.add}
-        </Button>
-      </div>
-      {session.writable ? (
-        // One file at a time, checked when picked and read only when saved (attachments.md §7).
-        <div className="flex flex-col gap-1">
-          <input
-            ref={picker}
-            type="file"
-            hidden
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (file) pick(file);
-            }}
-            data-testid="attachment-input"
-          />
-          <Button
-            variant="quiet"
-            className="self-start"
-            onClick={() => {
-              picker.current?.click();
-            }}
-          >
-            <Icon name="upload" className="me-2" />
-            {m.items.addAttachment}
-          </Button>
-          {refused ? (
-            <p role="alert" className="text-sm text-danger">
-              {refused}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        <span id={folderLabel}>{m.folders.folder}</span>
-        <select
-          className={INPUT}
-          aria-describedby={describedBy(platform.kind, folderLabel)}
-          value={folderKey}
+        <Field
+          label={m.items.tags}
+          hint={m.items.tagsHint}
+          value={draft.tags}
+          error={
+            errors?.tags === 'too-many'
+              ? m.errors.tagsTooMany
+              : errors?.tags === 'too-long'
+                ? m.errors.tagTooLong
+                : undefined
+          }
           onChange={(e) => {
-            const picked = folders.find((r) => hex(r.folder.id) === e.target.value);
-            update({ ...draft, folderId: picked?.folder.id });
+            update({ ...draft, tags: e.target.value });
           }}
-          data-testid="item-folder"
-        >
-          <option value="">{m.folders.root}</option>
-          {folderKey !== '' && !folders.some((r) => hex(r.folder.id) === folderKey) ? (
-            // A folder not shown in the tree: kept unless the user picks another (D14).
-            <option value={folderKey}>{m.folders.root}</option>
-          ) : null}
-          {folders.map((r) => (
-            <option key={hex(r.folder.id)} value={hex(r.folder.id)}>
-              {`${'\u00a0\u00a0'.repeat(r.depth)}${r.folder.name}`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Field
-        label={m.items.tags}
-        hint={m.items.tagsHint}
-        value={draft.tags}
-        error={
-          errors?.tags === 'too-many'
-            ? m.errors.tagsTooMany
-            : errors?.tags === 'too-long'
-              ? m.errors.tagTooLong
-              : undefined
-        }
-        onChange={(e) => {
-          update({ ...draft, tags: e.target.value });
-        }}
-        data-testid="item-tags"
-      />
-      <TextArea
-        label={m.items.notes}
-        value={draft.notes}
-        onChange={(e) => {
-          update({ ...draft, notes: e.target.value });
-        }}
-        data-testid="item-notes"
-      />
+          data-testid="item-tags"
+        />
+        <TextArea
+          label={m.items.notes}
+          value={draft.notes}
+          onChange={(e) => {
+            update({ ...draft, notes: e.target.value });
+          }}
+          data-testid="item-notes"
+        />
+      </div>
       {failure ? (
         <p role="alert" className="text-sm text-danger">
           {failure}
         </p>
       ) : null}
       {/* Fixed at the bottom of the pane, so Save never scrolls away (D254). */}
-      <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex justify-end gap-2 border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:*:flex-1">
+      <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap justify-end gap-2 border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:*:flex-1">
+        {/* Says when leaving would ask first (D234, D315). */}
+        <p
+          className="me-auto self-center text-sm text-muted max-sm:basis-full empty:hidden"
+          data-testid="unsaved"
+        >
+          {changed.current ? m.items.unsaved : null}
+        </p>
         <Button
           variant="secondary"
           onClick={() => {

@@ -15,6 +15,7 @@ import {
   findNode,
   folderFailure,
   folderNameOf,
+  folderPath,
   folderRows,
   moveTargets,
   treeItems,
@@ -90,6 +91,12 @@ describe('the displayed folder tree', () => {
   it('finds a folder node by ID, and nothing for an unknown one', () => {
     expect(findNode(tree, new Uint8Array(16).fill(2))).toBe(a1);
     expect(findNode(tree, new Uint8Array(16).fill(9))).toBeUndefined();
+  });
+
+  it('gives the path from the root to a folder, and none for an unknown one (D315)', () => {
+    expect(folderPath(tree, new Uint8Array(16).fill(4))).toEqual(['A', 'A1', 'A1a']);
+    expect(folderPath(tree, new Uint8Array(16).fill(5))).toEqual(['B']);
+    expect(folderPath(tree, new Uint8Array(16).fill(9))).toEqual([]);
   });
 
   it('offers as move targets the root and every folder outside the subtree (D171)', () => {

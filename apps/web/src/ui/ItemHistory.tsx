@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { Button, Notice } from './components';
 import { writeError } from './errors';
+import { Icon } from './icons';
 import { FieldValue, fieldName } from './ItemDetail';
 
 function VersionFields({
@@ -95,6 +96,17 @@ export function ItemHistory({
 
   return (
     <article className="flex w-full max-w-2xl flex-col gap-4 p-4">
+      {/* Back on top, as every screen opened from another (D315). */}
+      <Button
+        variant="quiet"
+        className="-ms-4 self-start"
+        onClick={() => {
+          nav.back();
+        }}
+      >
+        <Icon name="chevron-left" className="me-2" />
+        {m.items.backToItem}
+      </Button>
       <h1 className="text-title break-words">
         {format(m.items.historyTitle, { title: view.item?.title ?? m.items.newerTitle })}
       </h1>
@@ -104,64 +116,61 @@ export function ItemHistory({
       ) : versions.length === 0 ? (
         <p className="text-sm text-muted">{m.items.noHistory}</p>
       ) : null}
-      <ol className="flex flex-col gap-4">
-        {(versions ?? []).map((v) => (
-          <li
-            key={hex(v.versionId)}
-            className="flex flex-col gap-3 rounded-control border border-line p-3"
-          >
-            <header className="flex flex-col gap-1">
-              <h2 className="font-semibold break-words">{v.item?.title ?? m.items.newerTitle}</h2>
-              <p className="text-sm text-muted">{when.format(v.hlc.physicalMs)}</p>
-            </header>
-            {v.readOnly === 'newer-content' ? <Notice>{m.items.versionNewer}</Notice> : null}
-            {v.readOnly === 'future-clock' ? <Notice>{m.items.versionClock}</Notice> : null}
-            {v.item ? (
-              <VersionFields
-                item={v.item}
-                clearSeconds={session.preferences.clipboardClearSeconds}
-                session={session}
-                blobWrites={blobWrites}
+      {/* A timeline, newest first: a mark per version on one line (D315). */}
+      <ol className="flex flex-col">
+        {(versions ?? []).map((v, i) => (
+          <li key={hex(v.versionId)} className="flex gap-3">
+            <span aria-hidden="true" className="flex flex-col items-center">
+              <span
+                className={`mt-4 size-3 shrink-0 rounded-full ${i === 0 ? 'bg-accent' : 'bg-control'}`}
               />
-            ) : null}
-            {restorable && v.item && v.readOnly === undefined && session.writable ? (
-              <Button
-                variant="quiet"
-                className="self-start"
-                disabled={working}
-                onClick={() => {
-                  setWorking(true);
-                  setError(undefined);
-                  const from = nav.current();
-                  session.restoreVersion(id, v.versionId).then(
-                    () => {
-                      onChange();
-                      nav.follow(from, () => {
-                        nav.back();
-                      });
-                    },
-                    (e: unknown) => {
-                      setWorking(false);
-                      setError(writeError(e, m));
-                    },
-                  );
-                }}
-              >
-                {m.items.restoreVersion}
-              </Button>
-            ) : null}
+              <span className="w-px flex-1 bg-line" />
+            </span>
+            <div className="mb-4 flex min-w-0 flex-1 flex-col gap-3 rounded-card border border-line bg-raised p-4">
+              <header className="flex flex-col gap-1">
+                <h2 className="font-semibold break-words">{v.item?.title ?? m.items.newerTitle}</h2>
+                <p className="text-sm text-muted">{when.format(v.hlc.physicalMs)}</p>
+              </header>
+              {v.readOnly === 'newer-content' ? <Notice>{m.items.versionNewer}</Notice> : null}
+              {v.readOnly === 'future-clock' ? <Notice>{m.items.versionClock}</Notice> : null}
+              {v.item ? (
+                <VersionFields
+                  item={v.item}
+                  clearSeconds={session.preferences.clipboardClearSeconds}
+                  session={session}
+                  blobWrites={blobWrites}
+                />
+              ) : null}
+              {restorable && v.item && v.readOnly === undefined && session.writable ? (
+                <Button
+                  variant="quiet"
+                  className="self-start"
+                  disabled={working}
+                  onClick={() => {
+                    setWorking(true);
+                    setError(undefined);
+                    const from = nav.current();
+                    session.restoreVersion(id, v.versionId).then(
+                      () => {
+                        onChange();
+                        nav.follow(from, () => {
+                          nav.back();
+                        });
+                      },
+                      (e: unknown) => {
+                        setWorking(false);
+                        setError(writeError(e, m));
+                      },
+                    );
+                  }}
+                >
+                  {m.items.restoreVersion}
+                </Button>
+              ) : null}
+            </div>
           </li>
         ))}
       </ol>
-      <Button
-        variant="quiet"
-        className="self-start"
-        onClick={() => {
-          nav.back();
-        }}
-      >
-        {m.items.backToItem}
-      </Button>
       {error ? (
         <p role="alert" className="text-sm text-danger">
           {error}

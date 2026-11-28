@@ -20,6 +20,12 @@ function button(page: Page, name: string) {
 }
 
 /** A subfolder in the list: its ▸ is hidden from screen readers, the list is named Folders. */
+/** An action of the folder shown, in its overflow menu (D315). */
+async function folderAction(page: Page, name: string) {
+  await button(page, 'Folder actions').click();
+  await button(page, name).first().click();
+}
+
 function subfolder(page: Page, name: string) {
   return page.getByRole('list', { name: 'Folders' }).getByRole('button', { name, exact: true });
 }
@@ -55,7 +61,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByText('This folder is empty.')).toBeVisible();
 
     // A subfolder, then an item created while Work is shown lands in Work.
-    await button(page, 'New subfolder').click();
+    await folderAction(page, 'New subfolder');
     await page.getByTestId('folder-name').fill('Clients');
     await button(page, 'Create').click();
     await expect(page.getByRole('heading', { name: 'Clients', level: 2 })).toBeVisible();
@@ -72,19 +78,20 @@ for (const [layout, width] of WIDTHS) {
     // Rename; the folder cannot move into its own subtree (D171).
     await folders(page, layout);
     await button(page, 'Work').click();
-    await button(page, 'Rename').click();
+    await folderAction(page, 'Rename');
     await page.getByTestId('folder-name').fill('  Office ');
     await button(page, 'Rename').last().click();
     await expect(page.getByRole('heading', { name: 'Office', level: 2 })).toBeVisible();
-    await button(page, 'Move').click();
+    await folderAction(page, 'Move');
     await expect(page.getByTestId('move-target').locator('option')).toHaveText([
       'No folder (vault root)',
     ]);
-    await button(page, 'Move').first().click();
+    await folderAction(page, 'Move');
+    await expect(page.getByTestId('move-target')).toHaveCount(0);
 
     // Move Clients to the root, then the item into Clients.
     await subfolder(page, 'Clients').click();
-    await button(page, 'Move').click();
+    await folderAction(page, 'Move');
     await page.getByTestId('move-target').selectOption({ label: 'No folder (vault root)' });
     await button(page, 'Move').last().click();
     await folders(page, layout);
@@ -100,6 +107,7 @@ for (const [layout, width] of WIDTHS) {
     await folders(page, layout);
     await button(page, 'Clients').click();
     await expect(list.getByRole('button', { name: 'Contract', exact: true })).toBeVisible();
+    await button(page, 'Folder actions').click();
     await expect(button(page, 'Move to trash')).toHaveAttribute(
       'title',
       'Moving a folder to the trash also moves its subfolders and their items.',

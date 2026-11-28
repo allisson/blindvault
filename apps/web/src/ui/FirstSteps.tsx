@@ -9,7 +9,7 @@ import { Icon } from './icons';
 /**
  * The empty vault's first steps (D250), in place of "No items yet.": the vault made, then a first
  * item, an import and a pairing, each opening where it is done. A read-only vault leaves out the
- * steps that write.
+ * steps that write. Each step is a card (D315).
  */
 export function FirstSteps({
   session,
@@ -50,15 +50,21 @@ export function FirstSteps({
         {m.vault.firstSteps}
       </h3>
       <p className="text-sm text-muted">{m.vault.firstStepsIntro}</p>
-      <ol className="flex flex-col gap-3">
-        <li className="flex items-start gap-3 text-sm" data-done="true">
+      <ol className="flex flex-col gap-2">
+        <li
+          className="flex items-start gap-3 rounded-card border border-line bg-raised p-4 text-sm"
+          data-done="true"
+        >
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink">
             <Icon name="check" label={m.ready.done} className="size-3.5!" />
           </span>
           <span className="leading-6">{m.vault.stepCreated}</span>
         </li>
         {steps.map((step, i) => (
-          <li key={step.key} className="flex items-start gap-3 text-sm">
+          <li
+            key={step.key}
+            className="flex items-start gap-3 rounded-card border border-line bg-raised p-4 text-sm"
+          >
             <span
               aria-hidden="true"
               className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line text-xs font-semibold"

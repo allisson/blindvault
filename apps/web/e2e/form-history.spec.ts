@@ -86,8 +86,10 @@ test('keeps vault content out of the form history and the spellchecker (D174, D1
   await button(page, 'Create').click();
   await expect(page.getByRole('heading', { name: 'Work', level: 2 })).toBeVisible();
   for (const action of ['New subfolder', 'Rename']) {
+    await button(page, 'Folder actions').click();
     await button(page, action).click();
     await expectNoneKept(page);
+    await button(page, 'Folder actions').click();
     await button(page, action).first().click();
   }
 

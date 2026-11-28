@@ -1,5 +1,6 @@
 import { type BlockedRecord, type VaultSession } from '@blindvault/vault';
 import { type ReactNode, useId, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   type FolderFailure,
@@ -14,7 +15,7 @@ import { type ListScreen, type Navigation } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { platform } from '../platform';
-import { Button, Field, INPUT, Notice, ROW, describedBy } from './components';
+import { Button, Field, INPUT, Notice, Overflow, ROW, describedBy } from './components';
 import { useLayout } from './hooks';
 import { Icon, type IconName } from './icons';
 
@@ -236,17 +237,22 @@ export function FolderPane({
 
 type Action = 'none' | 'subfolder' | 'rename' | 'move';
 
-/** The actions of the folder shown as the list: new subfolder, rename, move, trash. */
+/**
+ * The actions of the folder shown as the list: new subfolder, rename, move, trash. They sit in the
+ * folder's overflow menu, placed in the list's head (`menu`), their forms below it (D315).
+ */
 export function FolderActions({
   session,
   nav,
   id,
   onChange,
+  menu,
 }: {
   readonly session: VaultSession;
   readonly nav: Navigation;
   readonly id: Uint8Array;
   readonly onChange: () => void;
+  readonly menu: HTMLElement | null;
 }) {
   const { messages: m, language } = useLanguage();
   const moveToLabel = useId();
@@ -280,38 +286,50 @@ export function FolderActions({
   // An orphan shown at the root (D14) starts from the root.
   const parent = targets.some((t) => t.folder && hex(t.folder.id) === stored) ? stored : '';
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1">
-        {(['subfolder', 'rename', 'move'] as const).map((a) => (
-          <Button
-            key={a}
-            variant="quiet"
-            aria-expanded={action === a}
-            onClick={() => {
-              setFailure(undefined);
-              setAction(action === a ? 'none' : a);
-              setTarget(parent);
-            }}
-          >
-            {a === 'subfolder'
-              ? m.folders.newSubfolder
-              : a === 'rename'
-                ? m.folders.rename
-                : m.folders.move}
-          </Button>
-        ))}
-        <Button
-          variant="quiet"
-          title={m.folders.trashNote}
-          onClick={() => {
-            run(session.trashFolder(id), () => {
-              nav.closeFolder(id);
-            });
-          }}
-        >
-          {m.items.moveToTrash}
-        </Button>
-      </div>
+    <div className="flex flex-col gap-2 empty:hidden">
+      {menu
+        ? createPortal(
+            <Overflow label={m.folders.actions}>
+              {(['subfolder', 'rename', 'move'] as const).map((a) => (
+                <Button
+                  key={a}
+                  variant="quiet"
+                  className="text-left"
+                  aria-expanded={action === a}
+                  onClick={() => {
+                    setFailure(undefined);
+                    setAction(action === a ? 'none' : a);
+                    setTarget(parent);
+                  }}
+                >
+                  <Icon
+                    name={a === 'subfolder' ? 'plus' : a === 'rename' ? 'pencil' : 'folder'}
+                    className="me-2"
+                  />
+                  {a === 'subfolder'
+                    ? m.folders.newSubfolder
+                    : a === 'rename'
+                      ? m.folders.rename
+                      : m.folders.move}
+                </Button>
+              ))}
+              <Button
+                variant="quiet"
+                className="text-left text-danger!"
+                title={m.folders.trashNote}
+                onClick={() => {
+                  run(session.trashFolder(id), () => {
+                    nav.closeFolder(id);
+                  });
+                }}
+              >
+                <Icon name="trash-2" className="me-2" />
+                {m.items.moveToTrash}
+              </Button>
+            </Overflow>,
+            menu,
+          )
+        : null}
       {action === 'subfolder' ? (
         <NameForm
           initial=""
