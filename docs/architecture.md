@@ -341,7 +341,11 @@ every project through the references in the root `tsconfig.json`.
   reminder, the clock, the retired device, the check after a restore, the re-founding and the
   leftover passkey) and shows them on the Notices screen; the status card, the tablet's pill and the
   phone's line say how many, with the first one's short line. The shared-origin warning (D90) stays
-  a banner on every screen.
+  a banner on every screen. An asset update opens `UpdateDialog` (`ui/components.tsx`) between
+  flows, on every screen; "Not now" calls `UpdateMonitor.postpone()` and `UpdateEntry`, in the status
+  card, above a phone's list and in a start card's footer, reopens it (`resume()`), a new offer
+  opening it again. The changed service worker (`ui/ChangedWorker.tsx`) and the failure screen
+  (`ui/ErrorBoundary.tsx`) take the prototype's card with its mark (`CardMark`).
 - **Onboarding (Phase 3, §13.3, D198).** `src/ui/Start.tsx` opens with what having no server
   means, then the three starts; the pair start explains today's path (a backup restored here) until
   Phase 4. On a Safari tab (`safariTab()`) the advice to install first comes before the starts, and

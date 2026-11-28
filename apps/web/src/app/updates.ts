@@ -28,6 +28,8 @@ export interface UpdateState {
   readonly changedWorker: boolean;
   /** The warning about it, until dismissed. */
   readonly warning: boolean;
+  /** "Not now" on the offer: its dialog stays closed until reopened or a new offer (D316). */
+  readonly postponed: boolean;
 }
 
 export interface UpdateDeps {
@@ -56,7 +58,12 @@ function offerOf(reply: unknown): UpdateOffer | undefined {
 export class UpdateMonitor {
   readonly #deps: UpdateDeps;
   #registration: WatchedRegistration | undefined;
-  #state: UpdateState = { offer: undefined, changedWorker: false, warning: false };
+  #state: UpdateState = {
+    offer: undefined,
+    changedWorker: false,
+    warning: false,
+    postponed: false,
+  };
   readonly #listeners = new Set<() => void>();
 
   constructor(deps: UpdateDeps) {
@@ -91,12 +98,22 @@ export class UpdateMonitor {
   #changed(): void {
     // First, with no await: the new worker can take over the window within milliseconds (D162).
     this.#deps.lock();
-    this.#set({ offer: undefined, changedWorker: true, warning: true });
+    this.#set({ offer: undefined, changedWorker: true, warning: true, postponed: false });
   }
 
   /** Dismisses the warning ("I verified, continue"); the change stays known. */
   acknowledge(): void {
     if (this.#state.warning) this.#set({ ...this.#state, warning: false });
+  }
+
+  /** "Not now": closes the offer's dialog, the offer kept. */
+  postpone(): void {
+    if (this.#state.offer && !this.#state.postponed) this.#set({ ...this.#state, postponed: true });
+  }
+
+  /** Reopens the postponed offer's dialog. */
+  resume(): void {
+    if (this.#state.postponed) this.#set({ ...this.#state, postponed: false });
   }
 
   /** At startup and whenever the app becomes visible: a changed `sw.js`, then an asset update. */
@@ -116,7 +133,8 @@ export class UpdateMonitor {
     const offer = offerOf(reply);
     const current = this.#state.offer;
     if (offer?.hash === current?.hash && offer?.version === current?.version) return;
-    this.#set({ ...this.#state, offer });
+    // A new offer opens its dialog again.
+    this.#set({ ...this.#state, offer, postponed: false });
   }
 
   /** Locks, asks the service worker to switch to the offered hash, and reloads once it did. */

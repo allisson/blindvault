@@ -146,21 +146,26 @@ test('offers a new deploy without switching to it, and switches only once confir
   const next = await deploy('next', { version: '0.0.1-next' });
   host.root = next.root;
   await becomeVisible(page);
-  const banner = page.getByTestId('update-banner');
-  await expect(banner).toContainText(`An update is available: version ${VERSION} → 0.0.1-next.`, {
+  const dialog = page.getByRole('dialog', { name: 'Update available' });
+  await expect(dialog).toContainText(`An update is available: version ${VERSION} → 0.0.1-next.`, {
     timeout: 30_000,
   });
   await expect(page.getByTestId('update-hash')).toHaveText(next.hash);
-  await expect(
-    banner.getByText('Compare this hash with the one published in the release before you update.', {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    banner.getByText('Updating locks the vault and reloads the app.', { exact: true }),
-  ).toBeVisible();
+  await expect(dialog).toContainText(
+    'Compare this hash with the one published in the release before you update.',
+  );
+  await expect(dialog).toContainText('Updating locks the vault and reloads the app.');
   // Being offered locks nothing.
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
+
+  // "Not now" keeps the offer behind the status card, which reopens it (D316).
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
+  await page.getByTestId('status-card').getByTestId('update-open').click();
+  await expect(page.getByTestId('update-hash')).toHaveText(next.hash);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
 
   // Without confirmation the running version stays, reload after reload.
   for (let n = 0; n < 2; n++) {
@@ -171,10 +176,14 @@ test('offers a new deploy without switching to it, and switches only once confir
       `${VERSION}\n`,
     );
   }
+  // Offered again before unlock; postponed, it waits in the card's footer.
   await expect(page.getByTestId('update-hash')).toHaveText(next.hash, { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
+  await expect(page.getByTestId('update-open')).toBeVisible();
 
   await unlock(page);
-  await expect(page.getByTestId('update-hash')).toHaveText(next.hash, { timeout: 30_000 });
+  await page.getByTestId('status-card').getByTestId('update-open').click();
+  await expect(page.getByTestId('update-hash')).toHaveText(next.hash);
   await page.getByRole('button', { name: 'Update and lock', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Unlock the vault' })).toBeVisible({
     timeout: 30_000,
@@ -183,7 +192,7 @@ test('offers a new deploy without switching to it, and switches only once confir
   expect(await page.evaluate(async () => (await fetch('/version.txt')).text())).toBe(
     '0.0.1-next\n',
   );
-  await expect(page.getByTestId('update-banner')).toHaveCount(0);
+  await expect(page.getByTestId('update-dialog')).toHaveCount(0);
   await unlock(page);
 });
 
@@ -204,7 +213,7 @@ test('does not offer a deploy whose files fail their hashes (D191)', async ({ pa
   expect(reply).toEqual({ type: 'none' });
   await becomeVisible(page);
   await startScreen(page);
-  await expect(page.getByTestId('update-banner')).toHaveCount(0);
+  await expect(page.getByTestId('update-dialog')).toHaveCount(0);
 });
 
 test('locks an unlocked vault and warns when the host serves a changed sw.js (D63, D142, D162, D191)', async ({
@@ -229,7 +238,7 @@ test('locks an unlocked vault and warns when the host serves a changed sw.js (D6
   await page.getByRole('button', { name: 'I verified, continue', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Unlock the vault' })).toBeVisible();
   // The new bundle came with the changed worker: no asset update is offered next to it.
-  await expect(page.getByTestId('update-banner')).toHaveCount(0);
+  await expect(page.getByTestId('update-dialog')).toHaveCount(0);
 
   // The warning comes back at every start while the new worker waits.
   await page.reload();

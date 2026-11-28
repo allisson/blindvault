@@ -15,7 +15,14 @@ import { type Navigation, type Screen, isDetail, isList, isMain } from '../app/n
 import { SearchIndex } from '../app/search';
 import { newItemShortcut } from '../app/shortcuts';
 import { useMessages } from '../i18n/context';
-import { Button, LockState, SharedOriginWarning, UpdateBanner, WizardPlace } from './components';
+import {
+  Button,
+  LockState,
+  SharedOriginWarning,
+  UpdateDialog,
+  UpdateEntry,
+  WizardPlace,
+} from './components';
 import { useLayout } from './hooks';
 import { hex } from '../app/ids';
 import { ItemDetail } from './ItemDetail';
@@ -412,7 +419,7 @@ export function VaultShell({
           )}
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="scroller">
             <SharedOriginWarning />
-            <UpdateBanner />
+            <UpdateDialog />
             {/* A desktop has no header: a main destination's Back sits above it (D316). */}
             {layout === 'desktop' && main ? (
               <div className="px-2 pt-2">
@@ -429,7 +436,10 @@ export function VaultShell({
               </div>
             ) : null}
             {mobile && isList(screen) && !ready ? (
-              <StatusLine controller={controller} session={session} nav={nav} />
+              <>
+                <StatusLine controller={controller} session={session} nav={nav} />
+                <UpdateEntry className="mx-4" />
+              </>
             ) : null}
             <main className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'shrink-0'}`}>
               <WizardPlace.Provider value={{ header: mobile ? wizardHeader : null }}>

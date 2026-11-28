@@ -156,6 +156,8 @@ const en = {
       'This login has no https address an app can be linked to. Pick another login.',
   },
   update: {
+    title: 'Update available',
+    later: 'Not now',
     available: 'An update is available: version {current} → {next}.',
     hash: 'SHA-256 of its asset manifest:',
     verify: 'Compare this hash with the one published in the release before you update.',
@@ -1521,6 +1523,8 @@ const ptBR: Messages = {
       'Este login não tem endereço https a que um app possa se vincular. Escolha outro login.',
   },
   update: {
+    title: 'Atualização disponível',
+    later: 'Agora não',
     available: 'Há uma atualização disponível: versão {current} → {next}.',
     hash: 'SHA-256 do manifesto de assets:',
     verify: 'Compare este hash com o publicado na versão antes de atualizar.',

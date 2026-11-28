@@ -672,12 +672,7 @@ export function PreviewBadge() {
 
 const noUpdates = () => () => undefined;
 
-/**
- * An asset update the service worker staged, with the running and new versions and the full
- * manifest hash, offered only between flows (D152, D191). Updating locks and reloads.
- */
-export function UpdateBanner() {
-  const m = useMessages();
+function useOffer() {
   const updates = useUpdates();
   const state = useSyncExternalStore(updates?.monitor.subscribe ?? noUpdates, () =>
     updates?.monitor.getState(),
@@ -687,32 +682,74 @@ export function UpdateBanner() {
     () => updates?.controller.updateAllowed ?? false,
   );
   const offer = state?.offer;
-  if (!updates || !offer || state.changedWorker || !allowed) return null;
+  if (!updates || !offer || state.changedWorker || !allowed) return undefined;
+  return { monitor: updates.monitor, offer, postponed: state.postponed };
+}
+
+/**
+ * An asset update the service worker staged, with the running and new versions and the full
+ * manifest hash, offered only between flows (D152, D191), in a dialog (D316). Updating locks and
+ * reloads; "Not now" keeps the offer behind `UpdateEntry`.
+ */
+export function UpdateDialog() {
+  const m = useMessages();
+  const id = useId();
+  const update = useOffer();
+  if (!update || update.postponed) return null;
+  const { monitor, offer } = update;
   return (
-    <Banner
-      tone="info"
-      role="status"
-      data-testid="update-banner"
-      className="flex flex-col gap-2 py-3"
+    <ConfirmDialog
+      aria-label={undefined}
+      aria-labelledby={id}
+      data-testid="update-dialog"
+      tone="primary"
+      confirm={m.update.apply}
+      cancel={m.update.later}
+      onConfirm={() => {
+        void monitor.apply();
+      }}
+      onCancel={() => {
+        monitor.postpone();
+      }}
     >
+      <h2 id={id} className="text-lg font-semibold">
+        {m.update.title}
+      </h2>
       <p>{format(m.update.available, { current: __APP_VERSION__, next: offer.version })}</p>
-      <p>
-        {m.update.hash}{' '}
-        <code data-testid="update-hash" className="break-all">
+      <div className="flex flex-col gap-1 text-sm">
+        <p className="text-muted">{m.update.hash}</p>
+        <code
+          data-testid="update-hash"
+          className="rounded-control bg-subtle px-3 py-2 font-mono break-all"
+        >
           {offer.hash}
         </code>
+      </div>
+      <p className="text-sm text-muted">
+        {m.update.verify} {m.update.note}
       </p>
-      <p>{m.update.verify}</p>
-      <p>{m.update.note}</p>
-      <Button
-        className="self-start"
-        onClick={() => {
-          void updates.monitor.apply();
-        }}
-      >
-        {m.update.apply}
-      </Button>
-    </Banner>
+    </ConfirmDialog>
+  );
+}
+
+/** Reopens an update postponed with "Not now" (D316). */
+export function UpdateEntry({ className = '' }: { readonly className?: string }) {
+  const m = useMessages();
+  const update = useOffer();
+  if (!update?.postponed) return null;
+  const { monitor } = update;
+  return (
+    <button
+      type="button"
+      className={`${TARGET} flex items-center gap-2 rounded-control text-start text-sm font-semibold hover:underline ${className}`}
+      onClick={() => {
+        monitor.resume();
+      }}
+      data-testid="update-open"
+    >
+      <Icon name="refresh-cw" className="size-4 shrink-0" />
+      {m.update.title}
+    </button>
   );
 }
 
@@ -795,12 +832,38 @@ export function SafariTabWarning() {
   );
 }
 
+const MARK = {
+  danger: 'bg-danger-soft text-danger-text',
+  warning: 'bg-warning-soft text-warning-text',
+} as const;
+
+/** The icon of a failure or a warning, in a tinted square (D316). */
+export function CardMark({
+  name,
+  tone,
+}: {
+  readonly name: IconName;
+  readonly tone: keyof typeof MARK;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-12 items-center justify-center rounded-control ${MARK[tone]}`}
+    >
+      <Icon name={name} className="size-5!" />
+    </span>
+  );
+}
+
 /** A centered card for the screens shown before unlock. */
 export function Card({
   title,
+  icon,
   children,
 }: {
   readonly title: string;
+  /** A failure's or a warning's mark above the title (D316). */
+  readonly icon?: { readonly name: IconName; readonly tone: 'danger' | 'warning' } | undefined;
   readonly children: ReactNode;
 }) {
   const m = useMessages();
@@ -817,7 +880,7 @@ export function Card({
     <div className="flex min-h-dvh flex-col bg-surface text-fg">
       <SharedOriginWarning />
       <SafariTabWarning />
-      <UpdateBanner />
+      <UpdateDialog />
       <main className="flex flex-1 items-center justify-center p-4">
         <section className="flex w-full max-w-sm flex-col gap-4 rounded-card bg-raised p-6 shadow-raised">
           {/* The app's name once (D254), and no lock state before a vault exists. */}
@@ -831,6 +894,7 @@ export function Card({
             {/* A wizard's Cancel (D254). */}
             <span ref={setHeader} className={about ? 'hidden' : 'contents'} />
           </header>
+          {icon && !about ? <CardMark {...icon} /> : null}
           <h1 className="text-title">{about ? m.about.title : title}</h1>
           {about ? (
             <>
@@ -850,8 +914,9 @@ export function Card({
           <div className={about ? 'hidden' : 'contents'}>
             <WizardPlace.Provider value={{ header }}>{children}</WizardPlace.Provider>
           </div>
-          <footer className="flex items-center justify-between">
+          <footer className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted">v{__APP_VERSION__}</p>
+            <UpdateEntry />
             {about || holdsPhrase ? null : (
               <Button
                 variant="quiet"
