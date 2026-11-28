@@ -22,7 +22,7 @@ function header(config: string, name: string): string[] {
 describe('content security policy (D83, D91, D193, D195)', () => {
   it('is the policy of overview §11, and the header adds frame-ancestors', () => {
     expect(META_CSP).toBe(
-      "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; worker-src 'self'; manifest-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'",
+      "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; font-src 'self'; img-src 'self' data: blob:; worker-src 'self'; manifest-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'",
     );
     expect(HEADER_CSP).toBe(`${META_CSP}; frame-ancestors 'none'`);
   });

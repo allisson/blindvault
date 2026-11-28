@@ -7,7 +7,7 @@ export type Browser = (typeof BROWSERS)[number];
 export const GECKO_ID = 'blindvault@allisson.github.io';
 
 export const EXTENSION_CSP =
-  "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; form-action 'none'";
+  "script-src 'self' 'wasm-unsafe-eval'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 /** `action.openPopup` without a policy (extension.md §10). */
 export const MINIMUM_CHROME = '127';

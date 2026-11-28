@@ -6,6 +6,7 @@ export const META_CSP = [
   "default-src 'none'",
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self'",
+  "font-src 'self'",
   "img-src 'self' data: blob:",
   "worker-src 'self'",
   "manifest-src 'self'",

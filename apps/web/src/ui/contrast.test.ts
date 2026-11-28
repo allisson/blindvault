@@ -113,10 +113,10 @@ describe('visual tokens (D231)', () => {
     }
   }
 
-  it('uses 6-digit hex values, alpha allowed only for the shadow, edge and scrim', () => {
+  it('uses 6-digit hex values, alpha allowed only for the shadows, edge and scrim', () => {
     for (const vars of rules.values()) {
       for (const [name, value] of Object.entries(vars)) {
-        const alpha = ['shadow', 'edge', 'scrim'].includes(name);
+        const alpha = ['shadow', 'shadow-far', 'edge', 'scrim'].includes(name);
         expect(value, name).toMatch(alpha ? /^#[0-9a-f]{8}$/ : /^#[0-9a-f]{6}$/);
       }
     }
