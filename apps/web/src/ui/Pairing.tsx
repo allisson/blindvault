@@ -25,7 +25,7 @@ import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { platform } from '../platform';
 import { keystoreError } from './keystore';
-import { Button, CopyCheck, Field, Notice, TARGET, TextArea, useCheck } from './components';
+import { Alert, Button, CopyCheck, Field, Notice, TARGET, TextArea, useCheck } from './components';
 import { MergeNotices } from './MergeBackup';
 import { NewPassword } from './NewPassword';
 import { Icon } from './icons';
@@ -637,7 +637,7 @@ function StageBody({
         <>
           <h3 className="font-semibold">{p.sasTitle}</h3>
           <p
-            className="font-mono text-4xl tracking-widest"
+            className="font-mono text-5xl font-bold tracking-widest"
             data-testid="pairing-sas"
             aria-label={stage.sas.split('').join(' ')}
           >
@@ -725,14 +725,9 @@ function StageBody({
     case 'failed':
       return (
         <>
-          <p
-            role="alert"
-            className="text-sm text-danger"
-            data-testid="pairing-failed"
-            data-reason={stage.reason}
-          >
+          <Alert data-testid="pairing-failed" data-reason={stage.reason}>
             {failure(m, stage, flow)}
-          </p>
+          </Alert>
           <WizardActions>
             <Button onClick={onAgain} data-testid="pairing-again">
               {p.again}

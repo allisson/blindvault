@@ -55,7 +55,7 @@ for (const [layout, width] of WIDTHS) {
         - listitem: /^1\\. [a-z]+$/
         - listitem: /^24\\. [a-z]+$/
       - paragraph: /shown only now/
-      - paragraph: /Do not take a screenshot/
+      - note: /Do not take a screenshot/
       - button "I wrote them down"
     `);
 

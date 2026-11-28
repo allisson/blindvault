@@ -54,6 +54,7 @@ export function ResetPassword({
             <p className="text-sm">{m.reset.intro}</p>
             <TextArea
               label={m.restore.phrase}
+              mono
               hint={m.reset.hint}
               autoCapitalize="none"
               autoFocus

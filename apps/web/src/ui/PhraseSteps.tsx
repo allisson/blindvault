@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { wordMatches } from '../app/phrase-check';
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
-import { Button, Field } from './components';
+import { Button, Field, Notice } from './components';
 import { WizardActions } from './Wizard';
 
 // The Recovery Phrase shown once, then confirmed at three positions drawn at random (§5.4, D179):
@@ -33,7 +33,7 @@ export function PhraseWords({
       {/* No copy or download: the clipboard and downloaded files are outside the app (D179). */}
       <ol
         data-testid="recovery-phrase"
-        className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-control bg-subtle p-3 font-mono text-sm sm:grid-cols-3"
+        className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-card bg-subtle p-4 font-mono text-sm sm:grid-cols-3"
       >
         {words.map((word, i) => (
           <li key={i} className="flex gap-2">
@@ -43,7 +43,9 @@ export function PhraseWords({
         ))}
       </ol>
       <p className="text-sm">{m.create.phraseOnce}</p>
-      <p className="text-sm text-warning">{m.create.phraseNoPhoto}</p>
+      <Notice tone="warning" icon="triangle-alert">
+        {m.create.phraseNoPhoto}
+      </Notice>
       <WizardActions>
         <Button onClick={onWritten}>{m.create.phraseWritten}</Button>
       </WizardActions>

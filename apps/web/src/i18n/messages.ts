@@ -221,6 +221,7 @@ const en = {
     create: 'Create a new vault',
     pair: 'Pair with an existing device',
     restore: 'Restore from a backup',
+    already: 'Already use BlindVault?',
     installTitle: 'Install BlindVault first',
     installWhy:
       'In Safari, the installed app does not share this tab’s storage: a vault created here stays in this tab, and Safari may delete it after seven days of Safari use without opening BlindVault.',
@@ -1560,6 +1561,7 @@ const ptBR: Messages = {
     create: 'Criar um cofre novo',
     pair: 'Parear com um dispositivo existente',
     restore: 'Restaurar de um backup',
+    already: 'Já usa o BlindVault?',
     installTitle: 'Instale o BlindVault primeiro',
     installWhy:
       'No Safari, o app instalado não compartilha o armazenamento desta aba: um cofre criado aqui fica nesta aba, e o Safari pode apagá-lo depois de sete dias de uso do Safari sem abrir o BlindVault.',

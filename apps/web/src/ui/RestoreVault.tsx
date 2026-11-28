@@ -55,7 +55,9 @@ export function RestoreVault({
     <Card title={replace ? m.replace.title : m.restore.title}>
       {replace ? (
         <div className="flex flex-col gap-2" data-testid="replace-warning">
-          <Notice>{m.replace.warning}</Notice>
+          <Notice tone="warning" icon="triangle-alert">
+            {m.replace.warning}
+          </Notice>
           <p className="text-sm">{m.replace.retire}</p>
         </div>
       ) : null}
@@ -196,11 +198,16 @@ export function OpenBackup({
         {format(m.restore.header, { date, id: phraseLabel(header.phraseId) })}
       </p>
       {header.hasExportPassword ? (
-        <fieldset className="flex gap-4 text-sm">
+        // A segmented control over the two radios (D315).
+        <fieldset className="flex self-start rounded-control bg-subtle p-1 text-sm">
           <legend className="sr-only">{m.restore.method}</legend>
           {(['phrase', 'password'] as const).map((value) => (
-            <label key={value} className={`${TARGET} flex items-center gap-2`}>
+            <label
+              key={value}
+              className={`${TARGET} relative flex items-center rounded-control px-3 font-medium text-muted has-checked:bg-raised has-checked:text-fg has-checked:shadow-raised`}
+            >
               <input
+                className="absolute inset-0 cursor-pointer appearance-none rounded-control"
                 type="radio"
                 aria-label={value === 'phrase' ? m.restore.byPhrase : m.restore.byPassword}
                 name="restore-method"
@@ -219,6 +226,7 @@ export function OpenBackup({
       {method === 'phrase' ? (
         <TextArea
           label={m.restore.phrase}
+          mono
           autoCapitalize="none"
           autoFocus
           value={secret}

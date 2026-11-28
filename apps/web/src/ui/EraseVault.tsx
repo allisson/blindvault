@@ -47,10 +47,14 @@ export function EraseVault({
   const text = eraseAdviceText(m, advice);
   return (
     <div className="flex flex-col gap-3" data-testid="erase-warning">
-      <Notice>{m.erase.warning}</Notice>
+      <Notice tone="warning" icon="triangle-alert">
+        {m.erase.warning}
+      </Notice>
       {advice.kind === 'only-device' ? (
         <>
-          <Notice>{m.erase.onlyDevice}</Notice>
+          <Notice tone="danger" icon="triangle-alert">
+            {m.erase.onlyDevice}
+          </Notice>
           {onBackup ? (
             <Button variant="quiet" className="self-start" onClick={onBackup}>
               {m.erase.backupNow}

@@ -121,14 +121,19 @@ export function Wizard({
               name: current?.name ?? '',
             })}
           </p>
-          <div className="flex gap-1" aria-hidden="true">
+          {/* Each step named under its segment, the current one in bold (D315). */}
+          <ol className="flex gap-1" aria-hidden="true">
             {steps.map((s, i) => (
-              <span
-                key={s.name}
-                className={`h-1 flex-1 rounded-full ${i < step ? 'bg-accent' : 'bg-line'}`}
-              />
+              <li key={s.name} className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className={`h-1 rounded-full ${i < step ? 'bg-accent' : 'bg-line'}`} />
+                <span
+                  className={`text-xs break-words ${i === step - 1 ? 'font-semibold text-fg' : 'text-muted'}`}
+                >
+                  {s.name}
+                </span>
+              </li>
             ))}
-          </div>
+          </ol>
           {next ? (
             <p className="text-sm text-muted" data-testid="wizard-next">
               {format(m.wizard.next, { name: next.name })}
@@ -229,7 +234,7 @@ export function FileDrop({
         {label}
       </span>
       <label
-        className={`flex cursor-pointer flex-col items-center gap-1 rounded-card border border-dashed border-control p-6 text-center text-sm has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus ${over ? 'bg-subtle' : ''}`}
+        className={`flex cursor-pointer flex-col items-center gap-1 rounded-card border-2 border-dashed p-6 text-center text-sm has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus ${over ? 'border-accent bg-accent-soft' : 'border-control bg-subtle'}`}
         onDragOver={(e) => {
           e.preventDefault();
           setOver(true);

@@ -9,11 +9,12 @@ import {
 import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
 import { platform } from '../platform';
-import { Button, Card, Field, Notice, VaultHeld } from './components';
+import { Alert, Button, Card, Field, Notice, TARGET, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
 import { EraseVault, eraseAdviceText, eraseFailureText } from './EraseVault';
 import { JoinVault } from './Pairing';
 import { ResetPassword } from './ResetPassword';
+import { Icon, type IconName } from './icons';
 import { RestoreVault } from './RestoreVault';
 
 /** "Continue in this tab" chosen on a Safari tab, held above Start (D198, D263). */
@@ -317,52 +318,39 @@ export function Unlock({
             setPasskey('ok');
             setKeystore('ok');
           }}
-          error={wrong ? m.unlock.wrong : undefined}
+          aria-invalid={wrong || undefined}
           data-testid="unlock-password"
         />
+        {/* In a box of its own, not the field's error, so it is not missed (D315). */}
+        {wrong ? <Alert data-testid="unlock-wrong">{m.unlock.wrong}</Alert> : null}
         <Button type="submit" disabled={password === '' || working}>
           {working ? m.unlock.working : m.unlock.submit}
         </Button>
       </form>
-      {onReset ? (
-        <Button
-          variant="quiet"
-          className="self-start text-left"
-          disabled={working}
-          onClick={onReset}
-        >
-          {m.reset.forgot}
-        </Button>
-      ) : null}
-      {onReplace ? (
-        <Button
-          variant="quiet"
-          className="self-start text-left"
-          disabled={working}
-          onClick={onReplace}
-        >
-          {m.replace.choose}
-        </Button>
-      ) : null}
-      {onPair ? (
-        <Button
-          variant="quiet"
-          className="self-start text-left"
-          disabled={working}
-          onClick={onPair}
-        >
-          {m.replace.pairChoose}
-        </Button>
-      ) : null}
-      {onErase ? (
-        <Button
-          variant="quiet"
-          className="self-start text-left"
-          disabled={working}
-          onClick={onErase}
-        >
-          {m.erase.choose}
-        </Button>
+      {/* The ways out of a locked vault, as option cards on the unlock screen (D184, D204, D205,
+          D315); erase in the danger tone. */}
+      {onReset || onReplace || onPair || onErase ? (
+        <div className="flex flex-col gap-2" data-testid="unlock-ways-out">
+          {[
+            { on: onReset, label: m.reset.forgot, danger: false },
+            { on: onReplace, label: m.replace.choose, danger: false },
+            { on: onPair, label: m.replace.pairChoose, danger: false },
+            { on: onErase, label: m.erase.choose, danger: true },
+          ].map(({ on, label, danger }) =>
+            on ? (
+              <button
+                key={label}
+                type="button"
+                disabled={working}
+                onClick={on}
+                className={`${TARGET} flex items-center gap-2 rounded-card border bg-raised px-4 py-2 text-left text-sm font-medium enabled:hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-60 ${danger ? 'border-danger text-danger-text' : 'border-line text-fg'}`}
+              >
+                <span className="flex-1">{label}</span>
+                <Icon name="chevron-right" className="text-muted" />
+              </button>
+            ) : null,
+          )}
+        </div>
       ) : null}
       {children}
     </Card>
@@ -467,25 +455,25 @@ function NoVault({
           </Button>
         </div>
       ) : null}
-      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm" data-testid="no-server">
-        <li>{m.start.chooseIntro}</li>
-        <li>{m.start.noReset}</li>
-        <li>{m.start.recoveryOnly}</li>
+      <ul className="flex flex-col gap-3 text-sm" data-testid="no-server">
+        <Point icon="monitor-smartphone">{m.start.chooseIntro}</Point>
+        <Point icon="lock">{m.start.noReset}</Point>
+        <Point icon="shield-check">{m.start.recoveryOnly}</Point>
         {platform.kind === 'extension' ? (
           // The extension is a device of its own (extension.md §9, D267).
           <>
-            <li>{m.start.extensionDevice}</li>
-            <li>{m.start.extensionPair}</li>
-            <li>{m.start.extensionSync}</li>
-            <li>{m.start.extensionVersionLock}</li>
+            <Point icon="info">{m.start.extensionDevice}</Point>
+            <Point icon="info">{m.start.extensionPair}</Point>
+            <Point icon="info">{m.start.extensionSync}</Point>
+            <Point icon="info">{m.start.extensionVersionLock}</Point>
           </>
         ) : null}
         {platform.kind === 'android' ? (
           // The Android app is a device of its own (android.md §11, D269).
           <>
-            <li>{m.start.androidDevice}</li>
-            <li>{m.start.androidPair}</li>
-            <li>{m.start.androidSync}</li>
+            <Point icon="info">{m.start.androidDevice}</Point>
+            <Point icon="info">{m.start.androidPair}</Point>
+            <Point icon="info">{m.start.androidSync}</Point>
           </>
         ) : null}
       </ul>
@@ -497,8 +485,13 @@ function NoVault({
         >
           {m.start.create}
         </Button>
+        <p className="mt-2 flex items-center gap-2 text-label text-muted uppercase">
+          <span className="h-px flex-1 bg-line" aria-hidden="true" />
+          {m.start.already}
+          <span className="h-px flex-1 bg-line" aria-hidden="true" />
+        </p>
         <Button
-          variant="quiet"
+          variant="secondary"
           onClick={() => {
             choose('pair');
           }}
@@ -506,7 +499,7 @@ function NoVault({
           {m.start.pair}
         </Button>
         <Button
-          variant="quiet"
+          variant="secondary"
           onClick={() => {
             choose('restore');
           }}
@@ -515,5 +508,17 @@ function NoVault({
         </Button>
       </div>
     </Card>
+  );
+}
+
+/** A point of the start screen, after its icon on the accent's soft fill (D315). */
+function Point({ icon, children }: { readonly icon: IconName; readonly children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent-text">
+        <Icon name={icon} />
+      </span>
+      <span className="self-center">{children}</span>
+    </li>
   );
 }

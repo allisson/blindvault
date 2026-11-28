@@ -7,6 +7,7 @@ import { type Navigation, type SettingsFocus } from '../app/nav';
 import { type Ready as ReadyState, type ReadyAdvice, readyAdvice } from '../app/ready';
 import { useMessages } from '../i18n/context';
 import { Badge, Button } from './components';
+import { Icon } from './icons';
 import { BlobNotices } from './RestoreVault';
 
 // "Vault ready" after a creation, a restore or a pairing (overview §13.3, D198, D203): the
@@ -81,30 +82,41 @@ export function Ready({
       {ready.start === 'restored' && ready.blobs ? (
         <BlobNotices session={session} blobs={ready.blobs} />
       ) : null}
-      <ol className="flex flex-col gap-4">
+      {/* The steps in a card, each with its state mark (D315). */}
+      <ol className="flex flex-col divide-y divide-line rounded-card border border-line bg-raised">
         {advice.map((a) => {
           const act = action[a];
+          const isDone = done[a] === true;
           return (
             <li
               key={a}
-              className="flex flex-col items-start gap-2"
+              className="flex items-start gap-3 p-4"
               data-testid={`ready-${a}`}
-              data-done={done[a] === true ? 'true' : undefined}
+              data-done={isDone ? 'true' : undefined}
             >
-              <p className="text-sm">
-                {text[a]}
-                {done[a] === true ? <Badge className="ms-2">{m.ready.done}</Badge> : null}
-              </p>
-              {act ? (
-                <Button
-                  variant="quiet"
-                  onClick={() => {
-                    nav.openSettings(act.focus);
-                  }}
-                >
-                  {act.label}
-                </Button>
-              ) : null}
+              <span className="flex h-5 items-center" aria-hidden="true">
+                {isDone ? (
+                  <Icon name="check" className="text-success" />
+                ) : (
+                  <span className="size-4 rounded-full border-2 border-control" />
+                )}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+                <p className="text-sm">
+                  {text[a]}
+                  {isDone ? <Badge className="ms-2">{m.ready.done}</Badge> : null}
+                </p>
+                {act ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      nav.openSettings(act.focus);
+                    }}
+                  >
+                    {act.label}
+                  </Button>
+                ) : null}
+              </div>
             </li>
           );
         })}
