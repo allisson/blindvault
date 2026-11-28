@@ -43,12 +43,14 @@ for (const [layout, width] of WIDTHS) {
 
     await startScreen(page);
     await expect(main).toMatchAriaSnapshot(`
+      - text: BlindVault
       - button "Preview"
-      - heading "BlindVault" [level=1]
+      - heading /stays on your devices/ [level=1]
+      - paragraph: /no account and no server/
       - list:
-        - listitem: /no account and no server/
         - listitem: /can reset your local password/
         - listitem: /Recovery Phrase and a backup/
+      - heading "How do you want to start?" [level=2]
       - button "Create a new vault"
       - button "Pair with an existing device"
       - button "Restore from a backup"

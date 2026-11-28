@@ -37,8 +37,10 @@ test('says that no server can reset the vault, then offers the three starts (§1
 }) => {
   await page.goto('/');
   await startScreen(page);
-  await expect(page.getByTestId('no-server').getByRole('listitem')).toHaveText([
+  await expect(page.getByTestId('no-server').getByRole('paragraph')).toHaveText(
     'BlindVault has no account and no server: your vault lives only on your devices and in your backups.',
+  );
+  await expect(page.getByTestId('no-server').getByRole('listitem')).toHaveText([
     'Nobody, BlindVault included, can reset your local password or recover your vault for you.',
     'Your Recovery Phrase and a backup are the only way to get the vault back.',
   ]);

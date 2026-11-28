@@ -670,6 +670,33 @@ export function PreviewBadge() {
   );
 }
 
+/**
+ * The app's name with its mark and the preview badge (D177, D254). `compact` keeps the name for
+ * screen readers only, so a phone's header fits its actions.
+ */
+export function Brand({
+  compact = false,
+  preview = true,
+}: {
+  readonly compact?: boolean;
+  /** The preview badge, a button: the framed app shows none (D193). */
+  readonly preview?: boolean;
+}) {
+  const m = useMessages();
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        aria-hidden="true"
+        className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink"
+      >
+        <Icon name="shield-check" />
+      </span>
+      <span className={compact ? 'sr-only' : 'min-w-0 truncate font-semibold'}>{m.app.name}</span>
+      {preview ? <PreviewBadge /> : null}
+    </div>
+  );
+}
+
 const noUpdates = () => () => undefined;
 
 function useOffer() {
@@ -833,11 +860,12 @@ export function SafariTabWarning() {
 }
 
 const MARK = {
+  accent: 'bg-accent-soft text-accent-text',
   danger: 'bg-danger-soft text-danger-text',
   warning: 'bg-warning-soft text-warning-text',
 } as const;
 
-/** The icon of a failure or a warning, in a tinted square (D316). */
+/** A screen's icon in a tinted square: the accent, or a failure's or a warning's tone (D316). */
 export function CardMark({
   name,
   tone,
@@ -855,15 +883,21 @@ export function CardMark({
   );
 }
 
-/** A centered card for the screens shown before unlock. */
+/**
+ * A screen shown before unlock (D316): a centered card on a tablet and a computer, the whole screen
+ * on a phone. A `hero` goes beside the card on a computer and above it elsewhere, and takes the
+ * app's name and the page's heading, the card's title then a heading of the second level.
+ */
 export function Card({
   title,
   icon,
+  hero,
   children,
 }: {
   readonly title: string;
-  /** A failure's or a warning's mark above the title (D316). */
-  readonly icon?: { readonly name: IconName; readonly tone: 'danger' | 'warning' } | undefined;
+  /** The screen's mark above the title (D316). */
+  readonly icon?: { readonly name: IconName; readonly tone: keyof typeof MARK } | undefined;
+  readonly hero?: ReactNode;
   readonly children: ReactNode;
 }) {
   const m = useMessages();
@@ -876,26 +910,32 @@ export function Card({
     () => updates?.controller.holdsPhrase ?? false,
   );
   const [header, setHeader] = useState<HTMLElement | null>(null);
+  const heading = about ? m.about.title : title;
+  // The app's name once (D254): a title that is the name is the brand's, for screen readers only.
+  const named = heading === m.app.name;
+  const Heading = hero ? 'h2' : 'h1';
   return (
     <div className="flex min-h-dvh flex-col bg-surface text-fg">
       <SharedOriginWarning />
       <SafariTabWarning />
       <UpdateDialog />
-      <main className="flex flex-1 items-center justify-center p-4">
-        <section className="flex w-full max-w-sm flex-col gap-4 rounded-card bg-raised p-6 shadow-raised">
-          {/* The app's name once (D254), and no lock state before a vault exists. */}
-          <header className="flex flex-wrap items-center gap-2">
-            {title === m.app.name ? null : (
-              <span className="text-sm font-semibold">{m.app.name}</span>
-            )}
-            <PreviewBadge />
-            <span className="flex-1" />
-            {held === 'yes' ? <LockState unlocked={false} /> : null}
-            {/* A wizard's Cancel (D254). */}
-            <span ref={setHeader} className={about ? 'hidden' : 'contents'} />
-          </header>
+      <main
+        className={`flex flex-1 flex-col items-center sm:justify-center sm:gap-8 sm:p-4 ${hero ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_32.5rem] lg:gap-18 lg:px-20' : ''}`}
+      >
+        {hero}
+        <section className="flex w-full flex-1 flex-col gap-4 p-6 sm:max-w-[32.5rem] sm:flex-none sm:rounded-card sm:border sm:border-line sm:bg-raised sm:p-8 sm:shadow-raised">
+          {/* The hero holds the name; no lock state before a vault exists. */}
+          {hero ? null : (
+            <header className="flex flex-wrap items-center gap-2">
+              <Brand />
+              <span className="flex-1" />
+              {held === 'yes' ? <LockState unlocked={false} /> : null}
+              {/* A wizard's Cancel (D254). */}
+              <span ref={setHeader} className={about ? 'hidden' : 'contents'} />
+            </header>
+          )}
           {icon && !about ? <CardMark {...icon} /> : null}
-          <h1 className="text-title">{about ? m.about.title : title}</h1>
+          <Heading className={named && !hero ? 'sr-only' : 'text-title'}>{heading}</Heading>
           {about ? (
             <>
               <AboutBuild />
@@ -914,18 +954,19 @@ export function Card({
           <div className={about ? 'hidden' : 'contents'}>
             <WizardPlace.Provider value={{ header }}>{children}</WizardPlace.Provider>
           </div>
-          <footer className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted">v{__APP_VERSION__}</p>
+          <footer className="mt-auto flex flex-wrap items-center justify-between gap-2 sm:mt-2">
+            <p className="font-mono text-xs text-muted">v{__APP_VERSION__}</p>
             <UpdateEntry />
             {about || holdsPhrase ? null : (
-              <Button
-                variant="quiet"
+              <button
+                type="button"
+                className={`${TARGET} text-sm font-semibold text-muted underline hover:text-fg`}
                 onClick={() => {
                   setAbout(true);
                 }}
               >
                 {m.about.open}
-              </Button>
+              </button>
             )}
           </footer>
         </section>

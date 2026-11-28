@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useId, useState } from 'react';
 
 import {
   type KeystoreOutcome,
@@ -9,7 +9,7 @@ import {
 import { useMessages } from '../i18n/context';
 import { safariTab } from '../app/storage-state';
 import { platform } from '../platform';
-import { Alert, Button, Card, Field, Notice, TARGET, VaultHeld } from './components';
+import { Alert, Brand, Button, Card, Field, Notice, TARGET, VaultHeld } from './components';
 import { CreateVault } from './CreateVault';
 import { EraseVault, eraseAdviceText, eraseFailureText } from './EraseVault';
 import { JoinVault } from './Pairing';
@@ -50,10 +50,11 @@ export function Start({
       );
     case 'elsewhere':
       return (
-        <Card title={m.app.name}>
-          <p>{m.start.elsewhere}</p>
-          <p className="text-sm text-muted">{m.start.takeOverNote}</p>
-          <Button onClick={() => void controller.takeOver()}>{m.start.takeOver}</Button>
+        <Card title={m.start.elsewhere} icon={{ name: 'app-window', tone: 'accent' }}>
+          <p className="text-muted">{m.start.takeOverNote}</p>
+          <Button className="self-start" onClick={() => void controller.takeOver()}>
+            {m.start.takeOver}
+          </Button>
         </Card>
       );
     case 'incomplete':
@@ -408,10 +409,18 @@ function NoVault({
   if (!inTab && safariTab()) {
     return (
       <Card title={m.start.installTitle}>
-        <p className="text-sm">{m.start.installWhy}</p>
-        <p className="text-sm">{m.start.installHow}</p>
+        <p className="text-muted">{m.start.installWhy}</p>
+        <p className="flex items-center gap-4 rounded-card border border-line bg-raised p-4 text-sm">
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent-text"
+          >
+            <Icon name="share" />
+          </span>
+          {m.start.installHow}
+        </p>
         <Button
-          variant="quiet"
+          variant="secondary"
           onClick={() => {
             setInTab(true);
           }}
@@ -423,8 +432,41 @@ function NoVault({
   }
   const erased = controller.erased;
   const erasedAdvice = erased ? eraseAdviceText(m, erased) : undefined;
+  const hero = (
+    <div className="flex w-full max-w-[35rem] flex-col gap-6 px-6 pt-6 sm:px-0 sm:pt-0">
+      <Brand />
+      <h1 className="text-[2rem] leading-[1.08] font-semibold tracking-[-0.03em] sm:text-[2.875rem]">
+        {m.start.headline}
+      </h1>
+      <div className="flex flex-col gap-6" data-testid="no-server">
+        <p className="text-lg text-muted">{m.start.chooseIntro}</p>
+        <Devices />
+        <ul className="flex flex-col gap-3 text-sm text-muted">
+          <Point icon="check">{m.start.noReset}</Point>
+          <Point icon="check">{m.start.recoveryOnly}</Point>
+          {platform.kind === 'extension' ? (
+            // The extension is a device of its own (extension.md §9, D267).
+            <>
+              <Point icon="info">{m.start.extensionDevice}</Point>
+              <Point icon="info">{m.start.extensionPair}</Point>
+              <Point icon="info">{m.start.extensionSync}</Point>
+              <Point icon="info">{m.start.extensionVersionLock}</Point>
+            </>
+          ) : null}
+          {platform.kind === 'android' ? (
+            // The Android app is a device of its own (android.md §11, D269).
+            <>
+              <Point icon="info">{m.start.androidDevice}</Point>
+              <Point icon="info">{m.start.androidPair}</Point>
+              <Point icon="info">{m.start.androidSync}</Point>
+            </>
+          ) : null}
+        </ul>
+      </div>
+    </div>
+  );
   return (
-    <Card title={m.app.name}>
+    <Card title={m.start.chooseTitle} hero={hero}>
       {erased ? (
         <div className="flex flex-col gap-2" data-testid="erased">
           <Notice>{m.erase.done}</Notice>
@@ -455,70 +497,130 @@ function NoVault({
           </Button>
         </div>
       ) : null}
-      <ul className="flex flex-col gap-3 text-sm" data-testid="no-server">
-        <Point icon="monitor-smartphone">{m.start.chooseIntro}</Point>
-        <Point icon="lock">{m.start.noReset}</Point>
-        <Point icon="shield-check">{m.start.recoveryOnly}</Point>
-        {platform.kind === 'extension' ? (
-          // The extension is a device of its own (extension.md §9, D267).
-          <>
-            <Point icon="info">{m.start.extensionDevice}</Point>
-            <Point icon="info">{m.start.extensionPair}</Point>
-            <Point icon="info">{m.start.extensionSync}</Point>
-            <Point icon="info">{m.start.extensionVersionLock}</Point>
-          </>
-        ) : null}
-        {platform.kind === 'android' ? (
-          // The Android app is a device of its own (android.md §11, D269).
-          <>
-            <Point icon="info">{m.start.androidDevice}</Point>
-            <Point icon="info">{m.start.androidPair}</Point>
-            <Point icon="info">{m.start.androidSync}</Point>
-          </>
-        ) : null}
-      </ul>
-      <div className="flex flex-col gap-2">
-        <Button
+      {/* The three starts as option cards, create first in the accent (D316). */}
+      <div className="flex flex-col gap-3">
+        <StartOption
+          icon="plus"
+          title={m.start.create}
+          note={m.start.createNote}
+          primary
           onClick={() => {
             choose('create');
           }}
-        >
-          {m.start.create}
-        </Button>
-        <p className="mt-2 flex items-center gap-2 text-label text-muted uppercase">
-          <span className="h-px flex-1 bg-line" aria-hidden="true" />
-          {m.start.already}
-          <span className="h-px flex-1 bg-line" aria-hidden="true" />
-        </p>
-        <Button
-          variant="secondary"
+        />
+        <StartOption
+          icon="monitor-smartphone"
+          title={m.start.pair}
+          note={m.start.pairNote}
           onClick={() => {
             choose('pair');
           }}
-        >
-          {m.start.pair}
-        </Button>
-        <Button
-          variant="secondary"
+        />
+        <StartOption
+          icon="download"
+          title={m.start.restore}
+          note={m.start.restoreNote}
+          neutral
           onClick={() => {
             choose('restore');
           }}
-        >
-          {m.start.restore}
-        </Button>
+        />
       </div>
     </Card>
   );
 }
 
-/** A point of the start screen, after its icon on the accent's soft fill (D315). */
+/** A start as an option card: its icon, its name and what it does (D316). */
+function StartOption({
+  icon,
+  title,
+  note,
+  primary = false,
+  neutral = false,
+  onClick,
+}: {
+  readonly icon: IconName;
+  readonly title: string;
+  readonly note: string;
+  readonly primary?: boolean;
+  /** A mark in the neutral tone, not the accent's. */
+  readonly neutral?: boolean;
+  readonly onClick: () => void;
+}) {
+  const id = useId();
+  // The button covers the card and names it by the title, described by the note: its own text
+  // would make the note part of its name (D316).
+  return (
+    <div className={`relative rounded-card ${primary ? 'text-accent-ink' : 'text-fg'}`}>
+      <button
+        type="button"
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-note`}
+        onClick={onClick}
+        className={`absolute inset-0 rounded-card ${primary ? 'bg-accent hover:bg-accent-hover' : 'border border-line bg-raised hover:bg-subtle'}`}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none relative flex items-center gap-4 p-4 text-start"
+      >
+        <span
+          className={`flex size-10 shrink-0 items-center justify-center rounded-control ${primary ? 'bg-accent-ink/15' : neutral ? 'bg-subtle text-muted' : 'bg-accent-soft text-accent-text'}`}
+        >
+          <Icon name={icon} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span id={`${id}-title`} className="font-semibold">
+            {title}
+          </span>
+          <span id={`${id}-note`} className={`text-sm ${primary ? '' : 'text-muted'}`}>
+            {note}
+          </span>
+        </span>
+        <Icon name="chevron-right" className="shrink-0" />
+      </div>
+    </div>
+  );
+}
+
+/** This device, another and a backup: where a vault lives (D316). Seen only. */
+function Devices() {
+  const m = useMessages();
+  const places: readonly { readonly icon: IconName; readonly label: string }[] = [
+    { icon: 'laptop', label: m.start.computer },
+    { icon: 'smartphone', label: m.start.phone },
+    { icon: 'upload', label: m.start.backup },
+  ];
+  return (
+    <div aria-hidden="true" className="hidden items-start sm:flex">
+      {places.map(({ icon, label }, i) => (
+        <Fragment key={label}>
+          {i > 0 ? (
+            <span
+              className={`mt-8 w-16 border-t-2 border-dashed ${i === 1 ? 'border-accent/35' : 'border-line'}`}
+            />
+          ) : null}
+          <span className="flex w-28 flex-col items-center gap-2 text-sm text-muted">
+            <span
+              className={`flex size-16 items-center justify-center rounded-[1.125rem] ${i === 2 ? 'border-[1.5px] border-dashed border-line text-muted' : 'border border-line bg-raised text-fg'}`}
+            >
+              <Icon name={icon} className="size-8!" />
+            </span>
+            {label}
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+/** A point of the start screen, after its mark in the accent (D316). */
 function Point({ icon, children }: { readonly icon: IconName; readonly children: ReactNode }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent-text">
-        <Icon name={icon} />
+      <span className="flex h-5 shrink-0 items-center text-accent-text">
+        <Icon name={icon} className="size-4" />
       </span>
-      <span className="self-center">{children}</span>
+      <span>{children}</span>
     </li>
   );
 }

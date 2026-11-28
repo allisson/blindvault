@@ -16,6 +16,7 @@ import { SearchIndex } from '../app/search';
 import { newItemShortcut } from '../app/shortcuts';
 import { useMessages } from '../i18n/context';
 import {
+  Brand,
   Button,
   LockState,
   SharedOriginWarning,
@@ -32,7 +33,7 @@ import { ItemList } from './ItemList';
 import { NoticesScreen, StatusLine, StatusPill } from './Notices';
 import { Ready } from './Ready';
 import { DevicesScreen, Settings } from './Settings';
-import { Brand, Sidebar } from './Sidebar';
+import { Sidebar } from './Sidebar';
 import { useStorageRefresh } from './StorageState';
 import { Icon } from './icons';
 import { ToastRegion } from './Toast';

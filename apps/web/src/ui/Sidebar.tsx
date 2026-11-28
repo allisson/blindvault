@@ -9,30 +9,10 @@ import { type VaultController } from '../app/controller';
 import { devicesOf } from '../app/devices';
 import { type Navigation } from '../app/nav';
 import { useMessages } from '../i18n/context';
-import { Button, PreviewBadge, ROW } from './components';
+import { Brand, Button, ROW } from './components';
 import { FolderPane } from './Folders';
 import { Icon, type IconName } from './icons';
 import { StatusCard } from './Notices';
-
-/**
- * The app's name with its mark and the preview badge (D177, D254). `compact` keeps the name for
- * screen readers only, so a phone's header fits its actions.
- */
-export function Brand({ compact = false }: { readonly compact?: boolean }) {
-  const m = useMessages();
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span
-        aria-hidden="true"
-        className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink"
-      >
-        <Icon name="shield-check" />
-      </span>
-      <span className={compact ? 'sr-only' : 'min-w-0 truncate font-semibold'}>{m.app.name}</span>
-      <PreviewBadge />
-    </div>
-  );
-}
 
 function MainEntry({
   icon,
