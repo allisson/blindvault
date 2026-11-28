@@ -51,7 +51,7 @@ project's own, with no type package.
 | `permissions` | `activeTab`, `scripting`, `idle`, `clipboardWrite`, `offscreen`, `unlimitedStorage` | `activeTab`, `scripting`, `idle`, `clipboardWrite` |
 | `optional_host_permissions` | `<all_urls>` | `<all_urls>` |
 | `background` | `service_worker` | `scripts` (event page) |
-| `content_security_policy.extension_pages` | `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; form-action 'none'` | same |
+| `content_security_policy.extension_pages` | `script-src 'self' 'wasm-unsafe-eval'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'` (`font-src`: the self-hosted fonts, D316) | same |
 | `commands` | `fill`: `Ctrl+Shift+L`, `Command+Shift+L` on macOS | same |
 | ID | fixed by the Web Store key | `browser_specific_settings.gecko.id` = `blindvault@allisson.github.io`, fixed, so storage survives updates |
 | Minimum | `minimum_chrome_version` `127` | `strict_min_version` `149.0` (§10) |

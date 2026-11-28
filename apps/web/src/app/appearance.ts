@@ -17,7 +17,7 @@ export interface Appearance {
 export const DEFAULT_APPEARANCE: Appearance = { theme: 'system', accent: 'blue' };
 
 /** `theme-color` follows the theme only: the surface color of each (index.css). */
-export const THEME_COLORS = { light: '#fafafa', dark: '#09090b' } as const;
+export const THEME_COLORS = { light: '#eef1f4', dark: '#0d1218' } as const;
 
 const STORAGE_KEY = 'blindvault.appearance';
 const DARK_QUERY = '(prefers-color-scheme: dark)';

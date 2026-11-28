@@ -951,6 +951,17 @@ Every GitHub Action is pinned to a commit, with its version in a comment, and ev
 Copied, not depended on: the icons in `apps/web/src/ui/icons/`, from `lucide-static` 1.61.0
 (ISC; some, as `lock` and `plus`, derive from Feather, MIT), both notices in `icons/LICENSE` (D233).
 
+Copied, not depended on: the fonts in `apps/web/src/fonts/` (D316), six `woff2` files taken from the
+npm packages `@fontsource-variable/instrument-sans` 5.3.0 and `@fontsource/ibm-plex-mono` 5.3.0 (the
+subsets Google Fonts serves), both under the SIL Open Font License 1.1, both notices in
+`fonts/LICENSE`. Instrument Sans as one variable face (weights 400 to 700) and IBM Plex Mono at 500
+and 600, the faces the prototype loads, each in the latin and latin-ext subsets; a character outside
+them falls back to the system font. The files are committed, not fetched at build time: Vite hashes
+them into `assets/`, `asset-manifest.txt` lists them, so the service worker precaches them and the
+reproducible build covers them, and `font-src 'self'` lets no font come from anywhere else. No
+package is added: a font package would bring only these files and its CSS, which `index.css`
+declares itself.
+
 ### Review before v1.0 (Phase 8, 2026-11-11)
 
 Every dependency of every workspace package was checked against the tables above, with

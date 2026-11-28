@@ -1,7 +1,8 @@
 @import 'tailwindcss';
 
 /*
- * Visual foundation (overview §13.7, D231). Components use only the semantic tokens below: the
+ * Visual foundation (overview §13.7, D231, D316): the values of the prototype frozen in
+ * docs/prototypes/phase-11/, a pair that fails contrast moved by the smallest step. Components use only the semantic tokens below: the
  * default palette is removed, so a palette class generates nothing (and a unit test refuses one).
  * `data-theme` (light or dark, the system theme resolved) and `data-accent` are set on <html> by
  * app/appearance.ts before the first render. Every value is a 6-digit hex: the contrast test
@@ -55,9 +56,18 @@
   --color-avatar-6: var(--bv-avatar-6);
   --color-avatar-6-ink: var(--bv-avatar-6-ink);
 
+  /* Instrument Sans for text, IBM Plex Mono for secrets, codes, hashes and the phrase (D316). */
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
   /* Two radii: controls and cards. */
-  --radius-control: 0.375rem;
-  --radius-card: 0.75rem;
+  --radius-control: 0.6875rem;
+  --radius-card: 1rem;
+
+  /* Heights (D316): a control, a small control, a text field. */
+  --spacing-control: 2.75rem;
+  --spacing-control-sm: 2.25rem;
+  --spacing-field: 2.875rem;
 
   /*
    * Type (D254): screen titles 22 px semibold with slight negative tracking, section labels 11 px
@@ -75,7 +85,8 @@
   --text-value--line-height: 1.375rem;
 
   /* Two elevations: flat (none) and raised, a light shadow in the light theme, a 1 px edge in the dark. */
-  --shadow-raised: 0 1px 3px 0 var(--bv-shadow), 0 0 0 1px var(--bv-edge);
+  --shadow-raised:
+    0 1px 2px var(--bv-shadow), 0 10px 30px var(--bv-shadow-far), 0 0 0 1px var(--bv-edge);
 
   /*
    * Motion (D231): opacity and transform only, ease-out, 200 ms for an entrance and 150 ms for
@@ -101,29 +112,30 @@
 /* Neutrals, statuses and the default accent (blue), light. */
 :root {
   color-scheme: light;
-  --bv-surface: #fafafa;
+  --bv-surface: #eef1f4;
   --bv-raised: #ffffff;
-  --bv-subtle: #f4f4f5;
-  --bv-fg: #18181b;
-  --bv-muted: #52525b;
-  --bv-line: #e4e4e7;
-  --bv-control: #71717a;
-  --bv-scrim: #09090b4d;
-  --bv-shadow: #0000001a;
+  --bv-subtle: #f4f6f9;
+  --bv-fg: #17202b;
+  --bv-muted: #5a6779;
+  --bv-line: #d9dfe6;
+  --bv-control: #848b94;
+  --bv-scrim: #17202b4d;
+  --bv-shadow: #1018280d;
+  --bv-shadow-far: #10182812;
   --bv-edge: #00000000;
 
-  --bv-danger: #b91c1c;
-  --bv-danger-hover: #991b1b;
+  --bv-danger: #b42318;
+  --bv-danger-hover: #9e1f15;
   --bv-danger-ink: #ffffff;
-  --bv-danger-soft: #fef2f2;
-  --bv-danger-text: #7f1d1d;
-  --bv-warning: #b45309;
-  --bv-warning-soft: #fef3c7;
-  --bv-warning-text: #78350f;
+  --bv-danger-soft: #f7e7e6;
+  --bv-danger-text: #b42318;
+  --bv-warning: #874600;
+  --bv-warning-soft: #fff2de;
+  --bv-warning-text: #874600;
   --bv-info: #0369a1;
   --bv-info-soft: #f0f9ff;
   --bv-info-text: #082f49;
-  --bv-success: #047857;
+  --bv-success: #156339;
 
   /* The six avatar pairs of the list row and the item header (D246). */
   --bv-avatar-1: #dbeafe;
@@ -140,37 +152,38 @@
   --bv-avatar-6-ink: #134e4a;
 
   --bv-accent: #2563eb;
-  --bv-accent-hover: #1d4ed8;
+  --bv-accent-hover: #2157cf;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #eff6ff;
-  --bv-accent-text: #1d4ed8;
+  --bv-accent-soft: #e7eefd;
+  --bv-accent-text: #2562e9;
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --bv-surface: #09090b;
-  --bv-raised: #18181b;
-  --bv-subtle: #27272a;
-  --bv-fg: #f4f4f5;
-  --bv-muted: #a1a1aa;
-  --bv-line: #27272a;
-  --bv-control: #71717a;
+  --bv-surface: #0d1218;
+  --bv-raised: #151c24;
+  --bv-subtle: #1c252f;
+  --bv-fg: #e8edf3;
+  --bv-muted: #97a2b1;
+  --bv-line: #2a3441;
+  --bv-control: #5f6873;
   --bv-scrim: #0000008c;
   --bv-shadow: #00000000;
-  --bv-edge: #27272aff;
+  --bv-shadow-far: #00000000;
+  --bv-edge: #2a3441ff;
 
-  --bv-danger: #f87171;
-  --bv-danger-hover: #fca5a5;
-  --bv-danger-ink: #09090b;
-  --bv-danger-soft: #450a0a;
-  --bv-danger-text: #fee2e2;
-  --bv-warning: #fbbf24;
-  --bv-warning-soft: #451a03;
-  --bv-warning-text: #fef3c7;
+  --bv-danger: #ff8f80;
+  --bv-danger-hover: #ff9c8f;
+  --bv-danger-ink: #151c24;
+  --bv-danger-soft: #3a2e33;
+  --bv-danger-text: #ff8f80;
+  --bv-warning: #f6c177;
+  --bv-warning-soft: #2b2011;
+  --bv-warning-text: #f6c177;
   --bv-info: #38bdf8;
   --bv-info-soft: #082f49;
   --bv-info-text: #f0f9ff;
-  --bv-success: #34d399;
+  --bv-success: #6bd9a3;
 
   /* The six avatar pairs of the list row and the item header (D246). */
   --bv-avatar-1: #1e3a8a;
@@ -193,104 +206,169 @@
  */
 [data-accent='blue'] {
   --bv-accent: #2563eb;
-  --bv-accent-hover: #1d4ed8;
+  --bv-accent-hover: #2157cf;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #eff6ff;
-  --bv-accent-text: #1d4ed8;
+  --bv-accent-soft: #e7eefd;
+  --bv-accent-text: #2562e9;
 }
 [data-theme='dark'][data-accent='blue'],
 [data-theme='dark'] [data-accent='blue'] {
-  --bv-accent: #60a5fa;
-  --bv-accent-hover: #93c5fd;
-  --bv-accent-ink: #09090b;
-  --bv-accent-soft: #172554;
-  --bv-accent-text: #93c5fd;
+  --bv-accent: #7ab0ff;
+  --bv-accent-hover: #8ab9ff;
+  --bv-accent-ink: #071833;
+  --bv-accent-soft: #253447;
+  --bv-accent-text: #7ab0ff;
 }
 
 [data-accent='indigo'] {
   --bv-accent: #4f46e5;
-  --bv-accent-hover: #4338ca;
+  --bv-accent-hover: #463eca;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #eef2ff;
-  --bv-accent-text: #4338ca;
+  --bv-accent-soft: #ecebfc;
+  --bv-accent-text: #4f46e5;
 }
 [data-theme='dark'][data-accent='indigo'],
 [data-theme='dark'] [data-accent='indigo'] {
-  --bv-accent: #818cf8;
-  --bv-accent-hover: #a5b4fc;
-  --bv-accent-ink: #09090b;
-  --bv-accent-soft: #1e1b4b;
-  --bv-accent-text: #a5b4fc;
+  --bv-accent: #9c97ff;
+  --bv-accent-hover: #a8a3ff;
+  --bv-accent-ink: #120f3a;
+  --bv-accent-soft: #2b3047;
+  --bv-accent-text: #9c97ff;
 }
 
 [data-accent='violet'] {
   --bv-accent: #7c3aed;
-  --bv-accent-hover: #6d28d9;
+  --bv-accent-hover: #6d33d1;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #f5f3ff;
-  --bv-accent-text: #6d28d9;
+  --bv-accent-soft: #f1e9fd;
+  --bv-accent-text: #7c3aed;
 }
 [data-theme='dark'][data-accent='violet'],
 [data-theme='dark'] [data-accent='violet'] {
-  --bv-accent: #a78bfa;
-  --bv-accent-hover: #c4b5fd;
-  --bv-accent-ink: #09090b;
-  --bv-accent-soft: #2e1065;
-  --bv-accent-text: #c4b5fd;
+  --bv-accent: #b794ff;
+  --bv-accent-hover: #c0a1ff;
+  --bv-accent-ink: #1e0b40;
+  --bv-accent-soft: #2f2f47;
+  --bv-accent-text: #b794ff;
 }
 
 [data-accent='teal'] {
   --bv-accent: #0f766e;
-  --bv-accent-hover: #115e59;
+  --bv-accent-hover: #0d6861;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #f0fdfa;
+  --bv-accent-soft: #e5f0ef;
   --bv-accent-text: #0f766e;
 }
 [data-theme='dark'][data-accent='teal'],
 [data-theme='dark'] [data-accent='teal'] {
-  --bv-accent: #2dd4bf;
-  --bv-accent-hover: #5eead4;
-  --bv-accent-ink: #09090b;
-  --bv-accent-soft: #042f2e;
-  --bv-accent-text: #5eead4;
+  --bv-accent: #3dd6c4;
+  --bv-accent-hover: #54dbcb;
+  --bv-accent-ink: #04201c;
+  --bv-accent-soft: #1b3a3e;
+  --bv-accent-text: #3dd6c4;
 }
 
 [data-accent='green'] {
   --bv-accent: #15803d;
-  --bv-accent-hover: #166534;
+  --bv-accent-hover: #127136;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #f0fdf4;
-  --bv-accent-text: #15803d;
+  --bv-accent-soft: #e5f1ea;
+  --bv-accent-text: #147c3b;
 }
 [data-theme='dark'][data-accent='green'],
 [data-theme='dark'] [data-accent='green'] {
-  --bv-accent: #4ade80;
-  --bv-accent-hover: #86efac;
-  --bv-accent-ink: #09090b;
-  --bv-accent-soft: #052e16;
-  --bv-accent-text: #86efac;
+  --bv-accent: #5edb8a;
+  --bv-accent-hover: #71df98;
+  --bv-accent-ink: #062512;
+  --bv-accent-soft: #213b34;
+  --bv-accent-text: #5edb8a;
 }
 
 [data-accent='rose'] {
-  --bv-accent: #e11d48;
-  --bv-accent-hover: #be123c;
+  --bv-accent: #be123c;
+  --bv-accent-hover: #a71035;
   --bv-accent-ink: #ffffff;
-  --bv-accent-soft: #fff1f2;
+  --bv-accent-soft: #f8e5ea;
   --bv-accent-text: #be123c;
 }
 [data-theme='dark'][data-accent='rose'],
 [data-theme='dark'] [data-accent='rose'] {
-  --bv-accent: #fb7185;
-  --bv-accent-hover: #fda4af;
-  --bv-accent-ink: #09090b;
-  --bv-accent-soft: #4c0519;
-  --bv-accent-text: #fda4af;
+  --bv-accent: #ff8aa0;
+  --bv-accent-hover: #ff98ab;
+  --bv-accent-ink: #3a0613;
+  --bv-accent-soft: #3a2e38;
+  --bv-accent-text: #ff8aa0;
+}
+
+/* Self-hosted (D316): latin and latin-ext, each face the prototype uses; fonts/LICENSE has the OFL. */
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url('./fonts/instrument-sans-latin-wght-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url('./fonts/instrument-sans-latin-ext-wght-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('./fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('./fonts/ibm-plex-mono-latin-ext-500-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('./fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('./fonts/ibm-plex-mono-latin-ext-600-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
 }
 
 /* Before app/appearance.ts runs, a dark system theme gets a dark page, not a white flash. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    background-color: #09090b;
+    background-color: #0d1218;
   }
 }
 

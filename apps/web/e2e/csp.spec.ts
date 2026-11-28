@@ -6,6 +6,7 @@ const POLICY = [
   "default-src 'none'",
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self'",
+  "font-src 'self'",
   "img-src 'self' data: blob:",
   "worker-src 'self'",
   "manifest-src 'self'",
@@ -88,6 +89,50 @@ test('blocks an inline script, and a connection and an image to another origin (
   expect(result).toMatchObject({ inline: false, fetched: false, image: false });
   expect(result.violations).toEqual(expect.arrayContaining(['connect-src', 'img-src']));
   expect(outside).toEqual([]);
+});
+
+test('loads its fonts from its own origin and blocks a font from another (D316)', async ({
+  page,
+  baseURL,
+}) => {
+  const fonts: string[] = [];
+  page.on('request', (r) => {
+    if (r.resourceType() === 'font') fonts.push(r.url());
+  });
+  const outside: string[] = [];
+  await page.route('https://outside.test/**', (route) => {
+    outside.push(route.request().url());
+    return route.abort();
+  });
+  await page.goto('/');
+  await startScreen(page);
+  const result = await page.evaluate(async () => {
+    const violations: string[] = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      violations.push(e.effectiveDirective);
+    });
+    await document.fonts.load('16px "Instrument Sans"');
+    await document.fonts.load('500 16px "IBM Plex Mono"');
+    const own = {
+      sans: document.fonts.check('16px "Instrument Sans"'),
+      mono: document.fonts.check('500 16px "IBM Plex Mono"'),
+    };
+    const foreign = await new FontFace('Outside', 'url(https://outside.test/font.woff2)')
+      .load()
+      .then(
+        () => true,
+        () => false,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return { own, foreign, violations };
+  });
+  expect(result).toMatchObject({ own: { sans: true, mono: true }, foreign: false });
+  expect(result.violations).toContain('font-src');
+  // Chromium reports the blocked request as a font request; it never reaches the network.
+  expect(outside).toEqual([]);
+  const loaded = fonts.filter((url) => !url.startsWith('https://outside.test/'));
+  expect(loaded.length).toBeGreaterThan(0);
+  for (const url of loaded) expect(new URL(url).origin).toBe(new URL(baseURL ?? '').origin);
 });
 
 test('requires Trusted Types where the browser supports them (D83)', async ({ page }) => {

@@ -66,6 +66,6 @@ describe('appearance (D231)', () => {
       },
     );
     expect(attrs).toEqual({ 'data-theme': 'dark', 'data-accent': 'teal' });
-    expect(meta).toEqual({ content: '#09090b' });
+    expect(meta).toEqual({ content: '#0d1218' });
   });
 });

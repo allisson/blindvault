@@ -81,9 +81,10 @@ describe('manifestFor (extension.md §2)', () => {
     }
   });
 
-  it('allows no remote script, eval, plugin, base or form target', () => {
+  it('allows no remote script or font, eval, plugin, base or form target', () => {
     expect(EXTENSION_CSP.split('; ')).toEqual([
       "script-src 'self' 'wasm-unsafe-eval'",
+      "font-src 'self'",
       "object-src 'none'",
       "base-uri 'none'",
       "form-action 'none'",
