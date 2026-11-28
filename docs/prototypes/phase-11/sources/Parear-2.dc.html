@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Parear, passo 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.bv{--bg:#EEF1F4;--stage:#E2E7ED;--surf:#FFFFFF;--surf2:#F4F6F9;--ink:#17202B;--ink2:#435063;--ink3:#5A6779;--line:#D9DFE6;--warnbg:#FFF2DE;--warn:#874600;--okbg:#E4F4EC;--ok:#156339;--danger:#B42318;--shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);--accs:color-mix(in srgb,var(--acc) 11%,var(--surf));--accl:color-mix(in srgb,var(--acc) 35%,var(--surf));font-family:'Instrument Sans',system-ui,sans-serif;color:var(--ink);background:var(--bg);box-sizing:border-box;-webkit-font-smoothing:antialiased;overflow:hidden;position:relative}
+.bv *{box-sizing:border-box}
+.bv.dark{--bg:#0D1218;--stage:#080B0F;--surf:#151C24;--surf2:#1C252F;--ink:#E8EDF3;--ink2:#B6C0CC;--ink3:#97A2B1;--line:#2A3441;--warnbg:#2B2011;--warn:#F6C177;--okbg:#0F2A1D;--ok:#6BD9A3;--danger:#FF8F80;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);--accs:color-mix(in srgb,var(--acc) 16%,var(--surf))}
+.acc-teal{--acc:#0F766E;--acc-ink:#FFFFFF}.dark.acc-teal{--acc:#3DD6C4;--acc-ink:#04201C}
+.acc-blue{--acc:#2563EB;--acc-ink:#FFFFFF}.dark.acc-blue{--acc:#7AB0FF;--acc-ink:#071833}
+.acc-indigo{--acc:#4F46E5;--acc-ink:#FFFFFF}.dark.acc-indigo{--acc:#9C97FF;--acc-ink:#120F3A}
+.acc-violet{--acc:#7C3AED;--acc-ink:#FFFFFF}.dark.acc-violet{--acc:#B794FF;--acc-ink:#1E0B40}
+.acc-green{--acc:#15803D;--acc-ink:#FFFFFF}.dark.acc-green{--acc:#5EDB8A;--acc-ink:#062512}
+.acc-rose{--acc:#BE123C;--acc-ink:#FFFFFF}.dark.acc-rose{--acc:#FF8AA0;--acc-ink:#3A0613}
+.bv h1,.bv h2,.bv h3,.bv p{margin:0}
+.h1{font-size:30px;font-weight:650;letter-spacing:-.022em;line-height:1.12}
+.h2{font-size:21px;font-weight:650;letter-spacing:-.015em;line-height:1.2}
+.h3{font-size:16px;font-weight:650;line-height:1.3}
+.body{font-size:15px;line-height:1.5}
+.small{font-size:13px;line-height:1.45}
+.t2{color:var(--ink2)}.t3{color:var(--ink3)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border-radius:11px;font-family:inherit;font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--surf);color:var(--ink);cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn.p{background:var(--acc);color:var(--acc-ink);border-color:transparent}
+.btn.q{background:transparent;border-color:transparent;color:var(--ink2)}
+.btn.sm{height:36px;padding:0 12px;font-size:14px;border-radius:9px}
+.btn.wide{width:100%}
+.btn.dg{color:var(--danger)}
+.btn.icon{width:44px;padding:0}
+.btn.sm.icon{width:36px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:16px}
+.lbl{display:block;font-size:13.5px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.inp{display:flex;align-items:center;gap:10px;height:46px;border:1px solid var(--line);border-radius:11px;background:var(--surf);padding:0 14px;font-family:inherit;font-size:15px;color:var(--ink);width:100%}
+.inp.focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--accl)}
+.inp input{all:unset;flex:1;min-width:0;font-size:15px;color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--surf2);color:var(--ink2);white-space:nowrap}
+.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.acc{background:var(--accs);color:var(--acc)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.ico{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ico.s{width:16px;height:16px}.ico.l{width:24px;height:24px}.ico.xl{width:32px;height:32px}
+.tile{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex:none}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:10px;font-size:14.5px;font-weight:550;color:var(--ink2);text-decoration:none}
+.nav.on{background:var(--surf);color:var(--ink);box-shadow:var(--shadow)}
+.nav .n{margin-left:auto;font-size:13px;color:var(--ink3);font-weight:500}
+.step{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--ink3)}
+.step .c{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+.step.on{color:var(--ink)}.step.on .c{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.step.done{color:var(--ink2)}.step.done .c{background:var(--accs);border-color:transparent;color:var(--acc)}
+.bar{flex:1;height:2px;background:var(--line);border-radius:2px;min-width:16px}.bar.done{background:var(--acc)}
+.qr{background:#fff;border-radius:14px;padding:12px;display:inline-flex;border:1px solid var(--line)}
+.win{background:var(--bg);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;position:relative}
+.phone{width:390px;border-radius:46px;border:9px solid #1B222C;background:var(--bg);overflow:hidden;position:relative;box-shadow:var(--shadow)}
+.dark .phone{border-color:#2C3542}
+.sep{height:1px;background:var(--line)}
+.row{display:flex;align-items:center}
+.col{display:flex;flex-direction:column}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: 1440px; height: 900px; ">
+
+<div style="position: absolute; inset: 0; background: var(--stage)"></div>
+<div class="row" style="position: relative; padding: 32px 40px 0; gap: 0; align-items: flex-start">
+  <div class="col" style="width: 800px; gap: 12px">
+    <span class="row small t2" style="gap: 8px; font-weight: 650"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.6"/><path d="M2 19h20"/></svg>No computador que já tem o cofre</span>
+    <div class="win col" style="height: 800px">
+      <div class="row" style="gap: 20px; height: 64px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--surf)">
+        <span style="font-weight: 650; white-space: nowrap">Parear</span><div class="row" style="gap: 10px; flex: 1; max-width: 560px"><span class="step done"><span class="c"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Preparar</span><span class="bar done"></span><span class="step on"><span class="c">2</span>Trocar códigos</span><span class="bar "></span><span class="step "><span class="c">3</span>Conferir número</span><span class="bar "></span><span class="step "><span class="c">4</span>Pronto</span></div><span style="flex: 1"></span><button class="btn sm q" type="button">Cancelar</button>
+      </div>
+      <div class="row" style="flex: 1; gap: 28px; padding: 36px; align-items: flex-start">
+        <div class="col" style="flex: 1; min-width: 0; gap: 18px"><h1 class="h1">Troquem os códigos</h1>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+  <div class="card col" style="padding: 20px; gap: 14px; align-items: center; text-align: center">
+    <span class="chip acc">1. Código de convite</span>
+    <p class="small t2">Aponte a câmera do aparelho novo para este código.</p>
+    <span class="qr"><svg width="180" height="180" viewBox="0 0 29 29" shape-rendering="crispEdges" role="img" aria-label="Código QR"><path d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM10 0h1v1h-1zM11 0h1v1h-1zM13 0h1v1h-1zM14 0h1v1h-1zM20 0h1v1h-1zM22 0h1v1h-1zM23 0h1v1h-1zM24 0h1v1h-1zM25 0h1v1h-1zM26 0h1v1h-1zM27 0h1v1h-1zM28 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM9 1h1v1h-1zM11 1h1v1h-1zM14 1h1v1h-1zM15 1h1v1h-1zM20 1h1v1h-1zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM11 2h1v1h-1zM12 2h1v1h-1zM13 2h1v1h-1zM14 2h1v1h-1zM15 2h1v1h-1zM16 2h1v1h-1zM18 2h1v1h-1zM19 2h1v1h-1zM22 2h1v1h-1zM24 2h1v1h-1zM25 2h1v1h-1zM26 2h1v1h-1zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM13 3h1v1h-1zM20 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM25 3h1v1h-1zM26 3h1v1h-1zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM13 4h1v1h-1zM15 4h1v1h-1zM20 4h1v1h-1zM22 4h1v1h-1zM24 4h1v1h-1zM25 4h1v1h-1zM26 4h1v1h-1zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM11 5h1v1h-1zM13 5h1v1h-1zM14 5h1v1h-1zM18 5h1v1h-1zM19 5h1v1h-1zM20 5h1v1h-1zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM27 6h1v1h-1zM28 6h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM11 7h1v1h-1zM13 7h1v1h-1zM14 7h1v1h-1zM15 7h1v1h-1zM16 7h1v1h-1zM17 7h1v1h-1zM20 7h1v1h-1zM0 8h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM3 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM8 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM13 8h1v1h-1zM14 8h1v1h-1zM15 8h1v1h-1zM16 8h1v1h-1zM17 8h1v1h-1zM20 8h1v1h-1zM21 8h1v1h-1zM22 8h1v1h-1zM25 8h1v1h-1zM0 9h1v1h-1zM1 9h1v1h-1zM3 9h1v1h-1zM7 9h1v1h-1zM8 9h1v1h-1zM10 9h1v1h-1zM11 9h1v1h-1zM12 9h1v1h-1zM13 9h1v1h-1zM16 9h1v1h-1zM19 9h1v1h-1zM21 9h1v1h-1zM24 9h1v1h-1zM25 9h1v1h-1zM27 9h1v1h-1zM28 9h1v1h-1zM5 10h1v1h-1zM6 10h1v1h-1zM8 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM14 10h1v1h-1zM15 10h1v1h-1zM16 10h1v1h-1zM19 10h1v1h-1zM24 10h1v1h-1zM25 10h1v1h-1zM26 10h1v1h-1zM27 10h1v1h-1zM0 11h1v1h-1zM1 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM8 11h1v1h-1zM19 11h1v1h-1zM20 11h1v1h-1zM23 11h1v1h-1zM26 11h1v1h-1zM3 12h1v1h-1zM6 12h1v1h-1zM8 12h1v1h-1zM11 12h1v1h-1zM12 12h1v1h-1zM13 12h1v1h-1zM14 12h1v1h-1zM19 12h1v1h-1zM23 12h1v1h-1zM24 12h1v1h-1zM26 12h1v1h-1zM1 13h1v1h-1zM2 13h1v1h-1zM4 13h1v1h-1zM7 13h1v1h-1zM8 13h1v1h-1zM10 13h1v1h-1zM11 13h1v1h-1zM13 13h1v1h-1zM14 13h1v1h-1zM15 13h1v1h-1zM18 13h1v1h-1zM19 13h1v1h-1zM21 13h1v1h-1zM22 13h1v1h-1zM25 13h1v1h-1zM26 13h1v1h-1zM27 13h1v1h-1zM2 14h1v1h-1zM3 14h1v1h-1zM4 14h1v1h-1zM5 14h1v1h-1zM6 14h1v1h-1zM9 14h1v1h-1zM12 14h1v1h-1zM17 14h1v1h-1zM18 14h1v1h-1zM23 14h1v1h-1zM25 14h1v1h-1zM27 14h1v1h-1zM28 14h1v1h-1zM0 15h1v1h-1zM1 15h1v1h-1zM2 15h1v1h-1zM5 15h1v1h-1zM7 15h1v1h-1zM9 15h1v1h-1zM10 15h1v1h-1zM12 15h1v1h-1zM14 15h1v1h-1zM15 15h1v1h-1zM16 15h1v1h-1zM17 15h1v1h-1zM18 15h1v1h-1zM19 15h1v1h-1zM23 15h1v1h-1zM25 15h1v1h-1zM27 15h1v1h-1zM28 15h1v1h-1zM0 16h1v1h-1zM1 16h1v1h-1zM2 16h1v1h-1zM5 16h1v1h-1zM6 16h1v1h-1zM7 16h1v1h-1zM10 16h1v1h-1zM12 16h1v1h-1zM13 16h1v1h-1zM15 16h1v1h-1zM16 16h1v1h-1zM19 16h1v1h-1zM21 16h1v1h-1zM22 16h1v1h-1zM23 16h1v1h-1zM26 16h1v1h-1zM27 16h1v1h-1zM4 17h1v1h-1zM7 17h1v1h-1zM9 17h1v1h-1zM11 17h1v1h-1zM12 17h1v1h-1zM14 17h1v1h-1zM16 17h1v1h-1zM18 17h1v1h-1zM22 17h1v1h-1zM24 17h1v1h-1zM25 17h1v1h-1zM27 17h1v1h-1zM1 18h1v1h-1zM2 18h1v1h-1zM4 18h1v1h-1zM6 18h1v1h-1zM7 18h1v1h-1zM8 18h1v1h-1zM13 18h1v1h-1zM15 18h1v1h-1zM21 18h1v1h-1zM22 18h1v1h-1zM25 18h1v1h-1zM27 18h1v1h-1zM28 18h1v1h-1zM1 19h1v1h-1zM2 19h1v1h-1zM4 19h1v1h-1zM5 19h1v1h-1zM10 19h1v1h-1zM11 19h1v1h-1zM12 19h1v1h-1zM14 19h1v1h-1zM18 19h1v1h-1zM19 19h1v1h-1zM20 19h1v1h-1zM21 19h1v1h-1zM25 19h1v1h-1zM26 19h1v1h-1zM28 19h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM4 20h1v1h-1zM5 20h1v1h-1zM6 20h1v1h-1zM8 20h1v1h-1zM9 20h1v1h-1zM14 20h1v1h-1zM17 20h1v1h-1zM20 20h1v1h-1zM21 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM27 20h1v1h-1zM11 21h1v1h-1zM12 21h1v1h-1zM14 21h1v1h-1zM16 21h1v1h-1zM17 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM28 21h1v1h-1zM0 22h1v1h-1zM1 22h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM5 22h1v1h-1zM6 22h1v1h-1zM10 22h1v1h-1zM11 22h1v1h-1zM12 22h1v1h-1zM13 22h1v1h-1zM15 22h1v1h-1zM20 22h1v1h-1zM22 22h1v1h-1zM24 22h1v1h-1zM28 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM11 23h1v1h-1zM13 23h1v1h-1zM15 23h1v1h-1zM20 23h1v1h-1zM24 23h1v1h-1zM25 23h1v1h-1zM26 23h1v1h-1zM27 23h1v1h-1zM0 24h1v1h-1zM2 24h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM6 24h1v1h-1zM8 24h1v1h-1zM10 24h1v1h-1zM11 24h1v1h-1zM12 24h1v1h-1zM15 24h1v1h-1zM17 24h1v1h-1zM19 24h1v1h-1zM20 24h1v1h-1zM21 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1zM26 24h1v1h-1zM28 24h1v1h-1zM0 25h1v1h-1zM2 25h1v1h-1zM3 25h1v1h-1zM4 25h1v1h-1zM6 25h1v1h-1zM8 25h1v1h-1zM11 25h1v1h-1zM12 25h1v1h-1zM13 25h1v1h-1zM14 25h1v1h-1zM15 25h1v1h-1zM17 25h1v1h-1zM19 25h1v1h-1zM20 25h1v1h-1zM21 25h1v1h-1zM25 25h1v1h-1zM26 25h1v1h-1zM27 25h1v1h-1zM28 25h1v1h-1zM0 26h1v1h-1zM2 26h1v1h-1zM3 26h1v1h-1zM4 26h1v1h-1zM6 26h1v1h-1zM8 26h1v1h-1zM10 26h1v1h-1zM11 26h1v1h-1zM12 26h1v1h-1zM13 26h1v1h-1zM14 26h1v1h-1zM15 26h1v1h-1zM17 26h1v1h-1zM19 26h1v1h-1zM27 26h1v1h-1zM28 26h1v1h-1zM0 27h1v1h-1zM6 27h1v1h-1zM10 27h1v1h-1zM11 27h1v1h-1zM12 27h1v1h-1zM13 27h1v1h-1zM14 27h1v1h-1zM16 27h1v1h-1zM19 27h1v1h-1zM24 27h1v1h-1zM27 27h1v1h-1zM28 27h1v1h-1zM0 28h1v1h-1zM1 28h1v1h-1zM2 28h1v1h-1zM3 28h1v1h-1zM4 28h1v1h-1zM5 28h1v1h-1zM6 28h1v1h-1zM8 28h1v1h-1zM9 28h1v1h-1zM10 28h1v1h-1zM11 28h1v1h-1zM13 28h1v1h-1zM14 28h1v1h-1zM16 28h1v1h-1zM17 28h1v1h-1zM18 28h1v1h-1zM19 28h1v1h-1zM21 28h1v1h-1zM23 28h1v1h-1zM24 28h1v1h-1zM26 28h1v1h-1zM27 28h1v1h-1z" fill="#111820"/></svg></span>
+    <button class="btn sm" type="button"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5.5A1.5 1.5 0 0 1 6.5 4H15"/></svg>Copiar como texto</button>
+  </div>
+  <div class="card col" style="padding: 20px; gap: 14px; align-items: center; text-align: center">
+    <span class="chip">2. Código de resposta</span>
+    <p class="small t2">Depois, o aparelho novo mostra uma resposta. Leia aqui.</p>
+    <div class="col" style="width: 204px; height: 204px; border-radius: 14px; border: 1.5px dashed var(--line); align-items: center; justify-content: center; gap: 8px; color: var(--ink3)"><svg class="ico xl" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5h3.2l1.8-2.5h7l1.8 2.5h3.2V19h-17z"/><circle cx="12" cy="13" r="3.4"/></svg><span class="small">Câmera desligada</span></div>
+    <div class="row" style="gap: 8px"><button class="btn sm" type="button"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5h3.2l1.8-2.5h7l1.8 2.5h3.2V19h-17z"/><circle cx="12" cy="13" r="3.4"/></svg>Ler com a câmera</button><button class="btn sm q" type="button"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 11h6M9 15h4"/></svg>Colar</button></div>
+  </div>
+</div>
+<div class="row small t2" style="gap: 10px"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Aguardando o código de resposta…</div>
+<p class="small t3" style="max-width: 520px">Quem vê o código de convite descobre só os endereços de rede deste computador. O número do passo 3 protege o pareamento.</p></div><aside class="col" style="width: 250px; flex: none; gap: 14px; padding: 20px; border-radius: 16px; background: var(--surf2); align-self: flex-start">
+      <div class="row small" style="gap: 8px; font-weight: 650"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.6"/><path d="M11 18.5h2"/></svg>No aparelho novo</div>
+      <ol class="col" style="gap: 12px; margin: 0; padding: 0; list-style: none"><li class="row small t2" style="gap: 10px; align-items: flex-start"><span class="tile" style="width: 22px; height: 22px; border-radius: 50%; font-size: 12px; background: var(--surf); border: 1px solid var(--line)">1</span><span>Ele lê o código de convite.</span></li><li class="row small t2" style="gap: 10px; align-items: flex-start"><span class="tile" style="width: 22px; height: 22px; border-radius: 50%; font-size: 12px; background: var(--surf); border: 1px solid var(--line)">2</span><span>Ele mostra o código de resposta.</span></li><li class="row small t2" style="gap: 10px; align-items: flex-start"><span class="tile" style="width: 22px; height: 22px; border-radius: 50%; font-size: 12px; background: var(--surf); border: 1px solid var(--line)">3</span><span>Você lê a resposta aqui.</span></li></ol></aside>
+      </div>
+    </div>
+  </div>
+  <div class="col" style="width: 152px; align-self: stretch; align-items: center; justify-content: center; gap: 14px; padding: 40px 12px 0; text-align: center"><div class="col" style="gap: 6px; align-items: center"><span class="chip acc">1. Convite</span><span style="color: var(--acc)"><svg class="ico l" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+<p class="small t2">O aparelho novo lê o computador.</p>
+<div class="col" style="gap: 6px; align-items: center; margin-top: 14px"><span style="color: var(--ink2)"><svg class="ico l" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></span><span class="chip">2. Resposta</span></div>
+<p class="small t2">O computador lê o aparelho novo.</p>
+<p class="small t3" style="margin-top: 14px">Sem câmera? Copie e cole o texto. Sair do app por mais de 60 s cancela.</p></div>
+  <div class="col" style="width: 408px; gap: 12px">
+    <span class="row small t2" style="gap: 8px; font-weight: 650"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.6"/><path d="M11 18.5h2"/></svg>No aparelho novo</span>
+    <div class="phone col" style="height: 800px">
+      <div class="col" style="flex: 1; padding: 40px 22px 26px; gap: 16px">
+        <div class="row" style="justify-content: space-between"><span class="small t3" style="font-weight: 600">Passo 2 de 4: Trocar códigos</span><button class="btn sm q" type="button" style="padding: 0 6px">Cancelar</button></div>
+        <div class="row" style="gap: 6px"><span class="bar done" style="height: 4px"></span><span class="bar done" style="height: 4px"></span><span class="bar " style="height: 4px"></span><span class="bar " style="height: 4px"></span></div>
+        <h1 class="h2" style="font-size: 24px; margin-top: 6px">Troquem os códigos</h1>
+<div class="row small" style="gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--okbg); color: var(--ok); font-weight: 600"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span style="flex: 1">1. Código de convite lido</span></div>
+<div class="card col" style="padding: 20px; gap: 14px; align-items: center; text-align: center">
+  <span class="chip acc">2. Código de resposta</span>
+  <p class="small t2">Mostre esta tela ao computador, que lê o código com a câmera dele.</p>
+  <span class="qr"><svg width="200" height="200" viewBox="0 0 29 29" shape-rendering="crispEdges" role="img" aria-label="Código QR"><path d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM9 0h1v1h-1zM13 0h1v1h-1zM15 0h1v1h-1zM16 0h1v1h-1zM17 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM22 0h1v1h-1zM23 0h1v1h-1zM24 0h1v1h-1zM25 0h1v1h-1zM26 0h1v1h-1zM27 0h1v1h-1zM28 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM12 1h1v1h-1zM15 1h1v1h-1zM18 1h1v1h-1zM20 1h1v1h-1zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM15 2h1v1h-1zM16 2h1v1h-1zM19 2h1v1h-1zM22 2h1v1h-1zM24 2h1v1h-1zM25 2h1v1h-1zM26 2h1v1h-1zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM10 3h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM18 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM25 3h1v1h-1zM26 3h1v1h-1zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM9 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM13 4h1v1h-1zM18 4h1v1h-1zM19 4h1v1h-1zM20 4h1v1h-1zM22 4h1v1h-1zM24 4h1v1h-1zM25 4h1v1h-1zM26 4h1v1h-1zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM17 5h1v1h-1zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM27 6h1v1h-1zM28 6h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM12 7h1v1h-1zM13 7h1v1h-1zM15 7h1v1h-1zM18 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM3 8h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM10 8h1v1h-1zM14 8h1v1h-1zM15 8h1v1h-1zM17 8h1v1h-1zM18 8h1v1h-1zM21 8h1v1h-1zM23 8h1v1h-1zM24 8h1v1h-1zM25 8h1v1h-1zM26 8h1v1h-1zM28 8h1v1h-1zM1 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM12 9h1v1h-1zM13 9h1v1h-1zM14 9h1v1h-1zM15 9h1v1h-1zM18 9h1v1h-1zM19 9h1v1h-1zM23 9h1v1h-1zM27 9h1v1h-1zM28 9h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM6 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM14 10h1v1h-1zM15 10h1v1h-1zM16 10h1v1h-1zM18 10h1v1h-1zM20 10h1v1h-1zM21 10h1v1h-1zM22 10h1v1h-1zM24 10h1v1h-1zM25 10h1v1h-1zM26 10h1v1h-1zM27 10h1v1h-1zM1 11h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM13 11h1v1h-1zM14 11h1v1h-1zM16 11h1v1h-1zM17 11h1v1h-1zM26 11h1v1h-1zM0 12h1v1h-1zM4 12h1v1h-1zM6 12h1v1h-1zM8 12h1v1h-1zM12 12h1v1h-1zM13 12h1v1h-1zM15 12h1v1h-1zM19 12h1v1h-1zM21 12h1v1h-1zM23 12h1v1h-1zM24 12h1v1h-1zM27 12h1v1h-1zM0 13h1v1h-1zM1 13h1v1h-1zM5 13h1v1h-1zM10 13h1v1h-1zM13 13h1v1h-1zM15 13h1v1h-1zM16 13h1v1h-1zM18 13h1v1h-1zM20 13h1v1h-1zM24 13h1v1h-1zM25 13h1v1h-1zM26 13h1v1h-1zM27 13h1v1h-1zM1 14h1v1h-1zM6 14h1v1h-1zM10 14h1v1h-1zM11 14h1v1h-1zM13 14h1v1h-1zM17 14h1v1h-1zM21 14h1v1h-1zM26 14h1v1h-1zM0 15h1v1h-1zM2 15h1v1h-1zM3 15h1v1h-1zM5 15h1v1h-1zM8 15h1v1h-1zM9 15h1v1h-1zM11 15h1v1h-1zM13 15h1v1h-1zM15 15h1v1h-1zM16 15h1v1h-1zM18 15h1v1h-1zM19 15h1v1h-1zM25 15h1v1h-1zM26 15h1v1h-1zM27 15h1v1h-1zM28 15h1v1h-1zM0 16h1v1h-1zM3 16h1v1h-1zM4 16h1v1h-1zM6 16h1v1h-1zM7 16h1v1h-1zM9 16h1v1h-1zM11 16h1v1h-1zM13 16h1v1h-1zM14 16h1v1h-1zM15 16h1v1h-1zM18 16h1v1h-1zM23 16h1v1h-1zM28 16h1v1h-1zM0 17h1v1h-1zM8 17h1v1h-1zM13 17h1v1h-1zM18 17h1v1h-1zM22 17h1v1h-1zM26 17h1v1h-1zM2 18h1v1h-1zM4 18h1v1h-1zM6 18h1v1h-1zM9 18h1v1h-1zM10 18h1v1h-1zM11 18h1v1h-1zM13 18h1v1h-1zM14 18h1v1h-1zM15 18h1v1h-1zM16 18h1v1h-1zM20 18h1v1h-1zM22 18h1v1h-1zM23 18h1v1h-1zM24 18h1v1h-1zM26 18h1v1h-1zM0 19h1v1h-1zM1 19h1v1h-1zM3 19h1v1h-1zM5 19h1v1h-1zM11 19h1v1h-1zM12 19h1v1h-1zM14 19h1v1h-1zM15 19h1v1h-1zM18 19h1v1h-1zM20 19h1v1h-1zM23 19h1v1h-1zM24 19h1v1h-1zM27 19h1v1h-1zM28 19h1v1h-1zM1 20h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM5 20h1v1h-1zM6 20h1v1h-1zM7 20h1v1h-1zM9 20h1v1h-1zM12 20h1v1h-1zM14 20h1v1h-1zM18 20h1v1h-1zM19 20h1v1h-1zM20 20h1v1h-1zM21 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM25 20h1v1h-1zM26 20h1v1h-1zM9 21h1v1h-1zM10 21h1v1h-1zM12 21h1v1h-1zM17 21h1v1h-1zM18 21h1v1h-1zM19 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM25 21h1v1h-1zM26 21h1v1h-1zM27 21h1v1h-1zM0 22h1v1h-1zM1 22h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM5 22h1v1h-1zM6 22h1v1h-1zM10 22h1v1h-1zM12 22h1v1h-1zM13 22h1v1h-1zM14 22h1v1h-1zM20 22h1v1h-1zM22 22h1v1h-1zM24 22h1v1h-1zM25 22h1v1h-1zM27 22h1v1h-1zM0 23h1v1h-1zM6 23h1v1h-1zM11 23h1v1h-1zM13 23h1v1h-1zM14 23h1v1h-1zM15 23h1v1h-1zM16 23h1v1h-1zM17 23h1v1h-1zM19 23h1v1h-1zM20 23h1v1h-1zM24 23h1v1h-1zM25 23h1v1h-1zM26 23h1v1h-1zM0 24h1v1h-1zM2 24h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM6 24h1v1h-1zM14 24h1v1h-1zM15 24h1v1h-1zM17 24h1v1h-1zM18 24h1v1h-1zM20 24h1v1h-1zM21 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1zM25 24h1v1h-1zM26 24h1v1h-1zM27 24h1v1h-1zM28 24h1v1h-1zM0 25h1v1h-1zM2 25h1v1h-1zM3 25h1v1h-1zM4 25h1v1h-1zM6 25h1v1h-1zM14 25h1v1h-1zM16 25h1v1h-1zM17 25h1v1h-1zM20 25h1v1h-1zM25 25h1v1h-1zM0 26h1v1h-1zM2 26h1v1h-1zM3 26h1v1h-1zM4 26h1v1h-1zM6 26h1v1h-1zM10 26h1v1h-1zM13 26h1v1h-1zM14 26h1v1h-1zM16 26h1v1h-1zM17 26h1v1h-1zM18 26h1v1h-1zM19 26h1v1h-1zM22 26h1v1h-1zM25 26h1v1h-1zM27 26h1v1h-1zM28 26h1v1h-1zM0 27h1v1h-1zM6 27h1v1h-1zM8 27h1v1h-1zM9 27h1v1h-1zM11 27h1v1h-1zM17 27h1v1h-1zM18 27h1v1h-1zM22 27h1v1h-1zM24 27h1v1h-1zM25 27h1v1h-1zM26 27h1v1h-1zM27 27h1v1h-1zM28 27h1v1h-1zM0 28h1v1h-1zM1 28h1v1h-1zM2 28h1v1h-1zM3 28h1v1h-1zM4 28h1v1h-1zM5 28h1v1h-1zM6 28h1v1h-1zM9 28h1v1h-1zM13 28h1v1h-1zM23 28h1v1h-1zM24 28h1v1h-1zM25 28h1v1h-1zM28 28h1v1h-1z" fill="#111820"/></svg></span>
+  <button class="btn sm" type="button"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5.5A1.5 1.5 0 0 1 6.5 4H15"/></svg>Copiar como texto</button>
+</div>
+<div style="flex: 1"></div>
+<div class="row small t2" style="gap: 10px; justify-content: center"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Aguardando o computador ler…</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema": {"editor": "enum", "options": ["Claro", "Escuro"], "default": "Claro", "section": "Tema"}, "destaque": {"editor": "enum", "options": ["Teal", "Azul", "Índigo", "Violeta", "Verde", "Rosa"], "default": "Teal", "section": "Tema"}, "$preview": {"width": 1440, "height": 900}}'>
+class Component extends DCLogic {
+renderVals() {
+const acc = {Teal:'acc-teal',Azul:'acc-blue','Índigo':'acc-indigo',Violeta:'acc-violet',Verde:'acc-green',Rosa:'acc-rose'};
+const t = this.props.tema ?? 'Claro';
+const a = acc[this.props.destaque ?? 'Teal'] || 'acc-teal';
+return { rootClass: 'bv ' + a + (t === 'Escuro' ? ' dark' : '') };
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Aparelho já tem cofre</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.bv{--bg:#EEF1F4;--stage:#E2E7ED;--surf:#FFFFFF;--surf2:#F4F6F9;--ink:#17202B;--ink2:#435063;--ink3:#5A6779;--line:#D9DFE6;--warnbg:#FFF2DE;--warn:#874600;--okbg:#E4F4EC;--ok:#156339;--danger:#B42318;--shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);--accs:color-mix(in srgb,var(--acc) 11%,var(--surf));--accl:color-mix(in srgb,var(--acc) 35%,var(--surf));font-family:'Instrument Sans',system-ui,sans-serif;color:var(--ink);background:var(--bg);box-sizing:border-box;-webkit-font-smoothing:antialiased;overflow:hidden;position:relative}
+.bv *{box-sizing:border-box}
+.bv.dark{--bg:#0D1218;--stage:#080B0F;--surf:#151C24;--surf2:#1C252F;--ink:#E8EDF3;--ink2:#B6C0CC;--ink3:#97A2B1;--line:#2A3441;--warnbg:#2B2011;--warn:#F6C177;--okbg:#0F2A1D;--ok:#6BD9A3;--danger:#FF8F80;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);--accs:color-mix(in srgb,var(--acc) 16%,var(--surf))}
+.acc-teal{--acc:#0F766E;--acc-ink:#FFFFFF}.dark.acc-teal{--acc:#3DD6C4;--acc-ink:#04201C}
+.acc-blue{--acc:#2563EB;--acc-ink:#FFFFFF}.dark.acc-blue{--acc:#7AB0FF;--acc-ink:#071833}
+.acc-indigo{--acc:#4F46E5;--acc-ink:#FFFFFF}.dark.acc-indigo{--acc:#9C97FF;--acc-ink:#120F3A}
+.acc-violet{--acc:#7C3AED;--acc-ink:#FFFFFF}.dark.acc-violet{--acc:#B794FF;--acc-ink:#1E0B40}
+.acc-green{--acc:#15803D;--acc-ink:#FFFFFF}.dark.acc-green{--acc:#5EDB8A;--acc-ink:#062512}
+.acc-rose{--acc:#BE123C;--acc-ink:#FFFFFF}.dark.acc-rose{--acc:#FF8AA0;--acc-ink:#3A0613}
+.bv h1,.bv h2,.bv h3,.bv p{margin:0}
+.h1{font-size:30px;font-weight:650;letter-spacing:-.022em;line-height:1.12}
+.h2{font-size:21px;font-weight:650;letter-spacing:-.015em;line-height:1.2}
+.h3{font-size:16px;font-weight:650;line-height:1.3}
+.body{font-size:15px;line-height:1.5}
+.small{font-size:13px;line-height:1.45}
+.t2{color:var(--ink2)}.t3{color:var(--ink3)}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border-radius:11px;font-family:inherit;font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--surf);color:var(--ink);cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn.p{background:var(--acc);color:var(--acc-ink);border-color:transparent}
+.btn.q{background:transparent;border-color:transparent;color:var(--ink2)}
+.btn.sm{height:36px;padding:0 12px;font-size:14px;border-radius:9px}
+.btn.wide{width:100%}
+.btn.dg{color:var(--danger)}
+.btn.icon{width:44px;padding:0}
+.btn.sm.icon{width:36px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:16px}
+.lbl{display:block;font-size:13.5px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.inp{display:flex;align-items:center;gap:10px;height:46px;border:1px solid var(--line);border-radius:11px;background:var(--surf);padding:0 14px;font-family:inherit;font-size:15px;color:var(--ink);width:100%}
+.inp.focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--accl)}
+.inp input{all:unset;flex:1;min-width:0;font-size:15px;color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--surf2);color:var(--ink2);white-space:nowrap}
+.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.acc{background:var(--accs);color:var(--acc)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.ico{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ico.s{width:16px;height:16px}.ico.l{width:24px;height:24px}.ico.xl{width:32px;height:32px}
+.tile{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex:none}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:10px;font-size:14.5px;font-weight:550;color:var(--ink2);text-decoration:none}
+.nav.on{background:var(--surf);color:var(--ink);box-shadow:var(--shadow)}
+.nav .n{margin-left:auto;font-size:13px;color:var(--ink3);font-weight:500}
+.step{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--ink3)}
+.step .c{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+.step.on{color:var(--ink)}.step.on .c{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.step.done{color:var(--ink2)}.step.done .c{background:var(--accs);border-color:transparent;color:var(--acc)}
+.bar{flex:1;height:2px;background:var(--line);border-radius:2px;min-width:16px}.bar.done{background:var(--acc)}
+.qr{background:#fff;border-radius:14px;padding:12px;display:inline-flex;border:1px solid var(--line)}
+.win{background:var(--bg);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;position:relative}
+.phone{width:390px;border-radius:46px;border:9px solid #1B222C;background:var(--bg);overflow:hidden;position:relative;box-shadow:var(--shadow)}
+.dark .phone{border-color:#2C3542}
+.sep{height:1px;background:var(--line)}
+.row{display:flex;align-items:center}
+.col{display:flex;flex-direction:column}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: 390px; height: 844px; ">
+<div class="col" style="height: 844px; padding: 48px 20px 28px; gap: 16px"><div class="row" style="justify-content: space-between"><span class="row small t3" style="gap: 6px; font-weight: 600"><svg class="ico s" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13" height="10" rx="1.4"/><path d="M1.5 18h11"/><rect x="16" y="8" width="6" height="12" rx="1.5"/></svg>Parear</span><button class="btn sm q" type="button" style="padding: 0 6px">Fechar</button></div>
+<span class="tile" style="width: 56px; height: 56px; border-radius: 16px; margin-top: 40px; background: var(--accs); color: var(--acc)"><svg class="ico l" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13" height="10" rx="1.4"/><path d="M1.5 18h11"/><rect x="16" y="8" width="6" height="12" rx="1.5"/></svg></span>
+<h1 class="h2" style="font-size: 24px">Esse aparelho já tem um cofre</h1>
+<p class="body t2">O código veio de um aparelho que já guarda um cofre. Pareamento é só para aparelhos sem cofre.</p>
+<div class="card col" style="padding: 16px; gap: 6px"><span class="small" style="font-weight: 650">O que fazer</span><span class="small t2">Se for o mesmo cofre, cancele e escolha Reconectar um aparelho restaurado nos dois. Se for outro cofre e você quiser trocá-lo por este, bloqueie lá e escolha Substituir pareando.</span></div>
+<div style="flex: 1"></div><button class="btn p wide" type="button">Ir para Reconectar</button><button class="btn wide" type="button">Fechar</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema": {"editor": "enum", "options": ["Claro", "Escuro"], "default": "Claro", "section": "Tema"}, "destaque": {"editor": "enum", "options": ["Teal", "Azul", "Índigo", "Violeta", "Verde", "Rosa"], "default": "Teal", "section": "Tema"}, "$preview": {"width": 390, "height": 844}}'>
+class Component extends DCLogic {
+renderVals() {
+const acc = {Teal:'acc-teal',Azul:'acc-blue','Índigo':'acc-indigo',Violeta:'acc-violet',Verde:'acc-green',Rosa:'acc-rose'};
+const t = this.props.tema ?? 'Claro';
+const a = acc[this.props.destaque ?? 'Teal'] || 'acc-teal';
+return { rootClass: 'bv ' + a + (t === 'Escuro' ? ' dark' : '') };
+}
+}
+</script>
+</body>
+</html>
