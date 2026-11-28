@@ -51,7 +51,7 @@ async function exportBackup(page: Page): Promise<Buffer> {
 
 /** Locks and deletes every database of this origin: the browser lost its storage. */
 async function loseStorage(page: Page): Promise<void> {
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.evaluate(async () => {
     for (const { name } of await indexedDB.databases()) {
       if (!name) continue;
@@ -134,7 +134,7 @@ test('restores a backup by the Recovery Phrase after the browser lost its storag
   await expect(page.getByTestId('after-restore')).toHaveCount(0);
 
   // The new local password opens it; the old one does not.
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await fillPassword(page.getByTestId('unlock-password'), PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });

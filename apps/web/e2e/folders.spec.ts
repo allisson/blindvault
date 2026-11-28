@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 
-import { createVault } from './create';
+import { createVault, toList } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -26,19 +26,26 @@ async function folderAction(page: Page, name: string) {
   await button(page, name).first().click();
 }
 
+/** A folder of the pane, not the pill that names the folder shown (D254, D316). */
+function folder(page: Page, name: string) {
+  return page
+    .getByRole('navigation', { name: 'Folders' })
+    .getByRole('button', { name, exact: true });
+}
+
 function subfolder(page: Page, name: string) {
   return page.getByRole('list', { name: 'Folders' }).getByRole('button', { name, exact: true });
 }
 
-/** Shows the folder pane: in the list's sheet on mobile (D254), in the drawer on tablet. */
+/** Shows the folder pane: in the list's sheet on mobile (D254), in Menu's drawer on tablet (D316). */
 async function folders(page: Page, layout: Layout) {
   if (layout === 'mobile') {
-    while (await button(page, 'Back').isVisible()) await button(page, 'Back').click();
+    await toList(page);
     if (!(await button(page, 'All items').isVisible()))
       await page.getByTestId('folder-pill').click();
   }
   if (layout === 'tablet' && !(await button(page, 'All items').isVisible())) {
-    await button(page, 'Folders').click();
+    await button(page, 'Menu').click();
   }
 }
 
@@ -66,7 +73,7 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Create').click();
     await expect(page.getByRole('heading', { name: 'Clients', level: 2 })).toBeVisible();
     await folders(page, layout);
-    await button(page, 'Work').click();
+    await folder(page, 'Work').click();
     await expect(subfolder(page, 'Clients')).toBeVisible();
     await button(page, 'New item').click();
     await button(page, 'Secure note').click();
@@ -77,7 +84,7 @@ for (const [layout, width] of WIDTHS) {
 
     // Rename; the folder cannot move into its own subtree (D171).
     await folders(page, layout);
-    await button(page, 'Work').click();
+    await folder(page, 'Work').click();
     await folderAction(page, 'Rename');
     await page.getByTestId('folder-name').fill('  Office ');
     await button(page, 'Rename').last().click();
@@ -95,7 +102,7 @@ for (const [layout, width] of WIDTHS) {
     await page.getByTestId('move-target').selectOption({ label: 'No folder (vault root)' });
     await button(page, 'Move').last().click();
     await folders(page, layout);
-    await button(page, 'Office').click();
+    await folder(page, 'Office').click();
     await expect(subfolder(page, 'Clients')).toHaveCount(0);
     await button(page, 'Contract').click();
     await button(page, 'Edit').click();
@@ -105,7 +112,7 @@ for (const [layout, width] of WIDTHS) {
 
     // Trash Clients with its item; both come back with the folder.
     await folders(page, layout);
-    await button(page, 'Clients').click();
+    await folder(page, 'Clients').click();
     await expect(list.getByRole('button', { name: 'Contract', exact: true })).toBeVisible();
     await button(page, 'Folder actions').click();
     await expect(button(page, 'Move to trash')).toHaveAttribute(
@@ -115,7 +122,7 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Move to trash').click();
     await expect(page.getByRole('heading', { name: 'Clients', level: 2 })).toHaveCount(0);
     await folders(page, layout);
-    await expect(button(page, 'Clients')).toHaveCount(0);
+    await expect(folder(page, 'Clients')).toHaveCount(0);
     await button(page, 'All items').click();
     await expect(page.getByRole('heading', { name: 'First steps' })).toBeVisible();
     // On mobile, the Trash is in the bottom navigation (D245).
@@ -130,7 +137,7 @@ for (const [layout, width] of WIDTHS) {
     await button(page, 'Restore Clients from the trash').click();
     await expect(page.getByText('The trash is empty.')).toBeVisible();
     await folders(page, layout);
-    await button(page, 'Clients').click();
+    await folder(page, 'Clients').click();
     await expect(button(page, 'Contract')).toBeVisible();
   });
 }

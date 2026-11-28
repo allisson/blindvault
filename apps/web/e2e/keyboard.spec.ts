@@ -5,7 +5,7 @@
 import { type Locator, type Page, expect, test } from '@playwright/test';
 
 import { WIDTHS } from './axe';
-import { createVault } from './create';
+import { createVault, toList } from './create';
 import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9), and the unlock runs it again.
@@ -113,14 +113,16 @@ for (const [layout, width] of WIDTHS) {
     await press(page, button(page, 'History'));
     await expect(page.getByRole('heading', { name: 'History' }).first()).toBeVisible();
 
-    // Settings (on mobile, behind Back from the history and the item), a lock and an unlock.
-    const settings = page.getByRole('button', { name: 'Settings' }).first();
-    while (!(await settings.isVisible())) await press(page, button(page, 'Back'));
+    // Settings (on mobile, behind Back from the history and the item; on a tablet, in Menu's
+    // drawer), a lock and an unlock.
+    const settings = button(page, 'Settings');
+    while (await button(page, 'Back').isVisible()) await press(page, button(page, 'Back'));
+    if (!(await settings.isVisible())) await press(page, button(page, 'Menu'));
     await press(page, settings);
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-    // On a phone, Lock is in the "…" menu (D245).
-    if (await button(page, 'More').isVisible()) await press(page, button(page, 'More'));
-    await press(page, button(page, 'Lock'));
+    // The drawer closes on the navigation: a tablet's Lock is then the header's alone.
+    await expect(page.locator('#sidebar-drawer')).toBeHidden();
+    await press(page, page.getByRole('button', { name: /^Lock( now)?$/ }));
     await type(page, page.getByTestId('unlock-password'), PASSWORD);
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
@@ -134,24 +136,22 @@ for (const [layout, width] of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     await createVault(page, PASSWORD);
-    const settings = page.getByRole('button', { name: 'Settings' }).first();
-    const toList = async () => {
-      while (!(await settings.isVisible())) await button(page, 'Back').click();
-    };
 
     // A popover opens with Enter and closes with Esc, handing the focus back to its button.
-    const badge = page.getByTestId('preview-badge');
+    // A tablet's drawer holds a hidden copy of the brand: the visible badge is the header's.
+    const badge = page.getByTestId('preview-badge').locator('visible=true');
+    const note = page.getByTestId('preview-banner').locator('visible=true');
     await press(page, badge);
-    await expect(page.getByTestId('preview-banner')).toBeVisible();
+    await expect(note).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('preview-banner')).toBeHidden();
+    await expect(note).toBeHidden();
     await expect(badge).toBeFocused();
 
     for (const [type, title] of [
       ['Login', 'Harbor'],
       ['Secure note', 'Memo'],
     ] as const) {
-      await toList();
+      await toList(page);
       await button(page, 'New item').click();
       await button(page, type).click();
       await page.getByTestId('item-title').fill(title);
@@ -169,7 +169,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(more).toBeFocused();
 
     // The row's Copy, announced by the toast.
-    await toList();
+    await toList(page);
     await press(page, button(page, 'Copy password: Harbor'));
     await expect(page.getByTestId('toast-region')).toContainText('Copied.');
 
@@ -217,14 +217,10 @@ for (const [layout, width] of WIDTHS) {
     await page.goto('/');
     await createVault(page, PASSWORD);
     // On a phone, the list waits behind Back from an item.
-    const settings = page.getByRole('button', { name: 'Settings' }).first();
-    const toList = async () => {
-      while (!(await settings.isVisible())) await button(page, 'Back').click();
-    };
 
     // Ctrl/⌘ + Enter saves from the notes, where Enter alone is a new line.
     for (const title of ['Charlie', 'Alpha', 'Bravo']) {
-      await toList();
+      await toList(page);
       await button(page, 'New item').click();
       await button(page, 'Login').click();
       await page.getByTestId('item-title').fill(title);
@@ -233,7 +229,7 @@ for (const [layout, width] of WIDTHS) {
       await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
     }
     await expect(button(page, 'Save')).toHaveCount(0);
-    await toList();
+    await toList(page);
 
     const search = page.getByTestId('search');
     const row = (name: string) => button(page, name);
@@ -252,7 +248,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(row('Bravo')).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { name: 'Bravo', level: 1 })).toBeVisible();
-    await toList();
+    await toList(page);
     await row('Bravo').focus();
     await page.keyboard.press('ArrowUp');
     await expect(row('Alpha')).toBeFocused();

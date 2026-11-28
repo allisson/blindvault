@@ -11,7 +11,7 @@ import {
   treeItems,
 } from '../app/folders';
 import { hex } from '../app/ids';
-import { type ListScreen, type Navigation } from '../app/nav';
+import { type ListScreen, type Navigation, isMain } from '../app/nav';
 import { useLanguage, useMessages } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { platform } from '../platform';
@@ -134,7 +134,10 @@ function ListEntry({
   readonly children: ReactNode;
 }) {
   const current = useSyncExternalStore(nav.subscribe, nav.list);
+  // Devices, Notices or Settings open: no list is the current place (D316).
+  const main = isMain(useSyncExternalStore(nav.subscribe, nav.current));
   const selected =
+    !main &&
     current.name === list.name &&
     (current.name !== 'folder' || list.name !== 'folder' || hex(current.id) === hex(list.id));
   return (
@@ -157,7 +160,7 @@ function ListEntry({
   );
 }
 
-/** All items, the folder tree as derived (D14), and the trash. */
+/** All items, the trash, then the folder tree as derived (D14), as the sidebar shows them (D316). */
 export function FolderPane({
   session,
   nav,
@@ -174,10 +177,21 @@ export function FolderPane({
   const rows = folderRows(tree);
   return (
     <nav aria-label={m.vault.folders} className="flex flex-col gap-1 p-3">
-      <h2 className="px-2 text-label font-semibold text-muted uppercase">{m.vault.folders}</h2>
       <ListEntry nav={nav} list={{ name: 'vault' }} icon="list" count={treeItems(tree).length}>
         {m.vault.allItems}
       </ListEntry>
+      {/* On mobile, the Trash is in the bottom navigation (D245, D316). */}
+      {layout === 'mobile' ? null : (
+        <ListEntry
+          nav={nav}
+          list={{ name: 'trash' }}
+          icon="trash-2"
+          count={session.items().filter((v) => v.inTrash).length}
+        >
+          {m.vault.trash}
+        </ListEntry>
+      )}
+      <h2 className="mt-3 px-2 text-label font-semibold text-muted uppercase">{m.vault.folders}</h2>
       {rows.map(({ folder, depth, items }) => (
         <ListEntry
           key={hex(folder.id)}
@@ -190,17 +204,6 @@ export function FolderPane({
           {folder.name}
         </ListEntry>
       ))}
-      {/* On mobile, the Trash is in the bottom navigation (D245). */}
-      {layout === 'mobile' ? null : (
-        <ListEntry
-          nav={nav}
-          list={{ name: 'trash' }}
-          icon="trash-2"
-          count={session.items().filter((v) => v.inTrash).length}
-        >
-          {m.vault.trash}
-        </ListEntry>
-      )}
       {session.writable ? (
         creating ? (
           <NameForm

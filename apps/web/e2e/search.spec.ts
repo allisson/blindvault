@@ -66,7 +66,7 @@ test('searches in memory, never over secrets, and forgets the query on lock (D13
   );
   expect(stored).not.toContain('Orbit');
 
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

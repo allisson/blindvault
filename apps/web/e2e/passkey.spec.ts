@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { type CDPSession, type Page, expect, test } from '@playwright/test';
 
-import { createVault, openSettingsPage } from './create';
+import { createVault, openNotices, openSettingsPage } from './create';
 
 // Calibrating Argon2id targets about 1 s per derivation (D9), on every browser.
 test.setTimeout(120_000);
@@ -52,7 +52,7 @@ async function setUp(page: Page, password = PASSWORD) {
 }
 
 async function lock(page: Page) {
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
 }
 
@@ -220,6 +220,7 @@ test('with no way to ask the manager, removing, replacing or erasing says to del
   await page.getByTestId('replace-understood').check();
   await page.getByRole('button', { name: 'Replace', exact: true }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 60_000 });
+  await openNotices(page);
   await expect(
     page
       .getByTestId('leftover-passkey')

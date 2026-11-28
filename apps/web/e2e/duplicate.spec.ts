@@ -76,9 +76,10 @@ for (const [layout, width] of WIDTHS) {
       .locator('article')
       .getByRole('button', { name: 'Move to trash', exact: true })
       .click();
+    // The trashed item's screen closes, on a phone back to the list: no Back is left to press.
     if (layout === 'mobile') {
       await expect(page.getByRole('heading', { name: 'Harbor', level: 1 })).toHaveCount(0);
-      await button(page, 'Back').click();
+      await expect(button(page, 'Back')).toHaveCount(0);
     }
     await button(page, 'Trash').click();
     await button(page, 'Harbor').click();

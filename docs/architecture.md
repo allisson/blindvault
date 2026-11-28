@@ -247,8 +247,8 @@ every project through the references in the root `tsconfig.json`.
   the controller's clock, whether a backup is due: `never`, `old-phrase` or `stale` (30 days, fixed
   in v1). A vault without a Recovery Envelope gets none. `VaultController.backupReminder` returns
   it while unlocked; `dismissBackupReminder` hides it for that session until the next lock, so a
-  vault that replaces it shows it again, and nothing new is stored. VaultShell shows it with "Make
-  a backup", which opens Settings with `focus: 'backup'` on the navigation screen.
+  vault that replaces it shows it again, and nothing new is stored. The Notices screen shows it with
+  "Make a backup", which opens Settings with `focus: 'backup'` on the navigation screen (D316).
 - **Asset manifest and reproducible build (Phase 3, D189).** `apps/web/build/asset-manifest.ts` is
   a Vite plugin, applied to `vite build` only: at `buildStart` it refuses a Node other than
   `.nvmrc`'s, and at `closeBundle` it walks `dist/`, writes `asset-manifest.txt` (`manifestOf`, the
@@ -330,6 +330,18 @@ every project through the references in the root `tsconfig.json`.
   checks the panes, the lock state, masked secrets and no horizontal overflow at 390, 800 and
   1280 px, state kept across both breakpoints, the drawer, the system's back, N, and, in Chromium
   with `isMobile`, every control's height.
+- **Shell (Phase 11, D316).** `src/ui/Sidebar.tsx` is the sidebar: the brand, `FolderPane` (All
+  items, the trash, the folders), Devices and Settings, the status card and Lock now; always shown
+  on a desktop, in Menu's drawer on a tablet. A phone has a header with the lock state and Lock, the
+  status line above the lists and a bottom bar of four tabs. Devices (`DevicesScreen` in
+  `ui/Settings.tsx`) and Notices are main destinations of `Navigation` (`openMain`), each in place
+  of the other and of Settings, over the list they were opened from; `openSettings` still takes
+  `devices`, `pair` and `readmit` and opens Devices. `src/ui/Notices.tsx` gathers the notices a
+  vault screen showed above its content (the storage warnings, which cannot be dismissed, the backup
+  reminder, the clock, the retired device, the check after a restore, the re-founding and the
+  leftover passkey) and shows them on the Notices screen; the status card, the tablet's pill and the
+  phone's line say how many, with the first one's short line. The shared-origin warning (D90) stays
+  a banner on every screen.
 - **Onboarding (Phase 3, §13.3, D198).** `src/ui/Start.tsx` opens with what having no server
   means, then the three starts; the pair start explains today's path (a backup restored here) until
   Phase 4. On a Safari tab (`safariTab()`) the advice to install first comes before the starts, and
@@ -565,7 +577,8 @@ every project through the references in the root `tsconfig.json`.
   reports a commit that issued one through `SyncGrant.watch`; a merge or the maintenance pass issues
   none. `src/app/sync.ts` in `apps/web` watches from the summary on, pushes after `committed` and
   adds each live merge's result to the sync's; the controller keeps a live sync when Settings
-  closes (`leaveSync`), `cancelPairing` ends only the pairing, and `VaultShell` shows the live bar.
+  closes (`leaveSync`), `cancelPairing` ends only the pairing, and the status card, the tablet's
+  pill or the phone's status line shows the live sync (`ui/Notices.tsx`, D316).
   No new dependency.
 - **Records in a newer format over a sync (Phase 5, D68, D227).** `VaultSession` adds the peer
   to `rejectedPeers` in Local Config, through the `seen` part of a merge plan, in the commit of a

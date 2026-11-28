@@ -136,7 +136,7 @@ test('copies a TOTP code and a secret, then clears the clipboard after the timeo
   await page.getByRole('button', { name: 'Copy: Password', exact: true }).click();
   await expect(page.getByTestId('secret-Password')).toHaveText('••••••••Hidden');
   expect((await writes(page)).at(-1)).toBe('Tulip-Orbit-5528-Granite');
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(page.getByTestId('unlock-password')).toBeVisible();
   await expect.poll(() => writes(page)).toEqual([copied[0], '', 'Tulip-Orbit-5528-Granite', '']);
 });

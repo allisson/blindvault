@@ -7,6 +7,7 @@ import { corruptRecords } from './corrupt';
 import {
   checkSameNetwork,
   createVault,
+  openNotices,
   openSettingsPage,
   openVault,
   startScreen,
@@ -145,7 +146,7 @@ test('pairs two devices: the same number on both, then B holds the vault (§8.4,
   await expect(b.getByTestId('device-last-sync')).not.toContainText('never');
 
   // B's vault opens with B's own password.
-  await button(b, 'Lock').click();
+  await b.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
   await button(b, 'Unlock').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
@@ -188,7 +189,7 @@ test('destroy A, continue with B; then destroy B and restore its backup with the
 
   // B goes on alone: writes, locks, unlocks with its own password and makes a backup.
   await addItem(b, 'Written on B');
-  await button(b, 'Lock').click();
+  await b.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await fillPassword(b.getByTestId('unlock-password'), PASSWORD_B);
   await button(b, 'Unlock').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
@@ -246,9 +247,12 @@ test('a clock gone back far on a paired device offers replacing its vault by pai
   await button(a, 'Save').click();
   await expect(a.getByRole('heading', { name: 'Ahead' })).toBeVisible();
   await a.clock.setSystemTime(now);
-  await button(a, 'Lock').click();
+  await a.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await fillPassword(a.getByTestId('unlock-password'), PASSWORD_A);
   await button(a, 'Unlock').click();
+  // The notice is on the Notices screen (D316).
+  await expect(a.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });
+  await openNotices(a);
   await expect(a.getByTestId('clock-behind')).toContainText(
     'Or replace this device’s vault by pairing with another device: lock, then choose “Replace by pairing with another device…”.',
     { timeout: 30_000 },
@@ -310,7 +314,7 @@ test('a lock on A while the numbers are shown stops the pairing on B (D93)', asy
 }) => {
   const { a, b } = await toSas(browser);
   await button(b, 'Yes, the same').click();
-  await button(a, 'Lock').click();
+  await a.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(b.getByTestId('pairing-failed')).toHaveAttribute('data-reason', 'locked');
   expect(await b.evaluate(async () => (await indexedDB.databases()).length)).toBe(0);
 });
@@ -400,7 +404,7 @@ async function replacing(browser: Browser) {
   await b.getByTestId('item-title').fill('Old item');
   await button(b, 'Save').click();
   await expect(b.getByRole('heading', { name: 'Old item' })).toBeVisible();
-  await button(b, 'Lock').click();
+  await b.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await button(b, 'Replace by pairing with another device…').click();
   await expect(b.getByTestId('replace-warning')).toContainText(
     'Changes that exist only on this device are lost',
@@ -445,7 +449,7 @@ test('replaces a locked vault by pairing: B then holds only the other vault (D15
   await expect(b.getByRole('button', { name: /Old item/ })).toHaveCount(0);
   // The old database is deleted once the new one commits (D89).
   await expect.poll(() => b.evaluate(async () => (await indexedDB.databases()).length)).toBe(1);
-  await button(b, 'Lock').click();
+  await b.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await fillPassword(b.getByTestId('unlock-password'), PASSWORD_NEW);
   await button(b, 'Unlock').click();
   await expect(b.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

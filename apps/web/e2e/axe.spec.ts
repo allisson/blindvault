@@ -5,7 +5,16 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { THEMES, WIDTHS, audit } from './axe';
-import { answerConfirmation, openVault, readPhrase, startScreen } from './create';
+import {
+  answerConfirmation,
+  openDevices,
+  openSettings,
+  openSettingsPage,
+  openVault,
+  readPhrase,
+  startScreen,
+  toList,
+} from './create';
 import { lock } from './lock';
 
 // Creating a vault calibrates Argon2id at about 1 s (D9); each test also runs axe on every screen.
@@ -111,18 +120,14 @@ for (const [layout, width] of WIDTHS) {
       await audit(page, 'an item history');
 
       // The list (D246) and its type filter, a popover or a bottom sheet on a phone (D254), which
-      // shows with a second type. On mobile, the list and Settings wait behind Back.
-      const settings = page.getByRole('button', { name: 'Settings' }).first();
-      const toList = async () => {
-        while (!(await settings.isVisible())) await button(page, 'Back').click();
-      };
-      await toList();
+      // shows with a second type. On mobile, the list waits behind Back.
+      await toList(page);
       await button(page, 'New item').click();
       await button(page, 'Secure note').click();
       await page.getByTestId('item-title').fill('Memo');
       await button(page, 'Save').click();
       await expect(page.getByRole('heading', { name: 'Memo', level: 1 })).toBeVisible();
-      await toList();
+      await toList(page);
       await audit(page, 'the item list');
       await page.getByTestId('type-pill').click();
       await expect(page.getByRole('group', { name: 'Filter by type' })).toBeVisible();
@@ -136,15 +141,13 @@ for (const [layout, width] of WIDTHS) {
       }
 
       // Settings, with About in it (D192).
-      await settings.click();
-      await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+      await openSettings(page);
       await audit(page, 'Settings');
-      // The densest pages (D252).
-      await page.getByTestId('settings-devices').click();
+      // Devices, a main destination of its own (D316), and the densest page of Settings (D252).
+      await openDevices(page);
       await expect(page.getByRole('heading', { name: 'Devices', level: 1 })).toBeVisible();
-      await audit(page, 'Settings, Devices');
-      await button(page, 'Back').click();
-      await page.getByTestId('settings-backup').click();
+      await audit(page, 'Devices');
+      await openSettingsPage(page, 'backup');
       await expect(page.getByRole('heading', { name: 'Backup', level: 1 })).toBeVisible();
       await audit(page, 'Settings, Backup');
       await button(page, 'Back').click();

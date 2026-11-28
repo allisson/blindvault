@@ -5,7 +5,14 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 
 import { THEMES, WIDTHS, audit } from './axe';
-import { checkSameNetwork, createVault, startScreen } from './create';
+import {
+  checkSameNetwork,
+  createVault,
+  openDevices,
+  openNotices,
+  startScreen,
+  toList,
+} from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
 
@@ -45,12 +52,10 @@ async function device(
   return page;
 }
 
-/** Goes back to Settings › Devices from wherever the vault is (on mobile, through Back). */
-async function settings(page: Page): Promise<void> {
-  const open = page.getByRole('button', { name: 'Settings' }).first();
-  while (!(await open.isVisible())) await button(page, 'Back').click();
-  await open.click();
-  await page.getByTestId('settings-devices').click();
+/** Goes back to Devices from wherever the vault is (on mobile, through Back). */
+async function devices(page: Page): Promise<void> {
+  await toList(page);
+  await openDevices(page);
 }
 
 for (const [layout, width] of WIDTHS) {
@@ -63,7 +68,7 @@ for (const [layout, width] of WIDTHS) {
 
       // Pairing: A's text, B's answer, the SAS on both, then each side's result.
       await createVault(a, PASSWORD_A);
-      await settings(a);
+      await devices(a);
       await button(a, 'Pair a device…').click();
       await audit(a, 'the pairing password');
       await checkSameNetwork(a);
@@ -102,10 +107,10 @@ for (const [layout, width] of WIDTHS) {
       await expect(a.getByTestId('pairing-done')).toBeVisible({ timeout: 60_000 });
       await audit(a, 'the paired device');
       await button(a, 'Close').click();
-      await audit(a, 'Settings with two devices');
+      await audit(a, 'Devices with two devices');
 
       // Sync: A's code, B's answer, connected on both, then live in the vault.
-      await settings(b);
+      await devices(b);
       await a.getByTestId('device-sync').click();
       const syncA = a.getByTestId('sync');
       await audit(a, 'the sync choice');
@@ -130,7 +135,21 @@ for (const [layout, width] of WIDTHS) {
       await audit(a, 'a sync connected on A');
       await audit(b, 'a sync connected on B');
       await a.getByTestId('sync-close').click();
-      while (await button(a, 'Back').isVisible()) await button(a, 'Back').click();
+      await toList(a);
+      // A new vault's backup reminder is a notice, which a phone's line and a tablet's pill show in
+      // place of the live sync (D316): dismissed, the live sync shows.
+      await openNotices(a);
+      await a.getByTestId('backup-reminder').getByRole('button', { name: 'Dismiss' }).click();
+      await toList(a);
+      // A tablet shows it as a pill, and as the sidebar's block once Menu opens it (D316).
+      const menu = button(a, 'Menu');
+      if (await menu.isVisible()) {
+        await expect(
+          a.getByRole('banner').getByRole('button', { name: /^Live with/ }),
+        ).toBeVisible();
+        await audit(a, 'the live sync pill');
+        await menu.click();
+      }
       await expect(a.getByTestId('live-sync')).toBeVisible();
       await audit(a, 'the live sync in the vault');
 

@@ -34,7 +34,7 @@ test('resets a forgotten local password with the Recovery Phrase, keeping the va
   await page.getByTestId('input-Password').fill(SECRET);
   await button(page, 'Save').click();
   await expect(page.getByRole('heading', { name: 'Only here', level: 1 })).toBeVisible();
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
 
   await button(page, 'Forgot the password?').click();
   // Input that is not a phrase: back to the phrase step, emptied, with nothing written.
@@ -71,7 +71,7 @@ test('a vault with no Recovery Envelope says so at the reset, and stays locked (
 }) => {
   await page.goto('/');
   const words = await createVault(page, PASSWORD);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(page.getByTestId('lock-state')).toHaveText('Locked');
   expect(await deleteRecords(page, RecordType.recoveryEnvelope)).toBe(1);
 

@@ -8,10 +8,12 @@ import {
   answerConfirmation,
   checkSameNetwork,
   createVault,
+  openNotices,
   openSettingsPage,
   openVault,
   startScreen,
   switchSettingsPage,
+  toList,
 } from './create';
 import { PAIRING_URL } from '../playwright.config';
 import { fillPassword } from './password';
@@ -221,7 +223,6 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   await expect(b.getByTestId('sync-failed')).toHaveText(
     /^This device was retired on another device, and .+ passed that on, so the sync ended\. This device can no longer sync\.$/,
   );
-  await expect(b.getByTestId('own-retired')).toBeVisible();
   // B, now retired, offers no sync, no pairing and no re-admission, and says why (D41, D45).
   await button(b, 'Start again').click();
   await expect(b.getByTestId('device-sync')).toHaveCount(0);
@@ -232,7 +233,10 @@ test('A retires B, then tells it: B merges its retired record and shows the D41 
   await expect(b.getByTestId('readmit-device')).toContainText(
     'This device was retired: it cannot be re-admitted. Replace it by pairing to sync.',
   );
-  await switchSettingsPage(b, 'refound');
+  // Its notice is on the Notices screen (D316).
+  await openNotices(b);
+  await expect(b.getByTestId('own-retired')).toBeVisible();
+  await openSettingsPage(b, 'refound');
   // Re-founding on B says it cannot sync first, in place of the advice to sync (D47).
   await b.getByTestId('refound-start').click();
   const warnings = b.getByTestId('refound-warnings');
@@ -275,6 +279,7 @@ test('A retires B during an open sync: B merges its retired record and shows the
   await expect(b.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'retired', {
     timeout: 30_000,
   });
+  await openNotices(b);
   await expect(b.getByTestId('own-retired')).toBeVisible();
 });
 
@@ -311,8 +316,7 @@ async function closed(a: Page, b: Page) {
   await expect(a.getByTestId('sync-failed')).toHaveAttribute('data-reason', 'ended');
   await a.getByTestId('sync-again').click();
   for (const page of [a, b]) {
-    await button(page, 'Back').click();
-    await button(page, 'Back').click();
+    await toList(page);
   }
 }
 
@@ -334,16 +338,14 @@ test('an item created on A reaches B through a sync, and B shows the merge (D222
   browser,
 }) => {
   const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await newLogin(a, 'ACME');
   await openSettingsPage(a, 'devices');
 
   await synced(a, b);
   await expect(b.getByTestId('merge-result')).toContainText('Merged: 1 added, 0 replaced.');
   await b.getByTestId('sync-end').click();
-  await button(b, 'Back').click();
-  await button(b, 'Back').click();
+  await toList(b);
   // B still shows "Vault ready" from its pairing (D198).
   await button(b, 'Open the vault').click();
   await expect(button(b, 'ACME')).toBeVisible();
@@ -383,8 +385,7 @@ test('an attachment reaches B in its pairing and another reaches A in a sync, an
     attached(page, 'Lease', 'lease.pdf', LEASE),
   );
   // The pairing's blob phase: B holds the blob of A's attachment when the pairing ends.
-  await button(b, 'Back').click();
-  await button(b, 'Back').click();
+  await toList(b);
   await button(b, 'Open the vault').click();
   expect(await downloaded(b, 'Lease', 'lease.pdf')).toBe(LEASE);
 
@@ -428,8 +429,7 @@ test('a record of A that fails verification stops the sync before it is sent: A 
   browser,
 }) => {
   const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await newLogin(a, 'ACME');
   await openSettingsPage(a, 'devices');
   // B lacks the item, so A reads it again from storage and verifies it before sending (D181).
@@ -449,8 +449,7 @@ test('a record of A that fails verification stops the sync before it is sent: A 
   await expect(failedB).toContainText('Nothing was merged.');
 
   await b.getByTestId('sync-again').click();
-  await button(b, 'Back').click();
-  await button(b, 'Back').click();
+  await toList(b);
   await button(b, 'Open the vault').click();
   await expect(button(b, 'ACME')).toHaveCount(0);
 });
@@ -502,8 +501,7 @@ test('concurrent edits converge in one sync: the newer wins on both, the other i
   browser,
 }) => {
   const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await newLogin(a, 'ACME');
   await openSettingsPage(a, 'devices');
   await synced(a, b);
@@ -535,8 +533,7 @@ test('the history cut drops an edit of A in one sync: only A tells its user, and
   browser,
 }) => {
   const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await newLogin(a, 'ACME');
   await openSettingsPage(a, 'devices');
   await synced(a, b);
@@ -570,8 +567,7 @@ test('an edit older than a trash never brings the item back: in the trash on bot
   browser,
 }) => {
   const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await newLogin(a, 'ACME');
   await openSettingsPage(a, 'devices');
   await synced(a, b);
@@ -606,8 +602,7 @@ test('an item trashed on A is in the trash of both with the same purge date, off
   browser,
 }) => {
   const { a, b } = await paired(browser);
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await newLogin(a, 'ACME');
   await openSettingsPage(a, 'devices');
   await synced(a, b);
@@ -718,7 +713,7 @@ test('a live sync outlives Settings: an item made in the vault reaches the peer 
   const { a, b } = await paired(browser);
   await synced(a, b);
   for (const page of [a, b]) {
-    await expect(page.getByTestId('live-sync')).toContainText('Live sync with', {
+    await expect(page.getByTestId('live-sync')).toContainText('Live with', {
       timeout: 30_000,
     });
   }
@@ -726,10 +721,8 @@ test('a live sync outlives Settings: an item made in the vault reaches the peer 
   await a.getByTestId('sync-close').click();
   await expect(a.getByTestId('sync')).toHaveCount(0);
   await expect(a.getByTestId('live-sync')).toBeVisible();
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
-  await button(b, 'Back').click();
-  await button(b, 'Back').click();
+  await toList(a);
+  await toList(b);
   await button(b, 'Open the vault').click();
   await expect(a.getByTestId('live-sync')).toBeVisible();
   await newLogin(a, 'Made while live');
@@ -751,10 +744,9 @@ test('a lock ends the live sync on both (D93, D225)', async ({ browser }) => {
   const { a, b } = await paired(browser);
   await synced(a, b);
   await expect(a.getByTestId('live-sync')).toBeVisible({ timeout: 30_000 });
-  await button(a, 'Back').click();
-  await button(a, 'Back').click();
+  await toList(a);
   await expect(a.getByTestId('live-sync')).toBeVisible();
-  await button(b, 'Lock').click();
+  await b.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(a.getByTestId('live-sync')).toHaveCount(0, { timeout: 30_000 });
 });
 

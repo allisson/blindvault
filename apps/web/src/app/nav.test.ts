@@ -181,8 +181,8 @@ describe('Settings pages (D252)', () => {
   it('opens a focus on its page over the index, and back leads to the index', () => {
     const nav = new Navigation();
     nav.select({ name: 'item', id: ID });
-    nav.openSettings('pair');
-    expect(nav.current()).toEqual({ name: 'settings', page: 'devices', focus: 'pair' });
+    nav.openSettings('import');
+    expect(nav.current()).toEqual({ name: 'settings', page: 'import', focus: 'import' });
     nav.back();
     expect(nav.current()).toEqual({ name: 'settings' });
     nav.back();
@@ -199,5 +199,42 @@ describe('Settings pages (D252)', () => {
     nav.back();
     expect(nav.current().name).toBe('vault');
     expect(nav.deeper()).toBe(false);
+  });
+});
+
+describe('main destinations (D316)', () => {
+  it('opens Devices, with the pairing or the re-admission, over the list', () => {
+    const nav = new Navigation();
+    nav.select({ name: 'item', id: ID });
+    nav.openSettings('pair');
+    expect(nav.current()).toEqual({ name: 'devices', focus: 'pair' });
+    nav.openSettings('devices');
+    expect(nav.current()).toEqual({ name: 'devices' });
+    nav.back();
+    expect(nav.current().name).toBe('item');
+  });
+
+  it('replaces one main destination with another, so back leads to the list', () => {
+    const nav = new Navigation();
+    nav.open({ name: 'settings' });
+    nav.open({ name: 'settings', page: 'appearance' });
+    nav.openMain({ name: 'notices' });
+    expect(nav.current()).toEqual({ name: 'notices' });
+    nav.openMain({ name: 'devices' });
+    nav.openSettings('backup');
+    expect(nav.current()).toEqual({ name: 'settings', page: 'backup', focus: 'backup' });
+    nav.back();
+    nav.back();
+    expect(nav.current().name).toBe('vault');
+    expect(nav.deeper()).toBe(false);
+  });
+
+  it('keeps the list a main destination was opened from', () => {
+    const nav = new Navigation();
+    nav.showList({ name: 'trash' });
+    nav.openMain({ name: 'devices' });
+    expect(nav.list()).toEqual({ name: 'trash' });
+    nav.back();
+    expect(nav.current()).toEqual({ name: 'trash' });
   });
 });

@@ -23,7 +23,7 @@ function watchLogs(page: Page): string[] {
 
 /** Locks and deletes every database of this origin: the browser lost its storage. */
 async function loseStorage(page: Page): Promise<void> {
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.evaluate(async () => {
     for (const { name } of await indexedDB.databases()) {
       if (!name) continue;
@@ -131,7 +131,7 @@ test('a restored device is unregistered, is told to get re-admitted, and retires
   await expect(devices.getByTestId('devices-readmit')).toHaveCount(0);
 
   // As stored: still retired after a new unlock.
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(NEW_PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

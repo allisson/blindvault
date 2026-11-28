@@ -2,7 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { createVault } from './create';
 
-// Icons and navigation (D245): the phone's bottom navigation, New item and the "…" menu in its
+// Icons and navigation (D245, D316): the phone's bottom navigation, New item and Lock in its
 // header; the type filter and the counts on every layout.
 
 test.setTimeout(120_000);
@@ -19,7 +19,7 @@ async function newNote(page: Page, title: string) {
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 }
 
-test('the phone has New item and a "…" menu with Lock in its header, and Trash below (D245)', async ({
+test('the phone has New item and Lock in its header, and four tabs below (D245, D316)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 800 });
@@ -27,9 +27,10 @@ test('the phone has New item and a "…" menu with Lock in its header, and Trash
   await createVault(page, PASSWORD);
   const footer = page.getByRole('contentinfo');
 
-  await expect(button(page, 'Lock')).toBeHidden();
+  await expect(page.getByRole('button', { name: /^Lock( now)?$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked');
-  await expect(footer.getByRole('button')).toHaveText(['Items', 'Trash', 'Settings']);
+  await expect(footer.getByRole('button')).toHaveText(['Items', 'Trash', 'Devices', 'Settings']);
   await expect(button(page, 'Items')).toHaveAttribute('aria-current', 'page');
   // One New item, the header's: the list's own is left out.
   await expect(button(page, 'New item')).toHaveCount(1);
@@ -45,13 +46,8 @@ test('the phone has New item and a "…" menu with Lock in its header, and Trash
   await button(page, 'Items').click();
   await expect(page.getByRole('heading', { name: 'Items', level: 2 })).toBeVisible();
 
-  // Escape closes the menu; choosing Lock locks.
-  await button(page, 'More').click();
-  await expect(button(page, 'Lock')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(button(page, 'Lock')).toBeHidden();
-  await button(page, 'More').click();
-  await button(page, 'Lock').click();
+  // Lock is in the header, with no menu to open first.
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await expect(page.getByTestId('unlock-password')).toBeVisible();
 });
 
@@ -123,7 +119,7 @@ test('filters the list by type, with counts beside the types and the folder pane
   await expect(list).toHaveText(['Garden plan', 'Tax return']);
 });
 
-test('Settings is an index of pages in groups; a page opens over it and Back returns, then leaves (D252)', async ({
+test('Settings is an index of pages in groups; a page opens over it and Back returns, then a tab leaves (D252, D316)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 800 });
@@ -132,9 +128,12 @@ test('Settings is an index of pages in groups; a page opens over it and Back ret
   await button(page, 'Settings').click();
 
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  for (const group of ['Preferences', 'Security', 'Devices', 'Data', 'Danger zone']) {
+  for (const group of ['Preferences', 'Security', 'Data', 'Danger zone']) {
     await expect(page.getByRole('heading', { name: group, level: 2 })).toBeVisible();
   }
+  // Devices is a main destination of its own, not a group of Settings (D316).
+  await expect(page.getByRole('heading', { name: 'Devices', level: 2 })).toHaveCount(0);
+  await expect(page.getByTestId('settings-devices')).toHaveCount(0);
   for (const row of [
     'appearance',
     'language',
@@ -142,7 +141,6 @@ test('Settings is an index of pages in groups; a page opens over it and Back ret
     'password',
     'passkey',
     'recovery',
-    'devices',
     'backup',
     'merge',
     'import',
@@ -167,7 +165,9 @@ test('Settings is an index of pages in groups; a page opens over it and Back ret
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByTestId('settings-locking')).toBeVisible();
 
-  await button(page, 'Back').click();
+  // The index is a tab on a phone: it has no Back, the Items tab leaves it.
+  await expect(button(page, 'Back')).toHaveCount(0);
+  await button(page, 'Items').click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toHaveCount(0);
   await expect(button(page, 'New item')).toBeVisible();
 });

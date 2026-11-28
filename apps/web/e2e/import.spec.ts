@@ -67,7 +67,7 @@ test('imports a Bitwarden export into a landing folder in one commit, after a pr
 
   // A lock before the commit writes nothing (§7).
   await preview(page);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByTestId('lock-state')).toHaveText('Unlocked', { timeout: 30_000 });

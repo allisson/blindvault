@@ -106,7 +106,7 @@ test('replaces the locked vault with a backup of another vault, deleting the old
   await createVault(page, PASSWORD);
   await newItem(page, 'Held');
   const [held] = await databases(page);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await replaceWith(page, file, otherWords);
 
   await expect(button(page, 'Other')).toBeVisible();
@@ -136,7 +136,7 @@ test('replaces a vault whose local password is forgotten with its own backup (D1
   const file = await exportBackup(page);
   await newItem(page, 'Only here');
   const before = await databases(page);
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await replaceWith(page, file, words);
 
   await expect(button(page, 'Backed up')).toBeVisible();
@@ -144,7 +144,7 @@ test('replaces a vault whose local password is forgotten with its own backup (D1
   // The same vault, replaced in its own database.
   expect(await databases(page)).toEqual(before);
 
-  await button(page, 'Lock').click();
+  await page.getByRole('button', { name: /^Lock( now)?$/ }).click();
   await page.getByTestId('unlock-password').fill(PASSWORD);
   await button(page, 'Unlock').click();
   await expect(page.getByText('Wrong password.')).toBeVisible({ timeout: 30_000 });

@@ -1,7 +1,7 @@
 // The storage state (overview §7, §13.2, D55, D119, D196): the "This device" section of Settings,
-// with the last backup and the last sync (D34, D226),
-// and the storage warning below the vault's header. The Safari warning before unlock is in
-// `components.tsx`, with the cards.
+// with the last backup and the last sync (D34, D226), and the storage warnings the vault notices
+// show (`Notices.tsx`, D316). The Safari warning before unlock is in `components.tsx`, with the
+// cards.
 
 import { type StorageStatus } from '@blindvault/storage';
 import { type VaultSession } from '@blindvault/vault';
@@ -14,7 +14,7 @@ import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
 import { platform } from '../platform';
 import type { Platform } from '../platform/platform';
-import { Button, Notice, StorageAlert } from './components';
+import { Button, Notice } from './components';
 
 const KB = 1000;
 
@@ -63,7 +63,7 @@ export function storageTexts(m: Messages, kind: Platform['kind']) {
   };
 }
 
-function warningText(
+export function warningText(
   m: Messages,
   language: string,
   warning: StorageWarning,
@@ -87,7 +87,7 @@ function useStorage(controller: VaultController): StorageStatus | undefined {
 }
 
 /** Every warning that applies to the unlocked vault, the most serious first. */
-function useWarnings(controller: VaultController, session: VaultSession) {
+export function useWarnings(controller: VaultController, session: VaultSession) {
   const status = useStorage(controller);
   const warnings = storageWarnings({
     safariTab: safariTab(),
@@ -99,18 +99,8 @@ function useWarnings(controller: VaultController, session: VaultSession) {
   return { status, warnings };
 }
 
-/**
- * The most serious storage warning, below the vault's header in every layout. It reads the status
- * at unlock and on every return to visible (D196); none of the warnings can be dismissed.
- */
-export function StorageWarningBanner({
-  controller,
-  session,
-}: {
-  readonly controller: VaultController;
-  readonly session: VaultSession;
-}) {
-  const { messages: m, language } = useLanguage();
+/** Reads the storage status at unlock and on every return to visible, never by polling (D196). */
+export function useStorageRefresh(controller: VaultController): void {
   useEffect(() => {
     void controller.storage.refresh();
     const visible = () => {
@@ -121,10 +111,6 @@ export function StorageWarningBanner({
       document.removeEventListener('visibilitychange', visible);
     };
   }, [controller]);
-  const { status, warnings } = useWarnings(controller, session);
-  const first = warnings[0];
-  if (!first) return null;
-  return <StorageAlert warning={first} text={warningText(m, language, first, status)} />;
 }
 
 /** "This device" in Settings: persistence, storage used, last backup and sync, and every warning (D196, D226). */

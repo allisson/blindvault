@@ -7,13 +7,16 @@ export type ListScreen =
   | { readonly name: 'trash' }
   | { readonly name: 'folder'; readonly id: Uint8Array };
 
+/** Where Devices puts the cursor: in the pairing or the re-admission, already open (D234). */
+export type DevicesFocus = 'pair' | 'readmit';
+
 /**
- * Where Settings puts the cursor: `backup` in the export's password field (D185, D188), `pair` and
- * `readmit` in the pairing and the re-admission, already open (D234), the others at their section,
- * from "Vault ready" (D198).
+ * Where Settings puts the cursor: `backup` in the export's password field (D185, D188), the others
+ * at their section, from "Vault ready" (D198). `devices` and a `DevicesFocus` open Devices, a main
+ * destination of its own (D316).
  */
 export type SettingsFocus =
-  'backup' | 'passkey' | 'recovery' | 'devices' | 'pair' | 'readmit' | 'refound' | 'import';
+  'backup' | 'passkey' | 'recovery' | 'devices' | DevicesFocus | 'refound' | 'import';
 
 /** A page of Settings, opened from its index (D252). */
 export type SettingsPage =
@@ -24,7 +27,6 @@ export type SettingsPage =
   | 'passkey'
   | 'sitePasskeys'
   | 'recovery'
-  | 'devices'
   | 'backup'
   | 'merge'
   | 'import'
@@ -33,25 +35,30 @@ export type SettingsPage =
   | 'erase'
   | 'about';
 
-/** The page each focus is on. */
-export const FOCUS_PAGE: Readonly<Record<SettingsFocus, SettingsPage>> = {
+/** The page each focus of Settings is on. */
+export const FOCUS_PAGE: Readonly<
+  Record<Exclude<SettingsFocus, 'devices' | DevicesFocus>, SettingsPage>
+> = {
   backup: 'backup',
   passkey: 'passkey',
   recovery: 'recovery',
-  devices: 'devices',
-  pair: 'devices',
-  readmit: 'devices',
   refound: 'refound',
   import: 'import',
 };
 
-export type Screen =
-  | ListScreen
+/** The main destinations besides the lists, each over the list it was opened from (D316). */
+export type MainScreen =
   | {
       readonly name: 'settings';
       readonly page?: SettingsPage;
       readonly focus?: SettingsFocus;
     }
+  | { readonly name: 'devices'; readonly focus?: DevicesFocus }
+  | { readonly name: 'notices' };
+
+export type Screen =
+  | ListScreen
+  | MainScreen
   | { readonly name: 'item'; readonly id: Uint8Array }
   | { readonly name: 'edit'; readonly id: Uint8Array }
   | { readonly name: 'history'; readonly id: Uint8Array }
@@ -66,6 +73,10 @@ export function isDetail(screen: Screen): screen is DetailScreen {
     screen.name === 'history' ||
     screen.name === 'new'
   );
+}
+
+export function isMain(screen: Screen): screen is MainScreen {
+  return screen.name === 'settings' || screen.name === 'devices' || screen.name === 'notices';
 }
 
 export function isList(screen: Screen): screen is ListScreen {
@@ -145,16 +156,26 @@ export class Navigation {
 
   /**
    * Settings over the screens below it: its index, then the page `focus` is on, so back from the
-   * page leads to the index (D252). Any Settings screen already open is replaced.
+   * page leads to the index (D252). Any main destination already open is replaced. Devices is one
+   * of its own (D316): `devices`, `pair` and `readmit` open it.
    */
   openSettings(focus?: SettingsFocus): void {
-    const below = this.#stack.filter((s) => s.name !== 'settings');
+    if (focus === 'devices' || focus === 'pair' || focus === 'readmit') {
+      this.openMain(focus === 'devices' ? { name: 'devices' } : { name: 'devices', focus });
+      return;
+    }
+    const below = this.#belowMain();
     const index: Screen = { name: 'settings' };
     this.#set(
       focus
         ? [...below, index, { name: 'settings', page: FOCUS_PAGE[focus], focus }]
         : [...below, index],
     );
+  }
+
+  /** A main destination over the screens below it, in place of any already open (D316). */
+  openMain(screen: MainScreen): void {
+    this.#set([...this.#belowMain(), screen]);
   }
 
   /** The detail of the current list, replacing any other detail. */
@@ -192,6 +213,12 @@ export class Navigation {
   /** Back to the vault root: on lock, nothing of the previous navigation is kept. */
   reset(): void {
     this.#set(ROOT, true);
+  }
+
+  /** The stack without its main destinations. */
+  #belowMain(): readonly Screen[] {
+    const below = this.#stack.filter((s) => !isMain(s));
+    return below.length > 0 ? below : ROOT;
   }
 
   /** The stack up to its last list screen; the root is always one. */
