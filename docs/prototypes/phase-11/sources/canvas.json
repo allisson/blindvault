@@ -16,6 +16,10 @@
   {
    "id": "extensoes",
    "name": "Extensões"
+  },
+  {
+   "id": "novas",
+   "name": "Telas novas"
   }
  ],
  "boards": {
@@ -427,6 +431,318 @@
    "h": 900,
    "title": "Parear a extensão no mesmo computador",
    "page": "extensoes"
+  },
+  "Lixeira.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 800,
+   "title": "Lixeira",
+   "page": "novas"
+  },
+  "Pasta.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 800,
+   "title": "Pasta: ações",
+   "page": "novas"
+  },
+  "Primeiros-passos.dc.html": {
+   "x": 2720,
+   "y": 0,
+   "w": 1280,
+   "h": 800,
+   "title": "Primeiros passos",
+   "page": "novas"
+  },
+  "Mesclar.dc.html": {
+   "x": 0,
+   "y": 1224,
+   "w": 1280,
+   "h": 800,
+   "title": "Mesclar 3/4",
+   "page": "novas"
+  },
+  "Mesclar-pronto.dc.html": {
+   "x": 1360,
+   "y": 1224,
+   "w": 1280,
+   "h": 800,
+   "title": "Mesclar: pronto, com avisos",
+   "page": "novas"
+  },
+  "Regenerar.dc.html": {
+   "x": 2720,
+   "y": 1224,
+   "w": 1280,
+   "h": 800,
+   "title": "Regenerar 1/5: aviso",
+   "page": "novas"
+  },
+  "Refundar.dc.html": {
+   "x": 4080,
+   "y": 1224,
+   "w": 1280,
+   "h": 800,
+   "title": "Refundar 1/5: avisos",
+   "page": "novas"
+  },
+  "Apagar.dc.html": {
+   "x": 5440,
+   "y": 1224,
+   "w": 1280,
+   "h": 800,
+   "title": "Apagar este cofre deste aparelho",
+   "page": "novas"
+  },
+  "Importar-formato.dc.html": {
+   "x": 0,
+   "y": 2448,
+   "w": 1280,
+   "h": 800,
+   "title": "Importar 1/4: formato",
+   "page": "novas"
+  },
+  "Importar-previa.dc.html": {
+   "x": 1360,
+   "y": 2448,
+   "w": 1280,
+   "h": 800,
+   "title": "Importar 3/4: prévia",
+   "page": "novas"
+  },
+  "Restaurar-2.dc.html": {
+   "x": 2720,
+   "y": 2448,
+   "w": 390,
+   "h": 844,
+   "title": "Restaurar 2/3: abrir o backup",
+   "page": "novas"
+  },
+  "Restaurar-3.dc.html": {
+   "x": 3190,
+   "y": 2448,
+   "w": 390,
+   "h": 844,
+   "title": "Restaurar 3/3: senha local",
+   "page": "novas"
+  },
+  "Substituir.dc.html": {
+   "x": 3660,
+   "y": 2448,
+   "w": 390,
+   "h": 844,
+   "title": "Substituir a partir do desbloqueio",
+   "page": "novas"
+  },
+  "Instalar.dc.html": {
+   "x": 0,
+   "y": 3720,
+   "w": 390,
+   "h": 844,
+   "title": "Instalar primeiro (Safari)",
+   "page": "novas"
+  },
+  "Atualizar.dc.html": {
+   "x": 470,
+   "y": 3720,
+   "w": 1280,
+   "h": 800,
+   "title": "Atualizar",
+   "page": "novas"
+  },
+  "Outra-janela.dc.html": {
+   "x": 1830,
+   "y": 3720,
+   "w": 1280,
+   "h": 800,
+   "title": "Aberto em outra janela",
+   "page": "novas"
+  },
+  "Erro.dc.html": {
+   "x": 3190,
+   "y": 3720,
+   "w": 1280,
+   "h": 800,
+   "title": "Algo deu errado",
+   "page": "novas"
+  },
+  "Service-worker.dc.html": {
+   "x": 4550,
+   "y": 3720,
+   "w": 1280,
+   "h": 800,
+   "title": "Service worker alterado",
+   "page": "novas"
+  },
+  "Moldura.dc.html": {
+   "x": 5910,
+   "y": 3720,
+   "w": 1280,
+   "h": 800,
+   "title": "Dentro de outra página",
+   "page": "novas"
+  },
+  "Avisos.dc.html": {
+   "x": 7270,
+   "y": 3720,
+   "w": 1280,
+   "h": 800,
+   "title": "Avisos do cofre",
+   "page": "novas"
+  },
+  "Avisos-celular.dc.html": {
+   "x": 8630,
+   "y": 3720,
+   "w": 390,
+   "h": 844,
+   "title": "Avisos no celular",
+   "page": "novas"
+  },
+  "Aposentados.dc.html": {
+   "x": 0,
+   "y": 4984,
+   "w": 1280,
+   "h": 800,
+   "title": "Aparelhos aposentados",
+   "page": "novas"
+  },
+  "STUN.dc.html": {
+   "x": 1360,
+   "y": 4984,
+   "w": 1280,
+   "h": 800,
+   "title": "Servidores STUN",
+   "page": "novas"
+  },
+  "Gerador-palavras.dc.html": {
+   "x": 2720,
+   "y": 4984,
+   "w": 1280,
+   "h": 800,
+   "title": "Gerador em palavras",
+   "page": "novas"
+  },
+  "Editor-totp-anexos.dc.html": {
+   "x": 4080,
+   "y": 4984,
+   "w": 1280,
+   "h": 800,
+   "title": "Editor: TOTP e anexos",
+   "page": "novas"
+  },
+  "Item-anexos.dc.html": {
+   "x": 5440,
+   "y": 4984,
+   "w": 1280,
+   "h": 800,
+   "title": "Item com anexos",
+   "page": "novas"
+  },
+  "Historico-restaurar.dc.html": {
+   "x": 6800,
+   "y": 4984,
+   "w": 1280,
+   "h": 800,
+   "title": "Histórico: restaurar uma versão",
+   "page": "novas"
+  },
+  "Toast-celular.dc.html": {
+   "x": 0,
+   "y": 6204,
+   "w": 390,
+   "h": 844,
+   "title": "Toast de cópia (celular)",
+   "page": "novas"
+  },
+  "Sheet-acoes.dc.html": {
+   "x": 470,
+   "y": 6204,
+   "w": 390,
+   "h": 844,
+   "title": "Bottom sheet: mais ações",
+   "page": "novas"
+  },
+  "Sheet-filtro.dc.html": {
+   "x": 940,
+   "y": 6204,
+   "w": 390,
+   "h": 844,
+   "title": "Bottom sheet: filtrar por tipo",
+   "page": "novas"
+  },
+  "Toast-computador.dc.html": {
+   "x": 1410,
+   "y": 6204,
+   "w": 1280,
+   "h": 800,
+   "title": "Toast de cópia (computador)",
+   "page": "novas"
+  },
+  "Tablet.dc.html": {
+   "x": 2770,
+   "y": 6204,
+   "w": 800,
+   "h": 1100,
+   "title": "Tablet em 800 px",
+   "page": "novas"
+  },
+  "Tablet-gaveta.dc.html": {
+   "x": 3650,
+   "y": 6204,
+   "w": 800,
+   "h": 1100,
+   "title": "Tablet: gaveta aberta",
+   "page": "novas"
+  },
+  "Android-biometria.dc.html": {
+   "x": 0,
+   "y": 7724,
+   "w": 390,
+   "h": 844,
+   "title": "Android: desbloqueio por biometria",
+   "page": "novas"
+  },
+  "Android-provedor.dc.html": {
+   "x": 470,
+   "y": 7724,
+   "w": 390,
+   "h": 844,
+   "title": "Android: janela do provedor",
+   "page": "novas"
+  },
+  "Android-sobre.dc.html": {
+   "x": 940,
+   "y": 7724,
+   "w": 390,
+   "h": 844,
+   "title": "Android: Sobre",
+   "page": "novas"
+  },
+  "Passkey-frame.dc.html": {
+   "x": 1410,
+   "y": 7724,
+   "w": 420,
+   "h": 640,
+   "title": "Passkey: pedido de dentro de um frame",
+   "page": "novas"
+  },
+  "Passkey-encerrado.dc.html": {
+   "x": 1910,
+   "y": 7724,
+   "w": 420,
+   "h": 640,
+   "title": "Passkey: pedido encerrado",
+   "page": "novas"
+  },
+  "Passkey-sem.dc.html": {
+   "x": 2410,
+   "y": 7724,
+   "w": 420,
+   "h": 640,
+   "title": "Passkey: nenhuma do site",
+   "page": "novas"
   }
  },
  "order": [
@@ -486,7 +802,46 @@
   "Ext-boas-vindas.dc.html",
   "Ext-versao.dc.html",
   "Ext-passkeys.dc.html",
-  "Ext-parear.dc.html"
+  "Ext-parear.dc.html",
+  "Lixeira.dc.html",
+  "Pasta.dc.html",
+  "Primeiros-passos.dc.html",
+  "Mesclar.dc.html",
+  "Mesclar-pronto.dc.html",
+  "Regenerar.dc.html",
+  "Refundar.dc.html",
+  "Apagar.dc.html",
+  "Importar-formato.dc.html",
+  "Importar-previa.dc.html",
+  "Restaurar-2.dc.html",
+  "Restaurar-3.dc.html",
+  "Substituir.dc.html",
+  "Instalar.dc.html",
+  "Atualizar.dc.html",
+  "Outra-janela.dc.html",
+  "Erro.dc.html",
+  "Service-worker.dc.html",
+  "Moldura.dc.html",
+  "Avisos.dc.html",
+  "Avisos-celular.dc.html",
+  "Aposentados.dc.html",
+  "STUN.dc.html",
+  "Gerador-palavras.dc.html",
+  "Editor-totp-anexos.dc.html",
+  "Item-anexos.dc.html",
+  "Historico-restaurar.dc.html",
+  "Toast-celular.dc.html",
+  "Sheet-acoes.dc.html",
+  "Sheet-filtro.dc.html",
+  "Toast-computador.dc.html",
+  "Tablet.dc.html",
+  "Tablet-gaveta.dc.html",
+  "Android-biometria.dc.html",
+  "Android-provedor.dc.html",
+  "Android-sobre.dc.html",
+  "Passkey-frame.dc.html",
+  "Passkey-encerrado.dc.html",
+  "Passkey-sem.dc.html"
  ],
  "notes": {
   "t1": {
@@ -613,6 +968,62 @@
    "fill": "teal",
    "page": "extensoes",
    "text": "A janela de confirmação reusa os cartões de opção do pareamento e do sync. Confirmar fica desativado por meio segundo quando a janela aparece ou volta ao foco, como o app já faz."
+  },
+  "nv1": {
+   "x": 0,
+   "y": -300,
+   "text": "Cofre: telas que faltavam",
+   "kind": "title1",
+   "maxW": 4000,
+   "page": "novas"
+  },
+  "nv2": {
+   "x": 0,
+   "y": 924,
+   "text": "Assistentes de Configurações",
+   "kind": "title1",
+   "maxW": 6720,
+   "page": "novas"
+  },
+  "nv3": {
+   "x": 0,
+   "y": 2148,
+   "text": "Importar, restaurar e substituir",
+   "kind": "title1",
+   "maxW": 4050,
+   "page": "novas"
+  },
+  "nv4": {
+   "x": 0,
+   "y": 3420,
+   "text": "Instalar, atualizar, erros e avisos",
+   "kind": "title1",
+   "maxW": 9020,
+   "page": "novas"
+  },
+  "nv5": {
+   "x": 0,
+   "y": 4684,
+   "text": "Aparelhos, gerador, anexos e histórico",
+   "kind": "title1",
+   "maxW": 8080,
+   "page": "novas"
+  },
+  "nv6": {
+   "x": 0,
+   "y": 5904,
+   "text": "Toasts, bottom sheets e tablet",
+   "kind": "title1",
+   "maxW": 4450,
+   "page": "novas"
+  },
+  "nv7": {
+   "x": 0,
+   "y": 7424,
+   "text": "Android e janelas de passkey",
+   "kind": "title1",
+   "maxW": 2830,
+   "page": "novas"
   }
  },
  "designSystems": []
