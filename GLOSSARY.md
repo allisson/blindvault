@@ -295,7 +295,7 @@ _Avoid_: instance (for the copy), app, client
 
 **Device**:
 One installation as one vault sees it, with its own device identity for that vault; a Safari tab and the installed app on the same phone are two devices.
-_pt-BR_: dispositivo
+_pt-BR_: aparelho
 _Avoid_: phone, computer (as an identity), browser
 
 **Device identity**:
@@ -304,7 +304,7 @@ _Avoid_: device key, device certificate, static key (in UI copy)
 
 **Device record**:
 The record that registers one device's identity and display name in the vault.
-_pt-BR_: Registro de dispositivo
+_pt-BR_: Registro de aparelho
 _Avoid_: device entry, device profile
 
 **Vault creator**:
@@ -313,12 +313,12 @@ _Avoid_: owner device, primary device, master device
 
 **Registered device**:
 A device whose identity is recorded in a Device record of the vault.
-_pt-BR_: dispositivo registrado
+_pt-BR_: aparelho registrado
 _Avoid_: paired device, trusted device, enrolled device
 
 **Unregistered device**:
 A device holding the vault whose identity has no Device record, typically one restored from a backup; it can sync with the vault's existing devices only after re-admission.
-_pt-BR_: dispositivo não registrado
+_pt-BR_: aparelho não registrado
 _Avoid_: orphan device, unpaired device, restored device (as a status)
 
 **App window**:
@@ -346,7 +346,7 @@ _Avoid_: wipe, reset, factory reset
 
 **Retired device**:
 A device whose Device record has been permanently marked retired from another device, so it is hidden and other devices refuse to sync with it; it is not revoked.
-_pt-BR_: dispositivo aposentado (aposentar)
+_pt-BR_: aparelho aposentado (aposentar)
 _Avoid_: revoked device, removed device, deleted device
 
 **Admission**:
@@ -360,8 +360,8 @@ _Avoid_: enrollment, linking
 
 **Joining device**:
 The device with no vault, or one whose vault the pairing replaces, that receives the vault in pairing; the other side is the device holding the vault.
-_pt-BR_: o outro dispositivo (in UI copy)
-_Avoid_: new device (as a role), guest, B (in UI copy)
+_pt-BR_: aparelho novo (in UI copy)
+_Avoid_: guest, B (in UI copy)
 
 **Replace by pairing**:
 Pairing a device that already holds a vault, so the vault it receives replaces the one it held, whether the same vault or another.
@@ -370,22 +370,22 @@ _Avoid_: re-pair, overwrite
 
 **Re-admission**:
 The admission flow between two devices that already hold the same vault, in which the identity either side lacks is registered after both prove they hold the same Master Key, so no Master Key is transferred.
-_pt-BR_: readmissão (readmitir)
+_pt-BR_: reconexão (reconectar um aparelho restaurado)
 _Avoid_: re-pairing, rejoin
 
 **SAS**:
 The short code shown on both screens that the user compares to confirm an admission.
-_pt-BR_: os números
+_pt-BR_: o número
 _Avoid_: verification code, PIN, pairing code
 
 **Pairing payload**:
 The connection data one device shows (by QR or copy/paste) so another can start pairing with it.
-_pt-BR_: texto de pareamento
-_Avoid_: pairing invitation, pairing response, pairing QR
+_pt-BR_: código de convite (shown by the device holding the vault), código de resposta (shown by the **Joining device**)
+_Avoid_: pairing QR, pairing text
 
 **Reconnection payload**:
 The connection data two registered devices exchange to start a sync session.
-_pt-BR_: texto de sincronização
+_pt-BR_: código de sincronização
 _Avoid_: sync QR, sync invitation
 
 **Sync session**:
