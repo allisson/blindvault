@@ -6,12 +6,14 @@ import { Button, Card } from './components';
 export function ChangedWorker({ monitor }: { readonly monitor: UpdateMonitor }) {
   const m = useMessages();
   return (
-    <Card title={m.changedWorker.title}>
+    <Card title={m.changedWorker.title} icon={{ name: 'triangle-alert', tone: 'warning' }}>
       <div role="alert" data-testid="changed-worker" className="flex flex-col gap-3">
         <p>{m.changedWorker.found}</p>
-        <p>{m.changedWorker.notes}</p>
+        <p className="text-sm text-muted">{m.changedWorker.notes}</p>
       </div>
       <Button
+        variant="secondary"
+        className="self-start"
         onClick={() => {
           monitor.acknowledge();
         }}

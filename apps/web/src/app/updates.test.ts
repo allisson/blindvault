@@ -205,3 +205,35 @@ describe('applying an asset update (D152, D191)', () => {
     expect(empty.calls).toEqual([]);
   });
 });
+
+describe('"Not now" on an offer (D316)', () => {
+  it('keeps the offer behind postpone, reopens it on resume, and a new offer reopens it', async () => {
+    let version = '2.0.0';
+    let hash = HASH;
+    const { m, calls } = monitor();
+    const r = new FakeRegistration(() => ({ type: 'available', version, hash }));
+    m.watch(r);
+    expect(m.getState().postponed).toBe(false);
+    m.postpone();
+    expect(m.getState().postponed).toBe(false);
+    m.look();
+    await until(() => m.getState().offer !== undefined);
+    m.postpone();
+    expect(m.getState()).toMatchObject({ offer: { version, hash }, postponed: true });
+    expect(calls).toEqual([]);
+    m.resume();
+    expect(m.getState().postponed).toBe(false);
+    m.postpone();
+
+    // The same offer again stays postponed; another one opens.
+    m.look();
+    await until(() => r.sent.length === 2);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(m.getState().postponed).toBe(true);
+    version = '2.0.1';
+    hash = 'cd'.repeat(32);
+    m.look();
+    await until(() => m.getState().offer?.version === '2.0.1');
+    expect(m.getState().postponed).toBe(false);
+  });
+});

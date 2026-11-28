@@ -11,7 +11,7 @@ import { type VaultController } from '../app/controller';
 import { type Navigation } from '../app/nav';
 import { useLanguage } from '../i18n/context';
 import { type Messages, format } from '../i18n/messages';
-import { Button, LockState } from './components';
+import { Button, LockState, UpdateEntry } from './components';
 import { useLayout } from './hooks';
 import { Icon } from './icons';
 import { useWarnings, warningText } from './StorageState';
@@ -406,6 +406,7 @@ export function StatusCard({
       ) : null}
       {notices[0] ? <p>{notices[0].summary}</p> : null}
       {live ? <LiveLine controller={controller} nav={nav} live={live} /> : null}
+      <UpdateEntry className="-mx-1 px-1" />
       <p className="flex items-start gap-2" data-testid="status-backup">
         <span className="flex h-5 shrink-0 items-center">
           <Icon name="upload" className="size-4" />
