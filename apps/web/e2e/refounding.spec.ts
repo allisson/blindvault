@@ -97,12 +97,18 @@ test('re-founds the vault: warnings, proof, new phrase and password, and only th
   await answerConfirmation(page, words);
   await refound.getByTestId('new-password').fill(NEW_PASSWORD);
   await refound.getByTestId('confirm-password').fill(NEW_PASSWORD);
+  // The storage warnings differ by browser (WebKit has two), so the wait is one notice more than now.
+  const notices = Number(
+    /\d+/.exec((await page.getByTestId('notices-open').textContent()) ?? '')?.[0],
+  );
   await button(page, 'Re-found').click();
 
   // The new vault: the live item only, its own device only, a new phrase (D40, D72). Its notice is
   // on the Notices screen (D316), opened once the re-founding is done: leaving the page before drops
-  // it. The status counts the storage warning, the backup reminder and this notice.
-  await expect(page.getByTestId('notices-open')).toContainText('3 notices', { timeout: 60_000 });
+  // it.
+  await expect(page.getByTestId('notices-open')).toContainText(`${String(notices + 1)} notices`, {
+    timeout: 60_000,
+  });
   await openNotices(page);
   await expect(page.getByTestId('refounded')).toContainText(
     'destroy the backups of the old vault',
