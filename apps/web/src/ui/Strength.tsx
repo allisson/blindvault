@@ -40,8 +40,13 @@ export function useStrength(value: string, enabled = true): Strength | undefined
 }
 
 const BAR = { weak: 'bg-danger', fair: 'bg-warning', strong: 'bg-success' } as const;
+const TEXT = { weak: 'text-danger', fair: 'text-warning', strong: 'text-success' } as const;
+const WIDTH = ['w-1/4', 'w-1/4', 'w-2/4', 'w-3/4', 'w-full'] as const;
 
-/** The editor's meter: four bars, seen only, and its level and advice as the field's hint. */
+/**
+ * The editor's meter: one 4 px bar filled to the score and its level in the level's colour, seen
+ * only (D315); its level and advice are the field's hint.
+ */
 export function useMeter(value: string, enabled: boolean) {
   const m = useLanguage().messages;
   const strength = useStrength(value, enabled);
@@ -54,13 +59,16 @@ export function useMeter(value: string, enabled: boolean) {
     .filter((t) => t !== '')
     .join(' ');
   const meter = (
-    <div aria-hidden="true" className="flex gap-1" data-testid="item-strength" data-level={l}>
-      {[1, 2, 3, 4].map((n) => (
-        <span
-          key={n}
-          className={`h-1.5 flex-1 rounded-full ${Math.max(strength.score, 1) >= n ? BAR[l] : 'bg-line'}`}
-        />
-      ))}
+    <div
+      aria-hidden="true"
+      className="flex items-center gap-3"
+      data-testid="item-strength"
+      data-level={l}
+    >
+      <span className="h-1 flex-1 rounded-full bg-line">
+        <span className={`block h-1 rounded-full ${WIDTH[strength.score]} ${BAR[l]}`} />
+      </span>
+      <span className={`text-xs font-medium ${TEXT[l]}`}>{m.items.strengthLevels[l]}</span>
     </div>
   );
   return { meter, hint };

@@ -11,6 +11,7 @@ import {
 import { type ReactNode, useEffect, useId, useState } from 'react';
 
 import { attachmentBlob, downloadName, saveAttachment } from '../app/attachments';
+import { folderPath } from '../app/folders';
 import { type Navigation } from '../app/nav';
 import { host } from '../app/row';
 import { useLanguage } from '../i18n/context';
@@ -245,16 +246,33 @@ function Chip({
   icon,
   label,
   text,
+  onClick,
 }: {
   readonly icon: IconName;
   readonly label?: string;
   readonly text: string;
+  /** Opens what the chip names: the item's folder (D315). */
+  readonly onClick?: () => void;
 }) {
-  return (
-    <li className="inline-flex max-w-full items-center gap-1 rounded-full bg-subtle px-3 py-1 text-xs">
+  const content = (
+    <>
       <Icon name={icon} {...(label === undefined ? {} : { label })} className="size-3.5!" />
       <span className="truncate">{text}</span>
+    </>
+  );
+  const look = 'inline-flex max-w-full items-center gap-1 rounded-full bg-subtle px-3 py-1 text-xs';
+  return onClick ? (
+    <li className="flex max-w-full">
+      <button
+        type="button"
+        className={`${look} underline-offset-2 hover:underline pointer-coarse:min-h-11`}
+        onClick={onClick}
+      >
+        {content}
+      </button>
     </li>
+  ) : (
+    <li className={look}>{content}</li>
   );
 }
 
@@ -339,10 +357,12 @@ export function ItemDetail({
 
   const clearSeconds = session.preferences.clipboardClearSeconds;
   const template = item !== undefined && known(item.templateId) ? item.templateId : undefined;
-  const folder =
-    item?.folderId && session.folder(item.folderId)?.inTrash === false
-      ? session.folder(item.folderId)?.name
-      : undefined;
+  const folderId =
+    item?.folderId && session.folder(item.folderId)?.inTrash === false ? item.folderId : undefined;
+  // Its whole path, as the tree shows it (D14, D315).
+  const folder = folderId
+    ? folderPath(session.tree(new Intl.Collator(language).compare), folderId).join(' / ')
+    : undefined;
   const url = item?.fields.find(
     (f) => f.type === 'url' && typeof f.value === 'string' && f.value.trim() !== '',
   )?.value;
@@ -389,8 +409,15 @@ export function ItemDetail({
                 <Chip icon={TEMPLATE_ICON[template]} text={m.templates[template]} />
               ) : null}
               {typeof url === 'string' ? <Chip icon="globe" text={host(url.trim())} /> : null}
-              {folder !== undefined ? (
-                <Chip icon="folder" label={m.folders.folder} text={folder} />
+              {folderId && folder ? (
+                <Chip
+                  icon="folder"
+                  label={m.folders.folder}
+                  text={folder}
+                  onClick={() => {
+                    nav.showList({ name: 'folder', id: folderId });
+                  }}
+                />
               ) : null}
               {item.tags.map((tag) => (
                 <Chip key={tag} icon="tag" label={m.items.tags} text={tag} />

@@ -16,6 +16,7 @@ import {
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { Button, Field, TARGET } from './components';
+import { Icon } from './icons';
 
 const SETS: readonly CharacterSetName[] = ['lowercase', 'uppercase', 'digits', 'symbols'];
 
@@ -54,10 +55,15 @@ export function Generator({
   return (
     <fieldset className="flex flex-col gap-3">
       <legend className="mb-3 text-lg font-semibold">{m.generator.title}</legend>
-      <div className="flex gap-4 text-sm">
+      {/* A segmented control (D315); each choice is still a radio. */}
+      <div className="flex self-start rounded-control bg-subtle p-1 text-sm">
         {(['characters', 'words'] as const).map((mode) => (
-          <label key={mode} className={`${TARGET} flex items-center gap-2`}>
+          <label
+            key={mode}
+            className={`${TARGET} relative flex items-center rounded-control px-3 font-medium text-muted has-checked:bg-raised has-checked:text-fg has-checked:shadow-raised`}
+          >
             <input
+              className="absolute inset-0 cursor-pointer appearance-none rounded-control"
               type="radio"
               aria-label={m.generator[mode]}
               name="generator-mode"
@@ -102,10 +108,15 @@ export function Generator({
               data-testid="generator-length-slider"
             />
           </div>
-          <div className="flex flex-wrap gap-4 text-sm">
+          {/* Chips (D315); each is still a checkbox. */}
+          <div className="flex flex-wrap gap-2 text-sm">
             {SETS.map((set) => (
-              <label key={set} className={`${TARGET} flex items-center gap-2`}>
+              <label
+                key={set}
+                className={`${TARGET} relative flex items-center gap-2 rounded-full border border-control bg-raised px-3 has-checked:border-accent has-checked:bg-accent-soft has-checked:text-accent-text`}
+              >
                 <input
+                  className="peer absolute inset-0 cursor-pointer appearance-none rounded-full"
                   type="checkbox"
                   aria-label={m.generator[set]}
                   checked={settings.sets.includes(set)}
@@ -116,6 +127,7 @@ export function Generator({
                     update({ ...settings, sets });
                   }}
                 />
+                <Icon name="check" className="hidden! size-3.5! peer-checked:inline-block!" />
                 {m.generator[set]}
               </label>
             ))}

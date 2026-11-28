@@ -64,6 +64,21 @@ export function findNode(tree: FolderTree, id: Uint8Array): FolderTree | undefin
   return walk(tree);
 }
 
+/** The names from the root down to folder `id` as the tree shows it (D14), `[]` when not shown. */
+export function folderPath(tree: FolderTree, id: Uint8Array): string[] {
+  const key = hex(id);
+  const walk = (n: FolderTree, path: string[]): string[] | undefined => {
+    const here = n.folder ? [...path, n.folder.name] : path;
+    if (n.folder && hex(n.folder.id) === key) return here;
+    for (const child of n.folders) {
+      const found = walk(child, here);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return walk(tree, []) ?? [];
+}
+
 /** Where folder `id` may move: the root (`folder: null`), then every folder outside its subtree. */
 export function moveTargets(
   tree: FolderTree,

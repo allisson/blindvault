@@ -67,6 +67,8 @@ export function ItemList({
   const screen = useSyncExternalStore(nav.subscribe, nav.current);
   const list = useSyncExternalStore(nav.subscribe, nav.list);
   const rowsRef = useRef<HTMLUListElement>(null);
+  // Where the folder's overflow menu goes, beside New item (D315).
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
   // The items' own buttons, in the order shown; a row's Copy is reached with Tab.
   const rows = () => [...(rowsRef.current?.querySelectorAll<HTMLElement>('[data-row]') ?? [])];
   const collator = new Intl.Collator(language);
@@ -82,7 +84,7 @@ export function ItemList({
   // All items with nothing in them shows the first steps (D250).
   let empty: string | undefined;
   let items: Row[];
-  let subfolders: Row[] = [];
+  let subfolders: (Row & { readonly count: number })[] = [];
   let trashedFolders: Row[] = [];
   const searching = list.name !== 'trash' && query.trim() !== '';
   // Nothing stays indexed while no search runs.
@@ -122,7 +124,7 @@ export function ItemList({
     // The tree is already in display order (D14).
     items = (node?.items ?? []).map(named);
     subfolders = (node?.folders ?? []).flatMap((n) =>
-      n.folder ? [{ id: n.folder.id, name: n.folder.name }] : [],
+      n.folder ? [{ id: n.folder.id, name: n.folder.name, count: n.items.length }] : [],
     );
   } else {
     items = treeItems(tree).map(named);
@@ -147,8 +149,9 @@ export function ItemList({
     <section aria-label={heading} className="flex min-w-0 flex-col gap-2 p-4">
       {/* Stays at the top of its scrolling pane, so New item and search are always at hand. */}
       <div className="sticky top-0 z-10 -mx-4 -mt-4 flex flex-col gap-2 bg-surface px-4 pt-4 pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="truncate text-sm font-semibold">{heading}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{heading}</h2>
+          <span ref={setMenu} className="contents" />
           {/* On mobile, New item is the header's action (D245). */}
           {list.name !== 'trash' && session.writable && layout !== 'mobile' ? (
             <Button
@@ -267,12 +270,37 @@ export function ItemList({
           nav={nav}
           id={list.id}
           onChange={onChange}
+          menu={menu}
         />
       ) : null}
       {!nothing ? null : empty === undefined ? (
         <FirstSteps session={session} nav={nav} />
       ) : (
-        <p className="text-sm text-muted">{empty}</p>
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-sm text-muted">{empty}</p>
+          {/* The empty state's way on (D315). */}
+          {searching ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                onQuery('');
+                searchRef.current?.focus();
+              }}
+            >
+              {m.vault.clearSearch}
+            </Button>
+          ) : list.name === 'folder' && session.writable ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                nav.select({ name: 'new' });
+              }}
+            >
+              <Icon name="plus" className="me-2" />
+              {m.folders.addHere}
+            </Button>
+          ) : null}
+        </div>
       )}
       {subfolders.length > 0 ? (
         <ul className="flex flex-col" aria-label={m.vault.folders}>
@@ -280,13 +308,20 @@ export function ItemList({
             <li key={hex(row.id)}>
               <button
                 type="button"
-                className={`${ROW} font-medium`}
+                className={`${ROW} flex items-center gap-3 py-1 font-medium`}
                 onClick={() => {
                   nav.showList({ name: 'folder', id: row.id });
                 }}
               >
-                <Icon name="folder" className="me-2 text-muted" />
-                {row.name}
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent-text">
+                  <Icon name="folder" />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                {/* Seen only: the list it opens announces its length (D245). */}
+                <span aria-hidden="true" className="text-xs font-normal text-muted">
+                  {row.count}
+                </span>
+                <Icon name="chevron-right" className="shrink-0 text-muted" />
               </button>
             </li>
           ))}

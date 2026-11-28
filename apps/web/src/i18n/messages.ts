@@ -824,6 +824,7 @@ const en = {
       'Searches titles, tags, folders, notes and fields that are not secret. ↓ moves to the list; Esc clears.',
     results: 'Results',
     noResults: 'No items match.',
+    clearSearch: 'Clear search',
     filterType: 'Filter by type',
     allTypes: 'All types',
     allFolders: 'All folders',
@@ -845,6 +846,9 @@ const en = {
   items: {
     new: 'New item',
     chooseTemplate: 'Choose a template',
+    newOf: 'New item: {template}',
+    editOf: 'Edit item: {template}',
+    unsaved: 'Unsaved changes',
     title: 'Title',
     tags: 'Tags',
     tagsHint: 'Separate tags with commas.',
@@ -937,6 +941,8 @@ const en = {
   folders: {
     new: 'New folder',
     newSubfolder: 'New subfolder',
+    actions: 'Folder actions',
+    addHere: 'Add an item here',
     name: 'Folder name',
     create: 'Create',
     rename: 'Rename',
@@ -2176,6 +2182,7 @@ const ptBR: Messages = {
       'Busca em títulos, tags, pastas, notas e campos que não são secretos. ↓ leva à lista; Esc limpa.',
     results: 'Resultados',
     noResults: 'Nenhum item corresponde.',
+    clearSearch: 'Limpar busca',
     filterType: 'Filtrar por tipo',
     allTypes: 'Todos os tipos',
     allFolders: 'Todas as pastas',
@@ -2197,6 +2204,9 @@ const ptBR: Messages = {
   items: {
     new: 'Novo item',
     chooseTemplate: 'Escolha um modelo',
+    newOf: 'Novo item: {template}',
+    editOf: 'Editar item: {template}',
+    unsaved: 'Alterações não salvas',
     title: 'Título',
     tags: 'Tags',
     tagsHint: 'Separe as tags com vírgulas.',
@@ -2288,6 +2298,8 @@ const ptBR: Messages = {
   folders: {
     new: 'Nova pasta',
     newSubfolder: 'Nova subpasta',
+    actions: 'Ações da pasta',
+    addHere: 'Adicionar um item aqui',
     name: 'Nome da pasta',
     create: 'Criar',
     rename: 'Renomear',

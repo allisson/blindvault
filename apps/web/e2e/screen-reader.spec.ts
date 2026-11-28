@@ -127,7 +127,7 @@ for (const [layout, width] of WIDTHS) {
     await expect(page.getByText('Enter a title.')).toBeVisible();
     await expect(main).toMatchAriaSnapshot(`
       - region "Details":
-        - heading "Login" [level=1]
+        - 'heading "New item: Login" [level=1]'
         - textbox "Title" [invalid]
         - alert: Enter a title.
         - textbox "Password"
