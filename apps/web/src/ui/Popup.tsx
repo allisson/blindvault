@@ -16,6 +16,8 @@ import { type Copyable, type Found, type Matched, type Refusal } from '../extens
 import { useMessages } from '../i18n/context';
 import { format } from '../i18n/messages';
 import { Button, Field, Notice } from './components';
+import { Icon } from './icons';
+import { Avatar } from './ItemRow';
 
 /**
  * The extension's popup (extension.md §6, D283, D286, D287): the vault's state, the Login items that
@@ -142,7 +144,7 @@ export function Popup({
       data-testid="popup"
       className="flex w-80 flex-col gap-3 bg-surface p-4 text-fg"
     >
-      <header className="flex items-center gap-2">
+      <header className="flex items-center gap-2 border-b border-line pb-3">
         <span className="text-sm font-semibold">{m.app.name}</span>
         <span className="flex-1" />
         {state === 'unlocked' ? (
@@ -156,7 +158,14 @@ export function Popup({
           </Button>
         ) : null}
       </header>
-      {state === 'locked' ? <p className="text-sm">{m.popup.locked}</p> : null}
+      {state === 'locked' ? (
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <span className="grid size-12 place-items-center rounded-card bg-subtle text-muted">
+            <Icon name="lock" className="size-6!" />
+          </span>
+          <p className="text-sm">{m.popup.locked}</p>
+        </div>
+      ) : null}
       {state === 'unlocked' ? (
         <>
           <Field
@@ -169,7 +178,7 @@ export function Popup({
           />
           {query === '' ? (
             <section className="flex flex-col gap-2">
-              <h2 className="text-xs font-semibold text-muted">{m.popup.onPage}</h2>
+              <h2 className="text-label font-semibold text-muted uppercase">{m.popup.onPage}</h2>
               {matched === 'page' ? <p className="text-sm text-muted">{m.popup.noPage}</p> : null}
               {matched !== undefined && matched !== 'page' && matched.length === 0 ? (
                 <p className="text-sm text-muted">{m.popup.noMatch}</p>
@@ -200,7 +209,7 @@ export function Popup({
             {/* Under the page's matches, every Login item: named, so a match listed twice reads as
                 such (D313). */}
             {query === '' && items !== undefined && items.length > 0 ? (
-              <h2 className="text-xs font-semibold text-muted">{m.popup.all}</h2>
+              <h2 className="text-label font-semibold text-muted uppercase">{m.popup.all}</h2>
             ) : null}
             <ul data-testid="popup-items" className="flex flex-col gap-2">
               {items?.map((item) => (
@@ -233,12 +242,17 @@ function Row({
   readonly children: ReactNode;
 }) {
   return (
-    <li className="flex flex-col gap-1 rounded-control bg-raised p-2">
-      <span className="text-sm font-medium break-words">{item.title}</span>
-      {item.username === undefined ? null : (
-        <span className="text-xs text-muted break-all">{item.username}</span>
-      )}
-      {url === undefined ? null : <span className="text-xs text-muted break-all">{url}</span>}
+    <li className="flex flex-col gap-3 rounded-card border border-line bg-raised p-3">
+      <span className="flex items-start gap-3">
+        <Avatar title={item.title} />
+        <span className="flex min-w-0 flex-col">
+          <span className="text-sm font-medium break-words">{item.title}</span>
+          {item.username === undefined ? null : (
+            <span className="text-xs text-muted break-all">{item.username}</span>
+          )}
+          {url === undefined ? null : <span className="text-xs text-muted break-all">{url}</span>}
+        </span>
+      </span>
       <span className="flex flex-wrap gap-1">{children}</span>
     </li>
   );

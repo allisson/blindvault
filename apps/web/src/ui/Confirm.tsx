@@ -164,7 +164,7 @@ export function ConfirmRequest({
         {state.passkeys.length === 0 ? (
           <p className="text-sm">{format(m.confirm.none, { rpId: state.rpId })}</p>
         ) : (
-          <fieldset className="flex flex-col gap-1">
+          <fieldset className="flex flex-col gap-2">
             <legend className="text-xs font-semibold text-muted">{m.confirm.choose}</legend>
             {state.passkeys.map((p) => (
               <Choice
@@ -209,7 +209,7 @@ export function ConfirmRequest({
             : `${state.displayName} (${state.userName})`}
         </Row>
       </Origins>
-      <fieldset className="flex flex-col gap-1">
+      <fieldset className="flex flex-col gap-2">
         <legend className="text-xs font-semibold text-muted">{m.confirm.saveIn}</legend>
         {state.items.map((item) => (
           <Choice
@@ -309,7 +309,9 @@ function Choice({
 }) {
   const detailId = useId();
   return (
-    <label className={`${TARGET} flex items-start gap-2 rounded-control bg-raised p-2 text-sm`}>
+    <label
+      className={`${TARGET} flex items-start gap-2 rounded-card border border-line bg-raised p-3 text-sm has-checked:border-accent`}
+    >
       <input
         type="radio"
         className="mt-1"
